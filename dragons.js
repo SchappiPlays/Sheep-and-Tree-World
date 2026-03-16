@@ -932,12 +932,22 @@ export class DragonManager {
             bd.group.position.set(bd.x, terrY + bd.footOffset, bd.z);
         }
 
-        // Player position follows dragon — offset by tilt so they stay on the back
-        const seatY = 0.15 * 2.55 * gs;
-        const tilt = bd._flyTilt || 0;
-        player.position.set(bd.x, bd.group.position.y + seatY * Math.cos(tilt), bd.z);
+        // Player sits on dragon's back — compute seat position in dragon's local space
+        // then transform to world space so player tilts/moves with the dragon
+        const S = 2.55;
+        const seatLocalY = 0.28 * S; // on top of chest (y=0 is body center)
+        const seatLocalZ = 0.2 * S;  // slightly forward (chest is at z=0.2*S)
+
+        // Get seat world position from dragon's group matrix
+        bd.group.updateMatrixWorld(true);
+        const _seatPos = new THREE.Vector3(0, seatLocalY, seatLocalZ);
+        _seatPos.applyMatrix4(bd.group.matrixWorld);
+
+        player.position.set(_seatPos.x, _seatPos.y, _seatPos.z);
         player.group.position.copy(player.position);
         player.group.rotation.y = bd.angle;
+        // Match dragon's pitch tilt on the player group
+        const tilt = bd._flyTilt || 0;
         player.group.rotation.x = tilt;
         player.speed = 0;
         player.jumpVel = 0;
@@ -954,6 +964,10 @@ export class DragonManager {
         player.spine.rotation.x = 0.15;
         player.headGroup.rotation.x = -0.1;
         player.body.position.y = player.hipHeight;
+        // Reset body sub-rotations that walk animation might have set
+        player.body.rotation.x = 0;
+        player.spine.rotation.y = 0;
+        player.spine.rotation.z = 0;
 
         bd.walking = wantDir !== 0;
         this._animateDragon(dt, bd);
@@ -1046,6 +1060,10 @@ export class DragonManager {
             player.rightArm.elbow.rotation.x = -1.4;
             player.spine.rotation.x += 0.04;
         }
+    }
+
+    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
+        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern);
     }
 
     getPrompt(player) {

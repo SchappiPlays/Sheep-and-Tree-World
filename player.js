@@ -240,20 +240,25 @@ export class Player {
             }
         }
 
-        // X collision with step-up
+        // X collision with step-up (up to 2 blocks)
         this.position.x = newX;
         if (this._checkBody()) {
             this.position.x -= moveX;
             if (this.isGrounded) {
+                let stepped = false;
                 const savedX = this.position.x;
                 const savedY = this.position.y;
-                this.position.x = newX;
-                this.position.y += BLOCK_SIZE + 0.002;
-                if (!this._checkBody()) {
-                    // Step-up succeeded — snap to the new block top
-                    const blockY = Math.floor((savedY + BLOCK_SIZE) / BLOCK_SIZE);
-                    this.position.y = blockY * BLOCK_SIZE + 0.001;
-                } else {
+                for (let step = 1; step <= 2; step++) {
+                    this.position.x = newX;
+                    this.position.y = savedY + BLOCK_SIZE * step + 0.002;
+                    if (!this._checkBody()) {
+                        const blockY = Math.floor((savedY + BLOCK_SIZE * step) / BLOCK_SIZE);
+                        this.position.y = blockY * BLOCK_SIZE + 0.001;
+                        stepped = true;
+                        break;
+                    }
+                }
+                if (!stepped) {
                     this.position.x = savedX;
                     this.position.y = savedY;
                     this.speed *= 0.5;
@@ -263,19 +268,25 @@ export class Player {
             }
         }
 
-        // Z collision with step-up
+        // Z collision with step-up (up to 2 blocks)
         this.position.z = newZ;
         if (this._checkBody()) {
             this.position.z -= moveZ;
             if (this.isGrounded) {
+                let stepped = false;
                 const savedZ = this.position.z;
                 const savedY = this.position.y;
-                this.position.z = newZ;
-                this.position.y += BLOCK_SIZE + 0.002;
-                if (!this._checkBody()) {
-                    const blockY = Math.floor((savedY + BLOCK_SIZE) / BLOCK_SIZE);
-                    this.position.y = blockY * BLOCK_SIZE + 0.001;
-                } else {
+                for (let step = 1; step <= 2; step++) {
+                    this.position.z = newZ;
+                    this.position.y = savedY + BLOCK_SIZE * step + 0.002;
+                    if (!this._checkBody()) {
+                        const blockY = Math.floor((savedY + BLOCK_SIZE * step) / BLOCK_SIZE);
+                        this.position.y = blockY * BLOCK_SIZE + 0.001;
+                        stepped = true;
+                        break;
+                    }
+                }
+                if (!stepped) {
                     this.position.z = savedZ;
                     this.position.y = savedY;
                     this.speed *= 0.5;

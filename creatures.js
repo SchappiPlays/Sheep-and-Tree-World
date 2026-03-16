@@ -213,7 +213,7 @@ export class CreatureManager {
         // Spawn sheep in nearby chunks that haven't been populated yet
         const pcx = Math.floor(playerX / (CHUNK_SIZE * BLOCK_SIZE));
         const pcz = Math.floor(playerZ / (CHUNK_SIZE * BLOCK_SIZE));
-        const spawnDist = 5;
+        const spawnDist = 4;
 
         for (let dx = -spawnDist; dx <= spawnDist; dx++) {
             for (let dz = -spawnDist; dz <= spawnDist; dz++) {
@@ -230,7 +230,7 @@ export class CreatureManager {
         for (let i = this.creatures.length - 1; i >= 0; i--) {
             const sh = this.creatures[i];
             const dx = sh.x - playerX, dz = sh.z - playerZ;
-            if (dx * dx + dz * dz > 60 * 60) {
+            if (dx * dx + dz * dz > 30 * 30) {
                 this.scene.remove(sh.group);
                 this.creatures.splice(i, 1);
             }
@@ -241,7 +241,7 @@ export class CreatureManager {
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             const dist2 = dx * dx + dz * dz;
             // Skip AI for very far sheep
-            if (dist2 > 40 * 40) continue;
+            if (dist2 > 25 * 25) continue;
 
             // ── Wandering AI — exact from game.html ──
             sh.wanderTimer -= dt;
@@ -310,10 +310,10 @@ export class CreatureManager {
         const chunkWorldZ = cz * CHUNK_SIZE * BLOCK_SIZE;
         const chunkWorldSize = CHUNK_SIZE * BLOCK_SIZE;
 
-        // Deterministic creature placement — sheep, cows, pigs
-        for (let i = 0; i < 5; i++) {
+        // Deterministic creature placement — ~1 per 3-4 chunks
+        for (let i = 0; i < 2; i++) {
             const hash = this.world._hash(cx * 100 + i * 7 + 9999, cz * 100 + i * 13 + 8888);
-            if (hash > 0.18) continue;
+            if (hash > 0.12) continue;
 
             const sx = chunkWorldX + hash * chunkWorldSize * 3.7 % chunkWorldSize;
             const sz = chunkWorldZ + this.world._hash(cx + i * 31, cz + i * 47) * chunkWorldSize;

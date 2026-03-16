@@ -2,7 +2,10 @@
 
 import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS } from './world.js';
 
-const RENDER_DIST = 20;
+const RENDER_DIST = 24; // total render distance in chunks
+const LOD0_DIST = 8;   // full detail
+const LOD1_DIST = 16;  // half detail (skip every other block)
+// beyond LOD1_DIST: quarter detail (every 3rd block)
 const UNLOAD_DIST = RENDER_DIST + 2;
 const BS = BLOCK_SIZE;
 const Y_OFF = Math.floor(WORLD_HEIGHT / 2); // block y offset: block Y_OFF = world y=0
@@ -68,7 +71,7 @@ export class ChunkManager {
         const pcz = Math.floor(pz / (CHUNK_SIZE * BS));
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
-            this._processQueue(4);
+            this._processQueue(2);
             return;
         }
         this._lastPCX = pcx;
@@ -76,11 +79,21 @@ export class ChunkManager {
 
         for (let dx = -RENDER_DIST; dx <= RENDER_DIST; dx++) {
             for (let dz = -RENDER_DIST; dz <= RENDER_DIST; dz++) {
-                if (dx * dx + dz * dz > RENDER_DIST * RENDER_DIST) continue;
+                const d2 = dx * dx + dz * dz;
+                if (d2 > RENDER_DIST * RENDER_DIST) continue;
                 const cx = pcx + dx, cz = pcz + dz;
+                const lod = d2 <= LOD0_DIST * LOD0_DIST ? 1 : d2 <= LOD1_DIST * LOD1_DIST ? 2 : 4;
                 const key = cx + ',' + cz;
+                const existing = this.loaded.get(key);
+                // Rebuild if LOD changed (closer now)
+                if (existing && existing.lod !== lod) {
+                    if (existing.terrain) { this.scene.remove(existing.terrain); existing.terrain.geometry.dispose(); }
+                    if (existing.water) { this.scene.remove(existing.water); existing.water.geometry.dispose(); }
+                    if (existing.leaves) { this.scene.remove(existing.leaves); existing.leaves.geometry.dispose(); }
+                    this.loaded.delete(key);
+                }
                 if (!this.loaded.has(key) && !this.buildQueue.find(q => q.key === key)) {
-                    this.buildQueue.push({ cx, cz, key, dist: dx * dx + dz * dz });
+                    this.buildQueue.push({ cx, cz, key, dist: d2, lod });
                 }
             }
         }
@@ -97,7 +110,7 @@ export class ChunkManager {
             }
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(8);
+        this._processQueue(4);
     }
 
     rebuildChunkAt(bx, bz) {
@@ -110,7 +123,8 @@ export class ChunkManager {
             if (old.water) { this.scene.remove(old.water); old.water.geometry.dispose(); }
             if (old.leaves) { this.scene.remove(old.leaves); old.leaves.geometry.dispose(); }
         }
-        const entry = this._buildChunkMeshes(cx, cz);
+        const entry = this._buildChunkMeshes(cx, cz, 1);
+        entry.lod = 1;
         if (entry.terrain) this.scene.add(entry.terrain);
         if (entry.water) this.scene.add(entry.water);
         if (entry.leaves) this.scene.add(entry.leaves);
@@ -120,14 +134,15 @@ export class ChunkManager {
     _processQueue(maxPerFrame) {
         let built = 0;
         while (this.buildQueue.length > 0 && built < maxPerFrame) {
-            const { cx, cz, key } = this.buildQueue.shift();
+            const { cx, cz, key, lod } = this.buildQueue.shift();
             if (this.loaded.has(key)) continue;
 
             for (let dx = -1; dx <= 1; dx++)
                 for (let dz = -1; dz <= 1; dz++)
                     this.world.getOrCreateChunk(cx + dx, cz + dz);
 
-            const entry = this._buildChunkMeshes(cx, cz);
+            const entry = this._buildChunkMeshes(cx, cz, lod || 1);
+            entry.lod = lod || 1;
             if (entry.terrain) this.scene.add(entry.terrain);
             if (entry.water) this.scene.add(entry.water);
             if (entry.leaves) this.scene.add(entry.leaves);
@@ -137,9 +152,11 @@ export class ChunkManager {
         this.loadedCount = this.loaded.size;
     }
 
-    _buildChunkMeshes(cx, cz) {
-        const ox = cx * CHUNK_SIZE; // block-space origin
+    _buildChunkMeshes(cx, cz, step) {
+        step = step || 1;
+        const ox = cx * CHUNK_SIZE;
         const oz = cz * CHUNK_SIZE;
+        const S = step; // block size multiplier for LOD
 
         const tPos = [], tNrm = [], tCol = [], tIdx = [];
         let tVert = 0;
@@ -150,22 +167,23 @@ export class ChunkManager {
 
         const tmpColor = new THREE.Color();
 
-        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
-            for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-                for (let y = 0; y < WORLD_HEIGHT; y++) {
-                    const bx = ox + lx, bz = oz + lz;
+        const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 160);
+        for (let lx = 0; lx < CHUNK_SIZE; lx += S) {
+            for (let lz = 0; lz < CHUNK_SIZE; lz += S) {
+                const bx = ox + lx, bz = oz + lz;
+                for (let y = 0; y < scanMaxY; y += S) {
                     const block = this.world.getBlockAt(bx, y, bz);
 
                     if (block === BLOCK.WATER) {
-                        const above = this.world.getBlockAt(bx, y + 1, bz);
+                        const above = this.world.getBlockAt(bx, y + S, bz);
                         if (above === BLOCK.AIR) {
                             const face = FACES[2];
                             const verts = face.verts;
                             for (let vi = 0; vi < 4; vi++) {
                                 wPos.push(
-                                    (lx + verts[vi][0]) * BS,
-                                    (y - Y_OFF + 0.85) * BS,
-                                    (lz + verts[vi][2]) * BS
+                                    (lx + verts[vi][0] * S) * BS,
+                                    (y - Y_OFF + 0.85 * S) * BS,
+                                    (lz + verts[vi][2] * S) * BS
                                 );
                                 wNrm.push(0, 1, 0);
                             }
@@ -181,7 +199,7 @@ export class ChunkManager {
                     if (block === BLOCK.LEAVES) {
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
-                            const nbx = bx + face.dir[0], nby = y + face.dir[1], nbz = bz + face.dir[2];
+                            const nbx = bx + face.dir[0] * S, nby = y + face.dir[1] * S, nbz = bz + face.dir[2] * S;
                             const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                             if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER) continue;
                             const ch = colorHash(bx, y, bz);
@@ -192,7 +210,7 @@ export class ChunkManager {
                             tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
                             const verts = face.verts;
                             for (let vi = 0; vi < 4; vi++) {
-                                lPos.push((lx + verts[vi][0]) * BS, (y - Y_OFF + verts[vi][1]) * BS, (lz + verts[vi][2]) * BS);
+                                lPos.push((lx + verts[vi][0] * S) * BS, (y - Y_OFF + verts[vi][1] * S) * BS, (lz + verts[vi][2] * S) * BS);
                                 lNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                                 lCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                             }
@@ -204,9 +222,9 @@ export class ChunkManager {
 
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
-                        const nbx = bx + face.dir[0];
-                        const nby = y + face.dir[1];
-                        const nbz = bz + face.dir[2];
+                        const nbx = bx + face.dir[0] * S;
+                        const nby = y + face.dir[1] * S;
+                        const nbz = bz + face.dir[2] * S;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                         if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER) continue;
 
@@ -308,6 +326,13 @@ export class ChunkManager {
                                 tmpColor.r += (ch - 0.5) * 0.03;
                                 tmpColor.g += (ch2 - 0.5) * 0.02;
                             }
+                        } else if (block === BLOCK.IRON_ORE) {
+                            // Stone base with orange-brown ore flecks
+                            tmpColor.copy(STONE_DARK).lerp(STONE_LIGHT, ch * 0.3);
+                            const oreFleck = ((bx * 17 + y * 31 + bz * 13) % 5) < 2;
+                            if (oreFleck) {
+                                tmpColor.r += 0.15; tmpColor.g += 0.06; tmpColor.b -= 0.05;
+                            }
                         } else if (block === BLOCK.SNOW) {
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.SNOW]);
                             tmpColor.r -= ch * 0.04;
@@ -324,9 +349,9 @@ export class ChunkManager {
                         const verts = face.verts;
                         for (let vi = 0; vi < 4; vi++) {
                             tPos.push(
-                                (lx + verts[vi][0]) * BS,
-                                (y - Y_OFF + verts[vi][1]) * BS,
-                                (lz + verts[vi][2]) * BS
+                                (lx + verts[vi][0] * S) * BS,
+                                (y - Y_OFF + verts[vi][1] * S) * BS,
+                                (lz + verts[vi][2] * S) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                             tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);

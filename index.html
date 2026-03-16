@@ -142,9 +142,48 @@ canvas { display: block; }
 #dragGhost .front-face {
     position: absolute; top: 11px; left: 3px; width: 24px; height: 19px; border-radius: 1px;
 }
+#mainMenu {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(180deg, #1a2a1a 0%, #0a120a 100%);
+    z-index: 500; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+}
+#mainMenu h1 {
+    color: rgba(220,200,160,0.9); font: bold 36px monospace;
+    text-shadow: 0 0 20px rgba(100,180,60,0.3); margin-bottom: 20px;
+}
+.menu-btn {
+    width: 260px; padding: 14px; font: bold 16px monospace;
+    background: rgba(40,60,30,0.7); color: rgba(220,210,180,0.9);
+    border: 2px solid rgba(120,160,80,0.4); border-radius: 6px;
+    cursor: pointer; text-align: center;
+}
+.menu-btn:hover { background: rgba(60,90,40,0.8); border-color: rgba(160,200,100,0.7); }
+.menu-btn:disabled { opacity: 0.4; cursor: default; }
+.menu-btn.delete { background: rgba(80,30,30,0.5); border-color: rgba(160,60,60,0.4); font-size: 11px; width: 80px; padding: 6px; }
+.menu-btn.delete:hover { background: rgba(120,40,40,0.7); }
+.save-slot {
+    display: flex; align-items: center; gap: 8px; width: 360px;
+    background: rgba(30,40,25,0.5); border: 1px solid rgba(100,120,70,0.3);
+    border-radius: 6px; padding: 8px 12px;
+}
+.save-slot .info { flex: 1; color: rgba(180,170,140,0.8); font: 12px monospace; }
+.save-slot .info .name { font-size: 14px; color: rgba(220,210,180,0.9); }
+#saveToast {
+    position: fixed; top: 12px; right: 12px; padding: 6px 14px;
+    background: rgba(40,60,30,0.8); color: rgba(200,190,160,0.8);
+    font: 11px monospace; border-radius: 4px; z-index: 50;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
 </style>
 </head>
 <body>
+<div id="mainMenu">
+    <h1>Sheep and Tree World</h1>
+    <button class="menu-btn" id="newGameBtn">New Game</button>
+    <div id="savedGames"></div>
+</div>
+<div id="saveToast">Saved</div>
 <div id="debug"></div>
 <div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
 <div id="hotbar"></div>
@@ -200,28 +239,189 @@ shCam.left = -18; shCam.right = 18; shCam.top = 18; shCam.bottom = -18;
 scene.add(sun);
 scene.add(sun.target);
 
-// ── World ──
-const world = new World();
-const chunkManager = new ChunkManager(scene, world);
-const creatures = new CreatureManager(scene, world);
-const dragonMgr = new DragonManager(scene, world);
-const player = new Player(scene, world);
+// ── Save/Load System ──
+const SAVE_KEY = 'satw_saves';
 
-// Spawn — generate chunk first
-world.getOrCreateChunk(0, 0);
-const spawnY = world.getHeight(0, 0);
-player.position.set(0, spawnY, 0);
-dragonMgr.build((x, z) => world.getHeight(x, z));
-dragonMgr.buildCarriedEgg(player.spine);
-dragonMgr.addToInventory = addToInventory;
-dragonMgr.removeFromInventory = removeFromInventory;
-dragonMgr.getHeldItem = () => {
-    const bt = hotbarSlots[selectedSlot];
-    if (typeof bt === 'string' && bt.startsWith('egg_') && inventory[bt] > 0) {
-        return { type: 'egg', egg: eggItems[bt] };
+function getSaves() {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); } catch { return {}; }
+}
+
+function collectSaveData() {
+    return {
+        time: Date.now(),
+        player: { x: player.position.x, y: player.position.y, z: player.position.z, ry: player.group.rotation.y },
+        inventory: JSON.parse(JSON.stringify(inventory)),
+        hotbarSlots: [...hotbarSlots],
+        selectedSlot,
+        eggItems: JSON.parse(JSON.stringify(eggItems)),
+        // Modified blocks (set by player, not generated)
+        modifiedBlocks: world._modifiedBlocks ? Object.fromEntries(world._modifiedBlocks) : {},
+        // Dragon data
+        dragons: dragonMgr.dragons.map(bd => ({
+            x: bd.x, z: bd.z, age: bd.age, angle: bd.angle,
+            eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
+            dragonName: bd.dragonName, hp: bd.hp,
+        })),
+        pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
+    };
+}
+
+function saveGame(slotName) {
+    const saves = getSaves();
+    saves[slotName] = collectSaveData();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saves));
+}
+
+function showToast(msg) {
+    const t = document.getElementById('saveToast');
+    t.textContent = msg; t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 1500);
+}
+
+// ── Main Menu ──
+const mainMenuEl = document.getElementById('mainMenu');
+let gameStarted = false;
+
+function updateMenuUI() {
+    const saves = getSaves();
+    const keys = Object.keys(saves);
+    let html = '';
+    if (keys.length > 0) {
+        html += '<div style="color:rgba(180,170,140,0.6);font:11px monospace;margin:8px 0 4px;">Saved Games:</div>';
+        for (const name of keys) {
+            const s = saves[name];
+            const date = new Date(s.time).toLocaleString();
+            html += `<div class="save-slot">
+                <div class="info"><div class="name">${name}</div>${date}</div>
+                <button class="menu-btn" style="width:80px;padding:8px;font-size:13px;" data-load="${name}">Load</button>
+                <button class="menu-btn delete" data-delete="${name}">Delete</button>
+            </div>`;
+        }
     }
-    return null;
-};
+    document.getElementById('savedGames').innerHTML = html;
+    document.querySelectorAll('[data-load]').forEach(btn => {
+        btn.addEventListener('click', () => startGame(btn.dataset.load));
+    });
+    document.querySelectorAll('[data-delete]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const saves = getSaves();
+            delete saves[btn.dataset.delete];
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saves));
+            updateMenuUI();
+        });
+    });
+}
+updateMenuUI();
+document.getElementById('newGameBtn').addEventListener('click', () => startGame(null));
+
+// ── World (created once, reset on new game) ──
+let world, chunkManager, creatures, dragonMgr, player;
+
+function startGame(loadSlotName) {
+    mainMenuEl.style.display = 'none';
+    gameStarted = true;
+
+    // Clean up previous game if any
+    if (world) {
+        while (scene.children.length > 0) scene.remove(scene.children[0]);
+        scene.add(ambient); scene.add(hemi); scene.add(sun); scene.add(sun.target);
+    }
+
+    world = new World();
+    if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
+    chunkManager = new ChunkManager(scene, world);
+    creatures = new CreatureManager(scene, world);
+    dragonMgr = new DragonManager(scene, world);
+    player = new Player(scene, world);
+
+    dragonMgr.build((x, z) => world.getHeight(x, z));
+    dragonMgr.buildCarriedEgg(player.spine);
+    dragonMgr.addToInventory = addToInventory;
+    dragonMgr.removeFromInventory = removeFromInventory;
+    dragonMgr.getHeldItem = () => {
+        const bt = hotbarSlots[selectedSlot];
+        if (typeof bt === 'string' && bt.startsWith('egg_') && inventory[bt] > 0) {
+            return { type: 'egg', egg: eggItems[bt] };
+        }
+        return null;
+    };
+
+    // Reset inventory
+    for (const k in inventory) delete inventory[k];
+    for (const k in eggItems) delete eggItems[k];
+    hotbarSlots.fill(0);
+    selectedSlot = 0;
+
+    if (loadSlotName) {
+        // Load save
+        const saves = getSaves();
+        const s = saves[loadSlotName];
+        if (s) {
+            player.position.set(s.player.x, s.player.y, s.player.z);
+            player.group.rotation.y = s.player.ry || 0;
+            // Restore inventory
+            Object.assign(inventory, s.inventory || {});
+            for (let i = 0; i < 9; i++) hotbarSlots[i] = s.hotbarSlots?.[i] || 0;
+            selectedSlot = s.selectedSlot || 0;
+            Object.assign(eggItems, s.eggItems || {});
+            // Restore modified blocks + rebuild chunk index
+            if (s.modifiedBlocks) {
+                for (const [key, val] of Object.entries(s.modifiedBlocks)) {
+                    world._modifiedBlocks.set(key, val);
+                    // Build chunk index
+                    const [mbx, mby, mbz] = key.split(',').map(Number);
+                    const mcx = Math.floor(mbx / CHUNK_SIZE), mcz = Math.floor(mbz / CHUNK_SIZE);
+                    const mlx = ((mbx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+                    const mlz = ((mbz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+                    const ck = mcx + ',' + mcz;
+                    if (!world._modsByChunk.has(ck)) world._modsByChunk.set(ck, []);
+                    world._modsByChunk.get(ck).push({ lx: mlx, y: mby, lz: mlz, block: val });
+                }
+            }
+            // Restore picked up eggs
+            if (s.pickedUpEggs) {
+                for (const idx of s.pickedUpEggs) {
+                    if (dragonMgr.eggs[idx]) {
+                        dragonMgr.eggs[idx].pickedUp = true;
+                        dragonMgr.eggs[idx].group.visible = false;
+                    }
+                }
+            }
+            // Restore dragons
+            if (s.dragons) {
+                for (const dd of s.dragons) {
+                    const hy = world.getHeight(dd.x, dd.z);
+                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern);
+                    bd.age = dd.age || 0;
+                    bd.dragonName = dd.dragonName || 'Dragon';
+                    bd.hp = dd.hp || bd.maxHP;
+                    bd.angle = dd.angle || 0;
+                    bd.group.rotation.y = bd.angle;
+                    scene.add(bd.group);
+                    dragonMgr.dragons.push(bd);
+                }
+            }
+            _currentSaveName = loadSlotName;
+            showToast('Loaded: ' + loadSlotName);
+        }
+    } else {
+        // New game — spawn at center
+        world.getOrCreateChunk(0, 0);
+        const spawnY = world.getHeight(0, 0);
+        player.position.set(0, spawnY, 0);
+        // Generate save name
+        const n = Object.keys(getSaves()).length + 1;
+        _currentSaveName = 'Save ' + n;
+        showToast('New game started');
+    }
+
+    refreshUI();
+    if (!_animStarted) { _animStarted = true; animate(); }
+}
+
+let _currentSaveName = 'Save 1';
+let _animStarted = false;
+let _autosaveTimer = 0;
 
 // ── Input — same as game.html (no pointer lock, keyboard only) ──
 const keys = {};
@@ -406,6 +606,7 @@ const BLOCK_INFO = {
     [BLOCK.LEAVES]: { name:'Leaves', top:'#35b535', front:'#1a7a1a' },
     [BLOCK.PLANKS]: { name:'Wood Planks', top:'#aa8a55', front:'#8a6a3a' },
     [BLOCK.CRAFTING]: { name:'Crafting Table', top:'#8a6535', front:'#7a5a30' },
+    [BLOCK.IRON_ORE]: { name:'Iron Ore', top:'#9a8a78', front:'#7a7068' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -650,6 +851,13 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape' && craftingTableOpen) {
         craftingTableOpen = false;
         craftTableMenuEl.style.display = 'none';
+    } else if (e.code === 'Escape' && !craftingTableOpen && !inventoryOpen && !mapOpen && gameStarted) {
+        // Save and return to menu
+        saveGame(_currentSaveName);
+        showToast('Saved & returned to menu');
+        gameStarted = false;
+        mainMenuEl.style.display = 'flex';
+        updateMenuUI();
     }
     if (e.code === 'KeyI') {
         // Close crafting table menu if open
@@ -733,16 +941,14 @@ function rebuildNear(bx, bz) {
 }
 
 // ── Pickaxe system ──
-let mineW = 0, mineH = 0; // half-extents: 0=1x1, 1=3x3
+let mineDepth = 1; // depth: 1-3 blocks deep
 
-// Arrow keys adjust mining size (only when holding pickaxe)
+// Arrow keys adjust mining depth (only when holding pickaxe)
 document.addEventListener('keydown', e => {
     const held = hotbarSlots[selectedSlot];
     if (held !== 'pickaxe') return;
-    if (e.code === 'ArrowUp') { mineH = Math.min(1, mineH + 1); e.preventDefault(); }
-    if (e.code === 'ArrowDown') { mineH = Math.max(0, mineH - 1); e.preventDefault(); }
-    if (e.code === 'ArrowRight') { mineW = Math.min(1, mineW + 1); e.preventDefault(); }
-    if (e.code === 'ArrowLeft') { mineW = Math.max(0, mineW - 1); e.preventDefault(); }
+    if (e.code === 'ArrowUp') { mineDepth = Math.min(3, mineDepth + 1); e.preventDefault(); }
+    if (e.code === 'ArrowDown') { mineDepth = Math.max(1, mineDepth - 1); e.preventDefault(); }
 });
 
 // Left click = break block(s)
@@ -755,21 +961,30 @@ renderer.domElement.addEventListener('click', (e) => {
     const held = hotbarSlots[selectedSlot];
     const hasPickaxe = held === 'pickaxe' && inventory['pickaxe'] > 0;
 
-    if (hasPickaxe && (mineW > 0 || mineH > 0)) {
-        // Area break — determine axes from hit face
-        // Face normal (nx, ny, nz) tells us which face we hit
-        // The two perpendicular axes become our width/height plane
-        let ax1, ax2; // 'x','y','z' for the two plane axes
-        if (hit.nx !== 0) { ax1 = 'z'; ax2 = 'y'; } // hit X face → plane is Z,Y
-        else if (hit.ny !== 0) { ax1 = 'x'; ax2 = 'z'; } // hit Y face → plane is X,Z
-        else { ax1 = 'x'; ax2 = 'y'; } // hit Z face → plane is X,Y
+    if (hasPickaxe) {
+        // Pickaxe: snaps to a 3x3 grid on the face plane, 1 layer deep into surface
+        // The hit block snaps to the nearest 3x3 cell on the two perpendicular axes
+        const dnx = hit.nx, dny = hit.ny, dnz = hit.nz;
+        let ax1, ax2;
+        if (dnx !== 0) { ax1 = 'z'; ax2 = 'y'; }
+        else if (dny !== 0) { ax1 = 'x'; ax2 = 'z'; }
+        else { ax1 = 'x'; ax2 = 'y'; }
+
+        // Get the hit block's coords on the two plane axes
+        const getAxis = (a) => a === 'x' ? hit.x : a === 'y' ? hit.y : hit.z;
+        // Snap to 3x3 grid: floor to nearest multiple of 3, then that's the corner
+        const snap = (v) => Math.floor(v / 3) * 3;
+        const base1 = snap(getAxis(ax1));
+        const base2 = snap(getAxis(ax2));
 
         const rebuildSet = new Set();
-        for (let dw = -mineW; dw <= mineW; dw++) {
-            for (let dh = -mineH; dh <= mineH; dh++) {
+        for (let d1 = 0; d1 < 3; d1++) {
+            for (let d2 = 0; d2 < 3; d2++) {
                 let bx = hit.x, by = hit.y, bz = hit.z;
-                if (ax1 === 'x') bx += dw; else if (ax1 === 'y') by += dw; else bz += dw;
-                if (ax2 === 'x') bx += dh; else if (ax2 === 'y') by += dh; else bz += dh;
+                // Set the plane axes to the snapped grid position
+                if (ax1 === 'x') bx = base1 + d1; else if (ax1 === 'y') by = base1 + d1; else bz = base1 + d1;
+                if (ax2 === 'x') bx = base2 + d2; else if (ax2 === 'y') by = base2 + d2; else bz = base2 + d2;
+                // Depth axis stays at hit position (1 block deep)
                 const b = world.getBlockAt(bx, by, bz);
                 if (b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.BEDROCK) {
                     addToInventory(b);
@@ -783,7 +998,7 @@ renderer.domElement.addEventListener('click', (e) => {
             rebuildNear(rx, rz);
         }
     } else {
-        // Single block break
+        // Single block break (no pickaxe)
         addToInventory(hit.block);
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
         rebuildNear(hit.x, hit.z);
@@ -850,8 +1065,7 @@ function updateCraftTableUI() {
     html += '</div>';
     // Show current pickaxe mining size if holding pickaxe
     if (hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0) {
-        const w = mineW * 2 + 1, h = mineH * 2 + 1;
-        html += `<div style="margin-top:8px;color:rgba(200,180,140,0.7);font:11px monospace;text-align:center;">Pickaxe mining: ${w}x${h} | Arrow keys to resize</div>`;
+        html += '<div style="margin-top:8px;color:rgba(200,180,140,0.7);font:11px monospace;text-align:center;">Pickaxe: 3x3 grid-snapped, 1 deep</div>';
     }
     html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.5);font:10px monospace;">Press Escape or I to close</div>';
     craftTableMenuEl.innerHTML = html;
@@ -932,9 +1146,18 @@ let camInit = false;
 
 function animate() {
     requestAnimationFrame(animate);
+    if (!gameStarted) return;
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
+
+    // Autosave every 40s
+    _autosaveTimer += dt;
+    if (_autosaveTimer >= 40) {
+        _autosaveTimer = 0;
+        saveGame(_currentSaveName);
+        showToast('Autosaved');
+    }
 
     frameCount++;
     fpsTime += dt;
@@ -1013,7 +1236,7 @@ function animate() {
     const bx = Math.floor(px / BLOCK_SIZE);
     const by = Math.floor(py / BLOCK_SIZE);
     const bz = Math.floor(pz / BLOCK_SIZE);
-    const pickInfo = hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0 ? `<br>Pickaxe: ${mineW*2+1}x${mineH*2+1} (arrows to resize)` : '';
+    const pickInfo = hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0 ? '<br>Pickaxe: 3x3 grid-snapped' : '';
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}`;
 
     renderer.render(scene, camera);

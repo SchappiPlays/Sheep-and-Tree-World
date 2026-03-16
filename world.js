@@ -9,14 +9,14 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -293,6 +293,8 @@ function getTerrainHeight(x, z) {
 export class World {
     constructor() {
         this.chunks = new Map();
+        this._modifiedBlocks = new Map(); // "bx,by,bz" → blockType (for saving)
+        this._modsByChunk = new Map(); // "cx,cz" → [{lx,ly,lz,block},...] (for fast chunk apply)
     }
 
     _hash(x, z) {
@@ -349,6 +351,13 @@ export class World {
         if (this.chunks.has(key)) return this.chunks.get(key);
         const data = this.generateChunk(cx, cz);
         this.chunks.set(key, data);
+        // Apply saved modifications for this chunk only (fast indexed lookup)
+        const mods = this._modsByChunk.get(key);
+        if (mods) {
+            for (const m of mods) {
+                data[(m.y * CHUNK_SIZE + m.lz) * CHUNK_SIZE + m.lx] = m.block;
+            }
+        }
         return data;
     }
 
@@ -404,7 +413,10 @@ export class World {
                     } else if (y < 3) {
                         block = this._hash(bx + y * 37, bz + y * 71) < 0.5 ? BLOCK.BEDROCK : BLOCK.STONE;
                     } else if (y < surfaceBlock - dirtDepth) {
-                        block = BLOCK.STONE;
+                        // Iron ore veins in stone
+                        const oreN = this._hash(bx * 0.31 + y * 0.17, bz * 0.23 + y * 0.41);
+                        if (oreN > 0.92) block = BLOCK.IRON_ORE;
+                        else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {
                         if (inPond) block = BLOCK.CLAY;
                         else if (inRiver) block = BLOCK.SAND;
@@ -499,6 +511,12 @@ export class World {
         const data = this.chunks.get(this.getChunkKey(cx, cz));
         if (!data) return;
         data[(by * CHUNK_SIZE + lz) * CHUNK_SIZE + lx] = block;
+        // Track for saving
+        this._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
+        // Index by chunk for fast apply on load
+        const ck = cx + ',' + cz;
+        if (!this._modsByChunk.has(ck)) this._modsByChunk.set(ck, []);
+        this._modsByChunk.get(ck).push({ lx, y: by, lz, block });
     }
 
     getBlockAt(bx, by, bz) {
