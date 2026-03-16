@@ -92,6 +92,7 @@ export class ChunkManager {
             if (dx * dx + dz * dz > UNLOAD_DIST * UNLOAD_DIST) {
                 if (entry.terrain) { this.scene.remove(entry.terrain); entry.terrain.geometry.dispose(); }
                 if (entry.water) { this.scene.remove(entry.water); entry.water.geometry.dispose(); }
+                if (entry.leaves) { this.scene.remove(entry.leaves); entry.leaves.geometry.dispose(); }
                 this.loaded.delete(key);
             }
         }
@@ -107,10 +108,12 @@ export class ChunkManager {
         if (old) {
             if (old.terrain) { this.scene.remove(old.terrain); old.terrain.geometry.dispose(); }
             if (old.water) { this.scene.remove(old.water); old.water.geometry.dispose(); }
+            if (old.leaves) { this.scene.remove(old.leaves); old.leaves.geometry.dispose(); }
         }
         const entry = this._buildChunkMeshes(cx, cz);
         if (entry.terrain) this.scene.add(entry.terrain);
         if (entry.water) this.scene.add(entry.water);
+        if (entry.leaves) this.scene.add(entry.leaves);
         this.loaded.set(key, entry);
     }
 
@@ -127,6 +130,7 @@ export class ChunkManager {
             const entry = this._buildChunkMeshes(cx, cz);
             if (entry.terrain) this.scene.add(entry.terrain);
             if (entry.water) this.scene.add(entry.water);
+            if (entry.leaves) this.scene.add(entry.leaves);
             this.loaded.set(key, entry);
             built++;
         }
@@ -141,6 +145,8 @@ export class ChunkManager {
         let tVert = 0;
         const wPos = [], wNrm = [], wIdx = [];
         let wVert = 0;
+        const lPos = [], lNrm = [], lCol = [], lIdx = []; // leaves
+        let lVert = 0;
 
         const tmpColor = new THREE.Color();
 
@@ -170,6 +176,31 @@ export class ChunkManager {
                     }
 
                     if (block === BLOCK.AIR) continue;
+
+                    // Leaves go to separate transparent mesh
+                    if (block === BLOCK.LEAVES) {
+                        for (let fi = 0; fi < 6; fi++) {
+                            const face = FACES[fi];
+                            const nbx = bx + face.dir[0], nby = y + face.dir[1], nbz = bz + face.dir[2];
+                            const neighbor = this.world.getBlockAt(nbx, nby, nbz);
+                            if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER) continue;
+                            const ch = colorHash(bx, y, bz);
+                            const ch2 = colorHash(bx + 100, y + 50, bz + 200);
+                            tmpColor.copy(LEAVES_DARK).lerp(LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
+                            tmpColor.r += (ch2 - 0.5) * 0.04;
+                            tmpColor.g += (ch - 0.5) * 0.06;
+                            tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
+                            const verts = face.verts;
+                            for (let vi = 0; vi < 4; vi++) {
+                                lPos.push((lx + verts[vi][0]) * BS, (y - Y_OFF + verts[vi][1]) * BS, (lz + verts[vi][2]) * BS);
+                                lNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                lCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
+                            }
+                            lIdx.push(lVert, lVert+1, lVert+2, lVert+2, lVert+1, lVert+3);
+                            lVert += 4;
+                        }
+                        continue;
+                    }
 
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
@@ -255,7 +286,7 @@ export class ChunkManager {
             }
         }
 
-        const entry = { terrain: null, water: null };
+        const entry = { terrain: null, water: null, leaves: null };
 
         // World-space offset for this chunk
         const worldOX = ox * BS;
@@ -284,6 +315,25 @@ export class ChunkManager {
             mesh.position.set(worldOX, 0, worldOZ);
             mesh.receiveShadow = true;
             entry.water = mesh;
+        }
+
+        if (lVert > 0) {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
+            geo.setAttribute('normal', new THREE.Float32BufferAttribute(lNrm, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(lCol, 3));
+            geo.setIndex(lIdx);
+            const mat = new THREE.MeshStandardMaterial({
+                vertexColors: true, roughness: 0.8, metalness: 0,
+                transparent: true, opacity: 0.75, side: THREE.DoubleSide,
+                depthWrite: false,
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(worldOX, 0, worldOZ);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.renderOrder = 1;
+            entry.leaves = mesh;
         }
 
         return entry;

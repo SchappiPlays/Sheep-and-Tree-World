@@ -97,6 +97,35 @@ export class Player {
         // Legs — exact dimensions
         this.leftLeg = this._makeLeg('left', pantsMat, shoeMat);
         this.rightLeg = this._makeLeg('right', pantsMat, shoeMat);
+
+        // Pickaxe held in left hand (exact from game.html)
+        this.pickaxeHeld = this._makePickaxe();
+        this.pickaxeHeld.visible = false;
+        this.pickaxeHeld.rotation.x = Math.PI;
+        this.pickaxeHeld.position.y = 0.02;
+        this.leftArm.handGrp.add(this.pickaxeHeld);
+
+        // Swing state
+        this.swingTimer = -1;
+    }
+
+    _makePickaxe() {
+        const g = new THREE.Group();
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.03), handleMat);
+        shaft.position.y = 0.3; shaft.castShadow = true; g.add(shaft);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.8, roughness: 0.2 });
+        const pickHead = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.04), headMat);
+        pickHead.position.y = 0.58; pickHead.castShadow = true; g.add(pickHead);
+        const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), headMat);
+        tipL.position.set(-0.17, 0.58, 0); tipL.rotation.z = Math.PI / 2; g.add(tipL);
+        const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), headMat);
+        tipR.position.set(0.17, 0.58, 0); tipR.rotation.z = -Math.PI / 2; g.add(tipR);
+        return g;
+    }
+
+    triggerSwing() {
+        this.swingTimer = 0;
     }
 
     _makeArm(side, shirtMat, skinMat) {
@@ -331,6 +360,49 @@ export class Player {
             const idleElbow = cr * -0.35 * (1 - b);
             this.leftArm.elbow.rotation.x += idleElbow;
             this.rightArm.elbow.rotation.x += idleElbow;
+        }
+
+        // ── Swing animation overlay (exact from game.html) ──
+        if (this.swingTimer >= 0) {
+            this.swingTimer += dt / 0.5; // 0.5s swing duration
+            const t = this.swingTimer;
+            let swShX, swShZ, swElX, swSpineX, swSpineY;
+
+            const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+
+            if (t < 0.2) {
+                // Wind up — raise arm to horizontal, torso coils back
+                const u = ss(0, 0.2, t);
+                swShX    = u * (-1.1);
+                swShZ    = u * 0.3;
+                swElX    = u * (-0.25);
+                swSpineY = u * (-0.45);
+                swSpineX = u * 0.03;
+            } else if (t < 0.45) {
+                // Sweep — torso drives a big twist, arm stays horizontal
+                const u = ss(0.2, 0.45, t);
+                swShX    = -1.1;
+                swShZ    = 0.3 + (-0.15 - 0.3) * u;
+                swElX    = -0.25 + (-0.1 - (-0.25)) * u;
+                swSpineY = -0.45 + (0.55 - (-0.45)) * u;
+                swSpineX = 0.03 + (0.06 - 0.03) * u;
+            } else {
+                // Recovery — everything returns to rest
+                const u = ss(0.45, 1.0, t);
+                swShX    = -1.1 * (1 - u);
+                swShZ    = -0.15 * (1 - u);
+                swElX    = -0.1 * (1 - u);
+                swSpineY = 0.55 * (1 - u);
+                swSpineX = 0.06 * (1 - u);
+            }
+
+            this.leftArm.shoulder.rotation.x += swShX;
+            this.leftArm.shoulder.rotation.z += swShZ;
+            this.leftArm.elbow.rotation.x    += swElX;
+            this.spine.rotation.x += swSpineX;
+            this.spine.rotation.y += swSpineY;
+
+            if (this.swingTimer >= 1) this.swingTimer = -1;
         }
 
         // Update group position

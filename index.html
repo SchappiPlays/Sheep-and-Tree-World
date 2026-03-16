@@ -705,7 +705,7 @@ function raycastBlock(e) {
 
     for (let i = 0; i < maxSteps; i++) {
         const block = world.getBlockAt(x, y, z);
-        if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK && block !== BLOCK.LEAVES) {
+        if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
             // Face normal = direction we entered from
             const nx = prevX - x, ny = prevY - y, nz = prevZ - z;
             return { x, y, z, block, prevX, prevY, prevZ, nx, ny, nz };
@@ -750,6 +750,7 @@ renderer.domElement.addEventListener('click', (e) => {
     if (mapOpen || inventoryOpen || craftingTableOpen) return;
     const hit = raycastBlock(e);
     if (!hit) return;
+    player.triggerSwing();
 
     const held = hotbarSlots[selectedSlot];
     const hasPickaxe = held === 'pickaxe' && inventory['pickaxe'] > 0;
@@ -942,6 +943,10 @@ function animate() {
     // Player update
     if (!dragonMgr.ridingDragon && !craftingTableOpen) player.update(dt, keys);
     dragonMgr.applyPlayerPose(player);
+
+    // Show/hide pickaxe in hand
+    const heldItem = hotbarSlots[selectedSlot];
+    player.pickaxeHeld.visible = heldItem === 'pickaxe' && (inventory['pickaxe'] || 0) > 0;
 
     // Sun follows player (offset same as game.html)
     sun.position.set(
