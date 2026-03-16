@@ -248,13 +248,65 @@ export class ChunkManager {
                         } else if (block === BLOCK.PLANKS) {
                             tmpColor.copy(PLANK_DARK).lerp(PLANK_LIGHT, ch * 0.6);
                         } else if (block === BLOCK.CRAFTING) {
-                            // Crafting table: darker plank base with grid-line pattern on top
+                            // Crafting table — detailed per-face texturing
+                            // Find position within the 3x3x3 table
+                            // Use world-space block coords for consistent pattern
+                            const cbx = ((bx % 3) + 3) % 3; // 0-2 local x within table
+                            const cbz = ((bz % 3) + 3) % 3; // 0-2 local z within table
+                            const cby = y % 3;
+
                             if (fi === 2) {
-                                // Top face — alternating dark/light for grid look
-                                const gx = (bx + bz) % 2 === 0;
-                                tmpColor.setRGB(gx ? 0.45 : 0.55, gx ? 0.32 : 0.38, gx ? 0.18 : 0.22);
+                                // ── Top face ──
+                                const isEdge = cbx === 0 || cbx === 2 || cbz === 0 || cbz === 2;
+                                const isCorner = (cbx === 0 || cbx === 2) && (cbz === 0 || cbz === 2);
+                                if (isCorner) {
+                                    // Dark corner trim
+                                    tmpColor.setRGB(0.28, 0.18, 0.10);
+                                } else if (isEdge) {
+                                    // Edge trim — darker wood frame
+                                    tmpColor.setRGB(0.35, 0.24, 0.13);
+                                    tmpColor.r += ch * 0.03;
+                                } else {
+                                    // Center grid — lighter work surface with tool marks
+                                    const grid = ((bx + bz) % 2 === 0);
+                                    if (grid) {
+                                        tmpColor.setRGB(0.58, 0.42, 0.24); // light plank
+                                    } else {
+                                        tmpColor.setRGB(0.48, 0.35, 0.20); // darker plank
+                                    }
+                                    // Subtle scratches/wear
+                                    tmpColor.r += (ch - 0.5) * 0.06;
+                                    tmpColor.g += (ch2 - 0.5) * 0.04;
+                                }
+                            } else if (fi === 3) {
+                                // ── Bottom face — plain dark wood ──
+                                tmpColor.setRGB(0.30, 0.20, 0.12);
                             } else {
-                                tmpColor.copy(PLANK_DARK).lerp(PLANK_LIGHT, 0.3);
+                                // ── Side faces — plank pattern with cross-brace detail ──
+                                const isVertEdge = cby === 0 || cby === 2;
+                                const isHorizEdge = (fi <= 1) ? (cbz === 0 || cbz === 2) : (cbx === 0 || cbx === 2);
+
+                                if (isVertEdge && isHorizEdge) {
+                                    // Corner post — darkest
+                                    tmpColor.setRGB(0.25, 0.16, 0.09);
+                                } else if (isVertEdge) {
+                                    // Top/bottom rail
+                                    tmpColor.setRGB(0.32, 0.22, 0.12);
+                                } else if (isHorizEdge) {
+                                    // Side post
+                                    tmpColor.setRGB(0.34, 0.23, 0.13);
+                                } else {
+                                    // Inner side panel — warm wood with grain variation
+                                    const grain = Math.sin(cby * 5.0 + ch * 3.0) * 0.04;
+                                    tmpColor.setRGB(0.48 + grain, 0.34 + grain * 0.7, 0.20 + grain * 0.4);
+                                    // Tool silhouette on middle row of front/back face
+                                    if (cby === 1 && fi >= 4) {
+                                        // Darker inset — looks like a carved tool shape
+                                        tmpColor.multiplyScalar(0.75);
+                                    }
+                                }
+                                tmpColor.r += (ch - 0.5) * 0.03;
+                                tmpColor.g += (ch2 - 0.5) * 0.02;
                             }
                         } else if (block === BLOCK.SNOW) {
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.SNOW]);

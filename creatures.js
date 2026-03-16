@@ -9,6 +9,13 @@ const woolMat = new THREE.MeshStandardMaterial({ color: 0xF0EAD6 });
 const hoofMat = new THREE.MeshStandardMaterial({ color: 0x3A3A3A });
 const noseMat = new THREE.MeshStandardMaterial({ color: 0xD4A08A });
 const eyeMatS = new THREE.MeshStandardMaterial({ color: 0x222222 });
+// Cow materials
+const cowBodyMat = new THREE.MeshStandardMaterial({ color: 0x8B5E3C });
+const cowSpotMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E0 });
+const cowNoseMat = new THREE.MeshStandardMaterial({ color: 0xD4A08A });
+// Pig materials
+const pigBodyMat = new THREE.MeshStandardMaterial({ color: 0xE8A0A0 });
+const pigNoseMat = new THREE.MeshStandardMaterial({ color: 0xD4807A });
 
 // Shared geometries
 const bodyGeo  = new THREE.BoxGeometry(0.45, 0.38, 0.7);
@@ -98,11 +105,107 @@ function makeSheep(x, z, terrainY) {
     };
 }
 
+function makeCow(x, z, terrainY) {
+    const g = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 1.0), cowBodyMat);
+    bodyMesh.position.y = 0.65; bodyMesh.castShadow = true; g.add(bodyMesh);
+    // Spots
+    const spot1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.2, 0.3), cowSpotMat);
+    spot1.position.set(-0.18, 0.75, 0.1); g.add(spot1);
+    const spot2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.25), cowSpotMat);
+    spot2.position.set(0.15, 0.6, -0.2); g.add(spot2);
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.7, 0.55); g.add(headGrp);
+    headGrp.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.3), cowBodyMat));
+    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.1), cowNoseMat);
+    muzzle.position.set(0, -0.06, 0.18); headGrp.add(muzzle);
+    const eyeGeo = new THREE.SphereGeometry(0.03, 6, 6);
+    const lEye = new THREE.Mesh(eyeGeo, eyeMatS); lEye.position.set(-0.12, 0.04, 0.13); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeGeo, eyeMatS); rEye.position.set(0.12, 0.04, 0.13); headGrp.add(rEye);
+    // Horns
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0xCCBB99 });
+    const hornGeo = new THREE.ConeGeometry(0.025, 0.14, 5);
+    const lH = new THREE.Mesh(hornGeo, hornMat); lH.position.set(-0.12, 0.16, 0.02); lH.rotation.z = 0.5; headGrp.add(lH);
+    const rH = new THREE.Mesh(hornGeo, hornMat); rH.position.set(0.12, 0.16, 0.02); rH.rotation.z = -0.5; headGrp.add(rH);
+    // Ears
+    const earGeo = new THREE.BoxGeometry(0.1, 0.04, 0.08);
+    const lEar = new THREE.Mesh(earGeo, cowBodyMat); lEar.position.set(-0.18, 0.06, 0); lEar.rotation.z = -0.4; headGrp.add(lEar);
+    const rEar = new THREE.Mesh(earGeo, cowBodyMat); rEar.position.set(0.18, 0.06, 0); rEar.rotation.z = 0.4; headGrp.add(rEar);
+    // Legs
+    const legs = [];
+    for (const [lx, ly, lz] of [[-0.2,0.4,0.35],[0.2,0.4,0.35],[-0.2,0.4,-0.35],[0.2,0.4,-0.35]]) {
+        const hip = new THREE.Group(); hip.position.set(lx, ly, lz); g.add(hip);
+        const legM = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), cowBodyMat); legM.position.y = -0.2; hip.add(legM);
+        const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.12), hoofMat); hoof.position.set(0, -0.42, 0.01); hip.add(hoof);
+        legs.push(hip);
+    }
+    // Tail
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.04), cowBodyMat);
+    tail.position.set(0, 0.55, -0.52); tail.rotation.x = 0.3; g.add(tail);
+    const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), cowBodyMat);
+    tailTip.position.set(0, 0.4, -0.56); g.add(tailTip);
+
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3 + 1,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'cow',
+    };
+}
+
+function makePig(x, z, terrainY) {
+    const g = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.32, 0.55), pigBodyMat);
+    bodyMesh.position.y = 0.38; bodyMesh.castShadow = true; g.add(bodyMesh);
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.38, 0.3); g.add(headGrp);
+    headGrp.add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.2, 0.22), pigBodyMat));
+    // Snout
+    const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.06, 8), pigNoseMat);
+    snout.rotation.x = Math.PI / 2; snout.position.set(0, -0.02, 0.13); headGrp.add(snout);
+    // Nostrils
+    const nostrilMat = new THREE.MeshStandardMaterial({ color: 0x993333 });
+    const nostrilGeo = new THREE.SphereGeometry(0.015, 4, 4);
+    const lN = new THREE.Mesh(nostrilGeo, nostrilMat); lN.position.set(-0.025, -0.02, 0.16); headGrp.add(lN);
+    const rN = new THREE.Mesh(nostrilGeo, nostrilMat); rN.position.set(0.025, -0.02, 0.16); headGrp.add(rN);
+    // Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.02, 6, 6);
+    const lEye = new THREE.Mesh(eyeGeo, eyeMatS); lEye.position.set(-0.09, 0.04, 0.08); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeGeo, eyeMatS); rEye.position.set(0.09, 0.04, 0.08); headGrp.add(rEye);
+    // Ears
+    const earGeo = new THREE.BoxGeometry(0.1, 0.06, 0.08);
+    const lEar = new THREE.Mesh(earGeo, pigBodyMat); lEar.position.set(-0.12, 0.1, 0.04); lEar.rotation.set(-0.3, 0, -0.6); headGrp.add(lEar);
+    const rEar = new THREE.Mesh(earGeo, pigBodyMat); rEar.position.set(0.12, 0.1, 0.04); rEar.rotation.set(-0.3, 0, 0.6); headGrp.add(rEar);
+    // Legs
+    const legs = [];
+    for (const [lx, ly, lz] of [[-0.13,0.22,0.18],[0.13,0.22,0.18],[-0.13,0.22,-0.18],[0.13,0.22,-0.18]]) {
+        const hip = new THREE.Group(); hip.position.set(lx, ly, lz); g.add(hip);
+        const legM = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.08), pigBodyMat); legM.position.y = -0.11; hip.add(legM);
+        const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.09), hoofMat); hoof.position.set(0, -0.24, 0.01); hip.add(hoof);
+        legs.push(hip);
+    }
+    // Curly tail
+    const tail = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.015, 6, 8, Math.PI * 1.5), pigBodyMat);
+    tail.position.set(0, 0.4, -0.3); tail.rotation.y = Math.PI / 2; g.add(tail);
+
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3 + 1,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'pig',
+    };
+}
+
 export class CreatureManager {
     constructor(scene, world) {
         this.scene = scene;
         this.world = world;
-        this.sheep = [];
+        this.creatures = []; // all creatures (sheep, cows, pigs)
+        this.sheep = this.creatures; // alias for backward compat
         this.spawnedChunks = new Set();
     }
 
@@ -123,18 +226,18 @@ export class CreatureManager {
             }
         }
 
-        // Despawn far sheep
-        for (let i = this.sheep.length - 1; i >= 0; i--) {
-            const sh = this.sheep[i];
+        // Despawn far creatures
+        for (let i = this.creatures.length - 1; i >= 0; i--) {
+            const sh = this.creatures[i];
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             if (dx * dx + dz * dz > 60 * 60) {
                 this.scene.remove(sh.group);
-                this.sheep.splice(i, 1);
+                this.creatures.splice(i, 1);
             }
         }
 
         // Update AI + animation
-        for (const sh of this.sheep) {
+        for (const sh of this.creatures) {
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             const dist2 = dx * dx + dz * dz;
             // Skip AI for very far sheep
@@ -207,22 +310,31 @@ export class CreatureManager {
         const chunkWorldZ = cz * CHUNK_SIZE * BLOCK_SIZE;
         const chunkWorldSize = CHUNK_SIZE * BLOCK_SIZE;
 
-        // Deterministic sheep placement — ~0-2 per chunk on grass
-        for (let i = 0; i < 3; i++) {
+        // Deterministic creature placement — sheep, cows, pigs
+        for (let i = 0; i < 5; i++) {
             const hash = this.world._hash(cx * 100 + i * 7 + 9999, cz * 100 + i * 13 + 8888);
-            if (hash > 0.15) continue; // ~15% chance per slot
+            if (hash > 0.18) continue;
 
             const sx = chunkWorldX + hash * chunkWorldSize * 3.7 % chunkWorldSize;
             const sz = chunkWorldZ + this.world._hash(cx + i * 31, cz + i * 47) * chunkWorldSize;
 
-            // Check biome — only spawn on grass
             const biome = this.world._getBiome(sx, sz);
-            if (biome !== 'grass') continue;
+            if (biome !== 'grass' && biome !== 'desert_transition') continue;
             const terrainY = this.world.getHeight(sx, sz);
             if (terrainY < 0.5 || terrainY > 35) continue;
-            const sh = makeSheep(sx, sz, terrainY);
-            this.scene.add(sh.group);
-            this.sheep.push(sh);
+
+            // Pick creature type deterministically
+            const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
+            let creature;
+            if (typeHash < 0.45) {
+                creature = makeSheep(sx, sz, terrainY);
+            } else if (typeHash < 0.75) {
+                creature = makeCow(sx, sz, terrainY);
+            } else {
+                creature = makePig(sx, sz, terrainY);
+            }
+            this.scene.add(creature.group);
+            this.creatures.push(creature);
         }
     }
 }

@@ -590,8 +590,8 @@ export class DragonManager {
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
-        this.altarX = -40;
-        this.altarZ = 10;
+        this.altarX = -60;
+        this.altarZ = 180;
         this._built = false;
         this.carriedEggGrp = null;
         this.carriedEggMat = null;
