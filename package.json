@@ -1,0 +1,29 @@
+{
+  "name": "sheep-and-tree-world",
+  "version": "1.0.0",
+  "main": "main.js",
+  "author": "Lucas",
+  "description": "Sheep and Tree World",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.lucas.sheepandtreeworld",
+    "productName": "Sheep and Tree World",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.games"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "*.js",
+      "!node_modules"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^41.0.2",
+    "electron-builder": "^26.8.1"
+  }
+}

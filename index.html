@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sheep and Tree World</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: monospace; }
+canvas { display: block; }
+#debug {
+    position: fixed; top: 8px; left: 8px;
+    color: rgba(255,255,255,0.6); font-size: 12px;
+    pointer-events: none; z-index: 10;
+    text-shadow: 1px 1px 2px #000;
+    line-height: 1.6;
+}
+#worldMap {
+    display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+    background: rgba(10,15,10,0.92);
+    border: 2px solid rgba(180,160,120,0.4);
+    border-radius: 8px;
+    padding: 10px;
+}
+#worldMap h2 {
+    color: rgba(220,200,160,0.8); font: bold 14px monospace;
+    text-align: center; margin-bottom: 6px;
+}
+#mapCanvas { display: block; cursor: grab; }
+#hotbar {
+    position: fixed; bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 3px; z-index: 20;
+    background: rgba(0,0,0,0.45);
+    padding: 4px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+.hotbar-slot {
+    width: 46px; height: 46px;
+    background: rgba(40,40,40,0.6);
+    border: 2px solid rgba(120,120,120,0.3);
+    border-radius: 4px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+}
+.hotbar-slot.selected {
+    border-color: rgba(255,255,255,0.85);
+    background: rgba(80,80,80,0.5);
+}
+.hotbar-slot .block-icon {
+    width: 26px; height: 26px;
+    border-radius: 2px;
+    position: relative;
+}
+.hotbar-slot .block-icon .top-face {
+    position: absolute; top: 0; left: 3px;
+    width: 20px; height: 10px;
+    border-radius: 1px;
+}
+.hotbar-slot .block-icon .front-face {
+    position: absolute; top: 9px; left: 3px;
+    width: 20px; height: 17px;
+    border-radius: 1px;
+}
+.hotbar-slot .count {
+    position: absolute; bottom: 1px; right: 3px;
+    font: bold 10px monospace;
+    color: #fff; text-shadow: 1px 1px 1px #000;
+}
+.hotbar-slot .key-hint {
+    position: absolute; top: 1px; left: 3px;
+    font: 9px monospace;
+    color: rgba(255,255,255,0.35);
+}
+#inventoryScreen {
+    display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 110;
+    background: rgba(10,12,10,0.94);
+    border: 2px solid rgba(160,140,100,0.4);
+    border-radius: 8px;
+    padding: 16px;
+    min-width: 420px;
+    user-select: none;
+}
+#inventoryScreen h2 {
+    color: rgba(220,200,160,0.85); font: bold 15px monospace;
+    text-align: center; margin-bottom: 10px;
+}
+.inv-section-label {
+    color: rgba(180,160,120,0.6); font: 11px monospace;
+    margin: 10px 0 4px 2px;
+}
+.inv-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 44px);
+    gap: 3px;
+}
+.inv-slot {
+    width: 44px; height: 44px;
+    background: rgba(40,40,40,0.6);
+    border: 2px solid rgba(100,100,100,0.25);
+    border-radius: 4px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+}
+.inv-slot:hover { border-color: rgba(200,180,120,0.6); background: rgba(60,55,45,0.5); }
+.inv-slot.drag-over { border-color: rgba(255,220,100,0.8); background: rgba(80,70,40,0.5); }
+.inv-slot .block-icon {
+    width: 26px; height: 26px; border-radius: 2px; position: relative;
+}
+.inv-slot .block-icon .top-face {
+    position: absolute; top: 0; left: 3px; width: 20px; height: 10px; border-radius: 1px;
+}
+.inv-slot .block-icon .front-face {
+    position: absolute; top: 9px; left: 3px; width: 20px; height: 17px; border-radius: 1px;
+}
+.inv-slot .count {
+    position: absolute; bottom: 1px; right: 3px;
+    font: bold 10px monospace; color: #fff; text-shadow: 1px 1px 1px #000;
+}
+.inv-slot .slot-label {
+    position: absolute; top: 1px; left: 3px;
+    font: 9px monospace; color: rgba(255,255,255,0.3);
+}
+.inv-slot .block-name {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    font: 9px monospace; color: rgba(200,180,140,0.7); white-space: nowrap;
+    display: none;
+}
+.inv-slot:hover .block-name { display: block; }
+.craft-btn:not([disabled]):hover { background: rgba(80,70,40,0.8) !important; border-color: rgba(220,200,120,0.7) !important; }
+#dragGhost {
+    position: fixed; pointer-events: none; z-index: 200;
+    width: 30px; height: 30px; opacity: 0.85; display: none;
+}
+#dragGhost .top-face {
+    position: absolute; top: 0; left: 3px; width: 24px; height: 12px; border-radius: 1px;
+}
+#dragGhost .front-face {
+    position: absolute; top: 11px; left: 3px; width: 24px; height: 19px; border-radius: 1px;
+}
+</style>
+</head>
+<body>
+<div id="debug"></div>
+<div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
+<div id="hotbar"></div>
+<div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
+<div id="dragGhost"></div>
+<div id="worldMap"><h2>World Map</h2><canvas id="mapCanvas" width="600" height="600"></canvas></div>
+<script src="three.min.js" onerror="
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    document.head.appendChild(s);
+"></script>
+<script type="module">
+import { World, BLOCK_SIZE, BLOCK, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend } from './world.js';
+import { Player } from './player.js';
+import { ChunkManager } from './chunks.js';
+import { CreatureManager } from './creatures.js';
+import { DragonManager } from './dragons.js';
+
+function mix(a, b, t) { return a + (b - a) * t; }
+
+const SKY_COLOR = 0x87CEEB;
+
+// ── Renderer ──
+const renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.5 });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.BasicShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.setClearColor(SKY_COLOR);
+document.body.appendChild(renderer.domElement);
+
+// ── Scene ──
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(SKY_COLOR, 0.006);
+
+// ── Camera — same FOV as game.html ──
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 800);
+
+// ── Lighting — same as game.html ──
+const ambient = new THREE.AmbientLight(0x8899bb, 1.2);
+scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0x88bbff, 0x445522, 0.8);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+sun.position.set(5, 12, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+const shCam = sun.shadow.camera;
+shCam.near = 0.5; shCam.far = 60;
+shCam.left = -18; shCam.right = 18; shCam.top = 18; shCam.bottom = -18;
+scene.add(sun);
+scene.add(sun.target);
+
+// ── World ──
+const world = new World();
+const chunkManager = new ChunkManager(scene, world);
+const creatures = new CreatureManager(scene, world);
+const dragonMgr = new DragonManager(scene, world);
+const player = new Player(scene, world);
+
+// Spawn — generate chunk first
+world.getOrCreateChunk(0, 0);
+const spawnY = world.getHeight(0, 0);
+player.position.set(0, spawnY, 0);
+dragonMgr.build((x, z) => world.getHeight(x, z));
+dragonMgr.buildCarriedEgg(player.spine);
+dragonMgr.addToInventory = addToInventory;
+dragonMgr.removeFromInventory = removeFromInventory;
+dragonMgr.getHeldItem = () => {
+    const bt = hotbarSlots[selectedSlot];
+    if (typeof bt === 'string' && bt.startsWith('egg_') && inventory[bt] > 0) {
+        return { type: 'egg', egg: eggItems[bt] };
+    }
+    return null;
+};
+
+// ── Input — same as game.html (no pointer lock, keyboard only) ──
+const keys = {};
+document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'KeyM') {
+        mapOpen = !mapOpen;
+        worldMapEl.style.display = mapOpen ? 'block' : 'none';
+        if (mapOpen) {
+            mapViewX = player.position.x;
+            mapViewZ = player.position.z;
+            drawWorldMap();
+        }
+    }
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ── Zoom — exact same as game.html ──
+let zoomLevel = 1.0;
+const minZoom = 0.4;
+const maxZoom = 5.0;
+addEventListener('wheel', e => {
+    e.preventDefault();
+    const zoomSpeed = 0.001;
+    zoomLevel += e.deltaY * zoomSpeed;
+    zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel));
+}, { passive: false });
+
+// ── World Map ──
+const worldMapEl = document.getElementById('worldMap');
+const mapCanvas = document.getElementById('mapCanvas');
+const mapCtx = mapCanvas.getContext('2d');
+let mapOpen = false;
+let mapViewX = 0, mapViewZ = 0, mapViewSize = 1200;
+let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
+let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
+
+function drawWorldMap() {
+    const w = mapCanvas.width, h = mapCanvas.height;
+    const scale = w / (mapViewSize * 2);
+
+    // Only redraw terrain if view changed
+    if (!mapCache || mapCacheVX !== mapViewX || mapCacheVZ !== mapViewZ || mapCacheSize !== mapViewSize) {
+        mapCtx.fillStyle = '#1a2a1a';
+        mapCtx.fillRect(0, 0, w, h);
+
+        // Draw terrain pixel by pixel
+        const step = 4; // render every 4th pixel for speed
+        for (let px = 0; px < w; px += step) {
+            for (let py = 0; py < h; py += step) {
+                const wx = (px / scale) + mapViewX - mapViewSize;
+                const wz = (py / scale) + mapViewZ - mapViewSize;
+
+                const dist = Math.sqrt(wx * wx + wz * wz);
+                const localR = getIslandRadius(wx, wz);
+
+                if (dist > localR - 20) {
+                    mapCtx.fillStyle = '#2a5a8a'; // ocean
+                    mapCtx.fillRect(px, py, step, step);
+                    continue;
+                }
+
+                // Beach
+                if (dist > localR - 50) {
+                    mapCtx.fillStyle = '#c4b890';
+                    mapCtx.fillRect(px, py, step, step);
+                    continue;
+                }
+
+                const th = getTerrainHeight(wx, wz);
+                const snow = getSnowBlend(wz);
+                const desert = getDesertBlend(wz);
+                const mtn = getMountainBlend(wx, wz);
+                const ench = getEnchantedBlend(wx, wz);
+                const scorch = getScorchedBlend(wx, wz);
+
+                let r, g, b;
+                if (scorch > 0.05) {
+                    const sv = Math.floor(20 + th * 2 - scorch * 15);
+                    r = sv + 5; g = sv; b = sv;
+                } else if (ench > 0.1) {
+                    const eT = Math.min(1, (ench - 0.1) / 0.5);
+                    r = Math.floor(60 + th * 3 + eT * 50);
+                    g = Math.floor(30 + th * 5 + eT * 20);
+                    b = Math.floor(80 + th * 5 + eT * 100);
+                } else if (mtn > 0.15) {
+                    const rockT = Math.min(1, (mtn - 0.15) / 0.5);
+                    const base = 80 + Math.floor(rockT * 100);
+                    r = base; g = base - 5; b = base - 10;
+                } else if (snow > 0) {
+                    r = Math.floor(40 + th * 5 + snow * 180);
+                    g = Math.floor(80 + th * 10 + snow * 155);
+                    b = Math.floor(30 + snow * 215);
+                } else if (desert > 0) {
+                    r = Math.floor(40 + th * 5 + desert * 170);
+                    g = Math.floor(80 + th * 10 + desert * 110);
+                    b = Math.floor(30 + desert * 90);
+                } else {
+                    r = Math.floor(40 + th * 5);
+                    g = Math.min(140, Math.floor(80 + th * 15));
+                    b = 30;
+                }
+
+                mapCtx.fillStyle = `rgb(${Math.min(255,r)},${Math.min(255,g)},${Math.min(255,b)})`;
+                mapCtx.fillRect(px, py, step, step);
+            }
+        }
+        mapCache = mapCtx.getImageData(0, 0, w, h);
+        mapCacheVX = mapViewX; mapCacheVZ = mapViewZ; mapCacheSize = mapViewSize;
+    } else {
+        mapCtx.putImageData(mapCache, 0, 0);
+    }
+
+    // Player marker
+    const ppx = (player.position.x - mapViewX + mapViewSize) * scale;
+    const ppy = (player.position.z - mapViewZ + mapViewSize) * scale;
+    const angle = player.group.rotation.y;
+    mapCtx.fillStyle = '#ff3333';
+    mapCtx.beginPath();
+    mapCtx.moveTo(ppx + Math.sin(angle) * 8, ppy + Math.cos(angle) * 8);
+    mapCtx.lineTo(ppx + Math.sin(angle + 2.5) * 5, ppy + Math.cos(angle + 2.5) * 5);
+    mapCtx.lineTo(ppx + Math.sin(angle - 2.5) * 5, ppy + Math.cos(angle - 2.5) * 5);
+    mapCtx.closePath();
+    mapCtx.fill();
+
+    // Coord label
+    mapCtx.fillStyle = 'rgba(200,190,170,0.7)';
+    mapCtx.font = '11px monospace';
+    mapCtx.textAlign = 'left';
+    mapCtx.fillText(`X: ${player.position.x.toFixed(0)}  Z: ${player.position.z.toFixed(0)}`, 8, h - 8);
+}
+
+// Map drag
+mapCanvas.addEventListener('mousedown', e => {
+    mapDragging = true; mapDidDrag = false;
+    mapDragX = e.clientX; mapDragY = e.clientY;
+    mapDragVX = mapViewX; mapDragVZ = mapViewZ;
+    mapCanvas.style.cursor = 'grabbing';
+});
+document.addEventListener('mousemove', e => {
+    if (!mapDragging) return;
+    const dxPx = e.clientX - mapDragX, dyPx = e.clientY - mapDragY;
+    if (Math.abs(dxPx) > 3 || Math.abs(dyPx) > 3) mapDidDrag = true;
+    const rect = mapCanvas.getBoundingClientRect();
+    const canvasScale = mapCanvas.width / rect.width;
+    const pixToWorld = (mapViewSize * 2) / mapCanvas.width;
+    mapViewX = mapDragVX - dxPx * canvasScale * pixToWorld;
+    mapViewZ = mapDragVZ - dyPx * canvasScale * pixToWorld;
+    drawWorldMap();
+});
+document.addEventListener('mouseup', () => {
+    if (mapDragging) { mapDragging = false; mapCanvas.style.cursor = 'grab'; }
+});
+mapCanvas.addEventListener('wheel', e => {
+    if (!mapOpen) return;
+    e.preventDefault(); e.stopPropagation();
+    const zf = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+    mapViewSize = Math.max(50, Math.min(2500, mapViewSize * zf));
+    drawWorldMap();
+}, { passive: false });
+
+// ── Inventory & Hotbar ──
+const inventory = {}; // blockType → count
+let hotbarSlots = [0,0,0,0,0,0,0,0,0];
+let selectedSlot = 0;
+let inventoryOpen = false;
+const hotbarEl = document.getElementById('hotbar');
+const invScreenEl = document.getElementById('inventoryScreen');
+const invContentsEl = document.getElementById('invContents');
+const dragGhostEl = document.getElementById('dragGhost');
+
+const BLOCK_INFO = {
+    [BLOCK.GRASS]:  { name:'Grass',  top:'#4cc238', front:'#4a9a30' },
+    [BLOCK.DIRT]:   { name:'Dirt',   top:'#8b6b3d', front:'#6b5030' },
+    [BLOCK.STONE]:  { name:'Stone',  top:'#999',    front:'#777' },
+    [BLOCK.SAND]:   { name:'Sand',   top:'#d4c07a', front:'#c0aa60' },
+    [BLOCK.SNOW]:   { name:'Snow',   top:'#f0f0f8', front:'#d8d8e8' },
+    [BLOCK.GRAVEL]: { name:'Gravel', top:'#888880', front:'#666660' },
+    [BLOCK.CLAY]:   { name:'Clay',   top:'#9a8b7a', front:'#887868' },
+    [BLOCK.WOOD]:   { name:'Wood Log',   top:'#7d4f30', front:'#5a3518' },
+    [BLOCK.LEAVES]: { name:'Leaves', top:'#35b535', front:'#1a7a1a' },
+    [BLOCK.PLANKS]: { name:'Wood Planks', top:'#aa8a55', front:'#8a6a3a' },
+    [BLOCK.CRAFTING]: { name:'Crafting Table', top:'#8a6535', front:'#7a5a30' },
+};
+
+// Egg data stored separately — maps 'egg_0' → egg object
+const eggItems = {};
+
+function getItemInfo(key) {
+    if (key === 'pickaxe') return { name: 'Pickaxe', top: '#888', front: '#555', isTool: true };
+    if (key === 'stick') return { name: 'Stick', top: '#a08050', front: '#6b4226', isTool: true };
+    if (typeof key === 'number') return BLOCK_INFO[key];
+    if (typeof key === 'string' && key.startsWith('egg_')) {
+        const egg = eggItems[key];
+        if (!egg) return null;
+        const c = '#' + new THREE.Color(egg.color).getHexString();
+        const v = '#' + new THREE.Color(egg.veinColor).getHexString();
+        return { name: egg.name + ' Egg', top: v, front: c, isEgg: true };
+    }
+    return null;
+}
+
+function blockIconHTML(info) {
+    if (info.isTool) {
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">
+            <svg width="22" height="22" viewBox="0 0 22 22">
+                <rect x="10" y="8" width="3" height="13" rx="1" fill="${info.front}" transform="rotate(-45 11 14)"/>
+                <rect x="5" y="2" width="12" height="5" rx="1" fill="${info.top}" transform="rotate(-45 11 5)"/>
+            </svg></div>`;
+    }
+    if (info.isEgg) {
+        return `<div class="block-icon" style="border-radius:50%"><div class="top-face" style="background:${info.top};border-radius:50%"></div><div class="front-face" style="background:${info.front};border-radius:6px"></div></div>`;
+    }
+    return `<div class="block-icon"><div class="top-face" style="background:${info.top}"></div><div class="front-face" style="background:${info.front}"></div></div>`;
+}
+
+function addToInventory(key, eggData) {
+    if (typeof key === 'string' && key.startsWith('egg_') && eggData) {
+        eggItems[key] = eggData;
+        inventory[key] = 1;
+    } else {
+        inventory[key] = (inventory[key] || 0) + 1;
+    }
+    if (!hotbarSlots.includes(key)) {
+        const emptyIdx = hotbarSlots.indexOf(0);
+        if (emptyIdx >= 0) hotbarSlots[emptyIdx] = key;
+    }
+    refreshUI();
+}
+
+function removeFromInventory(blockType) {
+    if (!inventory[blockType]) return false;
+    inventory[blockType]--;
+    if (inventory[blockType] <= 0) {
+        delete inventory[blockType];
+        for (let i = 0; i < hotbarSlots.length; i++)
+            if (hotbarSlots[i] === blockType) hotbarSlots[i] = 0;
+    }
+    refreshUI();
+    return true;
+}
+
+function refreshUI() {
+    updateHotbarUI();
+    if (inventoryOpen) updateInventoryUI();
+}
+
+function updateHotbarUI() {
+    let html = '';
+    for (let i = 0; i < 9; i++) {
+        const sel = i === selectedSlot ? ' selected' : '';
+        const bt = hotbarSlots[i];
+        const info = getItemInfo(bt);
+        let inner = `<span class="key-hint">${i+1}</span>`;
+        if (info && inventory[bt] > 0) {
+            inner += blockIconHTML(info);
+            inner += `<span class="count">${inventory[bt]}</span>`;
+        }
+        html += `<div class="hotbar-slot${sel}">${inner}</div>`;
+    }
+    hotbarEl.innerHTML = html;
+}
+
+function updateInventoryUI() {
+    let html = '';
+
+    // Hotbar section
+    html += '<div class="inv-section-label">Hotbar</div><div class="inv-grid">';
+    for (let i = 0; i < 9; i++) {
+        const bt = hotbarSlots[i];
+        const info = getItemInfo(bt);
+        let inner = `<span class="slot-label">${i+1}</span>`;
+        if (info && inventory[bt] > 0) {
+            inner += blockIconHTML(info);
+            inner += `<span class="count">${inventory[bt]}</span>`;
+            inner += `<span class="block-name">${info.name}</span>`;
+        }
+        html += `<div class="inv-slot" data-area="hotbar" data-idx="${i}">${inner}</div>`;
+    }
+    html += '</div>';
+
+    // Inventory section — show all item types we have
+    const invTypes = Object.keys(inventory).filter(k => inventory[k] > 0).map(k => isNaN(k) ? k : Number(k));
+    html += '<div class="inv-section-label">Inventory</div><div class="inv-grid">';
+    for (let i = 0; i < 27; i++) {
+        const bt = i < invTypes.length ? invTypes[i] : 0;
+        const info = getItemInfo(bt);
+        let inner = '';
+        if (info && inventory[bt] > 0) {
+            inner += blockIconHTML(info);
+            inner += `<span class="count">${inventory[bt]}</span>`;
+            inner += `<span class="block-name">${info.name}</span>`;
+        }
+        html += `<div class="inv-slot" data-area="inv" data-idx="${i}" data-bt="${bt}">${inner}</div>`;
+    }
+    html += '</div>';
+
+    // Crafting section
+    const RECIPES = [
+        { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4, label: 'Wood Log → 4 Planks' },
+        { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1, label: '4 Planks → Wood Log' },
+        { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4, label: 'Wood Log → 4 Sticks' },
+        { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
+        { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1, label: '4 Wood Logs → Crafting Table' },
+        { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1, label: '16 Planks → Crafting Table' },
+    ];
+    html += '<div class="inv-section-label">Crafting</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    for (let ri = 0; ri < RECIPES.length; ri++) {
+        const r = RECIPES[ri];
+        const canCraft = (inventory[r.from] || 0) >= r.fc;
+        const toInfo = getItemInfo(r.to);
+        html += `<button class="craft-btn" data-ri="${ri}" ${canCraft ? '' : 'disabled'} style="
+            display:flex;align-items:center;gap:6px;padding:6px 10px;
+            background:${canCraft ? 'rgba(60,50,30,0.7)' : 'rgba(30,30,30,0.5)'};
+            border:1px solid ${canCraft ? 'rgba(180,160,100,0.5)' : 'rgba(80,80,80,0.3)'};
+            border-radius:4px;color:${canCraft ? 'rgba(220,200,160,0.9)' : 'rgba(120,120,120,0.5)'};
+            font:12px monospace;cursor:${canCraft ? 'pointer' : 'default'};
+        ">`;
+        html += `<span>${r.label}</span>`;
+        if (toInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${toInfo.front};border-radius:2px;"></span>`;
+        html += '</button>';
+    }
+    html += '</div>';
+
+    invContentsEl.innerHTML = html;
+
+    // Wire up craft buttons
+    invContentsEl.querySelectorAll('.craft-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const ri = Number(btn.dataset.ri);
+            doCraft(RECIPES[ri]);
+            updateInventoryUI();
+        });
+    });
+
+    // Wire up click handlers for moving items
+    invContentsEl.querySelectorAll('.inv-slot').forEach(slot => {
+        slot.addEventListener('click', onInvSlotClick);
+    });
+}
+
+// Click-to-move system: click a slot to pick up, click another to swap/place
+let heldBlock = 0; // block type currently "held" on cursor
+
+function onInvSlotClick(e) {
+    const slot = e.currentTarget;
+    const area = slot.dataset.area;
+    const idx = parseInt(slot.dataset.idx);
+
+    if (heldBlock === 0) {
+        // Pick up from this slot
+        let bt = 0;
+        if (area === 'hotbar') {
+            bt = hotbarSlots[idx];
+            if (bt && inventory[bt] > 0) {
+                heldBlock = bt;
+                hotbarSlots[idx] = 0;
+                showDragGhost(bt);
+                refreshUI();
+            }
+        } else {
+            bt = parseInt(slot.dataset.bt);
+            if (bt && inventory[bt] > 0) {
+                heldBlock = bt;
+                // Remove from visible inv list (it stays in inventory count)
+                showDragGhost(bt);
+                refreshUI();
+            }
+        }
+    } else {
+        // Place held block into this slot
+        if (area === 'hotbar') {
+            const existing = hotbarSlots[idx];
+            hotbarSlots[idx] = heldBlock;
+            heldBlock = existing && inventory[existing] > 0 ? existing : 0;
+        } else {
+            // Clicking an inventory slot with held block — just drop it back
+            // If slot has a block, swap
+            const slotBt = parseInt(slot.dataset.bt);
+            if (slotBt && slotBt !== heldBlock && inventory[slotBt] > 0) {
+                // Put held into first empty hotbar or just drop, pick up this one
+                const emptyIdx = hotbarSlots.indexOf(0);
+                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
+                heldBlock = slotBt;
+                showDragGhost(slotBt);
+            } else {
+                // Just assign to a hotbar slot
+                const emptyIdx = hotbarSlots.indexOf(0);
+                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
+                heldBlock = 0;
+            }
+        }
+        if (heldBlock === 0) hideDragGhost();
+        else showDragGhost(heldBlock);
+        refreshUI();
+    }
+}
+
+function showDragGhost(bt) {
+    const info = getItemInfo(bt);
+    if (!info) { hideDragGhost(); return; }
+    dragGhostEl.innerHTML = `<div class="top-face" style="background:${info.top}"></div><div class="front-face" style="background:${info.front}"></div>`;
+    dragGhostEl.style.display = 'block';
+}
+function hideDragGhost() {
+    dragGhostEl.style.display = 'none';
+    heldBlock = 0;
+}
+document.addEventListener('mousemove', e => {
+    if (dragGhostEl.style.display === 'block') {
+        dragGhostEl.style.left = (e.clientX + 10) + 'px';
+        dragGhostEl.style.top = (e.clientY + 10) + 'px';
+    }
+});
+
+updateHotbarUI();
+
+// Key handlers: 1-9 for hotbar, I for inventory
+document.addEventListener('keydown', e => {
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 9 && !inventoryOpen) {
+        selectedSlot = num - 1;
+        updateHotbarUI();
+    }
+    if (e.code === 'Escape' && craftingTableOpen) {
+        craftingTableOpen = false;
+        craftTableMenuEl.style.display = 'none';
+    }
+    if (e.code === 'KeyI') {
+        // Close crafting table menu if open
+        if (craftingTableOpen) {
+            craftingTableOpen = false;
+            craftTableMenuEl.style.display = 'none';
+        }
+        inventoryOpen = !inventoryOpen;
+        invScreenEl.style.display = inventoryOpen ? 'block' : 'none';
+        if (inventoryOpen) {
+            updateInventoryUI();
+        } else {
+            if (heldBlock) {
+                const emptyIdx = hotbarSlots.indexOf(0);
+                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
+                hideDragGhost();
+                refreshUI();
+            }
+        }
+    }
+});
+
+// ── DDA Raycast helper ──
+const _raycaster = new THREE.Raycaster();
+const _mouse = new THREE.Vector2();
+
+function raycastBlock(e) {
+    _mouse.x = (e.clientX / innerWidth) * 2 - 1;
+    _mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    _raycaster.setFromCamera(_mouse, camera);
+
+    const origin = _raycaster.ray.origin;
+    const dir = _raycaster.ray.direction;
+    const BS = BLOCK_SIZE;
+    const yOff = 128;
+
+    let x = Math.floor(origin.x / BS);
+    let y = Math.floor(origin.y / BS) + yOff;
+    let z = Math.floor(origin.z / BS);
+
+    const stepX = dir.x >= 0 ? 1 : -1;
+    const stepY = dir.y >= 0 ? 1 : -1;
+    const stepZ = dir.z >= 0 ? 1 : -1;
+    const tDeltaX = dir.x !== 0 ? Math.abs(BS / dir.x) : Infinity;
+    const tDeltaY = dir.y !== 0 ? Math.abs(BS / dir.y) : Infinity;
+    const tDeltaZ = dir.z !== 0 ? Math.abs(BS / dir.z) : Infinity;
+    let tMaxX = dir.x !== 0 ? ((dir.x > 0 ? (Math.floor(origin.x/BS)+1)*BS - origin.x : Math.floor(origin.x/BS)*BS - origin.x) / dir.x) : Infinity;
+    let tMaxY = dir.y !== 0 ? ((dir.y > 0 ? (Math.floor(origin.y/BS)+1)*BS - origin.y : Math.floor(origin.y/BS)*BS - origin.y) / dir.y) : Infinity;
+    let tMaxZ = dir.z !== 0 ? ((dir.z > 0 ? (Math.floor(origin.z/BS)+1)*BS - origin.z : Math.floor(origin.z/BS)*BS - origin.z) / dir.z) : Infinity;
+
+    const maxSteps = Math.ceil(10 / BS) + 5;
+    let prevX = x, prevY = y, prevZ = z;
+
+    for (let i = 0; i < maxSteps; i++) {
+        const block = world.getBlockAt(x, y, z);
+        if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK && block !== BLOCK.LEAVES) {
+            // Face normal = direction we entered from
+            const nx = prevX - x, ny = prevY - y, nz = prevZ - z;
+            return { x, y, z, block, prevX, prevY, prevZ, nx, ny, nz };
+        }
+        prevX = x; prevY = y; prevZ = z;
+        if (tMaxX < tMaxY) {
+            if (tMaxX < tMaxZ) { x += stepX; tMaxX += tDeltaX; }
+            else { z += stepZ; tMaxZ += tDeltaZ; }
+        } else {
+            if (tMaxY < tMaxZ) { y += stepY; tMaxY += tDeltaY; }
+            else { z += stepZ; tMaxZ += tDeltaZ; }
+        }
+    }
+    return null;
+}
+
+function rebuildNear(bx, bz) {
+    chunkManager.rebuildChunkAt(bx, bz);
+    const lx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    if (lx === 0) chunkManager.rebuildChunkAt(bx - 1, bz);
+    if (lx === CHUNK_SIZE - 1) chunkManager.rebuildChunkAt(bx + 1, bz);
+    if (lz === 0) chunkManager.rebuildChunkAt(bx, bz - 1);
+    if (lz === CHUNK_SIZE - 1) chunkManager.rebuildChunkAt(bx, bz + 1);
+}
+
+// ── Pickaxe system ──
+let mineW = 0, mineH = 0; // half-extents: 0=1x1, 1=3x3
+
+// Arrow keys adjust mining size (only when holding pickaxe)
+document.addEventListener('keydown', e => {
+    const held = hotbarSlots[selectedSlot];
+    if (held !== 'pickaxe') return;
+    if (e.code === 'ArrowUp') { mineH = Math.min(1, mineH + 1); e.preventDefault(); }
+    if (e.code === 'ArrowDown') { mineH = Math.max(0, mineH - 1); e.preventDefault(); }
+    if (e.code === 'ArrowRight') { mineW = Math.min(1, mineW + 1); e.preventDefault(); }
+    if (e.code === 'ArrowLeft') { mineW = Math.max(0, mineW - 1); e.preventDefault(); }
+});
+
+// Left click = break block(s)
+renderer.domElement.addEventListener('click', (e) => {
+    if (mapOpen || inventoryOpen || craftingTableOpen) return;
+    const hit = raycastBlock(e);
+    if (!hit) return;
+
+    const held = hotbarSlots[selectedSlot];
+    const hasPickaxe = held === 'pickaxe' && inventory['pickaxe'] > 0;
+
+    if (hasPickaxe && (mineW > 0 || mineH > 0)) {
+        // Area break — determine axes from hit face
+        // Face normal (nx, ny, nz) tells us which face we hit
+        // The two perpendicular axes become our width/height plane
+        let ax1, ax2; // 'x','y','z' for the two plane axes
+        if (hit.nx !== 0) { ax1 = 'z'; ax2 = 'y'; } // hit X face → plane is Z,Y
+        else if (hit.ny !== 0) { ax1 = 'x'; ax2 = 'z'; } // hit Y face → plane is X,Z
+        else { ax1 = 'x'; ax2 = 'y'; } // hit Z face → plane is X,Y
+
+        const rebuildSet = new Set();
+        for (let dw = -mineW; dw <= mineW; dw++) {
+            for (let dh = -mineH; dh <= mineH; dh++) {
+                let bx = hit.x, by = hit.y, bz = hit.z;
+                if (ax1 === 'x') bx += dw; else if (ax1 === 'y') by += dw; else bz += dw;
+                if (ax2 === 'x') bx += dh; else if (ax2 === 'y') by += dh; else bz += dh;
+                const b = world.getBlockAt(bx, by, bz);
+                if (b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.BEDROCK) {
+                    addToInventory(b);
+                    world.setBlock(bx, by, bz, BLOCK.AIR);
+                    rebuildSet.add(bx + ',' + bz);
+                }
+            }
+        }
+        for (const key of rebuildSet) {
+            const [rx, rz] = key.split(',').map(Number);
+            rebuildNear(rx, rz);
+        }
+    } else {
+        // Single block break
+        addToInventory(hit.block);
+        world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
+        rebuildNear(hit.x, hit.z);
+    }
+});
+
+// Right click = place block or interact with crafting table
+let craftingTableOpen = false;
+const craftTableMenuEl = document.createElement('div');
+craftTableMenuEl.id = 'craftTableMenu';
+craftTableMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.94);border:2px solid rgba(160,140,100,0.4);border-radius:8px;padding:16px;min-width:440px;user-select:none;';
+document.body.appendChild(craftTableMenuEl);
+
+const WORKBENCH_RECIPES = [
+    { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4, label: 'Wood Log → 4 Planks' },
+    { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1, label: '4 Planks → Wood Log' },
+    { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1, label: '4 Wood Logs → Crafting Table' },
+    { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1, label: '16 Planks → Crafting Table' },
+    { from: BLOCK.STONE, to: BLOCK.GRAVEL, fc: 1, tc: 4, label: 'Stone → 4 Gravel' },
+    { from: BLOCK.GRAVEL, to: BLOCK.STONE, fc: 4, tc: 1, label: '4 Gravel → Stone' },
+    { from: BLOCK.DIRT, to: BLOCK.CLAY, fc: 4, tc: 1, label: '4 Dirt → Clay' },
+    { from: BLOCK.PLANKS, to: BLOCK.LEAVES, fc: 2, tc: 1, label: '2 Planks → Leaves (decoration)' },
+    { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4, label: 'Wood Log → 4 Sticks' },
+    { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
+    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Pickaxe', multi: true },
+];
+
+function doCraft(r) {
+    // Check materials
+    if ((inventory[r.from] || 0) < r.fc) return;
+    if (r.multi && (inventory[r.fromAlt] || 0) < r.fcAlt) return;
+    // Consume
+    inventory[r.from] -= r.fc;
+    if (inventory[r.from] <= 0) { delete inventory[r.from]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.from) hotbarSlots[i] = 0; }
+    if (r.multi) {
+        inventory[r.fromAlt] -= r.fcAlt;
+        if (inventory[r.fromAlt] <= 0) { delete inventory[r.fromAlt]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.fromAlt) hotbarSlots[i] = 0; }
+    }
+    // Produce
+    const toKey = r.to;
+    inventory[toKey] = (inventory[toKey] || 0) + r.tc;
+    if (!hotbarSlots.includes(toKey)) { const ei = hotbarSlots.indexOf(0); if (ei >= 0) hotbarSlots[ei] = toKey; }
+    refreshUI();
+}
+
+function updateCraftTableUI() {
+    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Crafting Table</h2>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    for (let ri = 0; ri < WORKBENCH_RECIPES.length; ri++) {
+        const r = WORKBENCH_RECIPES[ri];
+        const canCraft = (inventory[r.from] || 0) >= r.fc && (!r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt);
+        const toInfo = getItemInfo(r.to);
+        html += `<button class="craft-btn ct-craft" data-ri="${ri}" ${canCraft ? '' : 'disabled'} style="
+            display:flex;align-items:center;gap:6px;padding:6px 10px;
+            background:${canCraft ? 'rgba(60,50,30,0.7)' : 'rgba(30,30,30,0.5)'};
+            border:1px solid ${canCraft ? 'rgba(180,160,100,0.5)' : 'rgba(80,80,80,0.3)'};
+            border-radius:4px;color:${canCraft ? 'rgba(220,200,160,0.9)' : 'rgba(120,120,120,0.5)'};
+            font:12px monospace;cursor:${canCraft ? 'pointer' : 'default'};
+        ">`;
+        html += `<span>${r.label}</span>`;
+        if (toInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${toInfo.front};border-radius:2px;"></span>`;
+        html += '</button>';
+    }
+    html += '</div>';
+    // Show current pickaxe mining size if holding pickaxe
+    if (hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0) {
+        const w = mineW * 2 + 1, h = mineH * 2 + 1;
+        html += `<div style="margin-top:8px;color:rgba(200,180,140,0.7);font:11px monospace;text-align:center;">Pickaxe mining: ${w}x${h} | Arrow keys to resize</div>`;
+    }
+    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.5);font:10px monospace;">Press Escape or I to close</div>';
+    craftTableMenuEl.innerHTML = html;
+    craftTableMenuEl.querySelectorAll('.ct-craft').forEach(btn => {
+        btn.addEventListener('click', () => {
+            doCraft(WORKBENCH_RECIPES[Number(btn.dataset.ri)]);
+            updateCraftTableUI();
+        });
+    });
+}
+
+renderer.domElement.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (mapOpen || inventoryOpen || craftingTableOpen) return;
+    const hit = raycastBlock(e);
+    if (!hit) return;
+
+    // Right-click on crafting table → open crafting menu
+    if (hit.block === BLOCK.CRAFTING) {
+        craftingTableOpen = true;
+        craftTableMenuEl.style.display = 'block';
+        updateCraftTableUI();
+        return;
+    }
+
+    const bt = hotbarSlots[selectedSlot];
+    if (!bt || !inventory[bt]) return;
+    if (typeof bt === 'string') return;
+
+    const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
+    const BS = BLOCK_SIZE;
+    const yOff = 128;
+    const placeWX = px * BS, placeWY = (py - yOff) * BS, placeWZ = pz * BS;
+    const pdx = placeWX - player.position.x, pdz = placeWZ - player.position.z;
+    const pdy = placeWY - player.position.y;
+    if (Math.abs(pdx) < 0.5 && Math.abs(pdz) < 0.5 && pdy >= -0.5 && pdy < player.HEIGHT) return;
+
+    if (!removeFromInventory(bt)) return;
+
+    // Crafting table places as 3x3x3
+    if (bt === BLOCK.CRAFTING) {
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = 0; dy <= 2; dy++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    world.setBlock(px + dx, py + dy, pz + dz, BLOCK.CRAFTING);
+                }
+            }
+        }
+        // Rebuild surrounding chunks
+        for (let dx = -1; dx <= 1; dx++)
+            for (let dz = -1; dz <= 1; dz++)
+                rebuildNear(px + dx, pz + dz);
+    } else {
+        world.setBlock(px, py, pz, bt);
+        rebuildNear(px, pz);
+    }
+});
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+// ── Game Loop ──
+let prevTime = performance.now();
+const debugEl = document.getElementById('debug');
+let frameCount = 0, fpsTime = 0, fps = 0;
+
+// Camera smoothing — exact same as game.html
+const camPos = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+const _idealOffset = new THREE.Vector3();
+const _idealLook = new THREE.Vector3();
+const _upAxis = new THREE.Vector3(0, 1, 0);
+let camInit = false;
+
+function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min((now - prevTime) / 1000, 0.1);
+    prevTime = now;
+
+    frameCount++;
+    fpsTime += dt;
+    if (fpsTime >= 1) { fps = frameCount; frameCount = 0; fpsTime = 0; }
+
+    // Player update
+    if (!dragonMgr.ridingDragon && !craftingTableOpen) player.update(dt, keys);
+    dragonMgr.applyPlayerPose(player);
+
+    // Sun follows player (offset same as game.html)
+    sun.position.set(
+        player.position.x + 5,
+        player.position.y + 12,
+        player.position.z + 8
+    );
+    sun.target.position.copy(player.position);
+    sun.target.updateMatrixWorld();
+
+    // Load/unload chunks
+    chunkManager.update(player.position.x, player.position.z);
+
+    // Creatures
+    creatures.update(dt, player.position.x, player.position.z);
+
+    // Dragons
+    dragonMgr.update(dt, player, keys);
+
+    // ── Camera ──
+    let camRotY = player.group.rotation.y;
+    let camTarget = player.position.clone();
+    let lookOffY = 1.3;
+    if (dragonMgr.ridingDragon && dragonMgr.ridingRef) {
+        const bd = dragonMgr.ridingRef;
+        camRotY = bd.angle;
+        camTarget.set(bd.x, bd.group.position.y, bd.z);
+        lookOffY = bd.growthScale * 2;
+    }
+    const s = player.sprintBlend;
+    const cr = 0;
+    const ridingScale = dragonMgr.ridingDragon && dragonMgr.ridingRef ? Math.max(1, dragonMgr.ridingRef.growthScale * 2.5) : 1;
+    const baseDist = mix(mix(4.5, 5.8, s), 3.5, cr) * ridingScale;
+    const baseH    = mix(mix(2.8, 3.2, s), 1.8, cr) * ridingScale;
+    const camDist = baseDist * zoomLevel;
+    const camH    = baseH * (0.7 + 0.3 * zoomLevel);
+
+    _idealOffset.set(0, camH, -camDist)
+        .applyAxisAngle(_upAxis, camRotY)
+        .add(camTarget);
+    _idealLook.copy(camTarget);
+    _idealLook.y += lookOffY;
+
+    if (!camInit) {
+        camPos.copy(_idealOffset);
+        camLook.copy(_idealLook);
+        camInit = true;
+    } else {
+        camPos.lerp(_idealOffset, 1 - Math.exp(-4 * dt));
+        camLook.lerp(_idealLook,  1 - Math.exp(-6 * dt));
+    }
+
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+
+    // Prompt
+    const promptEl = document.getElementById('prompt');
+    const promptText = dragonMgr.getPrompt(player);
+    if (promptText) { promptEl.textContent = promptText; promptEl.style.display = 'block'; }
+    else { promptEl.style.display = 'none'; }
+
+    // Debug
+    const px = player.position.x, py = player.position.y, pz = player.position.z;
+    const bx = Math.floor(px / BLOCK_SIZE);
+    const by = Math.floor(py / BLOCK_SIZE);
+    const bz = Math.floor(pz / BLOCK_SIZE);
+    const pickInfo = hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0 ? `<br>Pickaxe: ${mineW*2+1}x${mineH*2+1} (arrows to resize)` : '';
+    debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}`;
+
+    renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
