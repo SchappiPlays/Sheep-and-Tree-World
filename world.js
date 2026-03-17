@@ -302,6 +302,13 @@ export class World {
         return d - Math.floor(d);
     }
 
+    // Raw terrain height without detail noise — for structure placement
+    getBaseHeightBlocks(bx, bz) {
+        const wx = bx * BLOCK_SIZE;
+        const wz = bz * BLOCK_SIZE;
+        return Math.floor(getTerrainHeight(wx, wz) / BLOCK_SIZE);
+    }
+
     // Convert block coords → world coords → game.html terrain height → block height
     getHeightBlocks(bx, bz) {
         const wx = bx * BLOCK_SIZE;
@@ -459,6 +466,8 @@ export class World {
         }
 
         this._placeTreesInChunk(cx, cz, data, ox, oz);
+        // Villages placed after trees so houses override trees
+        if (this._placeVillages) this._placeVillages(this, cx, cz, data);
         return data;
     }
 

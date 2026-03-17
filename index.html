@@ -201,6 +201,7 @@ import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
 import { DragonManager } from './dragons.js';
+import { VillageManager, placeVillageInChunk } from './villages.js';
 
 function mix(a, b, t) { return a + (b - a) * t; }
 
@@ -315,7 +316,7 @@ updateMenuUI();
 document.getElementById('newGameBtn').addEventListener('click', () => startGame(null));
 
 // ── World (created once, reset on new game) ──
-let world, chunkManager, creatures, dragonMgr, player;
+let world, chunkManager, creatures, dragonMgr, player, villageMgr;
 
 function startGame(loadSlotName) {
     mainMenuEl.style.display = 'none';
@@ -331,6 +332,8 @@ function startGame(loadSlotName) {
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
     chunkManager = new ChunkManager(scene, world);
     creatures = new CreatureManager(scene, world);
+    villageMgr = new VillageManager(scene, world);
+    world._placeVillages = placeVillageInChunk;
     dragonMgr = new DragonManager(scene, world);
     player = new Player(scene, world);
 
@@ -1377,6 +1380,9 @@ function animate() {
 
     // Creatures
     creatures.update(dt, player.position.x, player.position.z);
+
+    // Villagers
+    villageMgr.update(dt, player.position.x, player.position.z);
 
     // Dragons
     dragonMgr.update(dt, player, keys);
