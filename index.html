@@ -213,7 +213,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 0.95;
 renderer.setClearColor(SKY_COLOR);
 document.body.appendChild(renderer.domElement);
 
@@ -225,11 +225,11 @@ scene.fog = new THREE.FogExp2(SKY_COLOR, 0.006);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 800);
 
 // ── Lighting — same as game.html ──
-const ambient = new THREE.AmbientLight(0x8899bb, 1.2);
+const ambient = new THREE.AmbientLight(0x667788, 0.5);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x88bbff, 0x445522, 0.8);
+const hemi = new THREE.HemisphereLight(0x6688aa, 0x3a4422, 0.6);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+const sun = new THREE.DirectionalLight(0xffeedd, 1.5);
 sun.position.set(5, 12, 8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -607,13 +607,20 @@ const BLOCK_INFO = {
     [BLOCK.PLANKS]: { name:'Wood Planks', top:'#aa8a55', front:'#8a6a3a' },
     [BLOCK.CRAFTING]: { name:'Crafting Table', top:'#8a6535', front:'#7a5a30' },
     [BLOCK.IRON_ORE]: { name:'Iron Ore', top:'#9a8a78', front:'#7a7068' },
+    [BLOCK.FURNACE]: { name:'Furnace', top:'#555', front:'#3a3a3a' },
+    [BLOCK.COAL_ORE]: { name:'Coal Ore', top:'#555', front:'#2a2a2a' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
 const eggItems = {};
 
 function getItemInfo(key) {
-    if (key === 'pickaxe') return { name: 'Pickaxe', top: '#888', front: '#555', isTool: true };
+    if (key === 'pickaxe') return { name: 'Wood Pickaxe', top: '#8a6a3a', front: '#5c3a1e', isTool: true };
+    if (key === 'stone_pickaxe') return { name: 'Stone Pickaxe', top: '#999', front: '#666', isTool: true };
+    if (key === 'iron_pickaxe') return { name: 'Iron Pickaxe', top: '#b0b8c0', front: '#7a8590', isTool: true };
+    if (key === 'furnace_block') return { name: 'Furnace', top: '#555', front: '#3a3a3a' };
+    if (key === 'iron_ingot') return { name: 'Iron Ingot', top: '#c0c8d0', front: '#8a9098' };
+    if (key === 'coal') return { name: 'Coal', top: '#2a2a2a', front: '#1a1a1a' };
     if (key === 'stick') return { name: 'Stick', top: '#a08050', front: '#6b4226', isTool: true };
     if (typeof key === 'number') return BLOCK_INFO[key];
     if (typeof key === 'string' && key.startsWith('egg_')) {
@@ -701,18 +708,18 @@ function updateInventoryUI() {
             inner += `<span class="count">${inventory[bt]}</span>`;
             inner += `<span class="block-name">${info.name}</span>`;
         }
-        html += `<div class="inv-slot" data-area="hotbar" data-idx="${i}">${inner}</div>`;
+        html += `<div class="inv-slot" data-area="hotbar" data-idx="${i}" data-bt="${bt}">${inner}</div>`;
     }
     html += '</div>';
 
-    // Inventory section — show all item types we have
-    const invTypes = Object.keys(inventory).filter(k => inventory[k] > 0).map(k => isNaN(k) ? k : Number(k));
+    // Inventory section — show ALL item types we have (including those not on hotbar)
+    const allItems = Object.keys(inventory).filter(k => inventory[k] > 0).map(k => isNaN(k) ? k : Number(k));
     html += '<div class="inv-section-label">Inventory</div><div class="inv-grid">';
-    for (let i = 0; i < 27; i++) {
-        const bt = i < invTypes.length ? invTypes[i] : 0;
+    for (let i = 0; i < Math.max(27, allItems.length); i++) {
+        const bt = i < allItems.length ? allItems[i] : 0;
         const info = getItemInfo(bt);
         let inner = '';
-        if (info && inventory[bt] > 0) {
+        if (bt && info && inventory[bt] > 0) {
             inner += blockIconHTML(info);
             inner += `<span class="count">${inventory[bt]}</span>`;
             inner += `<span class="block-name">${info.name}</span>`;
@@ -729,6 +736,7 @@ function updateInventoryUI() {
         { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
         { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1, label: '4 Wood Logs → Crafting Table' },
         { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1, label: '16 Planks → Crafting Table' },
+        { from: 3, to: 'furnace_block', fc: 8, tc: 1, label: '8 Stone → Furnace' },
     ];
     html += '<div class="inv-section-label">Crafting</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
     for (let ri = 0; ri < RECIPES.length; ri++) {
@@ -766,58 +774,48 @@ function updateInventoryUI() {
 }
 
 // Click-to-move system: click a slot to pick up, click another to swap/place
-let heldBlock = 0; // block type currently "held" on cursor
+// heldItem is declared in onInvSlotClick section above
+
+// Inventory interaction — click to move items between hotbar and inventory
+let heldItem = null;
 
 function onInvSlotClick(e) {
     const slot = e.currentTarget;
     const area = slot.dataset.area;
     const idx = parseInt(slot.dataset.idx);
 
-    if (heldBlock === 0) {
-        // Pick up from this slot
-        let bt = 0;
+    if (!heldItem) {
+        // ── Pick up from slot ──
         if (area === 'hotbar') {
-            bt = hotbarSlots[idx];
-            if (bt && inventory[bt] > 0) {
-                heldBlock = bt;
+            const item = hotbarSlots[idx];
+            if (item && inventory[item] > 0) {
+                heldItem = item;
                 hotbarSlots[idx] = 0;
-                showDragGhost(bt);
-                refreshUI();
             }
         } else {
-            bt = parseInt(slot.dataset.bt);
-            if (bt && inventory[bt] > 0) {
-                heldBlock = bt;
-                // Remove from visible inv list (it stays in inventory count)
-                showDragGhost(bt);
-                refreshUI();
+            // Get item key from the inventory list
+            const allItems = Object.keys(inventory).filter(k => inventory[k] > 0).map(k => isNaN(k) ? k : Number(k));
+            const item = idx < allItems.length ? allItems[idx] : null;
+            if (item && inventory[item] > 0) {
+                heldItem = item;
             }
         }
+        if (heldItem) showDragGhost(heldItem);
+        refreshUI();
     } else {
-        // Place held block into this slot
+        // ── Drop held item ──
         if (area === 'hotbar') {
+            // Swap with hotbar slot
             const existing = hotbarSlots[idx];
-            hotbarSlots[idx] = heldBlock;
-            heldBlock = existing && inventory[existing] > 0 ? existing : 0;
+            hotbarSlots[idx] = heldItem;
+            heldItem = (existing && existing !== heldItem && inventory[existing] > 0) ? existing : null;
         } else {
-            // Clicking an inventory slot with held block — just drop it back
-            // If slot has a block, swap
-            const slotBt = parseInt(slot.dataset.bt);
-            if (slotBt && slotBt !== heldBlock && inventory[slotBt] > 0) {
-                // Put held into first empty hotbar or just drop, pick up this one
-                const emptyIdx = hotbarSlots.indexOf(0);
-                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
-                heldBlock = slotBt;
-                showDragGhost(slotBt);
-            } else {
-                // Just assign to a hotbar slot
-                const emptyIdx = hotbarSlots.indexOf(0);
-                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
-                heldBlock = 0;
-            }
+            // Drop back — remove from any hotbar slot it might be on, it stays in inventory
+            // Just clear held
+            heldItem = null;
         }
-        if (heldBlock === 0) hideDragGhost();
-        else showDragGhost(heldBlock);
+        if (heldItem) showDragGhost(heldItem);
+        else hideDragGhost();
         refreshUI();
     }
 }
@@ -830,7 +828,7 @@ function showDragGhost(bt) {
 }
 function hideDragGhost() {
     dragGhostEl.style.display = 'none';
-    heldBlock = 0;
+    heldItem = null;
 }
 document.addEventListener('mousemove', e => {
     if (dragGhostEl.style.display === 'block') {
@@ -848,10 +846,13 @@ document.addEventListener('keydown', e => {
         selectedSlot = num - 1;
         updateHotbarUI();
     }
-    if (e.code === 'Escape' && craftingTableOpen) {
+    if (e.code === 'Escape' && furnaceOpen) {
+        furnaceOpen = false;
+        furnaceMenuEl.style.display = 'none';
+    } else if (e.code === 'Escape' && craftingTableOpen) {
         craftingTableOpen = false;
         craftTableMenuEl.style.display = 'none';
-    } else if (e.code === 'Escape' && !craftingTableOpen && !inventoryOpen && !mapOpen && gameStarted) {
+    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !inventoryOpen && !mapOpen && gameStarted) {
         // Save and return to menu
         saveGame(_currentSaveName);
         showToast('Saved & returned to menu');
@@ -860,19 +861,16 @@ document.addEventListener('keydown', e => {
         updateMenuUI();
     }
     if (e.code === 'KeyI') {
-        // Close crafting table menu if open
-        if (craftingTableOpen) {
-            craftingTableOpen = false;
-            craftTableMenuEl.style.display = 'none';
-        }
+        if (craftingTableOpen) { craftingTableOpen = false; craftTableMenuEl.style.display = 'none'; }
+        if (furnaceOpen) { furnaceOpen = false; furnaceMenuEl.style.display = 'none'; }
         inventoryOpen = !inventoryOpen;
         invScreenEl.style.display = inventoryOpen ? 'block' : 'none';
         if (inventoryOpen) {
             updateInventoryUI();
         } else {
-            if (heldBlock) {
+            if (heldItem) {
                 const emptyIdx = hotbarSlots.indexOf(0);
-                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldBlock;
+                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = heldItem;
                 hideDragGhost();
                 refreshUI();
             }
@@ -908,7 +906,7 @@ function raycastBlock(e) {
     let tMaxY = dir.y !== 0 ? ((dir.y > 0 ? (Math.floor(origin.y/BS)+1)*BS - origin.y : Math.floor(origin.y/BS)*BS - origin.y) / dir.y) : Infinity;
     let tMaxZ = dir.z !== 0 ? ((dir.z > 0 ? (Math.floor(origin.z/BS)+1)*BS - origin.z : Math.floor(origin.z/BS)*BS - origin.z) / dir.z) : Infinity;
 
-    const maxSteps = Math.ceil(10 / BS) + 5;
+    const maxSteps = Math.ceil(18 / BS) + 5;
     let prevX = x, prevY = y, prevZ = z;
 
     for (let i = 0; i < maxSteps; i++) {
@@ -951,15 +949,109 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowDown') { mineDepth = Math.max(1, mineDepth - 1); e.preventDefault(); }
 });
 
-// Left click = break block(s)
-renderer.domElement.addEventListener('click', (e) => {
-    if (mapOpen || inventoryOpen || craftingTableOpen) return;
+// Tree felling — break all connected WOOD above, then flood-fill remove all connected LEAVES
+function fellTree(bx, by, bz, rebuildSet) {
+    // 1. Break all wood blocks going straight up
+    let topY = by;
+    for (let dy = 1; dy < 40; dy++) {
+        const ty = by + dy;
+        const b = world.getBlockAt(bx, ty, bz);
+        if (b === BLOCK.WOOD) {
+            addToInventory(getBlockDrop(b));
+            world.setBlock(bx, ty, bz, BLOCK.AIR);
+            rebuildSet.add(bx + ',' + bz);
+            topY = ty;
+        } else {
+            break;
+        }
+    }
+    // 2. Flood-fill break all leaves connected to where the trunk was
+    // Search a generous box around the trunk column
+    const R = 5, VR = 6;
+    for (let dx = -R; dx <= R; dx++) {
+        for (let dz = -R; dz <= R; dz++) {
+            for (let dy = -2; dy <= VR; dy++) {
+                const lx = bx + dx, ly = topY + dy, lz = bz + dz;
+                if (world.getBlockAt(lx, ly, lz) === BLOCK.LEAVES) {
+                    addToInventory(getBlockDrop(BLOCK.LEAVES));
+                    world.setBlock(lx, ly, lz, BLOCK.AIR);
+                    rebuildSet.add(lx + ',' + lz);
+                }
+            }
+        }
+    }
+}
+
+// Block break times (seconds) — [no pickaxe, wood pickaxe, stone pickaxe]
+const BREAK_TIME = {
+    [BLOCK.GRASS]: [0.4, 0.2, 0.1],
+    [BLOCK.DIRT]: [0.4, 0.2, 0.1],
+    [BLOCK.SAND]: [0.3, 0.15, 0.08],
+    [BLOCK.CLAY]: [0.5, 0.25, 0.12],
+    [BLOCK.GRAVEL]: [0.5, 0.25, 0.12],
+    [BLOCK.WOOD]: [0.8, 0.3, 0.15],
+    [BLOCK.PLANKS]: [0.6, 0.25, 0.12],
+    [BLOCK.LEAVES]: [0.15, 0.1, 0.05],
+    [BLOCK.SNOW]: [0.3, 0.15, 0.08],
+    [BLOCK.STONE]: [Infinity, 0.6, 0.25],    // requires pickaxe
+    [BLOCK.IRON_ORE]: [Infinity, 0.8, 0.35],  // requires pickaxe
+    [BLOCK.CRAFTING]: [0.8, 0.3, 0.15],
+    [BLOCK.COAL_ORE]: [Infinity, 0.5, 0.2],
+    16: [Infinity, 0.5, 0.2],  // COAL_ORE fallback
+    [BLOCK.FURNACE]: [1.0, 0.5, 0.25],
+    15: [1.0, 0.5, 0.25],  // FURNACE fallback
+};
+
+let miningTarget = null; // { x, y, z, block, progress, time }
+let miningHeld = false;
+
+// Mining progress overlay
+const mineBarEl = document.createElement('div');
+mineBarEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,20px);width:60px;height:6px;background:rgba(0,0,0,0.5);border-radius:3px;z-index:15;display:none;';
+const mineBarFill = document.createElement('div');
+mineBarFill.style.cssText = 'height:100%;background:rgba(255,255,255,0.8);border-radius:3px;width:0%;';
+mineBarEl.appendChild(mineBarFill);
+document.body.appendChild(mineBarEl);
+
+renderer.domElement.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
+    miningHeld = true;
     const hit = raycastBlock(e);
     if (!hit) return;
-    player.triggerSwing();
 
     const held = hotbarSlots[selectedSlot];
-    const hasPickaxe = held === 'pickaxe' && inventory['pickaxe'] > 0;
+    const hasWoodPick = held === 'pickaxe' && inventory['pickaxe'] > 0;
+    const hasStonePick = held === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0;
+    const hasIronPick = held === 'iron_pickaxe' && inventory['iron_pickaxe'] > 0;
+    const hasPickaxe = hasWoodPick || hasStonePick || hasIronPick;
+    const pickTier = hasIronPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
+    const bt = hit.block;
+    const times = BREAK_TIME[bt] || [0.5, 0.25, 0.12];
+    const breakTime = times[pickTier];
+
+    if (breakTime === Infinity) return; // can't break without pickaxe
+
+    player.triggerSwing();
+    miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe };
+    mineBarEl.style.display = 'block';
+    mineBarFill.style.width = '0%';
+});
+
+renderer.domElement.addEventListener('mouseup', (e) => {
+    if (e.button !== 0) return;
+    miningHeld = false;
+    miningTarget = null;
+    mineBarEl.style.display = 'none';
+});
+
+function getBlockDrop(blockType) {
+    if (blockType === BLOCK.COAL_ORE) return 'coal';
+    if (blockType === 15) return 'furnace_block'; // BLOCK.FURNACE
+    return blockType;
+}
+
+function doBreakBlock(hit, hasPickaxe) {
 
     if (hasPickaxe) {
         // Pickaxe: snaps to a 3x3 grid on the face plane, 1 layer deep into surface
@@ -987,9 +1079,10 @@ renderer.domElement.addEventListener('click', (e) => {
                 // Depth axis stays at hit position (1 block deep)
                 const b = world.getBlockAt(bx, by, bz);
                 if (b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.BEDROCK) {
-                    addToInventory(b);
+                    addToInventory(getBlockDrop(b));
                     world.setBlock(bx, by, bz, BLOCK.AIR);
                     rebuildSet.add(bx + ',' + bz);
+                    if (b === BLOCK.WOOD) fellTree(bx, by, bz, rebuildSet);
                 }
             }
         }
@@ -999,11 +1092,18 @@ renderer.domElement.addEventListener('click', (e) => {
         }
     } else {
         // Single block break (no pickaxe)
-        addToInventory(hit.block);
+        addToInventory(getBlockDrop(hit.block));
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
-        rebuildNear(hit.x, hit.z);
+        if (hit.block === BLOCK.WOOD) {
+            const rs = new Set();
+            rs.add(hit.x + ',' + hit.z);
+            fellTree(hit.x, hit.y, hit.z, rs);
+            for (const key of rs) { const [rx, rz] = key.split(',').map(Number); rebuildNear(rx, rz); }
+        } else {
+            rebuildNear(hit.x, hit.z);
+        }
     }
-});
+}
 
 // Right click = place block or interact with crafting table
 let craftingTableOpen = false;
@@ -1023,16 +1123,20 @@ const WORKBENCH_RECIPES = [
     { from: BLOCK.PLANKS, to: BLOCK.LEAVES, fc: 2, tc: 1, label: '2 Planks → Leaves (decoration)' },
     { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4, label: 'Wood Log → 4 Sticks' },
     { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
-    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Pickaxe', multi: true },
+    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Wood Pickaxe', multi: true },
+    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Stone + 2 Sticks → Stone Pickaxe', multi: true },
+    { from: 3, to: 'furnace_block', fc: 8, tc: 1, label: '8 Stone → Furnace' },
+    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Iron Ingots + 2 Sticks → Iron Pickaxe', multi: true },
 ];
 
 function doCraft(r) {
-    // Check materials
+    if (!r || !r.from) return;
     if ((inventory[r.from] || 0) < r.fc) return;
     if (r.multi && (inventory[r.fromAlt] || 0) < r.fcAlt) return;
-    // Consume
+    // Consume primary
     inventory[r.from] -= r.fc;
     if (inventory[r.from] <= 0) { delete inventory[r.from]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.from) hotbarSlots[i] = 0; }
+    // Consume secondary
     if (r.multi) {
         inventory[r.fromAlt] -= r.fcAlt;
         if (inventory[r.fromAlt] <= 0) { delete inventory[r.fromAlt]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.fromAlt) hotbarSlots[i] = 0; }
@@ -1040,7 +1144,11 @@ function doCraft(r) {
     // Produce
     const toKey = r.to;
     inventory[toKey] = (inventory[toKey] || 0) + r.tc;
-    if (!hotbarSlots.includes(toKey)) { const ei = hotbarSlots.indexOf(0); if (ei >= 0) hotbarSlots[ei] = toKey; }
+    // Always try to put on hotbar
+    if (!hotbarSlots.includes(toKey)) {
+        const ei = hotbarSlots.indexOf(0);
+        if (ei >= 0) hotbarSlots[ei] = toKey;
+    }
     refreshUI();
 }
 
@@ -1077,9 +1185,68 @@ function updateCraftTableUI() {
     });
 }
 
+// ── Furnace system ──
+let furnaceOpen = false;
+const furnaceMenuEl = document.createElement('div');
+furnaceMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.94);border:2px solid rgba(160,140,100,0.4);border-radius:8px;padding:16px;min-width:360px;user-select:none;';
+document.body.appendChild(furnaceMenuEl);
+
+const SMELT_RECIPES = [
+    { input: BLOCK.IRON_ORE, output: 'iron_ingot', label: 'Iron Ore → Iron Ingot' },
+    { input: BLOCK.SAND, output: BLOCK.CLAY, label: 'Sand → Clay (brick)' },
+];
+
+function updateFurnaceUI() {
+    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Furnace</h2>';
+    const coalCount = inventory['coal'] || 0;
+    html += `<div style="color:rgba(180,160,120,0.7);font:12px monospace;margin-bottom:8px;">Coal: ${coalCount} (1 coal smelts 3 items)</div>`;
+    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    for (let ri = 0; ri < SMELT_RECIPES.length; ri++) {
+        const r = SMELT_RECIPES[ri];
+        const hasInput = (inventory[r.input] || 0) >= 1;
+        const hasFuel = coalCount >= 1;
+        const canSmelt = hasInput && hasFuel;
+        // How many can we smelt? Min of (input count, coal * 3)
+        const maxSmelt = Math.min(inventory[r.input] || 0, coalCount * 3);
+        const outInfo = getItemInfo(r.output);
+        html += `<button class="craft-btn furnace-smelt" data-ri="${ri}" ${canSmelt ? '' : 'disabled'} style="
+            display:flex;align-items:center;gap:6px;padding:6px 10px;
+            background:${canSmelt ? 'rgba(60,40,20,0.7)' : 'rgba(30,30,30,0.5)'};
+            border:1px solid ${canSmelt ? 'rgba(200,140,60,0.5)' : 'rgba(80,80,80,0.3)'};
+            border-radius:4px;color:${canSmelt ? 'rgba(230,200,150,0.9)' : 'rgba(120,120,120,0.5)'};
+            font:12px monospace;cursor:${canSmelt ? 'pointer' : 'default'};
+        ">`;
+        html += `<span>${r.label} (x${maxSmelt})</span>`;
+        if (outInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${outInfo.front || outInfo.top};border-radius:2px;"></span>`;
+        html += '</button>';
+    }
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.5);font:10px monospace;">Press Escape or I to close</div>';
+    furnaceMenuEl.innerHTML = html;
+
+    furnaceMenuEl.querySelectorAll('.furnace-smelt').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const r = SMELT_RECIPES[Number(btn.dataset.ri)];
+            const inputCount = inventory[r.input] || 0;
+            const coalAvail = inventory['coal'] || 0;
+            if (inputCount < 1 || coalAvail < 1) return;
+            // Smelt up to 3 per coal, use as many as possible
+            const canSmelt = Math.min(inputCount, 3);
+            inventory[r.input] -= canSmelt;
+            if (inventory[r.input] <= 0) { delete inventory[r.input]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.input) hotbarSlots[i] = 0; }
+            inventory['coal']--;
+            if (inventory['coal'] <= 0) { delete inventory['coal']; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === 'coal') hotbarSlots[i] = 0; }
+            inventory[r.output] = (inventory[r.output] || 0) + canSmelt;
+            if (!hotbarSlots.includes(r.output)) { const ei = hotbarSlots.indexOf(0); if (ei >= 0) hotbarSlots[ei] = r.output; }
+            refreshUI();
+            updateFurnaceUI();
+        });
+    });
+}
+
 renderer.domElement.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (mapOpen || inventoryOpen || craftingTableOpen) return;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
     const hit = raycastBlock(e);
     if (!hit) return;
 
@@ -1091,9 +1258,20 @@ renderer.domElement.addEventListener('contextmenu', (e) => {
         return;
     }
 
-    const bt = hotbarSlots[selectedSlot];
+    // Right-click on furnace → open furnace menu
+    if (hit.block === 15 || hit.block === BLOCK.FURNACE) {
+        furnaceOpen = true;
+        furnaceMenuEl.style.display = 'block';
+        updateFurnaceUI();
+        return;
+    }
+
+    let bt = hotbarSlots[selectedSlot];
     if (!bt || !inventory[bt]) return;
-    if (typeof bt === 'string') return;
+    // Convert furnace_block item to actual block type for placement
+    const isFurnace = bt === 'furnace_block';
+    const placeBlock = isFurnace ? 15 : bt; // 15 = BLOCK.FURNACE
+    if (typeof bt === 'string' && !isFurnace) return; // other string items can't be placed
 
     const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
     const BS = BLOCK_SIZE;
@@ -1105,16 +1283,15 @@ renderer.domElement.addEventListener('contextmenu', (e) => {
 
     if (!removeFromInventory(bt)) return;
 
-    // Crafting table places as 3x3x3
-    if (bt === BLOCK.CRAFTING) {
+    // 3x3x3 placement for crafting table and furnace
+    if (placeBlock === BLOCK.CRAFTING || placeBlock === 15) {
         for (let dx = -1; dx <= 1; dx++) {
             for (let dy = 0; dy <= 2; dy++) {
                 for (let dz = -1; dz <= 1; dz++) {
-                    world.setBlock(px + dx, py + dy, pz + dz, BLOCK.CRAFTING);
+                    world.setBlock(px + dx, py + dy, pz + dz, placeBlock);
                 }
             }
         }
-        // Rebuild surrounding chunks
         for (let dx = -1; dx <= 1; dx++)
             for (let dz = -1; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
@@ -1164,12 +1341,12 @@ function animate() {
     if (fpsTime >= 1) { fps = frameCount; frameCount = 0; fpsTime = 0; }
 
     // Player update
-    if (!dragonMgr.ridingDragon && !craftingTableOpen) player.update(dt, keys);
+    if (!dragonMgr.ridingDragon && !craftingTableOpen && !furnaceOpen) player.update(dt, keys);
     dragonMgr.applyPlayerPose(player);
 
     // Show/hide pickaxe in hand
     const heldItem = hotbarSlots[selectedSlot];
-    player.pickaxeHeld.visible = heldItem === 'pickaxe' && (inventory['pickaxe'] || 0) > 0;
+    player.pickaxeHeld.visible = (heldItem === 'pickaxe' && (inventory['pickaxe'] || 0) > 0) || (heldItem === 'stone_pickaxe' && (inventory['stone_pickaxe'] || 0) > 0) || (heldItem === 'iron_pickaxe' && (inventory['iron_pickaxe'] || 0) > 0);
 
     // Sun follows player (offset same as game.html)
     sun.position.set(
@@ -1182,6 +1359,21 @@ function animate() {
 
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z);
+
+    // Mining progress
+    if (miningTarget && miningHeld) {
+        miningTarget.progress += dt;
+        const pct = Math.min(100, (miningTarget.progress / miningTarget.time) * 100);
+        mineBarFill.style.width = pct + '%';
+        // Re-trigger swing animation periodically
+        if (miningTarget.progress % 0.5 < dt) player.triggerSwing();
+        if (miningTarget.progress >= miningTarget.time) {
+            doBreakBlock(miningTarget.hit, miningTarget.hasPickaxe);
+            miningTarget = null;
+            miningHeld = false;
+            mineBarEl.style.display = 'none';
+        }
+    }
 
     // Creatures
     creatures.update(dt, player.position.x, player.position.z);
@@ -1236,7 +1428,8 @@ function animate() {
     const bx = Math.floor(px / BLOCK_SIZE);
     const by = Math.floor(py / BLOCK_SIZE);
     const bz = Math.floor(pz / BLOCK_SIZE);
-    const pickInfo = hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0 ? '<br>Pickaxe: 3x3 grid-snapped' : '';
+    const _heldPick = hotbarSlots[selectedSlot];
+    const pickInfo = ((_heldPick === 'pickaxe' && inventory['pickaxe'] > 0) || (_heldPick === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0)) ? '<br>Pickaxe: 3x3 grid-snapped' : '';
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}`;
 
     renderer.render(scene, camera);

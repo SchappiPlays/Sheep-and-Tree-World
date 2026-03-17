@@ -114,7 +114,8 @@ export class Player {
         const handleMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
         const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.03), handleMat);
         shaft.position.y = 0.3; shaft.castShadow = true; g.add(shaft);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.8, roughness: 0.2 });
+        // Wood pickaxe head — plank-coloured
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.7, metalness: 0.0 });
         const pickHead = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.04), headMat);
         pickHead.position.y = 0.58; pickHead.castShadow = true; g.add(pickHead);
         const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), headMat);

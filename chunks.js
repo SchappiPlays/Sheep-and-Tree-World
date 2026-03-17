@@ -326,6 +326,108 @@ export class ChunkManager {
                                 tmpColor.r += (ch - 0.5) * 0.03;
                                 tmpColor.g += (ch2 - 0.5) * 0.02;
                             }
+                        } else if (block === 16 || block === BLOCK.COAL_ORE) {
+                            tmpColor.copy(STONE_DARK).lerp(STONE_LIGHT, ch * 0.2);
+                            const coalFleck = ((bx * 13 + y * 29 + bz * 17) % 4) < 2;
+                            if (coalFleck) { tmpColor.r -= 0.1; tmpColor.g -= 0.1; tmpColor.b -= 0.1; }
+                        } else if (block === 15 || block === BLOCK.FURNACE) {
+                            // Furnace — subdivide each face into 3x3 sub-quads for higher detail
+                            const cbx = ((bx % 3) + 3) % 3;
+                            const cbz = ((bz % 3) + 3) % 3;
+                            const cby = y % 3;
+                            const face = FACES[fi];
+                            const sub = 3; // 3x3 subdivisions per face
+                            for (let su = 0; su < sub; su++) {
+                                for (let sv = 0; sv < sub; sv++) {
+                                    const u0 = su / sub, u1 = (su + 1) / sub;
+                                    const v0 = sv / sub, v1 = (sv + 1) / sub;
+                                    // Pixel position within the whole furnace face (0-8)
+                                    const px = cbx * sub + su;
+                                    const py = (fi === 2 || fi === 3) ? (cbz * sub + sv) : (cby * sub + sv);
+                                    const pz = (fi <= 1) ? (cbz * sub + sv) : (fi >= 4 ? (cbx * sub + su) : 0);
+                                    // Color based on face and pixel position
+                                    let cr, cg, cb;
+                                    const isFront = fi === 4;
+                                    const pixHash = colorHash(bx * 9 + su, y * 9 + sv, bz + fi * 7);
+
+                                    if (fi === 2) {
+                                        // TOP — chimney with ring of stones
+                                        const cx = cbx * 3 + su, cz = cbz * 3 + sv;
+                                        const dist = Math.max(Math.abs(cx - 4), Math.abs(cz - 4));
+                                        if (dist <= 1) { cr = 0.06 + pixHash * 0.06; cg = 0.02; cb = 0.01; } // chimney hole
+                                        else if (dist === 2) { cr = 0.32; cg = 0.30; cb = 0.28; cr += pixHash * 0.04; } // inner ring
+                                        else { cr = 0.38; cg = 0.36; cb = 0.34; cr -= pixHash * 0.03; cg -= pixHash * 0.03; } // outer edge
+                                    } else if (fi === 3) {
+                                        cr = 0.22 + pixHash * 0.06; cg = 0.20 + pixHash * 0.04; cb = 0.18 + pixHash * 0.03;
+                                    } else if (isFront) {
+                                        // FRONT — furnace opening with arch
+                                        const fx = cbx * 3 + su, fy = cby * 3 + sv;
+                                        // Arch opening: center-bottom area
+                                        const inMouth = fx >= 2 && fx <= 6 && fy <= 4;
+                                        const isArch = fx >= 2 && fx <= 6 && fy === 5 && fx >= 3 && fx <= 5;
+                                        const isFrame = (fx === 1 || fx === 7) && fy <= 5;
+                                        const isKeystone = fx === 4 && fy === 6;
+                                        if (inMouth || isArch) {
+                                            // Dark interior with embers
+                                            cr = 0.04 + pixHash * 0.08; cg = 0.01 + pixHash * 0.02; cb = 0.005;
+                                            if (fy <= 1) { cr += 0.15 * pixHash; cg += 0.05 * pixHash; } // embers at bottom
+                                        } else if (isFrame) {
+                                            cr = 0.35 + pixHash * 0.04; cg = 0.20; cb = 0.10; // warm stone frame
+                                        } else if (isKeystone) {
+                                            cr = 0.28; cg = 0.26; cb = 0.24; // keystone
+                                        } else {
+                                            // Stone bricks
+                                            const brick = ((fx + fy) % 2 === 0);
+                                            cr = brick ? 0.42 : 0.35; cg = brick ? 0.40 : 0.33; cb = brick ? 0.38 : 0.31;
+                                            cr += (pixHash - 0.5) * 0.06;
+                                            if (fy <= 3) { cr += 0.02; cb -= 0.01; } // heat staining near mouth
+                                        }
+                                    } else {
+                                        // OTHER SIDES + BACK
+                                        const sx = (fi <= 1) ? (cbz * 3 + su) : (cbx * 3 + su);
+                                        const sy = cby * 3 + sv;
+                                        const isBackVent = fi === 5 && sx >= 3 && sx <= 5 && sy >= 2 && sy <= 4;
+                                        if (isBackVent) {
+                                            cr = 0.12 + pixHash * 0.05; cg = 0.08; cb = 0.06;
+                                        } else {
+                                            // Stone brick pattern with mortar
+                                            const brickW = 3, brickH = 2;
+                                            const row = Math.floor(sy / brickH);
+                                            const offset = (row % 2) * 1;
+                                            const bx2 = (sx + offset) % brickW;
+                                            const by2 = sy % brickH;
+                                            const isMortar = bx2 === 0 || by2 === 0;
+                                            if (isMortar) {
+                                                cr = 0.48; cg = 0.46; cb = 0.44; // light mortar
+                                            } else {
+                                                cr = 0.36 + pixHash * 0.06; cg = 0.34 + pixHash * 0.04; cb = 0.32 + pixHash * 0.03;
+                                            }
+                                            // Soot on upper rows
+                                            if (sy >= 7) { cr -= 0.06; cg -= 0.06; cb -= 0.05; }
+                                            // Heat near bottom
+                                            if (sy <= 2) { cr += 0.03; cb -= 0.02; }
+                                        }
+                                    }
+                                    tmpColor.setRGB(Math.max(0, Math.min(1, cr)), Math.max(0, Math.min(1, cg)), Math.max(0, Math.min(1, cb)));
+                                    tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
+                                    // Build sub-quad vertices
+                                    const v = face.verts;
+                                    // Interpolate corners for this sub-quad
+                                    const x0 = v[0], x1 = v[1], x2 = v[2], x3 = v[3];
+                                    // v[0]=BL v[1]=BR v[2]=TL v[3]=TR
+                                    for (const [cu, cv] of [[u0,v0],[u1,v0],[u0,v1],[u1,v0],[u1,v1],[u0,v1]]) {
+                                        const ix = x0[0]*(1-cu)*(1-cv) + x1[0]*cu*(1-cv) + x2[0]*(1-cu)*cv + x3[0]*cu*cv;
+                                        const iy = x0[1]*(1-cu)*(1-cv) + x1[1]*cu*(1-cv) + x2[1]*(1-cu)*cv + x3[1]*cu*cv;
+                                        const iz = x0[2]*(1-cu)*(1-cv) + x1[2]*cu*(1-cv) + x2[2]*(1-cu)*cv + x3[2]*cu*cv;
+                                        tPos.push((lx + ix * S) * BS, (y - Y_OFF + iy * S) * BS, (lz + iz * S) * BS);
+                                        tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                        tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
+                                    }
+                                    tIdx.push(tVert, tVert+1, tVert+2, tVert+3, tVert+4, tVert+5);
+                                    tVert += 6;
+                                }
+                            }
+                            continue; // skip the normal quad push below
                         } else if (block === BLOCK.IRON_ORE) {
                             // Stone base with orange-brown ore flecks
                             tmpColor.copy(STONE_DARK).lerp(STONE_LIGHT, ch * 0.3);

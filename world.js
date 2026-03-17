@@ -9,14 +9,14 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -413,9 +413,18 @@ export class World {
                     } else if (y < 3) {
                         block = this._hash(bx + y * 37, bz + y * 71) < 0.5 ? BLOCK.BEDROCK : BLOCK.STONE;
                     } else if (y < surfaceBlock - dirtDepth) {
-                        // Iron ore veins in stone
-                        const oreN = this._hash(bx * 0.31 + y * 0.17, bz * 0.23 + y * 0.41);
-                        if (oreN > 0.92) block = BLOCK.IRON_ORE;
+                        // Ore veins — low-frequency noise creates cluster centers,
+                        // high-frequency decides which blocks near centers become ore
+                        // Iron: rarer, smaller veins
+                        const ironVein = Math.sin(bx * 0.15 + y * 0.13 + bz * 0.17 + 3.7) *
+                                         Math.cos(bx * 0.11 - y * 0.19 + bz * 0.14 + 1.2);
+                        const ironLocal = this._hash(bx * 0.31 + y * 0.17, bz * 0.23 + y * 0.41);
+                        // Coal: more common, larger veins
+                        const coalVein = Math.sin(bx * 0.12 + y * 0.1 + bz * 0.14 + 7.3) *
+                                         Math.cos(bx * 0.09 - y * 0.15 + bz * 0.11 + 4.1);
+                        const coalLocal = this._hash(bx * 0.47 + y * 0.29, bz * 0.37 + y * 0.53);
+                        if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
+                        else if (coalVein > 0.6 && coalLocal > 0.4) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {
                         if (inPond) block = BLOCK.CLAY;
