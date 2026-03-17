@@ -182,14 +182,30 @@ canvas { display: block; }
     <h1>Sheep and Tree World</h1>
     <button class="menu-btn" id="newGameBtn">New Game</button>
     <div id="savedGames"></div>
+    <div style="margin-top:20px;border-top:1px solid rgba(120,160,80,0.3);padding-top:16px;width:260px;text-align:center;">
+        <div style="color:rgba(180,170,140,0.6);font:11px monospace;margin-bottom:8px;">Multiplayer</div>
+        <button class="menu-btn" id="hostBtn" style="margin-bottom:6px;">Host Game</button>
+        <div style="display:flex;gap:4px;">
+            <input id="joinCode" placeholder="Room code" style="flex:1;padding:10px;font:14px monospace;background:rgba(30,40,25,0.7);color:rgba(220,210,180,0.9);border:2px solid rgba(120,160,80,0.4);border-radius:6px;outline:none;">
+            <button class="menu-btn" id="joinBtn" style="width:80px;">Join</button>
+        </div>
+        <div id="mpStatus" style="color:rgba(150,200,100,0.7);font:11px monospace;margin-top:6px;min-height:16px;"></div>
+    </div>
 </div>
 <div id="saveToast">Saved</div>
+<div id="pauseMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+    <h2 style="color:rgba(220,200,160,0.9);font:bold 24px monospace;margin-bottom:10px;">Paused</h2>
+    <button class="menu-btn" id="resumeBtn">Resume</button>
+    <button class="menu-btn" id="saveQuitBtn" style="background:rgba(80,40,30,0.7);border-color:rgba(160,80,60,0.5);">Save & Quit</button>
+</div>
 <div id="debug"></div>
+<div id="hearts" style="position:fixed;top:8px;right:8px;z-index:20;pointer-events:none;display:flex;gap:2px;"></div>
 <div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
 <div id="hotbar"></div>
 <div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
 <div id="dragGhost"></div>
 <div id="worldMap"><h2>World Map</h2><canvas id="mapCanvas" width="600" height="600"></canvas></div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="three.min.js" onerror="
     var s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
@@ -201,6 +217,7 @@ import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
 import { DragonManager } from './dragons.js';
+import { Multiplayer } from './multiplayer.js';
 import { VillageManager, placeVillageInChunk } from './villages.js';
 
 function mix(a, b, t) { return a + (b - a) * t; }
@@ -314,9 +331,31 @@ function updateMenuUI() {
 }
 updateMenuUI();
 document.getElementById('newGameBtn').addEventListener('click', () => startGame(null));
+document.getElementById('hostBtn').addEventListener('click', () => {
+    document.getElementById('mpStatus').textContent = 'Creating room...';
+    mp.host(code => {
+        document.getElementById('mpStatus').textContent = 'Room: ' + code + ' (waiting for players)';
+        document.getElementById('joinCode').value = code;
+        startGame(null);
+    });
+});
+document.getElementById('joinBtn').addEventListener('click', () => {
+    const code = document.getElementById('joinCode').value.trim();
+    if (!code) return;
+    document.getElementById('mpStatus').textContent = 'Joining...';
+    mp.join(code, id => {
+        if (id) {
+            document.getElementById('mpStatus').textContent = 'Connected!';
+            startGame(null);
+        } else {
+            document.getElementById('mpStatus').textContent = 'Failed to connect';
+        }
+    });
+});
 
 // ── World (created once, reset on new game) ──
 let world, chunkManager, creatures, dragonMgr, player, villageMgr;
+const mp = new Multiplayer(scene);
 
 function startGame(loadSlotName) {
     mainMenuEl.style.display = 'none';
@@ -334,6 +373,38 @@ function startGame(loadSlotName) {
     creatures = new CreatureManager(scene, world);
     villageMgr = new VillageManager(scene, world);
     world._placeVillages = placeVillageInChunk;
+
+    // Hook setBlock to broadcast changes in multiplayer
+    const origSetBlock = world.setBlock.bind(world);
+    world.setBlock = (bx, by, bz, block) => {
+        origSetBlock(bx, by, bz, block);
+        if (mp.active) mp.sendBlockChange(bx, by, bz, block);
+    };
+
+    // Receive remote block changes
+    mp.onBlockChange = (bx, by, bz, block) => {
+        origSetBlock(bx, by, bz, block);
+        chunkManager.rebuildChunkAt(bx, bz);
+    };
+
+    // Receive remote attacks (host processes creature damage)
+    mp.onAttack = (data) => {
+        if (mp.isHost && creatures) {
+            creatures.attackAt(data.x, data.z, data.angle, data.damage, 3);
+        }
+    };
+
+    // Receive creature sync from host
+    mp.onCreatureSync = (list) => {
+        for (let i = 0; i < Math.min(list.length, creatures.creatures.length); i++) {
+            const c = creatures.creatures[i], r = list[i];
+            if (c.dead && !r.d) continue;
+            c.x = r.x; c.z = r.z;
+            c.group.rotation.y = r.ry;
+            c.walking = !!r.w;
+            if (r.d && !c.dead) { c.dead = true; c.deathTimer = 0; c.hp = 0; }
+        }
+    };
     dragonMgr = new DragonManager(scene, world);
     player = new Player(scene, world);
 
@@ -425,6 +496,50 @@ function startGame(loadSlotName) {
 let _currentSaveName = 'Save 1';
 let _animStarted = false;
 let _autosaveTimer = 0;
+let gamePaused = false;
+const pauseMenuEl = document.getElementById('pauseMenu');
+
+document.getElementById('resumeBtn').addEventListener('click', () => {
+    gamePaused = false;
+    pauseMenuEl.style.display = 'none';
+});
+document.getElementById('saveQuitBtn').addEventListener('click', () => {
+    gamePaused = false;
+    pauseMenuEl.style.display = 'none';
+    saveGame(_currentSaveName);
+    if (mp.active) mp.disconnect();
+    showToast('Saved & returned to menu');
+    gameStarted = false;
+    mainMenuEl.style.display = 'flex';
+    updateMenuUI();
+});
+
+// ── Player HP ──
+let playerHP = 20, playerMaxHP = 20; // 10 hearts, each = 2 HP
+let attackCooldown = 0;
+
+const SWORD_DAMAGE = {
+    'wood_sword': 4,
+    'stone_sword': 5,
+    'iron_sword': 6,
+};
+
+function updateHeartsUI() {
+    const el = document.getElementById('hearts');
+    if (!el) return;
+    let html = '';
+    for (let i = 0; i < 10; i++) {
+        const hpForHeart = (i + 1) * 2;
+        if (playerHP >= hpForHeart) {
+            html += '<span style="font-size:18px;color:#e22;">❤</span>'; // full
+        } else if (playerHP >= hpForHeart - 1) {
+            html += '<span style="font-size:18px;color:#e22;opacity:0.5;">❤</span>'; // half
+        } else {
+            html += '<span style="font-size:18px;color:#444;">❤</span>'; // empty
+        }
+    }
+    el.innerHTML = html;
+}
 
 // ── Input — same as game.html (no pointer lock, keyboard only) ──
 const keys = {};
@@ -621,6 +736,12 @@ function getItemInfo(key) {
     if (key === 'pickaxe') return { name: 'Wood Pickaxe', top: '#8a6a3a', front: '#5c3a1e', isTool: true };
     if (key === 'stone_pickaxe') return { name: 'Stone Pickaxe', top: '#999', front: '#666', isTool: true };
     if (key === 'iron_pickaxe') return { name: 'Iron Pickaxe', top: '#b0b8c0', front: '#7a8590', isTool: true };
+    if (key === 'wood_sword') return { name: 'Wood Sword', top: '#8a6a3a', front: '#5c3a1e', isTool: true };
+    if (key === 'stone_sword') return { name: 'Stone Sword', top: '#999', front: '#666', isTool: true };
+    if (key === 'iron_sword') return { name: 'Iron Sword', top: '#c8d0d8', front: '#8a9098', isTool: true };
+    if (key === 'wood_axe') return { name: 'Wood Axe', top: '#8a6a3a', front: '#5c3a1e', isTool: true };
+    if (key === 'stone_axe') return { name: 'Stone Axe', top: '#999', front: '#666', isTool: true };
+    if (key === 'iron_axe') return { name: 'Iron Axe', top: '#b0b8c0', front: '#7a8590', isTool: true };
     if (key === 'furnace_block') return { name: 'Furnace', top: '#555', front: '#3a3a3a' };
     if (key === 'iron_ingot') return { name: 'Iron Ingot', top: '#c0c8d0', front: '#8a9098' };
     if (key === 'coal') return { name: 'Coal', top: '#2a2a2a', front: '#1a1a1a' };
@@ -856,12 +977,9 @@ document.addEventListener('keydown', e => {
         craftingTableOpen = false;
         craftTableMenuEl.style.display = 'none';
     } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !inventoryOpen && !mapOpen && gameStarted) {
-        // Save and return to menu
-        saveGame(_currentSaveName);
-        showToast('Saved & returned to menu');
-        gameStarted = false;
-        mainMenuEl.style.display = 'flex';
-        updateMenuUI();
+        // Toggle pause menu
+        gamePaused = !gamePaused;
+        pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
     }
     if (e.code === 'KeyI') {
         if (craftingTableOpen) { craftingTableOpen = false; craftTableMenuEl.style.display = 'none'; }
@@ -952,6 +1070,28 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowDown') { mineDepth = Math.max(1, mineDepth - 1); e.preventDefault(); }
 });
 
+// Check if a wood block is part of a natural tree (has wood above + leaves nearby)
+function isNaturalTree(bx, by, bz) {
+    // Check if this wood block was player-placed
+    if (world._modifiedBlocks.has(bx + ',' + by + ',' + bz)) return false;
+    // Check for wood above and leaves somewhere in vicinity
+    let hasWoodAbove = false, hasLeaves = false;
+    for (let dy = 1; dy <= 10; dy++) {
+        const b = world.getBlockAt(bx, by + dy, bz);
+        if (b === BLOCK.WOOD) hasWoodAbove = true;
+        if (b === BLOCK.LEAVES) { hasLeaves = true; break; }
+        if (b === BLOCK.AIR && hasWoodAbove) {
+            // Check around for leaves
+            for (let dx = -2; dx <= 2; dx++) for (let ddz = -2; ddz <= 2; ddz++) {
+                if (world.getBlockAt(bx + dx, by + dy, bz + ddz) === BLOCK.LEAVES) { hasLeaves = true; break; }
+            }
+            if (hasLeaves) break;
+        }
+        if (b !== BLOCK.WOOD && b !== BLOCK.LEAVES) break;
+    }
+    return hasLeaves;
+}
+
 // Tree felling — break all connected WOOD above, then flood-fill remove all connected LEAVES
 function fellTree(bx, by, bz, rebuildSet) {
     // 1. Break all wood blocks going straight up
@@ -1019,24 +1159,60 @@ document.body.appendChild(mineBarEl);
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
+
+    // Sword attack — damage creatures in front of player
+    const held = hotbarSlots[selectedSlot];
+    const swordDmg = SWORD_DAMAGE[held];
+    if (swordDmg && inventory[held] > 0 && attackCooldown <= 0) {
+        player.triggerSwing();
+        attackCooldown = 0.5;
+        if (creatures) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
+        if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
+        return;
+    }
+
     miningHeld = true;
     const hit = raycastBlock(e);
     if (!hit) return;
-
-    const held = hotbarSlots[selectedSlot];
     const hasWoodPick = held === 'pickaxe' && inventory['pickaxe'] > 0;
     const hasStonePick = held === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0;
     const hasIronPick = held === 'iron_pickaxe' && inventory['iron_pickaxe'] > 0;
     const hasPickaxe = hasWoodPick || hasStonePick || hasIronPick;
+    const hasWoodAxe = held === 'wood_axe' && inventory['wood_axe'] > 0;
+    const hasStoneAxe = held === 'stone_axe' && inventory['stone_axe'] > 0;
+    const hasIronAxe = held === 'iron_axe' && inventory['iron_axe'] > 0;
+    const hasAxe = hasWoodAxe || hasStoneAxe || hasIronAxe;
     const pickTier = hasIronPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
     const bt = hit.block;
-    const times = BREAK_TIME[bt] || [0.5, 0.25, 0.12];
-    const breakTime = times[pickTier];
+
+    let breakTime;
+    if (hasAxe) {
+        // Axes: fast on wood/planks/leaves, slow on stone, can't do iron/coal
+        const axeTier = hasIronAxe ? 2 : hasStoneAxe ? 1 : 0;
+        const AXE_TIMES = {
+            [BLOCK.WOOD]: [0.15, 0.1, 0.06],
+            [BLOCK.PLANKS]: [0.15, 0.1, 0.06],
+            [BLOCK.LEAVES]: [0.08, 0.05, 0.03],
+            [BLOCK.CRAFTING]: [0.2, 0.15, 0.08],
+            [BLOCK.STONE]: [1.5, 1.0, 0.7],
+            [BLOCK.GRASS]: [0.3, 0.2, 0.1],
+            [BLOCK.DIRT]: [0.3, 0.2, 0.1],
+            [BLOCK.SAND]: [0.25, 0.15, 0.08],
+            15: [0.5, 0.3, 0.2], // FURNACE
+        };
+        const axeTimes = AXE_TIMES[bt];
+        if (axeTimes) breakTime = axeTimes[axeTier];
+        else if (bt === BLOCK.IRON_ORE || bt === 16) breakTime = Infinity; // can't break iron/coal with axe
+        else breakTime = (BREAK_TIME[bt] || [0.5, 0.25, 0.12])[0]; // default no-tool speed
+    } else {
+        const times = BREAK_TIME[bt] || [0.5, 0.25, 0.12];
+        breakTime = times[pickTier];
+    }
 
     if (breakTime === Infinity) return; // can't break without pickaxe
 
     player.triggerSwing();
-    miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe };
+    miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe, hasAxe };
     mineBarEl.style.display = 'block';
     mineBarFill.style.width = '0%';
 });
@@ -1054,9 +1230,9 @@ function getBlockDrop(blockType) {
     return blockType;
 }
 
-function doBreakBlock(hit, hasPickaxe) {
+function doBreakBlock(hit, hasPickaxe, hasAxe) {
 
-    if (hasPickaxe) {
+    if (hasPickaxe || hasAxe) {
         // Pickaxe: snaps to a 3x3 grid on the face plane, 1 layer deep into surface
         // The hit block snaps to the nearest 3x3 cell on the two perpendicular axes
         const dnx = hit.nx, dny = hit.ny, dnz = hit.nz;
@@ -1085,7 +1261,7 @@ function doBreakBlock(hit, hasPickaxe) {
                     addToInventory(getBlockDrop(b));
                     world.setBlock(bx, by, bz, BLOCK.AIR);
                     rebuildSet.add(bx + ',' + bz);
-                    if (b === BLOCK.WOOD) fellTree(bx, by, bz, rebuildSet);
+                    if (b === BLOCK.WOOD && isNaturalTree(bx, by, bz)) fellTree(bx, by, bz, rebuildSet);
                 }
             }
         }
@@ -1097,7 +1273,7 @@ function doBreakBlock(hit, hasPickaxe) {
         // Single block break (no pickaxe)
         addToInventory(getBlockDrop(hit.block));
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
-        if (hit.block === BLOCK.WOOD) {
+        if (hit.block === BLOCK.WOOD && isNaturalTree(hit.x, hit.y, hit.z)) {
             const rs = new Set();
             rs.add(hit.x + ',' + hit.z);
             fellTree(hit.x, hit.y, hit.z, rs);
@@ -1130,6 +1306,14 @@ const WORKBENCH_RECIPES = [
     { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Stone + 2 Sticks → Stone Pickaxe', multi: true },
     { from: 3, to: 'furnace_block', fc: 8, tc: 1, label: '8 Stone → Furnace' },
     { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Iron Ingots + 2 Sticks → Iron Pickaxe', multi: true },
+    // Swords
+    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Planks + 1 Stick → Wood Sword', multi: true },
+    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Stone + 1 Stick → Stone Sword', multi: true },
+    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Iron Ingots + 1 Stick → Iron Sword', multi: true },
+    // Axes
+    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Wood Axe', multi: true },
+    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Stone + 2 Sticks → Stone Axe', multi: true },
+    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Iron Ingots + 2 Sticks → Iron Axe', multi: true },
 ];
 
 function doCraft(r) {
@@ -1326,7 +1510,7 @@ let camInit = false;
 
 function animate() {
     requestAnimationFrame(animate);
-    if (!gameStarted) return;
+    if (!gameStarted || gamePaused) { prevTime = performance.now(); return; }
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
@@ -1347,9 +1531,16 @@ function animate() {
     if (!dragonMgr.ridingDragon && !craftingTableOpen && !furnaceOpen) player.update(dt, keys);
     dragonMgr.applyPlayerPose(player);
 
-    // Show/hide pickaxe in hand
+    // Show/hide tools in hand
     const heldItem = hotbarSlots[selectedSlot];
-    player.pickaxeHeld.visible = (heldItem === 'pickaxe' && (inventory['pickaxe'] || 0) > 0) || (heldItem === 'stone_pickaxe' && (inventory['stone_pickaxe'] || 0) > 0) || (heldItem === 'iron_pickaxe' && (inventory['iron_pickaxe'] || 0) > 0);
+    player.pickaxeHeld.visible = false;
+    player.swordHeld.visible = false;
+    player.axeHeld.visible = false;
+    if (heldItem && typeof heldItem === 'string' && inventory[heldItem] > 0) {
+        if (heldItem.includes('pickaxe')) player.pickaxeHeld.visible = true;
+        else if (heldItem.includes('sword')) player.swordHeld.visible = true;
+        else if (heldItem.includes('axe')) player.axeHeld.visible = true;
+    }
 
     // Sun follows player (offset same as game.html)
     sun.position.set(
@@ -1363,6 +1554,30 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z);
 
+    // Attack cooldown
+    if (attackCooldown > 0) attackCooldown -= dt;
+
+    // Multiplayer sync
+    if (mp.active) {
+        mp._sendAccum += dt;
+        if (mp._sendAccum >= 0.05) { // 20Hz position updates
+            mp._sendAccum = 0;
+            const held = hotbarSlots[selectedSlot];
+            mp.sendState(player, held, player.swingTimer);
+        }
+        // Host syncs creatures at 5Hz
+        if (mp.isHost) {
+            mp._creatureSendAccum += dt;
+            if (mp._creatureSendAccum >= 0.2) {
+                mp._creatureSendAccum = 0;
+                mp.sendCreatureState(creatures.creatures);
+            }
+        }
+    }
+
+    // Hearts UI
+    updateHeartsUI();
+
     // Mining progress
     if (miningTarget && miningHeld) {
         miningTarget.progress += dt;
@@ -1371,7 +1586,7 @@ function animate() {
         // Re-trigger swing animation periodically
         if (miningTarget.progress % 0.5 < dt) player.triggerSwing();
         if (miningTarget.progress >= miningTarget.time) {
-            doBreakBlock(miningTarget.hit, miningTarget.hasPickaxe);
+            doBreakBlock(miningTarget.hit, miningTarget.hasPickaxe, miningTarget.hasAxe);
             miningTarget = null;
             miningHeld = false;
             mineBarEl.style.display = 'none';
@@ -1434,9 +1649,9 @@ function animate() {
     const bx = Math.floor(px / BLOCK_SIZE);
     const by = Math.floor(py / BLOCK_SIZE);
     const bz = Math.floor(pz / BLOCK_SIZE);
-    const _heldPick = hotbarSlots[selectedSlot];
-    const pickInfo = ((_heldPick === 'pickaxe' && inventory['pickaxe'] > 0) || (_heldPick === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0)) ? '<br>Pickaxe: 3x3 grid-snapped' : '';
-    debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}`;
+    const pickInfo = (player.pickaxeHeld.visible || player.axeHeld.visible) ? '<br>Tool: 3x3 grid-snapped' : '';
+    const mpInfo = mp.active ? `<br>Players: ${mp.playerCount} | ${mp.isHost ? 'Host' : 'Client'} | ${mp.myId}` : '';
+    debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}${mpInfo}`;
 
     renderer.render(scene, camera);
 }

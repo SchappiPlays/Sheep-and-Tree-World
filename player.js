@@ -98,12 +98,24 @@ export class Player {
         this.leftLeg = this._makeLeg('left', pantsMat, shoeMat);
         this.rightLeg = this._makeLeg('right', pantsMat, shoeMat);
 
-        // Pickaxe held in left hand (exact from game.html)
+        // Tools held in left hand
         this.pickaxeHeld = this._makePickaxe();
         this.pickaxeHeld.visible = false;
         this.pickaxeHeld.rotation.x = Math.PI;
         this.pickaxeHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.pickaxeHeld);
+
+        this.swordHeld = this._makeSword();
+        this.swordHeld.visible = false;
+        this.swordHeld.rotation.x = Math.PI;
+        this.swordHeld.position.y = 0.02;
+        this.leftArm.handGrp.add(this.swordHeld);
+
+        this.axeHeld = this._makeAxe();
+        this.axeHeld.visible = false;
+        this.axeHeld.rotation.x = Math.PI;
+        this.axeHeld.position.y = 0.02;
+        this.leftArm.handGrp.add(this.axeHeld);
 
         // Swing state
         this.swingTimer = -1;
@@ -122,6 +134,39 @@ export class Player {
         tipL.position.set(-0.17, 0.58, 0); tipL.rotation.z = Math.PI / 2; g.add(tipL);
         const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), headMat);
         tipR.position.set(0.17, 0.58, 0); tipR.rotation.z = -Math.PI / 2; g.add(tipR);
+        return g;
+    }
+
+    _makeSword() {
+        const g = new THREE.Group();
+        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.95, roughness: 0.08 });
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.6, 0.012), bladeMat);
+        blade.position.y = 0.4; blade.castShadow = true; g.add(blade);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.019, 0.09, 4), bladeMat);
+        tip.position.y = 0.745; g.add(tip);
+        const guardMat = new THREE.MeshStandardMaterial({ color: 0x997733, metalness: 0.5 });
+        const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), guardMat);
+        guard.position.y = 0.09; g.add(guard);
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0x44220a });
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.03), handleMat);
+        g.add(handle);
+        const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), guardMat);
+        pommel.position.y = -0.08; g.add(pommel);
+        return g;
+    }
+
+    _makeAxe() {
+        const g = new THREE.Group();
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.03), handleMat);
+        shaft.position.y = 0.3; shaft.castShadow = true; g.add(shaft);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x889988, metalness: 0.7, roughness: 0.25 });
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.025), headMat);
+        blade.position.set(-0.1, 0.58, 0); blade.castShadow = true; g.add(blade);
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.02), headMat);
+        edge.position.set(-0.21, 0.58, 0); edge.castShadow = true; g.add(edge);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.035), headMat);
+        back.position.set(0.04, 0.58, 0); back.castShadow = true; g.add(back);
         return g;
     }
 

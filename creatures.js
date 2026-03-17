@@ -101,7 +101,8 @@ function makeSheep(x, z, terrainY) {
         wanderTimer: Math.random() * 3 + 1,
         idleHeadTimer: 0,
         idleHeadTarget: 0,
-        walking: false,
+        walking: false, type: 'sheep',
+        hp: 8, maxHP: 8, dead: false,
     };
 }
 
@@ -152,6 +153,7 @@ function makeCow(x, z, terrainY) {
         group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
         walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3 + 1,
         idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'cow',
+        hp: 10, maxHP: 10, dead: false,
     };
 }
 
@@ -197,6 +199,7 @@ function makePig(x, z, terrainY) {
         group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
         walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3 + 1,
         idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'pig',
+        hp: 10, maxHP: 10, dead: false,
     };
 }
 
@@ -238,9 +241,23 @@ export class CreatureManager {
 
         // Update AI + animation
         for (const sh of this.creatures) {
+            // Dead creature — just stay fallen
+            if (sh.dead) {
+                sh.deathTimer = (sh.deathTimer || 0) + dt;
+                // Tilt to fallen position
+                if (sh.group.rotation.z < Math.PI / 2) {
+                    sh.group.rotation.z += dt * 4;
+                    if (sh.group.rotation.z > Math.PI / 2) sh.group.rotation.z = Math.PI / 2;
+                }
+                // Despawn body after 10s
+                if (sh.deathTimer > 10) {
+                    sh.group.visible = false;
+                }
+                continue;
+            }
+
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             const dist2 = dx * dx + dz * dz;
-            // Skip AI for very far sheep
             if (dist2 > 25 * 25) continue;
 
             // ── Wandering AI — exact from game.html ──
@@ -335,6 +352,31 @@ export class CreatureManager {
             }
             this.scene.add(creature.group);
             this.creatures.push(creature);
+        }
+    }
+
+    // Hit creatures near a point with damage
+    attackAt(wx, wz, facingAngle, damage, range) {
+        const sinA = Math.sin(facingAngle), cosA = Math.cos(facingAngle);
+        for (const sh of this.creatures) {
+            if (sh.dead) continue;
+            const dx = sh.x - wx, dz = sh.z - wz;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > range || dist < 0.1) continue;
+            // Check facing — creature must be roughly in front
+            const dot = (dx * sinA + dz * cosA) / dist;
+            if (dot < 0.2) continue;
+            sh.hp -= damage;
+            // Knockback
+            sh.x += (dx / dist) * 0.5;
+            sh.z += (dz / dist) * 0.5;
+            if (sh.hp <= 0) {
+                sh.hp = 0;
+                sh.dead = true;
+                sh.deathTimer = 0;
+                sh.walking = false;
+                sh.speed = 0;
+            }
         }
     }
 }
