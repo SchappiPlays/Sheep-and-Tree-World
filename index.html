@@ -387,6 +387,26 @@ function startGame(loadSlotName) {
         chunkManager.rebuildChunkAt(bx, bz);
     };
 
+    // Receive villager sync from host
+    mp.onVillagerSync = (list) => {
+        if (!villageMgr) return;
+        for (const r of list) {
+            let best = null, bestD = 4;
+            for (const v of villageMgr.villagers) {
+                const dx = v.x - r.x, dz = v.z - r.z;
+                const d = dx * dx + dz * dz;
+                if (d < bestD) { bestD = d; best = v; }
+            }
+            if (best) {
+                best.x = r.x; best.z = r.z;
+                best.group.position.x = r.x;
+                best.group.position.z = r.z;
+                best.group.rotation.y = r.ry;
+                best.walking = !!r.w;
+            }
+        }
+    };
+
     // Receive remote attacks (host processes creature damage)
     mp.onAttack = (data) => {
         if (mp.isHost && creatures) {
@@ -394,15 +414,28 @@ function startGame(loadSlotName) {
         }
     };
 
-    // Receive creature sync from host
+    // Receive creature sync from host — match by cid
     mp.onCreatureSync = (list) => {
-        for (let i = 0; i < Math.min(list.length, creatures.creatures.length); i++) {
-            const c = creatures.creatures[i], r = list[i];
-            if (c.dead && !r.d) continue;
-            c.x = r.x; c.z = r.z;
-            c.group.rotation.y = r.ry;
-            c.walking = !!r.w;
-            if (r.d && !c.dead) { c.dead = true; c.deathTimer = 0; c.hp = 0; }
+        const byId = new Map();
+        for (const c of creatures.creatures) byId.set(c.cid, c);
+        for (const r of list) {
+            let c = byId.get(r.id);
+            // Fallback: match by nearest same-type if cid doesn't match
+            if (!c) {
+                let bestD = 16;
+                for (const cc of creatures.creatures) {
+                    if (cc.type !== r.t) continue;
+                    const dx = cc.x - r.x, dz = cc.z - r.z;
+                    const d = dx * dx + dz * dz;
+                    if (d < bestD) { bestD = d; c = cc; }
+                }
+            }
+            if (c) {
+                c.x = r.x; c.z = r.z;
+                c.group.rotation.y = r.ry;
+                c.walking = !!r.w;
+                if (r.d && !c.dead) { c.dead = true; c.deathTimer = 0; c.hp = 0; }
+            }
         }
     };
     dragonMgr = new DragonManager(scene, world);
@@ -1258,10 +1291,11 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                 // Depth axis stays at hit position (1 block deep)
                 const b = world.getBlockAt(bx, by, bz);
                 if (b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.BEDROCK) {
+                    const isTree = b === BLOCK.WOOD && isNaturalTree(bx, by, bz);
                     addToInventory(getBlockDrop(b));
                     world.setBlock(bx, by, bz, BLOCK.AIR);
                     rebuildSet.add(bx + ',' + bz);
-                    if (b === BLOCK.WOOD && isNaturalTree(bx, by, bz)) fellTree(bx, by, bz, rebuildSet);
+                    if (isTree) fellTree(bx, by, bz, rebuildSet);
                 }
             }
         }
@@ -1271,9 +1305,10 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
         }
     } else {
         // Single block break (no pickaxe)
+        const isTree = hit.block === BLOCK.WOOD && isNaturalTree(hit.x, hit.y, hit.z);
         addToInventory(getBlockDrop(hit.block));
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
-        if (hit.block === BLOCK.WOOD && isNaturalTree(hit.x, hit.y, hit.z)) {
+        if (isTree) {
             const rs = new Set();
             rs.add(hit.x + ',' + hit.z);
             fellTree(hit.x, hit.y, hit.z, rs);
@@ -1565,12 +1600,21 @@ function animate() {
             const held = hotbarSlots[selectedSlot];
             mp.sendState(player, held, player.swingTimer);
         }
-        // Host syncs creatures at 5Hz
+        // Host syncs creatures + villagers at 5Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
             if (mp._creatureSendAccum >= 0.2) {
                 mp._creatureSendAccum = 0;
                 mp.sendCreatureState(creatures.creatures);
+                // Villager sync
+                if (villageMgr && villageMgr.villagers.length > 0) {
+                    const vList = villageMgr.villagers.map(v => ({
+                        x: +v.x.toFixed(2), z: +v.z.toFixed(2),
+                        ry: +v.group.rotation.y.toFixed(2),
+                        w: v.walking ? 1 : 0,
+                    }));
+                    mp._broadcast({ type: 'villagers', list: vList });
+                }
             }
         }
     }
@@ -1594,6 +1638,7 @@ function animate() {
     }
 
     // Creatures
+    creatures.skipAI = mp.active && !mp.isHost;
     creatures.update(dt, player.position.x, player.position.z);
 
     // Villagers

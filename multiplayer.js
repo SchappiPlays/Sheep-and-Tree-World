@@ -69,6 +69,8 @@ export class Multiplayer {
                 if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'creatures') {
                 if (this.onCreatureSync) this.onCreatureSync(data.list);
+            } else if (data.type === 'villagers') {
+                if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
                 // Relay attack events
                 if (this.onAttack) this.onAttack(data);
@@ -126,9 +128,8 @@ export class Multiplayer {
     sendCreatureState(creatureList) {
         if (!this.active || !this.isHost) return;
         const list = creatureList.map(c => ({
-            x: +c.x.toFixed(2), z: +c.z.toFixed(2),
+            id: c.cid, x: +c.x.toFixed(2), z: +c.z.toFixed(2),
             ry: +c.group.rotation.y.toFixed(2),
-            rz: +(c.group.rotation.z || 0).toFixed(2),
             w: c.walking ? 1 : 0, d: c.dead ? 1 : 0,
             t: c.type,
         }));
@@ -181,9 +182,11 @@ export class Multiplayer {
         function makeArm(sign) {
             const shoulder = new THREE.Group();
             shoulder.position.set(sign * 0.28, 0.5, 0); spine.add(shoulder);
-            shoulder.add(new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.28, 0.10), shirtMat)).position.y = -0.14;
+            const upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.28, 0.10), shirtMat);
+            upper.position.y = -0.14; shoulder.add(upper);
             const elbow = new THREE.Group(); elbow.position.y = -0.28; shoulder.add(elbow);
-            elbow.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.26, 0.085), skinMat)).position.y = -0.13;
+            const fore = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.26, 0.085), skinMat);
+            fore.position.y = -0.13; elbow.add(fore);
             const handGrp = new THREE.Group(); handGrp.position.y = -0.28; elbow.add(handGrp);
             handGrp.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.05), skinMat));
             return { shoulder, elbow, handGrp };
@@ -193,9 +196,11 @@ export class Multiplayer {
         function makeLeg(sign) {
             const hip = new THREE.Group();
             hip.position.set(sign * 0.11, 0, 0); body.add(hip);
-            hip.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.42, 0.14), pantsMat)).position.y = -0.21;
+            const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.42, 0.14), pantsMat);
+            thigh.position.y = -0.21; hip.add(thigh);
             const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
-            knee.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.40, 0.12), pantsMat)).position.y = -0.20;
+            const shin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.40, 0.12), pantsMat);
+            shin.position.y = -0.20; knee.add(shin);
             const foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.24), shoeMat);
             foot.position.set(0, -0.43, 0.04); knee.add(foot);
             return { hip, knee };

@@ -207,9 +207,11 @@ export class CreatureManager {
     constructor(scene, world) {
         this.scene = scene;
         this.world = world;
-        this.creatures = []; // all creatures (sheep, cows, pigs)
-        this.sheep = this.creatures; // alias for backward compat
+        this.creatures = [];
+        this.sheep = this.creatures;
         this.spawnedChunks = new Set();
+        this.skipAI = false;
+        this._nextId = 0;
     }
 
     update(dt, playerX, playerZ) {
@@ -244,15 +246,26 @@ export class CreatureManager {
             // Dead creature — just stay fallen
             if (sh.dead) {
                 sh.deathTimer = (sh.deathTimer || 0) + dt;
-                // Tilt to fallen position
                 if (sh.group.rotation.z < Math.PI / 2) {
                     sh.group.rotation.z += dt * 4;
                     if (sh.group.rotation.z > Math.PI / 2) sh.group.rotation.z = Math.PI / 2;
                 }
-                // Despawn body after 10s
-                if (sh.deathTimer > 10) {
-                    sh.group.visible = false;
-                }
+                if (sh.deathTimer > 10) sh.group.visible = false;
+                continue;
+            }
+
+            // Client in multiplayer — just update visual position from synced data, skip AI
+            if (this.skipAI) {
+                sh.group.position.set(sh.x, this.world.getHeight(sh.x, sh.z), sh.z);
+                // Still animate legs
+                const wb = clamp01(sh.speed / 0.25);
+                if (sh.walking) { sh.speed += (0.55 - sh.speed) * 4 * dt; } else { sh.speed *= 0.9; }
+                if (wb > 0.01) sh.walkPhase += sh.speed * dt * 8;
+                const wp = sh.walkPhase;
+                const legSwAmp = 0.35 * wb;
+                for (let li = 0; li < sh.legs.length; li++)
+                    sh.legs[li].rotation.x = ((li % 2 === 0) ? 1 : -1) * Math.sin(wp) * legSwAmp;
+                if (sh.walking) { sh.headGrp.rotation.x = Math.sin(wp * 2) * 0.06 * wb; }
                 continue;
             }
 
@@ -350,6 +363,7 @@ export class CreatureManager {
             } else {
                 creature = makePig(sx, sz, terrainY);
             }
+            creature.cid = this._nextId++;
             this.scene.add(creature.group);
             this.creatures.push(creature);
         }
