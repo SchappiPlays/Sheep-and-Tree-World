@@ -465,6 +465,7 @@ export class World {
             }
         }
 
+        this._carveCaves(cx, cz, data, ox, oz);
         this._placeTreesInChunk(cx, cz, data, ox, oz);
         // Villages placed after trees so houses override trees
         if (this._placeVillages) this._placeVillages(this, cx, cz, data);
@@ -513,6 +514,61 @@ export class World {
                             if (tlx<0||tlx>=CHUNK_SIZE||tlz<0||tlz>=CHUNK_SIZE) continue;
                             const idx = (y*CHUNK_SIZE+tlz)*CHUNK_SIZE+tlx;
                             if (data[idx] === BLOCK.AIR) data[idx] = BLOCK.LEAVES;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    _carveCaves(cx, cz, data, ox, oz) {
+        const yOff = Math.floor(WORLD_HEIGHT / 2);
+        const hillCX = -30, hillCZ = -190, hillR = 200;
+
+        // Quick check — skip entirely if chunk is far from the hill ring
+        const chunkCenterWX = (ox + 8) * BLOCK_SIZE;
+        const chunkCenterWZ = (oz + 8) * BLOCK_SIZE;
+        const dxH = chunkCenterWX - hillCX, dzH = chunkCenterWZ - hillCZ;
+        const distToHill = Math.sqrt(dxH * dxH + dzH * dzH);
+        if (distToHill > hillR + 20) return;
+
+        // Underground cavern system — large connected chambers, no surface openings
+        // Dig down to find them
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+            for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+                const bx = ox + lx, bz = oz + lz;
+                const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+
+                const dxC = wx - hillCX, dzC = wz - hillCZ;
+                const distC = Math.sqrt(dxC * dxC + dzC * dzC);
+                if (distC < 40 || distC > 185) continue;
+
+                const surfaceH = this.getHeightBlocks(bx, bz);
+                const surfaceY = surfaceH + yOff;
+                // Start 10 blocks below surface — never break through
+                const caveTop = surfaceY - 10;
+
+                for (let y = Math.max(5, yOff - 35); y < caveTop; y++) {
+                    const wy = (y - yOff) * BLOCK_SIZE;
+
+                    // 3 octaves of low-frequency noise for large organic shapes
+                    const n1 = Math.sin(wx * 0.02 + wy * 0.025 + wz * 0.022 + 5.3) *
+                               Math.cos(wx * 0.018 - wy * 0.02 + wz * 0.019 + 2.1);
+                    const n2 = Math.sin(wx * 0.035 + wy * 0.02 - wz * 0.03 + 8.7) *
+                               Math.cos(wx * 0.028 + wy * 0.018 + wz * 0.025 + 3.4);
+                    const n3 = Math.sin(wx * 0.05 + wy * 0.03 + wz * 0.04 + 1.2) *
+                               Math.cos(wx * 0.04 - wy * 0.028 + wz * 0.035 + 6.8);
+
+                    const caveNoise = Math.max(n1, n2, n3);
+                    const ringFactor = 1 - Math.abs(distC - 110) / 80;
+                    if (ringFactor <= 0) continue;
+
+                    // Low threshold = big open caverns
+                    if (caveNoise > 0.15 + (1 - ringFactor) * 0.2) {
+                        const idx = (y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
+                        const block = data[idx];
+                        if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
+                            data[idx] = BLOCK.AIR;
                         }
                     }
                 }

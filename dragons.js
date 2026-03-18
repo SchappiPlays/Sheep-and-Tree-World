@@ -590,8 +590,8 @@ export class DragonManager {
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
-        this.altarX = -60;
-        this.altarZ = 180;
+        this.altarX = -50;
+        this.altarZ = -170;
         this._built = false;
         this.carriedEggGrp = null;
         this.carriedEggMat = null;
@@ -769,6 +769,7 @@ export class DragonManager {
                 player.headGroup.rotation.x = 0;
                 player.body.rotation.x = 0;
                 player.group.rotation.x = 0;
+                player.group.rotation.order = 'XYZ';
             } else if (this.heldEgg) {
                 // Check if near altar — hatch!
                 const adx = px - this.altarX, adz = pz - this.altarZ;
@@ -945,8 +946,8 @@ export class DragonManager {
 
         player.position.set(_seatPos.x, _seatPos.y, _seatPos.z);
         player.group.position.copy(player.position);
+        player.group.rotation.order = 'YXZ'; // Y first (facing), then X (pitch)
         player.group.rotation.y = bd.angle;
-        // Match dragon's pitch tilt on the player group
         const tilt = bd._flyTilt || 0;
         player.group.rotation.x = tilt;
         player.speed = 0;

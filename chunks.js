@@ -2,11 +2,12 @@
 
 import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS } from './world.js';
 
-const RENDER_DIST = 24; // total render distance in chunks
-const LOD0_DIST = 8;   // full detail
-const LOD1_DIST = 16;  // half detail (skip every other block)
-// beyond LOD1_DIST: quarter detail (every 3rd block)
-const UNLOAD_DIST = RENDER_DIST + 2;
+const RENDER_DIST = 200; // whole world
+const LOD0_DIST = 8;    // full detail — every block, all faces
+const LOD1_DIST = 25;   // surface only — skip underground
+const LOD2_DIST = 60;   // surface only + skip every 2nd XZ
+// beyond LOD2: surface only + skip every 4th XZ
+const UNLOAD_DIST = RENDER_DIST + 3;
 const BS = BLOCK_SIZE;
 const Y_OFF = Math.floor(WORLD_HEIGHT / 2); // block y offset: block Y_OFF = world y=0
 
@@ -23,10 +24,10 @@ const FACES = [
 const FACE_SHADE = [0.85, 0.85, 1.0, 0.65, 0.9, 0.9];
 
 // Grass palette — varies by height and noise
-const GRASS_TOP_LOW  = new THREE.Color(0x3ab535); // rich lush green
-const GRASS_TOP_MID  = new THREE.Color(0x4cc238); // vibrant mid green
-const GRASS_TOP_HIGH = new THREE.Color(0x6aad40); // upland green
-const GRASS_SIDE = new THREE.Color(0x4a9a30);
+const GRASS_TOP_LOW  = new THREE.Color(0x2a8a28); // dark lush green
+const GRASS_TOP_MID  = new THREE.Color(0x359930); // darker mid green
+const GRASS_TOP_HIGH = new THREE.Color(0x508a35); // dark upland green
+const GRASS_SIDE = new THREE.Color(0x357a25);
 const DIRT_DARK = new THREE.Color(0x6b5030);
 const DIRT_LIGHT = new THREE.Color(0xa08050);
 const STONE_DARK = new THREE.Color(0x686868);
@@ -71,46 +72,51 @@ export class ChunkManager {
         const pcz = Math.floor(pz / (CHUNK_SIZE * BS));
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
-            this._processQueue(2);
+            this._processQueue(4);
             return;
         }
         this._lastPCX = pcx;
         this._lastPCZ = pcz;
 
-        for (let dx = -RENDER_DIST; dx <= RENDER_DIST; dx++) {
-            for (let dz = -RENDER_DIST; dz <= RENDER_DIST; dz++) {
-                const d2 = dx * dx + dz * dz;
-                if (d2 > RENDER_DIST * RENDER_DIST) continue;
-                const cx = pcx + dx, cz = pcz + dz;
-                const lod = d2 <= LOD0_DIST * LOD0_DIST ? 1 : d2 <= LOD1_DIST * LOD1_DIST ? 2 : 4;
-                const key = cx + ',' + cz;
-                const existing = this.loaded.get(key);
-                // Rebuild if LOD changed (closer now)
-                if (existing && existing.lod !== lod) {
-                    if (existing.terrain) { this.scene.remove(existing.terrain); existing.terrain.geometry.dispose(); }
-                    if (existing.water) { this.scene.remove(existing.water); existing.water.geometry.dispose(); }
-                    if (existing.leaves) { this.scene.remove(existing.leaves); existing.leaves.geometry.dispose(); }
-                    this.loaded.delete(key);
-                }
-                if (!this.loaded.has(key) && !this.buildQueue.find(q => q.key === key)) {
+        // Use a Set for fast queue lookup
+        const queued = new Set(this.buildQueue.map(q => q.key));
+
+        // Only scan nearby chunks first, expand outward in rings
+        for (let ring = 0; ring <= RENDER_DIST; ring++) {
+            if (ring > RENDER_DIST) break;
+            const lod = ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4;
+            const step = ring > LOD2_DIST ? 3 : ring > LOD1_DIST ? 2 : 1;
+            for (let dx = -ring; dx <= ring; dx += step) {
+                for (let dz = -ring; dz <= ring; dz += step) {
+                    if (Math.abs(dx) !== ring && Math.abs(dz) !== ring) continue; // ring perimeter only
+                    const d2 = dx * dx + dz * dz;
+                    if (d2 > RENDER_DIST * RENDER_DIST) continue;
+                    const cx = pcx + dx, cz = pcz + dz;
+                    const key = cx + ',' + cz;
+                    if (this.loaded.has(key) || queued.has(key)) continue;
                     this.buildQueue.push({ cx, cz, key, dist: d2, lod });
+                    queued.add(key);
                 }
             }
         }
         this.buildQueue.sort((a, b) => a.dist - b.dist);
 
+        // Unload distant chunks
+        const toDelete = [];
         for (const [key, entry] of this.loaded) {
             const [cx, cz] = key.split(',').map(Number);
             const dx = cx - pcx, dz = cz - pcz;
-            if (dx * dx + dz * dz > UNLOAD_DIST * UNLOAD_DIST) {
-                if (entry.terrain) { this.scene.remove(entry.terrain); entry.terrain.geometry.dispose(); }
-                if (entry.water) { this.scene.remove(entry.water); entry.water.geometry.dispose(); }
-                if (entry.leaves) { this.scene.remove(entry.leaves); entry.leaves.geometry.dispose(); }
-                this.loaded.delete(key);
-            }
+            if (dx * dx + dz * dz > UNLOAD_DIST * UNLOAD_DIST) toDelete.push(key);
+        }
+        for (const key of toDelete) {
+            const entry = this.loaded.get(key);
+            if (entry.terrain) { this.scene.remove(entry.terrain); entry.terrain.geometry.dispose(); }
+            if (entry.water) { this.scene.remove(entry.water); entry.water.geometry.dispose(); }
+            if (entry.leaves) { this.scene.remove(entry.leaves); entry.leaves.geometry.dispose(); }
+            this.loaded.delete(key);
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(4);
+        this._processQueue(6);
     }
 
     rebuildChunkAt(bx, bz) {
@@ -152,26 +158,40 @@ export class ChunkManager {
         this.loadedCount = this.loaded.size;
     }
 
-    _buildChunkMeshes(cx, cz, step) {
-        step = step || 1;
+    _buildChunkMeshes(cx, cz, lod) {
+        lod = lod || 1;
         const ox = cx * CHUNK_SIZE;
         const oz = cz * CHUNK_SIZE;
-        const S = step; // block size multiplier for LOD
+        // LOD 1: full detail. LOD 2: full Y, skip 2 XZ. LOD 3: surface only + skip 2. LOD 4: surface only + skip 4
+        const xzStep = lod >= 4 ? 4 : lod >= 2 ? 2 : 1;
+        const S = xzStep;
+        const surfaceOnly = lod >= 3; // only skip underground for very distant chunks
 
         const tPos = [], tNrm = [], tCol = [], tIdx = [];
         let tVert = 0;
         const wPos = [], wNrm = [], wIdx = [];
         let wVert = 0;
-        const lPos = [], lNrm = [], lCol = [], lIdx = []; // leaves
+        const lPos = [], lNrm = [], lCol = [], lIdx = [];
         let lVert = 0;
 
         const tmpColor = new THREE.Color();
 
         const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 160);
-        for (let lx = 0; lx < CHUNK_SIZE; lx += S) {
-            for (let lz = 0; lz < CHUNK_SIZE; lz += S) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx += xzStep) {
+            for (let lz = 0; lz < CHUNK_SIZE; lz += xzStep) {
                 const bx = ox + lx, bz = oz + lz;
-                for (let y = 0; y < scanMaxY; y += S) {
+                // For surface-only LOD, find the surface and render down to fill slopes
+                let yStart = 0, yEnd = scanMaxY;
+                if (surfaceOnly) {
+                    let surfY = Y_OFF;
+                    for (let sy = scanMaxY - 1; sy >= 0; sy--) {
+                        if (this.world.getBlockAt(bx, sy, bz) !== BLOCK.AIR) { surfY = sy; break; }
+                    }
+                    // Render deep enough to cover any slope — 20 blocks below surface
+                    yStart = Math.max(0, surfY - 20);
+                    yEnd = Math.min(scanMaxY, surfY + 2);
+                }
+                for (let y = yStart; y < yEnd; y++) {
                     const block = this.world.getBlockAt(bx, y, bz);
 
                     if (block === BLOCK.WATER) {

@@ -342,10 +342,12 @@ export class Player {
             }
         }
 
-        // Prevent falling through world
-        if (this.position.y < -5) {
-            this.position.y = 40;
+        // Prevent falling through world — teleport back to surface
+        if (this.position.y < -20) {
+            const safeY = this.world.getHeight(this.position.x, this.position.z);
+            this.position.y = safeY + 2;
             this.jumpVel = 0;
+            this.isGrounded = false;
         }
 
         // ── Animation — exact copy from game.html ──
