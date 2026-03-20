@@ -1466,6 +1466,9 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
 
+    // Always swing on left click
+    player.triggerSwing();
+
     // Sword attack — damage creatures in front of player
     const held = hotbarSlots[selectedSlot];
     const swordDmg = SWORD_DAMAGE[held];
@@ -1943,7 +1946,7 @@ function animate() {
     sun.target.updateMatrixWorld();
 
     // Load/unload chunks
-    chunkManager.update(player.position.x, player.position.z);
+    chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
 
     // Attack cooldown
     if (attackCooldown > 0) attackCooldown -= dt;

@@ -66,10 +66,12 @@ export class ChunkManager {
         this._lastPCZ = null;
     }
 
-    update(px, pz) {
+    update(px, pz, facingAngle) {
         // Convert world position to chunk coordinates
         const pcx = Math.floor(px / (CHUNK_SIZE * BS));
         const pcz = Math.floor(pz / (CHUNK_SIZE * BS));
+        const faceDX = Math.sin(facingAngle || 0);
+        const faceDZ = Math.cos(facingAngle || 0);
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
             this._processQueue(4);
@@ -106,12 +108,18 @@ export class ChunkManager {
                             continue;
                         }
                     }
-                    this.buildQueue.push({ cx, cz, key, dist: d2, lod });
+                    // Priority: bias toward the same side of the world as the player
+                    // If player is left of center, left-side chunks load first
+                    const sameX = (pcx > 0 && cx > 0) || (pcx < 0 && cx < 0) || pcx === 0;
+                    const sameZ = (pcz > 0 && cz > 0) || (pcz < 0 && cz < 0) || pcz === 0;
+                    const sameSide = (sameX && sameZ) ? 0.5 : 1.5; // half priority if same side
+                    const priority = d2 * sameSide;
+                    this.buildQueue.push({ cx, cz, key, dist: d2, lod, priority });
                     queued.add(key);
                 }
             }
         }
-        this.buildQueue.sort((a, b) => a.dist - b.dist);
+        this.buildQueue.sort((a, b) => a.priority - b.priority);
 
         // Unload distant chunks
         const toDelete = [];
