@@ -93,7 +93,19 @@ export class ChunkManager {
                     if (d2 > RENDER_DIST * RENDER_DIST) continue;
                     const cx = pcx + dx, cz = pcz + dz;
                     const key = cx + ',' + cz;
-                    if (this.loaded.has(key) || queued.has(key)) continue;
+                    if (queued.has(key)) continue;
+                    const existing = this.loaded.get(key);
+                    if (existing) {
+                        // Rebuild if LOD should be better (player moved closer)
+                        if (existing.lod > lod) {
+                            if (existing.terrain) { this.scene.remove(existing.terrain); existing.terrain.geometry.dispose(); }
+                            if (existing.water) { this.scene.remove(existing.water); existing.water.geometry.dispose(); }
+                            if (existing.leaves) { this.scene.remove(existing.leaves); existing.leaves.geometry.dispose(); }
+                            this.loaded.delete(key);
+                        } else {
+                            continue;
+                        }
+                    }
                     this.buildQueue.push({ cx, cz, key, dist: d2, lod });
                     queued.add(key);
                 }
@@ -189,7 +201,7 @@ export class ChunkManager {
                     }
                     // Render deep enough to cover any slope — 20 blocks below surface
                     yStart = Math.max(0, surfY - 20);
-                    yEnd = Math.min(scanMaxY, surfY + 2);
+                    yEnd = Math.min(scanMaxY, surfY + 1);
                 }
                 for (let y = yStart; y < yEnd; y++) {
                     const block = this.world.getBlockAt(bx, y, bz);

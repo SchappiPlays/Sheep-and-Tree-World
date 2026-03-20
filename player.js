@@ -117,6 +117,12 @@ export class Player {
         this.axeHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.axeHeld);
 
+        this.staffHeld = this._makeStaff();
+        this.staffHeld.visible = false;
+        this.staffHeld.rotation.x = Math.PI;
+        this.staffHeld.position.y = 0.02;
+        this.leftArm.handGrp.add(this.staffHeld);
+
         // Swing state
         this.swingTimer = -1;
     }
@@ -168,6 +174,26 @@ export class Player {
         const back = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.035), headMat);
         back.position.set(0.04, 0.58, 0); back.castShadow = true; g.add(back);
         return g;
+    }
+
+    _makeStaff() {
+        const g = new THREE.Group();
+        const shaftMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.7, 0.025), shaftMat);
+        shaft.position.y = 0.35; shaft.castShadow = true; g.add(shaft);
+        // Orb at top — color will be set dynamically
+        const orbMat = new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff4400, emissiveIntensity: 0.5 });
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), orbMat);
+        orb.position.y = 0.73; orb.castShadow = true; g.add(orb);
+        g._orbMat = orbMat;
+        return g;
+    }
+
+    setStaffColor(color, emissive) {
+        if (this.staffHeld._orbMat) {
+            this.staffHeld._orbMat.color.setHex(color);
+            this.staffHeld._orbMat.emissive.setHex(emissive);
+        }
     }
 
     triggerSwing() {

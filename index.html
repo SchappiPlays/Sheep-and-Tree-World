@@ -132,6 +132,22 @@ canvas { display: block; }
 }
 .inv-slot:hover .block-name { display: block; }
 .craft-btn:not([disabled]):hover { background: rgba(80,70,40,0.8) !important; border-color: rgba(220,200,120,0.7) !important; }
+.craft-row {
+    display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+    background: rgba(40,35,25,0.6); border: 1px solid rgba(100,90,60,0.3);
+    border-radius: 4px; cursor: pointer; font: 11px monospace;
+    color: rgba(200,190,160,0.8); transition: background 0.15s;
+}
+.craft-row:hover:not(.disabled) { background: rgba(70,60,35,0.7); border-color: rgba(180,160,100,0.5); }
+.craft-row.disabled { opacity: 0.4; cursor: default; }
+.craft-icon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
+.craft-arrow { color: rgba(180,160,100,0.5); font-size: 13px; }
+.craft-cat { color: rgba(160,140,100,0.5); font: bold 10px monospace; margin: 8px 0 3px 2px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; user-select: none; }
+.craft-cat:hover { color: rgba(200,180,120,0.7); }
+.craft-cat::before { content: '▸ '; font-size: 10px; }
+.craft-cat.open::before { content: '▾ '; }
+.craft-grid { display: flex; flex-direction: column; gap: 3px; }
+.craft-grid.collapsed { display: none; }
 #dragGhost {
     position: fixed; pointer-events: none; z-index: 200;
     width: 30px; height: 30px; opacity: 0.85; display: none;
@@ -557,6 +573,93 @@ document.getElementById('saveQuitBtn').addEventListener('click', () => {
 let playerHP = 20, playerMaxHP = 20; // 10 hearts, each = 2 HP
 let attackCooldown = 0;
 
+// ── Projectile system ──
+const projectiles = [];
+const STAFF_PROPS = {
+    basic_staff:     { color: 0x44aa44, speed: 18, damage: 3, size: 0.08, trail: 0x66cc66, life: 1.8 },
+    fire_staff:      { color: 0xff4400, speed: 25, damage: 8, size: 0.12, trail: 0xff6600, life: 2.0 },
+    ice_staff:       { color: 0x66ccff, speed: 20, damage: 6, size: 0.10, trail: 0xaaeeff, life: 2.5 },
+    lightning_staff:  { color: 0xffee44, speed: 40, damage: 12, size: 0.08, trail: 0xffff88, life: 1.5 },
+};
+
+function fireProjectile(staffType) {
+    const props = STAFF_PROPS[staffType];
+    if (!props) return;
+    const ry = player.group.rotation.y;
+    const sx = player.position.x + Math.sin(ry) * 0.5;
+    const sy = player.position.y + player.EYE_HEIGHT * 0.8;
+    const sz = player.position.z + Math.cos(ry) * 0.5;
+    const vx = Math.sin(ry) * props.speed;
+    const vz = Math.cos(ry) * props.speed;
+
+    const mat = new THREE.MeshBasicMaterial({ color: props.color, transparent: true, opacity: 0.9 });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(props.size, 6, 4), mat);
+    mesh.position.set(sx, sy, sz);
+    scene.add(mesh);
+
+    // Glow light
+    const light = new THREE.PointLight(props.color, 2, 8);
+    light.position.copy(mesh.position);
+    scene.add(light);
+
+    projectiles.push({
+        mesh, light, x: sx, y: sy, z: sz,
+        vx, vy: 0, vz,
+        life: props.life, age: 0,
+        damage: props.damage, staffType,
+        trailColor: props.trail,
+    });
+}
+
+function updateProjectiles(dt) {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.age += dt;
+        if (p.age > p.life) {
+            scene.remove(p.mesh); scene.remove(p.light);
+            p.mesh.geometry.dispose(); p.mesh.material.dispose();
+            projectiles.splice(i, 1);
+            continue;
+        }
+        // Gravity for fire, none for lightning
+        if (p.staffType === 'fire_staff') p.vy -= 5 * dt;
+
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+        p.mesh.position.set(p.x, p.y, p.z);
+        p.light.position.set(p.x, p.y, p.z);
+
+        // Fade out
+        p.mesh.material.opacity = 1 - (p.age / p.life) * 0.5;
+        p.light.intensity = 2 * (1 - p.age / p.life);
+
+        // Hit terrain — destroy on contact
+        if (world && world.isSolid(p.x, p.y, p.z)) {
+            scene.remove(p.mesh); scene.remove(p.light);
+            p.mesh.geometry.dispose(); p.mesh.material.dispose();
+            projectiles.splice(i, 1);
+            continue;
+        }
+
+        // Hit creatures
+        if (creatures) {
+            for (const sh of creatures.creatures) {
+                if (sh.dead) continue;
+                const dx = sh.x - p.x, dz = sh.z - p.z;
+                const dy = (world.getHeight(sh.x, sh.z) + 0.5) - p.y;
+                if (dx * dx + dy * dy + dz * dz < 2) {
+                    sh.hp -= p.damage;
+                    sh.x += dx * 0.1; sh.z += dz * 0.1; // tiny knockback
+                    if (sh.hp <= 0) { sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0; }
+                    scene.remove(p.mesh); scene.remove(p.light);
+                    p.mesh.geometry.dispose(); p.mesh.material.dispose();
+                    projectiles.splice(i, 1);
+                    break;
+                }
+            }
+        }
+    }
+}
+
 const SWORD_DAMAGE = {
     'wood_sword': 4,
     'stone_sword': 5,
@@ -781,6 +884,10 @@ function getItemInfo(key) {
     if (key === 'wood_axe') return { name: 'Wood Axe', top: '#8a6a3a', front: '#5c3a1e', isTool: true, toolType: 'axe' };
     if (key === 'stone_axe') return { name: 'Stone Axe', top: '#999', front: '#666', isTool: true, toolType: 'axe' };
     if (key === 'iron_axe') return { name: 'Iron Axe', top: '#b0b8c0', front: '#7a8590', isTool: true, toolType: 'axe' };
+    if (key === 'basic_staff') return { name: 'Basic Staff', top: '#44aa44', front: '#226622', isTool: true, toolType: 'staff' };
+    if (key === 'fire_staff') return { name: 'Fire Staff', top: '#ff6622', front: '#aa3311', isTool: true, toolType: 'staff' };
+    if (key === 'ice_staff') return { name: 'Ice Staff', top: '#66ccff', front: '#3388cc', isTool: true, toolType: 'staff' };
+    if (key === 'lightning_staff') return { name: 'Lightning Staff', top: '#ffee44', front: '#ccaa22', isTool: true, toolType: 'staff' };
     if (key === 'furnace_block') return { name: 'Furnace', top: '#555', front: '#3a3a3a' };
     if (key === 'iron_ingot') return { name: 'Iron Ingot', top: '#c0c8d0', front: '#8a9098' };
     if (key === 'coal') return { name: 'Coal', top: '#2a2a2a', front: '#1a1a1a' };
@@ -820,6 +927,12 @@ function blockIconHTML(info) {
                 <rect x="4" y="3" width="16" height="3" rx="1" fill="${t}" transform="rotate(-40 12 5)"/>
                 <polygon points="3,4.5 1,3.5 2,5.5" fill="${t}" transform="rotate(-40 3 4.5)"/>
                 <polygon points="21,4.5 23,3.5 22,5.5" fill="${t}" transform="rotate(-40 21 4.5)"/>
+            </svg>`;
+        } else if (info.toolType === 'staff') {
+            svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+                <rect x="11" y="4" width="2.5" height="18" rx="0.5" fill="${h}" transform="rotate(-30 12 13)"/>
+                <circle cx="10" cy="4" r="3.5" fill="${t}" opacity="0.8" transform="rotate(-30 12 5)"/>
+                <circle cx="10" cy="4" r="2" fill="#fff" opacity="0.4" transform="rotate(-30 12 5)"/>
             </svg>`;
         } else {
             // Stick or generic
@@ -918,38 +1031,37 @@ function updateInventoryUI() {
 
     // Crafting section
     const RECIPES = [
-        { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4, label: 'Wood Log → 4 Planks' },
-        { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1, label: '4 Planks → Wood Log' },
-        { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4, label: 'Wood Log → 4 Sticks' },
-        { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
-        { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1, label: '4 Wood Logs → Crafting Table' },
-        { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1, label: '16 Planks → Crafting Table' },
-        { from: 3, to: 'furnace_block', fc: 8, tc: 1, label: '8 Stone → Furnace' },
+        { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
+        { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1 },
+        { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4 },
+        { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2 },
+        { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1 },
+        { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1 },
+        { from: 3, to: 'furnace_block', fc: 8, tc: 1 },
     ];
-    html += '<div class="inv-section-label">Crafting</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    const invCraftOpen = !!_craftOpen['_inv'];
+    html += `<div class="craft-cat${invCraftOpen ? ' open' : ''}" data-cat="_inv">Crafting</div>`;
+    html += `<div class="craft-grid${invCraftOpen ? '' : ' collapsed'}">`;
     for (let ri = 0; ri < RECIPES.length; ri++) {
         const r = RECIPES[ri];
-        const canCraft = (inventory[r.from] || 0) >= r.fc;
-        const toInfo = getItemInfo(r.to);
-        html += `<button class="craft-btn" data-ri="${ri}" ${canCraft ? '' : 'disabled'} style="
-            display:flex;align-items:center;gap:6px;padding:6px 10px;
-            background:${canCraft ? 'rgba(60,50,30,0.7)' : 'rgba(30,30,30,0.5)'};
-            border:1px solid ${canCraft ? 'rgba(180,160,100,0.5)' : 'rgba(80,80,80,0.3)'};
-            border-radius:4px;color:${canCraft ? 'rgba(220,200,160,0.9)' : 'rgba(120,120,120,0.5)'};
-            font:12px monospace;cursor:${canCraft ? 'pointer' : 'default'};
-        ">`;
-        html += `<span>${r.label}</span>`;
-        if (toInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${toInfo.front};border-radius:2px;"></span>`;
-        html += '</button>';
+        const canCraft = (inventory[r.from] || 0) >= r.fc && (!r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt);
+        html += renderRecipeRow(r, ri, canCraft);
     }
     html += '</div>';
 
     invContentsEl.innerHTML = html;
 
-    // Wire up craft buttons
-    invContentsEl.querySelectorAll('.craft-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const ri = Number(btn.dataset.ri);
+    // Toggle crafting category
+    invContentsEl.querySelectorAll('.craft-cat').forEach(el => {
+        el.addEventListener('click', () => {
+            _craftOpen[el.dataset.cat] = !_craftOpen[el.dataset.cat];
+            updateInventoryUI();
+        });
+    });
+    // Wire up craft rows
+    invContentsEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
+        row.addEventListener('click', () => {
+            const ri = Number(row.dataset.ri);
             doCraft(RECIPES[ri]);
             updateInventoryUI();
         });
@@ -1234,6 +1346,13 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         return;
     }
+    // Staff — fire projectile
+    if (STAFF_PROPS[held] && inventory[held] > 0 && attackCooldown <= 0) {
+        player.triggerSwing();
+        attackCooldown = STAFF_PROPS[held].speed > 30 ? 0.3 : 0.6; // lightning fires faster
+        fireProjectile(held);
+        return;
+    }
 
     miningHeld = true;
     const hit = raycastBlock(e);
@@ -1357,30 +1476,66 @@ craftTableMenuEl.id = 'craftTableMenu';
 craftTableMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.94);border:2px solid rgba(160,140,100,0.4);border-radius:8px;padding:16px;min-width:440px;user-select:none;';
 document.body.appendChild(craftTableMenuEl);
 
-const WORKBENCH_RECIPES = [
-    { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4, label: 'Wood Log → 4 Planks' },
-    { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1, label: '4 Planks → Wood Log' },
-    { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1, label: '4 Wood Logs → Crafting Table' },
-    { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1, label: '16 Planks → Crafting Table' },
-    { from: BLOCK.STONE, to: BLOCK.GRAVEL, fc: 1, tc: 4, label: 'Stone → 4 Gravel' },
-    { from: BLOCK.GRAVEL, to: BLOCK.STONE, fc: 4, tc: 1, label: '4 Gravel → Stone' },
-    { from: BLOCK.DIRT, to: BLOCK.CLAY, fc: 4, tc: 1, label: '4 Dirt → Clay' },
-    { from: BLOCK.PLANKS, to: BLOCK.LEAVES, fc: 2, tc: 1, label: '2 Planks → Leaves (decoration)' },
-    { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4, label: 'Wood Log → 4 Sticks' },
-    { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2, label: 'Planks → 2 Sticks' },
-    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Wood Pickaxe', multi: true },
-    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Stone + 2 Sticks → Stone Pickaxe', multi: true },
-    { from: 3, to: 'furnace_block', fc: 8, tc: 1, label: '8 Stone → Furnace' },
-    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, label: '3 Iron Ingots + 2 Sticks → Iron Pickaxe', multi: true },
-    // Swords
-    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Planks + 1 Stick → Wood Sword', multi: true },
-    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Stone + 1 Stick → Stone Sword', multi: true },
-    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_sword', fc: 2, fcAlt: 1, tc: 1, label: '2 Iron Ingots + 1 Stick → Iron Sword', multi: true },
-    // Axes
-    { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Planks + 2 Sticks → Wood Axe', multi: true },
-    { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Stone + 2 Sticks → Stone Axe', multi: true },
-    { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_axe', fc: 3, fcAlt: 2, tc: 1, label: '3 Iron Ingots + 2 Sticks → Iron Axe', multi: true },
+const WB_CATEGORIES = [
+    { name: 'Materials', recipes: [
+        { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
+        { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1 },
+        { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4 },
+        { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2 },
+        { from: BLOCK.STONE, to: BLOCK.GRAVEL, fc: 1, tc: 4 },
+        { from: BLOCK.GRAVEL, to: BLOCK.STONE, fc: 4, tc: 1 },
+        { from: BLOCK.DIRT, to: BLOCK.CLAY, fc: 4, tc: 1 },
+        { from: BLOCK.PLANKS, to: BLOCK.LEAVES, fc: 2, tc: 1 },
+    ]},
+    { name: 'Stations', recipes: [
+        { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1 },
+        { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1 },
+        { from: 3, to: 'furnace_block', fc: 8, tc: 1 },
+    ]},
+    { name: 'Pickaxes', recipes: [
+        { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+    ]},
+    { name: 'Swords', recipes: [
+        { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+        { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+    ]},
+    { name: 'Axes', recipes: [
+        { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+    ]},
+    { name: 'Staffs', recipes: [
+        { from: 'stick', fromAlt: BLOCK.LEAVES, to: 'basic_staff', fc: 3, fcAlt: 4, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: 'coal', to: 'fire_staff', fc: 2, fcAlt: 4, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: BLOCK.SNOW, to: 'ice_staff', fc: 2, fcAlt: 8, tc: 1, multi: true },
+        { from: 'iron_ingot', fromAlt: BLOCK.SAND, to: 'lightning_staff', fc: 3, fcAlt: 6, tc: 1, multi: true },
+    ]},
 ];
+// Flat list for index lookup
+const WORKBENCH_RECIPES = WB_CATEGORIES.flatMap(c => c.recipes);
+
+function renderRecipeRow(r, ri, canCraft) {
+    const fromInfo = getItemInfo(r.from);
+    const toInfo = getItemInfo(r.to);
+    const fromColor = fromInfo ? (fromInfo.front || fromInfo.top) : '#555';
+    const toColor = toInfo ? (toInfo.front || toInfo.top) : '#555';
+    const fromName = fromInfo ? fromInfo.name : '?';
+    const toName = toInfo ? toInfo.name : '?';
+    let inputs = `<span class="craft-icon" style="background:${fromColor}"></span><span>${r.fc}× ${fromName}</span>`;
+    if (r.multi) {
+        const altInfo = getItemInfo(r.fromAlt);
+        const altColor = altInfo ? (altInfo.front || altInfo.top) : '#555';
+        const altName = altInfo ? altInfo.name : '?';
+        inputs += ` + <span class="craft-icon" style="background:${altColor}"></span><span>${r.fcAlt}× ${altName}</span>`;
+    }
+    return `<div class="craft-row${canCraft ? '' : ' disabled'}" data-ri="${ri}">
+        ${inputs} <span class="craft-arrow">→</span>
+        <span class="craft-icon" style="background:${toColor}"></span><span>${r.tc}× ${toName}</span>
+    </div>`;
+}
 
 function doCraft(r) {
     if (!r || !r.from) return;
@@ -1405,34 +1560,36 @@ function doCraft(r) {
     refreshUI();
 }
 
+const _craftOpen = {}; // track which categories are open
+
 function updateCraftTableUI() {
-    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Crafting Table</h2>';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
-    for (let ri = 0; ri < WORKBENCH_RECIPES.length; ri++) {
-        const r = WORKBENCH_RECIPES[ri];
-        const canCraft = (inventory[r.from] || 0) >= r.fc && (!r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt);
-        const toInfo = getItemInfo(r.to);
-        html += `<button class="craft-btn ct-craft" data-ri="${ri}" ${canCraft ? '' : 'disabled'} style="
-            display:flex;align-items:center;gap:6px;padding:6px 10px;
-            background:${canCraft ? 'rgba(60,50,30,0.7)' : 'rgba(30,30,30,0.5)'};
-            border:1px solid ${canCraft ? 'rgba(180,160,100,0.5)' : 'rgba(80,80,80,0.3)'};
-            border-radius:4px;color:${canCraft ? 'rgba(220,200,160,0.9)' : 'rgba(120,120,120,0.5)'};
-            font:12px monospace;cursor:${canCraft ? 'pointer' : 'default'};
-        ">`;
-        html += `<span>${r.label}</span>`;
-        if (toInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${toInfo.front};border-radius:2px;"></span>`;
-        html += '</button>';
+    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:6px;">Crafting Table</h2>';
+    let globalIdx = 0;
+    for (let ci = 0; ci < WB_CATEGORIES.length; ci++) {
+        const cat = WB_CATEGORIES[ci];
+        const isOpen = !!_craftOpen[cat.name];
+        html += `<div class="craft-cat${isOpen ? ' open' : ''}" data-cat="${cat.name}">${cat.name}</div>`;
+        html += `<div class="craft-grid${isOpen ? '' : ' collapsed'}">`;
+        for (const r of cat.recipes) {
+            const canCraft = (inventory[r.from] || 0) >= r.fc && (!r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt);
+            html += renderRecipeRow(r, globalIdx, canCraft);
+            globalIdx++;
+        }
+        html += '</div>';
     }
-    html += '</div>';
-    // Show current pickaxe mining size if holding pickaxe
-    if (hotbarSlots[selectedSlot] === 'pickaxe' && inventory['pickaxe'] > 0) {
-        html += '<div style="margin-top:8px;color:rgba(200,180,140,0.7);font:11px monospace;text-align:center;">Pickaxe: 3x3 grid-snapped, 1 deep</div>';
-    }
-    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.5);font:10px monospace;">Press Escape or I to close</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.4);font:10px monospace;">Escape to close</div>';
     craftTableMenuEl.innerHTML = html;
-    craftTableMenuEl.querySelectorAll('.ct-craft').forEach(btn => {
-        btn.addEventListener('click', () => {
-            doCraft(WORKBENCH_RECIPES[Number(btn.dataset.ri)]);
+    // Toggle categories
+    craftTableMenuEl.querySelectorAll('.craft-cat').forEach(el => {
+        el.addEventListener('click', () => {
+            _craftOpen[el.dataset.cat] = !_craftOpen[el.dataset.cat];
+            updateCraftTableUI();
+        });
+    });
+    // Craft clicks
+    craftTableMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
+        row.addEventListener('click', () => {
+            doCraft(WORKBENCH_RECIPES[Number(row.dataset.ri)]);
             updateCraftTableUI();
         });
     });
@@ -1450,40 +1607,40 @@ const SMELT_RECIPES = [
 ];
 
 function updateFurnaceUI() {
-    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Furnace</h2>';
     const coalCount = inventory['coal'] || 0;
-    html += `<div style="color:rgba(180,160,120,0.7);font:12px monospace;margin-bottom:8px;">Coal: ${coalCount} (1 coal smelts 3 items)</div>`;
-    html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:6px;">Furnace</h2>';
+    html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:6px;background:rgba(40,25,15,0.5);border-radius:4px;">
+        <span class="craft-icon" style="background:#1a1a1a"></span>
+        <span style="color:rgba(200,160,100,0.8);font:12px monospace;">Coal: ${coalCount} (1 coal smelts 3 items)</span>
+    </div>`;
+    html += '<div class="craft-cat">Smelting</div><div class="craft-grid">';
     for (let ri = 0; ri < SMELT_RECIPES.length; ri++) {
         const r = SMELT_RECIPES[ri];
-        const hasInput = (inventory[r.input] || 0) >= 1;
-        const hasFuel = coalCount >= 1;
-        const canSmelt = hasInput && hasFuel;
-        // How many can we smelt? Min of (input count, coal * 3)
+        const canSmelt = (inventory[r.input] || 0) >= 1 && coalCount >= 1;
         const maxSmelt = Math.min(inventory[r.input] || 0, coalCount * 3);
+        const inInfo = getItemInfo(r.input);
         const outInfo = getItemInfo(r.output);
-        html += `<button class="craft-btn furnace-smelt" data-ri="${ri}" ${canSmelt ? '' : 'disabled'} style="
-            display:flex;align-items:center;gap:6px;padding:6px 10px;
-            background:${canSmelt ? 'rgba(60,40,20,0.7)' : 'rgba(30,30,30,0.5)'};
-            border:1px solid ${canSmelt ? 'rgba(200,140,60,0.5)' : 'rgba(80,80,80,0.3)'};
-            border-radius:4px;color:${canSmelt ? 'rgba(230,200,150,0.9)' : 'rgba(120,120,120,0.5)'};
-            font:12px monospace;cursor:${canSmelt ? 'pointer' : 'default'};
-        ">`;
-        html += `<span>${r.label} (x${maxSmelt})</span>`;
-        if (outInfo) html += `<span style="display:inline-block;width:14px;height:14px;background:${outInfo.front || outInfo.top};border-radius:2px;"></span>`;
-        html += '</button>';
+        const inColor = inInfo ? (inInfo.front || inInfo.top) : '#555';
+        const outColor = outInfo ? (outInfo.front || outInfo.top) : '#555';
+        const inName = inInfo ? inInfo.name : '?';
+        const outName = outInfo ? outInfo.name : '?';
+        html += `<div class="craft-row${canSmelt ? '' : ' disabled'}" data-ri="${ri}">
+            <span class="craft-icon" style="background:${inColor}"></span><span>${inName}</span>
+            <span class="craft-arrow">→</span>
+            <span class="craft-icon" style="background:${outColor}"></span><span>${outName}</span>
+            <span style="color:rgba(150,130,80,0.6);margin-left:auto;font-size:10px;">(×${maxSmelt})</span>
+        </div>`;
     }
     html += '</div>';
-    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.5);font:10px monospace;">Press Escape or I to close</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.4);font:10px monospace;">Escape to close</div>';
     furnaceMenuEl.innerHTML = html;
 
-    furnaceMenuEl.querySelectorAll('.furnace-smelt').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const r = SMELT_RECIPES[Number(btn.dataset.ri)];
+    furnaceMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
+        row.addEventListener('click', () => {
+            const r = SMELT_RECIPES[Number(row.dataset.ri)];
             const inputCount = inventory[r.input] || 0;
             const coalAvail = inventory['coal'] || 0;
             if (inputCount < 1 || coalAvail < 1) return;
-            // Smelt up to 3 per coal, use as many as possible
             const canSmelt = Math.min(inputCount, 3);
             inventory[r.input] -= canSmelt;
             if (inventory[r.input] <= 0) { delete inventory[r.input]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.input) hotbarSlots[i] = 0; }
@@ -1497,34 +1654,41 @@ function updateFurnaceUI() {
     });
 }
 
-renderer.domElement.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
-    const hit = raycastBlock(e);
-    if (!hit) return;
+// Right click — place block or interact
+let placingHeld = false;
+let placeTimer = 0;
+let placeHoldTime = 0;
+let lastMouseX = 0, lastMouseY = 0;
+const PLACE_INTERVAL = 0.2;
+const PLACE_HOLD_DELAY = 0.3;
+
+document.addEventListener('mousemove', e => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
+
+function doPlace(e) {
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return false;
+    const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
+    const hit = raycastBlock(mouseEvt);
+    if (!hit) return false;
 
     // Right-click on crafting table → open crafting menu
     if (hit.block === BLOCK.CRAFTING) {
         craftingTableOpen = true;
         craftTableMenuEl.style.display = 'block';
         updateCraftTableUI();
-        return;
+        return false;
     }
-
-    // Right-click on furnace → open furnace menu
     if (hit.block === 15 || hit.block === BLOCK.FURNACE) {
         furnaceOpen = true;
         furnaceMenuEl.style.display = 'block';
         updateFurnaceUI();
-        return;
+        return false;
     }
 
     let bt = hotbarSlots[selectedSlot];
-    if (!bt || !inventory[bt]) return;
-    // Convert furnace_block item to actual block type for placement
+    if (!bt || !inventory[bt]) return false;
     const isFurnace = bt === 'furnace_block';
-    const placeBlock = isFurnace ? 15 : bt; // 15 = BLOCK.FURNACE
-    if (typeof bt === 'string' && !isFurnace) return; // other string items can't be placed
+    const placeBlock = isFurnace ? 15 : bt;
+    if (typeof bt === 'string' && !isFurnace) return false;
 
     const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
     const BS = BLOCK_SIZE;
@@ -1532,19 +1696,15 @@ renderer.domElement.addEventListener('contextmenu', (e) => {
     const placeWX = px * BS, placeWY = (py - yOff) * BS, placeWZ = pz * BS;
     const pdx = placeWX - player.position.x, pdz = placeWZ - player.position.z;
     const pdy = placeWY - player.position.y;
-    if (Math.abs(pdx) < 0.5 && Math.abs(pdz) < 0.5 && pdy >= -0.5 && pdy < player.HEIGHT) return;
+    if (Math.abs(pdx) < 0.5 && Math.abs(pdz) < 0.5 && pdy >= -0.5 && pdy < player.HEIGHT) return false;
 
-    if (!removeFromInventory(bt)) return;
+    if (!removeFromInventory(bt)) return false;
 
-    // 3x3x3 placement for crafting table and furnace
     if (placeBlock === BLOCK.CRAFTING || placeBlock === 15) {
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = 0; dy <= 2; dy++) {
-                for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++)
+            for (let dy = 0; dy <= 2; dy++)
+                for (let dz = -1; dz <= 1; dz++)
                     world.setBlock(px + dx, py + dy, pz + dz, placeBlock);
-                }
-            }
-        }
         for (let dx = -1; dx <= 1; dx++)
             for (let dz = -1; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
@@ -1552,6 +1712,23 @@ renderer.domElement.addEventListener('contextmenu', (e) => {
         world.setBlock(px, py, pz, bt);
         rebuildNear(px, pz);
     }
+    return true;
+}
+
+renderer.domElement.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (!placingHeld) {
+        placingHeld = true;
+        placeTimer = 0;
+        placeHoldTime = 0;
+        doPlace(e); // first block places immediately
+    }
+});
+renderer.domElement.addEventListener('mouseup', (e) => {
+    if (e.button === 2) placingHeld = false;
+});
+document.addEventListener('mouseup', (e) => {
+    if (e.button === 2) placingHeld = false;
 });
 
 // ── Resize ──
@@ -1602,9 +1779,16 @@ function animate() {
     player.pickaxeHeld.visible = false;
     player.swordHeld.visible = false;
     player.axeHeld.visible = false;
+    player.staffHeld.visible = false;
     if (heldItem && typeof heldItem === 'string' && inventory[heldItem] > 0) {
         if (heldItem.includes('pickaxe')) player.pickaxeHeld.visible = true;
         else if (heldItem.includes('sword')) player.swordHeld.visible = true;
+        else if (heldItem.includes('staff')) {
+            player.staffHeld.visible = true;
+            const staffColors = { basic_staff: [0x44aa44, 0x228822], fire_staff: [0xff6622, 0xff4400], ice_staff: [0x66ccff, 0x3388cc], lightning_staff: [0xffee44, 0xccaa00] };
+            const sc = staffColors[heldItem] || [0xffffff, 0xaaaaaa];
+            player.setStaffColor(sc[0], sc[1]);
+        }
         else if (heldItem.includes('axe')) player.axeHeld.visible = true;
     }
 
@@ -1622,6 +1806,21 @@ function animate() {
 
     // Attack cooldown
     if (attackCooldown > 0) attackCooldown -= dt;
+
+    // Projectiles
+    updateProjectiles(dt);
+
+    // Continuous block placement when holding right click (after 0.3s delay)
+    if (placingHeld) {
+        placeHoldTime += dt;
+        if (placeHoldTime >= PLACE_HOLD_DELAY) {
+            placeTimer += dt;
+            if (placeTimer >= PLACE_INTERVAL) {
+                placeTimer = 0;
+                doPlace(null);
+            }
+        }
+    }
 
     // Multiplayer sync
     if (mp.active) {

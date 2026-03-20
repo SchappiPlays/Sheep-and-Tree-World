@@ -82,6 +82,301 @@ function getHouseBlocks(seed, sizeIdx) {
 }
 
 // Place village structures into world chunk data
+// ── Western Castle ──
+const CASTLE = { wx: -400, wz: 20 }; // world coords
+
+function getCastleBlocks() {
+    const blocks = [];
+    const S = BLOCK.STONE, P = BLOCK.PLANKS, W = BLOCK.WOOD;
+    // Castle dimensions in blocks
+    const wallW = 60, wallD = 50, wallH = 18, crenH = 2;
+    const towerR = 5, towerH = 26;
+    const keepW = 24, keepD = 20, keepH = 28;
+    const gateW = 6, gateH = 12;
+
+    // ── Foundation (flatten ground) ──
+    for (let x = -3; x <= wallW + 3; x++)
+        for (let z = -3; z <= wallD + 3; z++)
+            for (let fy = -25; fy <= 0; fy++)
+                blocks.push({ x, y: fy, z, b: S });
+
+    // ── Outer walls ──
+    for (let y = 1; y <= wallH; y++) {
+        for (let x = 0; x <= wallW; x++) {
+            // Front and back walls
+            blocks.push({ x, y, z: 0, b: S });
+            blocks.push({ x, y, z: wallD, b: S });
+        }
+        for (let z = 0; z <= wallD; z++) {
+            // Left and right walls
+            blocks.push({ x: 0, y, z, b: S });
+            blocks.push({ x: wallW, y, z, b: S });
+        }
+    }
+
+    // ── Crenellations on walls ──
+    for (let x = 0; x <= wallW; x += 2) {
+        for (let cy = 1; cy <= crenH; cy++) {
+            blocks.push({ x, y: wallH + cy, z: 0, b: S });
+            blocks.push({ x, y: wallH + cy, z: wallD, b: S });
+        }
+    }
+    for (let z = 0; z <= wallD; z += 2) {
+        for (let cy = 1; cy <= crenH; cy++) {
+            blocks.push({ x: 0, y: wallH + cy, z, b: S });
+            blocks.push({ x: wallW, y: wallH + cy, z, b: S });
+        }
+    }
+
+    // ── Gate (front wall center) ──
+    const gateStart = Math.floor(wallW / 2) - Math.floor(gateW / 2);
+    // Gate is already open because we just don't place wall blocks there
+    // Add gate frame pillars
+    for (let y = 1; y <= gateH + 2; y++) {
+        blocks.push({ x: gateStart - 1, y, z: 0, b: W });
+        blocks.push({ x: gateStart + gateW, y, z: 0, b: W });
+    }
+    // Gate arch
+    for (let x = gateStart; x < gateStart + gateW; x++) {
+        blocks.push({ x, y: gateH + 1, z: 0, b: S });
+        blocks.push({ x, y: gateH + 2, z: 0, b: S });
+    }
+    // Remove wall blocks where gate opening is
+    // (we'll handle this by not placing them — done by checking in wall loop)
+
+    // ── 4 Corner towers ──
+    const towerCenters = [
+        [0, 0], [wallW, 0], [0, wallD], [wallW, wallD]
+    ];
+    for (const [tcx, tcz] of towerCenters) {
+        for (let y = 1; y <= towerH; y++) {
+            for (let dx = -towerR; dx <= towerR; dx++) {
+                for (let dz = -towerR; dz <= towerR; dz++) {
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist <= towerR && dist > towerR - 1.5) {
+                        blocks.push({ x: tcx + dx, y, z: tcz + dz, b: S });
+                    }
+                }
+            }
+        }
+        // Tower top crenellations
+        for (let dx = -towerR; dx <= towerR; dx++) {
+            for (let dz = -towerR; dz <= towerR; dz++) {
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist <= towerR) {
+                    blocks.push({ x: tcx + dx, y: towerH, z: tcz + dz, b: S });
+                    if ((dx + dz) % 2 === 0 && dist > towerR - 2) {
+                        blocks.push({ x: tcx + dx, y: towerH + 1, z: tcz + dz, b: S });
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Courtyard floor ──
+    for (let x = 1; x < wallW; x++)
+        for (let z = 1; z < wallD; z++)
+            blocks.push({ x, y: 0, z, b: S });
+
+    // ── Central Keep ──
+    const kx = Math.floor(wallW / 2) - Math.floor(keepW / 2);
+    const kz = Math.floor(wallD / 2) - Math.floor(keepD / 2) + 5;
+    // Keep walls
+    for (let y = 1; y <= keepH; y++) {
+        for (let x = kx; x <= kx + keepW; x++) {
+            blocks.push({ x, y, z: kz, b: S });
+            blocks.push({ x, y, z: kz + keepD, b: S });
+        }
+        for (let z = kz; z <= kz + keepD; z++) {
+            blocks.push({ x: kx, y, z, b: S });
+            blocks.push({ x: kx + keepW, y, z, b: S });
+        }
+        // Internal dividing walls for rooms — 2 floors
+        if (y <= 12) {
+            // Ground floor: 3 rooms side by side
+            for (let z = kz; z <= kz + keepD; z++) {
+                blocks.push({ x: kx + 8, y, z, b: S });
+                blocks.push({ x: kx + 16, y, z, b: S });
+            }
+        }
+    }
+
+    // Keep floor between levels (y=13)
+    for (let x = kx + 1; x < kx + keepW; x++)
+        for (let z = kz + 1; z < kz + keepD; z++)
+            blocks.push({ x, y: 13, z, b: P });
+
+    // Keep roof
+    for (let x = kx; x <= kx + keepW; x++)
+        for (let z = kz; z <= kz + keepD; z++)
+            blocks.push({ x, y: keepH + 1, z, b: S });
+    // Keep crenellations
+    for (let x = kx; x <= kx + keepW; x += 2) {
+        blocks.push({ x, y: keepH + 2, z: kz, b: S });
+        blocks.push({ x, y: keepH + 2, z: kz + keepD, b: S });
+    }
+    for (let z = kz; z <= kz + keepD; z += 2) {
+        blocks.push({ x: kx, y: keepH + 2, z, b: S });
+        blocks.push({ x: kx + keepW, y: keepH + 2, z, b: S });
+    }
+
+    // ── Keep doors (ground floor) ──
+    // Front entrance to keep
+    const keepDoor = Math.floor(keepW / 2) + kx;
+    // Doors are gaps — remove wall blocks at door positions
+    // We handle by not placing them — mark for removal after
+
+    // ── Room features ──
+    // Ground floor left room: Throne room
+    // Throne (stone platform at back)
+    for (let dx = 0; dx < 4; dx++)
+        for (let dz = 0; dz < 3; dz++) {
+            blocks.push({ x: kx + 2 + dx, y: 1, z: kz + keepD - 3 + dz, b: S });
+            blocks.push({ x: kx + 2 + dx, y: 2, z: kz + keepD - 3 + dz, b: P });
+        }
+    // Throne chair
+    blocks.push({ x: kx + 4, y: 3, z: kz + keepD - 2, b: P });
+    blocks.push({ x: kx + 4, y: 4, z: kz + keepD - 2, b: P });
+
+    // Ground floor middle room: Great hall
+    // Long table
+    for (let dz = 2; dz < keepD - 2; dz++) {
+        blocks.push({ x: kx + 12, y: 1, z: kz + dz, b: W });
+    }
+
+    // Ground floor right room: Armory
+    // Weapon racks (wood along walls)
+    for (let y2 = 1; y2 <= 3; y2++) {
+        blocks.push({ x: kx + keepW - 2, y: y2, z: kz + 2, b: W });
+        blocks.push({ x: kx + keepW - 2, y: y2, z: kz + 5, b: W });
+        blocks.push({ x: kx + keepW - 2, y: y2, z: kz + 8, b: W });
+    }
+
+    // Upper floor: open hall with pillars
+    for (let px = 0; px < 3; px++) {
+        for (let pz = 0; pz < 2; pz++) {
+            const pillarX = kx + 5 + px * 7;
+            const pillarZ = kz + 5 + pz * 10;
+            for (let y = 14; y <= keepH; y++) {
+                blocks.push({ x: pillarX, y, z: pillarZ, b: S });
+            }
+        }
+    }
+
+    // ── Staircase in keep (connects ground to upper floor) ──
+    for (let step = 0; step < 13; step++) {
+        const sx = kx + 1 + step;
+        blocks.push({ x: sx, y: 1 + step, z: kz + 1, b: S });
+        blocks.push({ x: sx, y: 1 + step, z: kz + 2, b: S });
+    }
+
+    // ── Courtyard buildings ──
+    // Barracks (left side)
+    const bx = 3, bz2 = 3;
+    for (let y = 1; y <= 8; y++) {
+        for (let x = bx; x <= bx + 12; x++) {
+            blocks.push({ x, y, z: bz2, b: S });
+            blocks.push({ x, y, z: bz2 + 8, b: S });
+        }
+        for (let z = bz2; z <= bz2 + 8; z++) {
+            blocks.push({ x: bx, y, z, b: S });
+            blocks.push({ x: bx + 12, y, z, b: S });
+        }
+    }
+    // Barracks roof
+    for (let x = bx; x <= bx + 12; x++)
+        for (let z = bz2; z <= bz2 + 8; z++)
+            blocks.push({ x, y: 9, z, b: P });
+
+    // Stable (right side)
+    const stx = wallW - 15, stz = 3;
+    for (let y = 1; y <= 6; y++) {
+        for (let x = stx; x <= stx + 12; x++) {
+            blocks.push({ x, y, z: stz, b: W });
+            blocks.push({ x, y, z: stz + 8, b: W });
+        }
+        for (let z = stz; z <= stz + 8; z++) {
+            blocks.push({ x: stx, y, z, b: W });
+            blocks.push({ x: stx + 12, y, z, b: W });
+        }
+    }
+    // Stable roof
+    for (let x = stx; x <= stx + 12; x++)
+        for (let z = stz; z <= stz + 8; z++)
+            blocks.push({ x, y: 7, z, b: P });
+
+    // ── Well in courtyard ──
+    const wellX = Math.floor(wallW / 2), wellZ = 10;
+    for (let y = 1; y <= 3; y++) {
+        blocks.push({ x: wellX - 1, y, z: wellZ - 1, b: S });
+        blocks.push({ x: wellX + 1, y, z: wellZ - 1, b: S });
+        blocks.push({ x: wellX - 1, y, z: wellZ + 1, b: S });
+        blocks.push({ x: wellX + 1, y, z: wellZ + 1, b: S });
+    }
+
+    // ── Wall walkway (inner ledge along wall top) ──
+    for (let x = 1; x < wallW; x++) {
+        blocks.push({ x, y: wallH - 1, z: 1, b: S });
+        blocks.push({ x, y: wallH - 1, z: wallD - 1, b: S });
+    }
+    for (let z = 1; z < wallD; z++) {
+        blocks.push({ x: 1, y: wallH - 1, z, b: S });
+        blocks.push({ x: wallW - 1, y: wallH - 1, z, b: S });
+    }
+
+    // Now remove gate opening blocks
+    for (let y = 1; y <= gateH; y++) {
+        for (let x = gateStart; x < gateStart + gateW; x++) {
+            // Mark these positions to be cleared
+            blocks.push({ x, y, z: 0, b: BLOCK.AIR });
+        }
+    }
+    // Keep doors
+    for (let y = 1; y <= 8; y++) {
+        blocks.push({ x: keepDoor, y, z: kz, b: BLOCK.AIR });
+        blocks.push({ x: keepDoor + 1, y, z: kz, b: BLOCK.AIR });
+        blocks.push({ x: keepDoor + 2, y, z: kz, b: BLOCK.AIR });
+    }
+    // Barracks door
+    for (let y = 1; y <= 7; y++) {
+        blocks.push({ x: bx + 6, y, z: bz2, b: BLOCK.AIR });
+        blocks.push({ x: bx + 7, y, z: bz2, b: BLOCK.AIR });
+    }
+    // Stable door
+    for (let y = 1; y <= 5; y++) {
+        blocks.push({ x: stx + 6, y, z: stz, b: BLOCK.AIR });
+        blocks.push({ x: stx + 7, y, z: stz, b: BLOCK.AIR });
+    }
+    // Keep internal doors (gaps in dividing walls)
+    for (let y = 1; y <= 7; y++) {
+        blocks.push({ x: kx + 8, y, z: kz + Math.floor(keepD / 2), b: BLOCK.AIR });
+        blocks.push({ x: kx + 8, y, z: kz + Math.floor(keepD / 2) + 1, b: BLOCK.AIR });
+        blocks.push({ x: kx + 16, y, z: kz + Math.floor(keepD / 2), b: BLOCK.AIR });
+        blocks.push({ x: kx + 16, y, z: kz + Math.floor(keepD / 2) + 1, b: BLOCK.AIR });
+    }
+    // Windows in keep walls
+    for (let room = 0; room < 3; room++) {
+        const wx2 = kx + 4 + room * 8;
+        for (let wy = 4; wy <= 6; wy++) {
+            blocks.push({ x: wx2, y: wy, z: kz, b: BLOCK.AIR });
+            blocks.push({ x: wx2, y: wy, z: kz + keepD, b: BLOCK.AIR });
+        }
+        for (let wy = 16; wy <= 18; wy++) {
+            blocks.push({ x: wx2, y: wy, z: kz, b: BLOCK.AIR });
+            blocks.push({ x: wx2, y: wy, z: kz + keepD, b: BLOCK.AIR });
+        }
+    }
+    // Windows in outer walls
+    for (let wx2 = 8; wx2 < wallW; wx2 += 10) {
+        for (let wy = 10; wy <= 12; wy++) {
+            blocks.push({ x: wx2, y: wy, z: 0, b: BLOCK.AIR });
+            blocks.push({ x: wx2, y: wy, z: wallD, b: BLOCK.AIR });
+        }
+    }
+
+    return blocks;
+}
+
 export function placeVillageInChunk(world, cx, cz, chunkData) {
     const yOff = Math.floor(WORLD_HEIGHT / 2);
     const ox = cx * 16, oz = cz * 16; // chunk origin in block coords
@@ -147,6 +442,42 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
                 if (by < 0 || by >= WORLD_HEIGHT) continue;
                 chunkData[(by * 16 + lz) * 16 + lx] = hb.b;
             }
+        }
+    }
+
+    // ── Western Castle ──
+    const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
+    const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
+    // Check if castle overlaps this chunk (castle is ~60x50 blocks)
+    if (cbx + 70 >= ox && cbx - 10 <= ox + 15 && cbz + 60 >= oz && cbz - 10 <= oz + 15) {
+        // Get base height
+        const castleBaseY = world.getBaseHeightBlocks(cbx + 30, cbz + 25) + yOff;
+        // Get or generate castle blocks (cache for performance)
+        if (!world._castleBlocks) world._castleBlocks = getCastleBlocks();
+        const castleBlocks = world._castleBlocks;
+
+        // Clear area first
+        for (let ix = -5; ix < 65; ix++) {
+            for (let iz = -5; iz < 55; iz++) {
+                for (let iy = 1; iy <= 35; iy++) {
+                    const bx2 = cbx + ix, bz2 = cbz + iz, by2 = castleBaseY + iy;
+                    const lx2 = bx2 - ox, lz2 = bz2 - oz;
+                    if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
+                    if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
+                    chunkData[(by2 * 16 + lz2) * 16 + lx2] = BLOCK.AIR;
+                }
+            }
+        }
+
+        // Place castle blocks
+        for (const hb of castleBlocks) {
+            const bx2 = cbx + hb.x;
+            const bz2 = cbz + hb.z;
+            const by2 = castleBaseY + hb.y;
+            const lx2 = bx2 - ox, lz2 = bz2 - oz;
+            if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
+            if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
+            chunkData[(by2 * 16 + lz2) * 16 + lx2] = hb.b;
         }
     }
 }

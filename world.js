@@ -545,26 +545,24 @@ export class World {
 
                 const surfaceH = this.getHeightBlocks(bx, bz);
                 const surfaceY = surfaceH + yOff;
-                // Start 10 blocks below surface — never break through
-                const caveTop = surfaceY - 10;
+                // Start 25 blocks below surface — deep underground
+                const caveTop = surfaceY - 25;
 
-                for (let y = Math.max(5, yOff - 35); y < caveTop; y++) {
+                for (let y = Math.max(5, yOff - 50); y < caveTop; y++) {
                     const wy = (y - yOff) * BLOCK_SIZE;
 
-                    // 3 octaves of low-frequency noise for large organic shapes
-                    const n1 = Math.sin(wx * 0.02 + wy * 0.025 + wz * 0.022 + 5.3) *
-                               Math.cos(wx * 0.018 - wy * 0.02 + wz * 0.019 + 2.1);
-                    const n2 = Math.sin(wx * 0.035 + wy * 0.02 - wz * 0.03 + 8.7) *
-                               Math.cos(wx * 0.028 + wy * 0.018 + wz * 0.025 + 3.4);
-                    const n3 = Math.sin(wx * 0.05 + wy * 0.03 + wz * 0.04 + 1.2) *
-                               Math.cos(wx * 0.04 - wy * 0.028 + wz * 0.035 + 6.8);
+                    // Higher frequency noise for smaller, tighter caves
+                    const n1 = Math.sin(wx * 0.04 + wy * 0.05 + wz * 0.042 + 5.3) *
+                               Math.cos(wx * 0.035 - wy * 0.04 + wz * 0.038 + 2.1);
+                    const n2 = Math.sin(wx * 0.06 + wy * 0.04 - wz * 0.055 + 8.7) *
+                               Math.cos(wx * 0.05 + wy * 0.035 + wz * 0.045 + 3.4);
 
-                    const caveNoise = Math.max(n1, n2, n3);
+                    const caveNoise = Math.max(n1, n2);
                     const ringFactor = 1 - Math.abs(distC - 110) / 80;
                     if (ringFactor <= 0) continue;
 
-                    // Low threshold = big open caverns
-                    if (caveNoise > 0.15 + (1 - ringFactor) * 0.2) {
+                    // Higher threshold = smaller caves
+                    if (caveNoise > 0.35 + (1 - ringFactor) * 0.15) {
                         const idx = (y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
                         const block = data[idx];
                         if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
