@@ -13,7 +13,11 @@
     "productName": "Sheep and Tree World",
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.games"
+      "category": "public.app-category.games",
+      "icon": "icon.icns"
+    },
+    "win": {
+      "icon": "icon.ico"
     },
     "files": [
       "main.js",

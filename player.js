@@ -253,31 +253,46 @@ export class Player {
         return { hip, knee };
     }
 
-    update(dt, keys) {
-        // ── Movement — exact same as game.html ──
-        // W/S = forward/backward along facing direction
-        // A/D = rotate character
+    update(dt, keys, fpMode, fpYaw) {
         let wantDir = 0;
+        let strafeDir = 0;
         if (keys['KeyW'] || keys['ArrowUp']) wantDir += 1;
         if (keys['KeyS'] || keys['ArrowDown']) wantDir -= 1;
-        if (keys['KeyA'] || keys['ArrowLeft']) this.group.rotation.y += this.turnRate * dt;
-        if (keys['KeyD'] || keys['ArrowRight']) this.group.rotation.y -= this.turnRate * dt;
 
-        const wantSprint = !!(keys['ShiftLeft'] && wantDir > 0);
+        if (fpMode) {
+            if (keys['KeyA'] || keys['ArrowLeft']) strafeDir += 1;
+            if (keys['KeyD'] || keys['ArrowRight']) strafeDir -= 1;
+            // Only turn player model when moving
+            const isMoving = wantDir !== 0 || strafeDir !== 0;
+            if (isMoving) this.group.rotation.y = fpYaw;
+        } else {
+            // Third person: A/D rotate
+            if (keys['KeyA'] || keys['ArrowLeft']) this.group.rotation.y += this.turnRate * dt;
+            if (keys['KeyD'] || keys['ArrowRight']) this.group.rotation.y -= this.turnRate * dt;
+        }
+
+        const wantSprint = !!(keys['ShiftLeft'] && (wantDir > 0 || strafeDir !== 0));
         const maxSpeed = wantSprint ? this.sprintSpeed : this.walkSpeed;
 
-        // Speed accumulation — exact same as game.html
-        if (wantDir !== 0) {
-            this.speed += (maxSpeed * wantDir - this.speed) * this.accel * dt;
+        // Speed — combine forward and strafe
+        const hasInput = wantDir !== 0 || strafeDir !== 0;
+        if (hasInput) {
+            this.speed += (maxSpeed - Math.abs(this.speed)) * this.accel * dt;
+            if (this.speed > maxSpeed) this.speed = maxSpeed;
         } else {
             this.speed -= this.speed * this.decel * dt;
             if (Math.abs(this.speed) < 0.02) this.speed = 0;
         }
 
-        // Move along facing direction
+        // Move along facing direction + strafe
         const facingY = this.group.rotation.y;
-        const moveX = Math.sin(facingY) * this.speed * dt;
-        const moveZ = Math.cos(facingY) * this.speed * dt;
+        const fwd = wantDir !== 0 || strafeDir !== 0 ? 1 : 0;
+        const moveAngle = Math.atan2(
+            wantDir * Math.sin(facingY) + strafeDir * Math.cos(facingY),
+            wantDir * Math.cos(facingY) - strafeDir * Math.sin(facingY)
+        );
+        const moveX = hasInput ? Math.sin(moveAngle) * this.speed * dt : 0;
+        const moveZ = hasInput ? Math.cos(moveAngle) * this.speed * dt : 0;
 
         // Jump — exact same as game.html
         if ((keys['Space'] || keys['ArrowUp']) && this.isGrounded && keys['Space']) {
