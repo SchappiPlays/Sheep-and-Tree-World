@@ -2,12 +2,12 @@
 
 import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS } from './world.js';
 
-const RENDER_DIST = 200; // whole world
+let RENDER_DIST = 12; // default, updated by settings
 const LOD0_DIST = 8;    // full detail — every block, all faces
 const LOD1_DIST = 25;   // surface only — skip underground
 const LOD2_DIST = 60;   // surface only + skip every 2nd XZ
 // beyond LOD2: surface only + skip every 4th XZ
-const UNLOAD_DIST = RENDER_DIST + 3;
+let UNLOAD_DIST = RENDER_DIST + 3;
 const BS = BLOCK_SIZE;
 const Y_OFF = Math.floor(WORLD_HEIGHT / 2); // block y offset: block Y_OFF = world y=0
 
@@ -66,6 +66,12 @@ export class ChunkManager {
         this._lastPCZ = null;
     }
 
+    setRenderDist(d) {
+        RENDER_DIST = d;
+        UNLOAD_DIST = d + 3;
+        this._lastPCX = null; // force re-scan
+    }
+
     update(px, pz, facingAngle) {
         // Convert world position to chunk coordinates
         const pcx = Math.floor(px / (CHUNK_SIZE * BS));
@@ -87,9 +93,8 @@ export class ChunkManager {
         for (let ring = 0; ring <= RENDER_DIST; ring++) {
             if (ring > RENDER_DIST) break;
             const lod = ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4;
-            const step = ring > LOD2_DIST ? 3 : ring > LOD1_DIST ? 2 : 1;
-            for (let dx = -ring; dx <= ring; dx += step) {
-                for (let dz = -ring; dz <= ring; dz += step) {
+            for (let dx = -ring; dx <= ring; dx++) {
+                for (let dz = -ring; dz <= ring; dz++) {
                     if (Math.abs(dx) !== ring && Math.abs(dz) !== ring) continue; // ring perimeter only
                     const d2 = dx * dx + dz * dz;
                     if (d2 > RENDER_DIST * RENDER_DIST) continue;

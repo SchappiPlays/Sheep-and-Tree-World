@@ -203,6 +203,105 @@ function makePig(x, z, terrainY) {
     };
 }
 
+// ── Enemy materials ──
+const goblinSkinMat = new THREE.MeshStandardMaterial({ color: 0x4a6a2a });
+const goblinEyeMat = new THREE.MeshStandardMaterial({ color: 0xcc2200, emissive: 0x661100, emissiveIntensity: 0.3 });
+const goblinClothMat = new THREE.MeshStandardMaterial({ color: 0x3a3022 });
+const skelBoneMat = new THREE.MeshStandardMaterial({ color: 0xd8d0c0 });
+const skelEyeMat = new THREE.MeshStandardMaterial({ color: 0x44ff44, emissive: 0x22aa22, emissiveIntensity: 0.5 });
+
+function makeGoblin(x, z, terrainY) {
+    const g = new THREE.Group();
+    // Body — short and hunched
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.18), goblinClothMat);
+    body.position.y = 0.55; g.add(body);
+    // Head — big for body
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.78, 0); g.add(headGrp);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.2), goblinSkinMat);
+    headGrp.add(head);
+    // Pointy ears
+    const earGeo = new THREE.ConeGeometry(0.04, 0.12, 4);
+    const lEar = new THREE.Mesh(earGeo, goblinSkinMat); lEar.position.set(-0.14, 0.02, 0); lEar.rotation.z = Math.PI/2 + 0.3; headGrp.add(lEar);
+    const rEar = new THREE.Mesh(earGeo, goblinSkinMat); rEar.position.set(0.14, 0.02, 0); rEar.rotation.z = -(Math.PI/2 + 0.3); headGrp.add(rEar);
+    // Red eyes
+    const eyeG = new THREE.SphereGeometry(0.025, 6, 6);
+    const lEye = new THREE.Mesh(eyeG, goblinEyeMat); lEye.position.set(-0.06, 0.02, 0.1); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeG, goblinEyeMat); rEye.position.set(0.06, 0.02, 0.1); headGrp.add(rEye);
+    // Nose — pointy
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 4), goblinSkinMat);
+    nose.position.set(0, -0.02, 0.12); nose.rotation.x = -Math.PI/2; headGrp.add(nose);
+    // Arms
+    const armGeo = new THREE.BoxGeometry(0.07, 0.25, 0.07);
+    const lArm = new THREE.Mesh(armGeo, goblinSkinMat); lArm.position.set(-0.2, 0.48, 0); g.add(lArm);
+    const rArm = new THREE.Mesh(armGeo, goblinSkinMat); rArm.position.set(0.2, 0.48, 0); g.add(rArm);
+    // Weapon — small club in right hand
+    const club = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), new THREE.MeshStandardMaterial({ color: 0x5c3a1e }));
+    club.position.set(0.2, 0.32, 0.08); g.add(club);
+    // Legs
+    const legs = [];
+    const legGeo = new THREE.BoxGeometry(0.08, 0.2, 0.08);
+    for (const lx of [-0.08, 0.08]) {
+        const hip = new THREE.Group(); hip.position.set(lx, 0.38, 0); g.add(hip);
+        const leg = new THREE.Mesh(legGeo, goblinClothMat); leg.position.y = -0.1; hip.add(leg);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.12), goblinSkinMat); foot.position.set(0, -0.22, 0.02); hip.add(foot);
+        legs.push(hip);
+    }
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+        type: 'goblin', hostile: true, aggroRange: 8, attackRange: 1.2, attackDmg: 3, attackCD: 1.2, attackTimer: 0,
+        hp: 15, maxHP: 15, dead: false, chaseSpeed: 1.8,
+    };
+}
+
+function makeSkeleton(x, z, terrainY) {
+    const g = new THREE.Group();
+    // Ribcage body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.35, 0.14), skelBoneMat);
+    body.position.y = 0.7; g.add(body);
+    // Spine detail
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.06), skelBoneMat);
+    spine.position.set(0, 0.7, -0.06); g.add(spine);
+    // Head — skull
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 1.0, 0); g.add(headGrp);
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), skelBoneMat);
+    headGrp.add(skull);
+    // Jaw
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.14), skelBoneMat);
+    jaw.position.set(0, -0.1, 0.02); headGrp.add(jaw);
+    // Glowing eyes
+    const eyeG = new THREE.SphereGeometry(0.03, 6, 6);
+    const lEye = new THREE.Mesh(eyeG, skelEyeMat); lEye.position.set(-0.05, 0.02, 0.1); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeG, skelEyeMat); rEye.position.set(0.05, 0.02, 0.1); headGrp.add(rEye);
+    // Arms — bony
+    const armGeo = new THREE.BoxGeometry(0.05, 0.3, 0.05);
+    const lArm = new THREE.Mesh(armGeo, skelBoneMat); lArm.position.set(-0.17, 0.6, 0); g.add(lArm);
+    const rArm = new THREE.Mesh(armGeo, skelBoneMat); rArm.position.set(0.17, 0.6, 0); g.add(rArm);
+    // Legs — bony
+    const legs = [];
+    const legGeo = new THREE.BoxGeometry(0.05, 0.35, 0.05);
+    for (const lx of [-0.07, 0.07]) {
+        const hip = new THREE.Group(); hip.position.set(lx, 0.5, 0); g.add(hip);
+        const leg = new THREE.Mesh(legGeo, skelBoneMat); leg.position.y = -0.175; hip.add(leg);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.12), skelBoneMat); foot.position.set(0, -0.37, 0.03); hip.add(foot);
+        legs.push(hip);
+    }
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+        type: 'skeleton', hostile: true, aggroRange: 12, attackRange: 1.5, attackDmg: 4, attackCD: 1.5, attackTimer: 0,
+        hp: 12, maxHP: 12, dead: false, chaseSpeed: 2.2,
+    };
+}
+
 export class CreatureManager {
     constructor(scene, world) {
         this.scene = scene;
@@ -272,6 +371,58 @@ export class CreatureManager {
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             const dist2 = dx * dx + dz * dz;
             if (dist2 > 25 * 25) continue;
+
+            // ── Hostile AI — chase and attack player ──
+            if (sh.hostile) {
+                const dist = Math.sqrt(dist2);
+                sh.attackTimer = Math.max(0, (sh.attackTimer || 0) - dt);
+
+                if (dist < sh.aggroRange) {
+                    // Chase player
+                    sh.angle = Math.atan2(-dx, -dz);
+                    sh.walking = true;
+                    const tgtSpd = dist > sh.attackRange ? sh.chaseSpeed : 0;
+                    sh.speed += (tgtSpd - sh.speed) * 5 * dt;
+
+                    // Attack when in range
+                    if (dist < sh.attackRange && sh.attackTimer <= 0) {
+                        sh.attackTimer = sh.attackCD;
+                        if (this._onPlayerHit) this._onPlayerHit(sh.attackDmg, sh.type);
+                    }
+                } else {
+                    // Wander when not aggro'd
+                    sh.wanderTimer -= dt;
+                    if (sh.wanderTimer <= 0) {
+                        sh.walking = !sh.walking;
+                        if (sh.walking) sh.angle += (Math.random() - 0.5) * 2.2;
+                        sh.wanderTimer = 1.5 + Math.random() * 3;
+                    }
+                    sh.speed += ((sh.walking ? 0.5 : 0) - sh.speed) * 4 * dt;
+                }
+
+                // Rotation smoothing
+                let da = sh.angle - sh.group.rotation.y;
+                while (da > Math.PI) da -= Math.PI * 2;
+                while (da < -Math.PI) da += Math.PI * 2;
+                sh.group.rotation.y += da * 5 * dt;
+
+                // Movement
+                if (sh.speed > 0.01) {
+                    sh.x += Math.sin(sh.group.rotation.y) * sh.speed * dt;
+                    sh.z += Math.cos(sh.group.rotation.y) * sh.speed * dt;
+                }
+
+                // Terrain + animation
+                const terrainY = this.world.getHeight(sh.x, sh.z);
+                sh.group.position.set(sh.x, terrainY, sh.z);
+                const wb = clamp01(sh.speed / 0.5);
+                if (wb > 0.01) sh.walkPhase += sh.speed * dt * 10;
+                const wp = sh.walkPhase;
+                for (let li = 0; li < sh.legs.length; li++)
+                    sh.legs[li].rotation.x = ((li % 2 === 0) ? 1 : -1) * Math.sin(wp) * 0.5 * wb;
+                sh.headGrp.rotation.x = sh.walking ? Math.sin(wp * 2) * 0.08 * wb : 0;
+                continue;
+            }
 
             // ── Wandering AI — exact from game.html ──
             sh.wanderTimer -= dt;
@@ -353,15 +504,34 @@ export class CreatureManager {
             const terrainY = this.world.getHeight(sx, sz);
             if (terrainY < 0.5 || terrainY > 35) continue;
 
-            // Pick creature type deterministically
+            // Pick creature type based on biome
             const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
             let creature;
-            if (typeHash < 0.45) {
-                creature = makeSheep(sx, sz, terrainY);
-            } else if (typeHash < 0.75) {
-                creature = makeCow(sx, sz, terrainY);
+            if (biome === 'mountain' || biome === 'scorched') {
+                // Hostile territory — goblins
+                if (typeHash < 0.5) {
+                    creature = makeGoblin(sx, sz, terrainY);
+                } else {
+                    continue; // sparser spawns in hostile areas
+                }
+            } else if (biome === 'snow' || biome === 'snow_transition') {
+                // Frozen lands — skeletons and occasional animals
+                if (typeHash < 0.35) {
+                    creature = makeSkeleton(sx, sz, terrainY);
+                } else if (typeHash < 0.55) {
+                    creature = makeSheep(sx, sz, terrainY);
+                } else {
+                    continue;
+                }
             } else {
-                creature = makePig(sx, sz, terrainY);
+                // Peaceful grasslands
+                if (typeHash < 0.45) {
+                    creature = makeSheep(sx, sz, terrainY);
+                } else if (typeHash < 0.75) {
+                    creature = makeCow(sx, sz, terrainY);
+                } else {
+                    creature = makePig(sx, sz, terrainY);
+                }
             }
             creature.cid = this._nextId++;
             this.scene.add(creature.group);
@@ -390,6 +560,16 @@ export class CreatureManager {
                 sh.deathTimer = 0;
                 sh.walking = false;
                 sh.speed = 0;
+                // Enemy drops
+                if (this._onCreatureDrop) {
+                    if (sh.type === 'goblin') {
+                        this._onCreatureDrop('stick', 1 + Math.floor(Math.random() * 3));
+                        if (Math.random() < 0.3) this._onCreatureDrop('iron_bar', 1);
+                    } else if (sh.type === 'skeleton') {
+                        this._onCreatureDrop('bone', 1 + Math.floor(Math.random() * 2));
+                        if (Math.random() < 0.4) this._onCreatureDrop('stick', 2);
+                    }
+                }
             }
         }
     }

@@ -1,22 +1,22 @@
 // world.js — Terrain generation matching game.html's main continent
 // 1 Minecraft block = 3×3×3 of these blocks
-// Player is ~1.9 units tall ≈ 6 blocks tall
+// Player is ~1.9 units tall ≈ 4 blocks tall. 2x2x2 blocks = 1 Minecraft block
 
-export const BLOCK_SIZE = 1.9 / 6; // ≈ 0.3167 world units per block
+export const BLOCK_SIZE = 1.9 / 4; // ≈ 0.475 world units per block
 export const CHUNK_SIZE = 16;
 export const WORLD_HEIGHT = 256;
 export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -430,7 +430,17 @@ export class World {
                         const coalVein = Math.sin(bx * 0.12 + y * 0.1 + bz * 0.14 + 7.3) *
                                          Math.cos(bx * 0.09 - y * 0.15 + bz * 0.11 + 4.1);
                         const coalLocal = this._hash(bx * 0.47 + y * 0.29, bz * 0.37 + y * 0.53);
-                        if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
+                        // Diamond: very deep only (y < 20), rare small veins
+                        const diamondVein = Math.sin(bx * 0.23 + y * 0.31 + bz * 0.19 + 11.3) *
+                                            Math.cos(bx * 0.17 - y * 0.27 + bz * 0.21 + 5.7);
+                        const diamondLocal = this._hash(bx * 0.61 + y * 0.43, bz * 0.53 + y * 0.37);
+                        // Gold: mid-deep (y < 35), uncommon
+                        const goldVein = Math.sin(bx * 0.18 + y * 0.22 + bz * 0.16 + 9.1) *
+                                         Math.cos(bx * 0.14 - y * 0.24 + bz * 0.13 + 6.8);
+                        const goldLocal = this._hash(bx * 0.53 + y * 0.31, bz * 0.41 + y * 0.47);
+                        if (y < 20 && diamondVein > 0.8 && diamondLocal > 0.6) block = BLOCK.DIAMOND_ORE;
+                        else if (y < 35 && goldVein > 0.75 && goldLocal > 0.55) block = BLOCK.GOLD_ORE;
+                        else if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
                         else if (coalVein > 0.6 && coalLocal > 0.4) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {

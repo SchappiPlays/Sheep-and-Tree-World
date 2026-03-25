@@ -93,7 +93,7 @@ export class Multiplayer {
     }
 
     // Send local player state
-    sendState(player, heldItem, swingTimer) {
+    sendState(player, heldItem, swingTimer, charColors) {
         if (!this.active) return;
         const state = {
             type: 'state',
@@ -108,6 +108,7 @@ export class Multiplayer {
             sb: +(player.sprintBlend || 0).toFixed(2),
             sw: +(swingTimer >= 0 ? swingTimer : -1).toFixed(2),
             tool: heldItem || '',
+            cc: charColors || null,
         };
         this._broadcast(state);
     }
@@ -152,10 +153,7 @@ export class Multiplayer {
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x3B2507 });
         const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
 
-        // Pick a unique color per player
-        const colors = [0xBB4444, 0x44BB44, 0x4444BB, 0xBBBB44];
-        const ci = this.remotePlayers.size % colors.length;
-        shirtMat.color.setHex(colors[ci]);
+        // Colors will be set from remote player's character customization
 
         const body = new THREE.Group();
         body.position.y = 0.95;
@@ -173,8 +171,10 @@ export class Multiplayer {
         const headGroup = new THREE.Group();
         headGroup.position.y = 0.76; spine.add(headGroup);
         headGroup.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skinMat));
-        const hair = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.24), hairMat);
-        hair.position.y = 0.13; headGroup.add(hair);
+        const hairGroup = new THREE.Group();
+        const defaultHair = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.24), hairMat);
+        defaultHair.position.y = 0.13; hairGroup.add(defaultHair);
+        headGroup.add(hairGroup);
         const lEye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), eyeMat);
         lEye.position.set(-0.06, 0.03, 0.11); headGroup.add(lEye);
         const rEye = lEye.clone(); rEye.position.x = 0.06; headGroup.add(rEye);
@@ -214,7 +214,7 @@ export class Multiplayer {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
         ctx.fillText('Player', 64, 20);
         const tex = new THREE.CanvasTexture(canvas);
-        const labelMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+        const labelMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: true });
         const label = new THREE.Sprite(labelMat);
         label.position.y = 2.2; label.scale.set(1.0, 0.25, 1);
         g.add(label);
@@ -222,15 +222,59 @@ export class Multiplayer {
         g.rotation.order = 'YXZ';
         this.scene.add(g);
 
-        this.remotePlayers.set(pid, {
+        const rp = {
             group: g, body, spine, headGroup, torso,
             leftArm, rightArm, leftLeg, rightLeg,
-        });
+            _skinMat: skinMat, _shirtMat: shirtMat, _pantsMat: pantsMat,
+            _shoeMat: shoeMat, _hairMat: hairMat, _hairGroup: hairGroup,
+            _labelCanvas: canvas, _labelTex: tex,
+        };
+        rp.setHeight = function(h) {
+            h = h || 1;
+            body.scale.set(1, h, 1);
+            if (headGroup) headGroup.scale.set(1, 1/h, 1);
+            body.position.y = 0.90 * h;
+        };
+        this.remotePlayers.set(pid, rp);
     }
 
     _applyRemoteState(pid, s) {
         const rp = this.remotePlayers.get(pid);
         if (!rp) return;
+
+        // Apply character colors and name from remote player
+        if (s.cc && !rp._colorsApplied) {
+            rp._colorsApplied = true;
+            if (s.cc.shirt) rp._shirtMat.color.set(s.cc.shirt);
+            if (s.cc.pants) rp._pantsMat.color.set(s.cc.pants);
+            if (s.cc.skin) rp._skinMat.color.set(s.cc.skin);
+            if (s.cc.hair) rp._hairMat.color.set(s.cc.hair);
+            if (s.cc.shoes) rp._shoeMat.color.set(s.cc.shoes);
+            // Body shape — full setBody if available, else simple height scale
+            if (s.cc.height && rp.setHeight) {
+                rp.setHeight(s.cc.height);
+            }
+            // Update hairstyle — rebuild hair group on remote player
+            if (s.cc.hairStyle && rp._hairGroup) {
+                const hg = rp._hairGroup;
+                while (hg.children.length) hg.remove(hg.children[0]);
+                const hm = rp._hairMat;
+                const hs = s.cc.hairStyle;
+                if (hs === 'short') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); h.position.y = 0.13; hg.add(h); }
+                else if (hs === 'flat') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.04,0.24), hm); h.position.y = 0.14; hg.add(h); const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.26), hm); s2.position.y = 0.10; hg.add(s2); }
+                else if (hs === 'long') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); t.position.y = 0.13; hg.add(t); const b = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.28,0.06), hm); b.position.set(0,-0.02,-0.12); hg.add(b); }
+                else if (hs === 'mohawk') { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.22), hm); r.position.y = 0.18; hg.add(r); }
+                else if (hs === 'messy') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.10,0.26), hm); t.position.y = 0.14; hg.add(t); }
+            }
+            // Update name label
+            if (s.cc.name && rp._labelCanvas) {
+                const ctx = rp._labelCanvas.getContext('2d');
+                ctx.clearRect(0, 0, 128, 32);
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(s.cc.name, 64, 20);
+                rp._labelTex.needsUpdate = true;
+            }
+        }
 
         // Position + rotation (smooth lerp)
         rp.group.position.lerp(new THREE.Vector3(s.x, s.y, s.z), 0.3);

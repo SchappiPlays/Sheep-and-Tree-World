@@ -33,12 +33,12 @@ export class Player {
         this.group = new THREE.Group();
         scene.add(this.group);
 
-        // Materials — exact colors
-        const skinMat  = new THREE.MeshStandardMaterial({ color: 0xE8B49D });
-        const shirtMat = new THREE.MeshStandardMaterial({ color: 0x4477BB });
-        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x334466 });
-        const shoeMat  = new THREE.MeshStandardMaterial({ color: 0x332211 });
-        const hairMat  = new THREE.MeshStandardMaterial({ color: 0x3B2507 });
+        // Materials — stored on instance for color customization
+        const skinMat  = this._skinMat  = new THREE.MeshStandardMaterial({ color: 0xE8B49D });
+        const shirtMat = this._shirtMat = new THREE.MeshStandardMaterial({ color: 0x4477BB });
+        const pantsMat = this._pantsMat = new THREE.MeshStandardMaterial({ color: 0x334466 });
+        const shoeMat  = this._shoeMat  = new THREE.MeshStandardMaterial({ color: 0x332211 });
+        const hairMat  = this._hairMat  = new THREE.MeshStandardMaterial({ color: 0x3B2507 });
         const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x222222 });
 
         // character (world position + Y rotation)
@@ -50,7 +50,7 @@ export class Player {
         //      ├─ leftLeg.hip
         //      └─ rightLeg.hip
 
-        this.hipHeight = 0.95;
+        this.hipHeight = 0.90;
 
         this.body = new THREE.Group();
         this.body.position.y = this.hipHeight;
@@ -79,9 +79,9 @@ export class Player {
         head.castShadow = true;
         this.headGroup.add(head);
 
-        const hair = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.24), hairMat);
-        hair.position.y = 0.13;
-        this.headGroup.add(hair);
+        this._hairGroup = new THREE.Group();
+        this.headGroup.add(this._hairGroup);
+        this.setHairStyle('short');
 
         const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), eyeMat);
         leftEye.position.set(-0.06, 0.03, 0.11);
@@ -119,7 +119,6 @@ export class Player {
 
         this.staffHeld = this._makeStaff();
         this.staffHeld.visible = false;
-        this.staffHeld.rotation.x = Math.PI;
         this.staffHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.staffHeld);
 
@@ -132,7 +131,6 @@ export class Player {
         const handleMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
         const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.55, 0.03), handleMat);
         shaft.position.y = 0.3; shaft.castShadow = true; g.add(shaft);
-        // Wood pickaxe head — plank-coloured
         const headMat = new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.7, metalness: 0.0 });
         const pickHead = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.04), headMat);
         pickHead.position.y = 0.58; pickHead.castShadow = true; g.add(pickHead);
@@ -140,6 +138,7 @@ export class Player {
         tipL.position.set(-0.17, 0.58, 0); tipL.rotation.z = Math.PI / 2; g.add(tipL);
         const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), headMat);
         tipR.position.set(0.17, 0.58, 0); tipR.rotation.z = -Math.PI / 2; g.add(tipR);
+        g._headMat = headMat;
         return g;
     }
 
@@ -158,6 +157,8 @@ export class Player {
         g.add(handle);
         const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), guardMat);
         pommel.position.y = -0.08; g.add(pommel);
+        g._bladeMat = bladeMat;
+        g._guardMat = guardMat;
         return g;
     }
 
@@ -173,21 +174,152 @@ export class Player {
         edge.position.set(-0.21, 0.58, 0); edge.castShadow = true; g.add(edge);
         const back = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.035), headMat);
         back.position.set(0.04, 0.58, 0); back.castShadow = true; g.add(back);
+        g._headMat = headMat;
         return g;
+    }
+
+    setToolColor(tool, itemName) {
+        // Material tiers: wood, stone, iron, gold, diamond
+        const TIER_COLORS = {
+            pickaxe:        { head: 0x8a6a3a, metal: 0.0, rough: 0.7 }, // wood
+            stone_pickaxe:  { head: 0x888888, metal: 0.3, rough: 0.5 },
+            iron_pickaxe:   { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
+            gold_pickaxe:   { head: 0xf0d060, metal: 0.9, rough: 0.1 },
+            diamond_pickaxe:{ head: 0x4ae8e8, metal: 0.7, rough: 0.08 },
+            wood_sword:     { blade: 0x8a6a3a, guard: 0x5c3a1e, metal: 0.0, rough: 0.7 },
+            stone_sword:    { blade: 0x999999, guard: 0x666666, metal: 0.3, rough: 0.4 },
+            iron_sword:     { blade: 0xe8ecf4, guard: 0x997733, metal: 0.95, rough: 0.08 },
+            gold_sword:     { blade: 0xf8e860, guard: 0xc8a020, metal: 0.9, rough: 0.1 },
+            diamond_sword:  { blade: 0x6af8f8, guard: 0x2ab0c0, metal: 0.7, rough: 0.05 },
+            wood_axe:       { head: 0x8a6a3a, metal: 0.0, rough: 0.7 },
+            stone_axe:      { head: 0x888888, metal: 0.3, rough: 0.5 },
+            iron_axe:       { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
+            gold_axe:       { head: 0xf0d060, metal: 0.9, rough: 0.1 },
+            diamond_axe:    { head: 0x4ae8e8, metal: 0.7, rough: 0.08 },
+        };
+        const t = TIER_COLORS[itemName];
+        if (!t) return;
+        if (tool._headMat) {
+            tool._headMat.color.setHex(t.head);
+            tool._headMat.metalness = t.metal;
+            tool._headMat.roughness = t.rough;
+        }
+        if (tool._bladeMat) {
+            tool._bladeMat.color.setHex(t.blade);
+            tool._bladeMat.metalness = t.metal;
+            tool._bladeMat.roughness = t.rough;
+        }
+        if (tool._guardMat && t.guard) {
+            tool._guardMat.color.setHex(t.guard);
+        }
     }
 
     _makeStaff() {
         const g = new THREE.Group();
         const shaftMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
-        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.7, 0.025), shaftMat);
-        shaft.position.y = 0.35; shaft.castShadow = true; g.add(shaft);
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 2.0, 0.03), shaftMat);
+        shaft.position.y = 0.15; shaft.castShadow = true; g.add(shaft);
         // Orb at top — color will be set dynamically
         const orbMat = new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff4400, emissiveIntensity: 0.5 });
-        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), orbMat);
-        orb.position.y = 0.73; orb.castShadow = true; g.add(orb);
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), orbMat);
+        orb.position.y = 1.18; orb.castShadow = true; g.add(orb);
         g._orbMat = orbMat;
         return g;
     }
+
+    setHairStyle(style, tipColor) {
+        const g = this._hairGroup;
+        while (g.children.length) g.remove(g.children[0]);
+        const rc = '#' + this._hairMat.color.getHexString();
+        const tc = tipColor || rc;
+        const m = this._hairMat; // flat color fallback
+
+        if (style === 'short') {
+            g.add(this._hmGrad(0.24, 0.08, 0.24, rc, tc, 0, 0.13, 0));
+        } else if (style === 'flat') {
+            g.add(this._hmGrad(0.26, 0.12, 0.26, rc, tc, 0, 0.10, 0));
+            g.add(this._hmGrad(0.24, 0.04, 0.24, rc, tc, 0, 0.16, 0));
+        } else if (style === 'long') {
+            g.add(this._hmGrad(0.24, 0.08, 0.24, rc, tc, 0, 0.13, 0));
+            g.add(this._hmGrad(0.24, 0.28, 0.06, rc, tc, 0, -0.02, -0.12));
+            g.add(this._hmGrad(0.06, 0.20, 0.18, rc, tc, -0.13, 0, 0));
+            g.add(this._hmGrad(0.06, 0.20, 0.18, rc, tc, 0.13, 0, 0));
+        } else if (style === 'mohawk') {
+            g.add(this._hmGrad(0.06, 0.16, 0.22, rc, tc, 0, 0.18, 0));
+        } else if (style === 'messy') {
+            g.add(this._hmGrad(0.26, 0.10, 0.26, rc, tc, 0, 0.14, 0, 0, 0.15, 0));
+            g.add(this._hmGrad(0.08, 0.08, 0.08, rc, tc, -0.10, 0.18, 0.08, 0, 0, 0.3));
+            g.add(this._hmGrad(0.07, 0.09, 0.07, rc, tc, 0.08, 0.19, -0.06, 0, 0, -0.4));
+            g.add(this._hmGrad(0.06, 0.07, 0.06, rc, tc, 0, 0.20, 0.10, 0.3, 0, 0));
+        } else if (style === 'curly') {
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                g.add(this._hmGrad(0.07, 0.07, 0.07, rc, tc, Math.cos(a)*0.10, 0.13+Math.sin(i*1.5)*0.03, Math.sin(a)*0.10));
+            }
+            g.add(this._hmGrad(0.18, 0.06, 0.18, rc, rc, 0, 0.12, 0));
+        } else if (style === 'ponytail') {
+            g.add(this._hmGrad(0.24, 0.08, 0.24, rc, rc, 0, 0.13, 0));
+            g.add(this._hmGrad(0.06, 0.06, 0.06, rc, rc, 0, 0.08, -0.13));
+            g.add(this._hmGrad(0.05, 0.18, 0.05, rc, tc, 0, -0.04, -0.16));
+            g.add(this._hmGrad(0.06, 0.06, 0.06, tc, tc, 0, -0.14, -0.18));
+        } else if (style === 'spiky') {
+            g.add(this._hmGrad(0.22, 0.05, 0.22, rc, rc, 0, 0.12, 0));
+            for (let i = 0; i < 5; i++) {
+                const a = (i / 5) * Math.PI * 2 + 0.3;
+                const spike = this._hmGrad(0.04, 0.12, 0.04, rc, tc, Math.cos(a)*0.06, 0.20, Math.sin(a)*0.06);
+                spike.rotation.set(Math.sin(a)*0.4, 0, Math.cos(a)*0.4);
+                g.add(spike);
+            }
+        } else if (style === 'bowl') {
+            g.add(this._hmGrad(0.26, 0.10, 0.26, rc, tc, 0, 0.10, 0));
+            g.add(this._hmGrad(0.24, 0.04, 0.24, tc, tc, 0, 0.04, 0));
+            g.add(this._hmGrad(0.26, 0.03, 0.08, tc, tc, 0, 0.02, 0.12));
+        }
+    }
+
+    // Create a hair mesh with vertical color gradient (root→tip)
+    _hm(w, h, d, mat, x, y, z, rx, ry, rz) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        mesh.position.set(x || 0, y || 0, z || 0);
+        if (rx || ry || rz) mesh.rotation.set(rx || 0, ry || 0, rz || 0);
+        return mesh;
+    }
+
+    _hmGrad(w, h, d, rootColor, tipColor, x, y, z, rx, ry, rz) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true });
+        // Color each vertex based on Y position (bottom=root, top=tip)
+        const pos = geo.attributes.position;
+        const colors = new Float32Array(pos.count * 3);
+        const rc = new THREE.Color(rootColor);
+        const tc = new THREE.Color(tipColor);
+        const tmp = new THREE.Color();
+        for (let i = 0; i < pos.count; i++) {
+            const vy = pos.getY(i);
+            const t = 0.5 - (vy / h); // 0 at top (root), 1 at bottom (tip)
+            tmp.copy(rc).lerp(tc, Math.max(0, Math.min(1, t)));
+            colors[i * 3] = tmp.r;
+            colors[i * 3 + 1] = tmp.g;
+            colors[i * 3 + 2] = tmp.b;
+        }
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x || 0, y || 0, z || 0);
+        if (rx || ry || rz) mesh.rotation.set(rx || 0, ry || 0, rz || 0);
+        return mesh;
+    }
+
+    setBody(h) {
+        h = h || 1;
+        this.body.scale.set(1, h, 1);
+        if (this.headGroup) this.headGroup.scale.set(1, 1/h, 1);
+        this.HEIGHT = 1.9 * h;
+        this.EYE_HEIGHT = 1.7 * h;
+        this.hipHeight = 0.90 * h;
+        this.body.position.y = this.hipHeight;
+    }
+
+    setHeight(h) { this.setBody(h); }
 
     setStaffColor(color, emissive) {
         if (this.staffHeld._orbMat) {
@@ -253,25 +385,33 @@ export class Player {
         return { hip, knee };
     }
 
-    update(dt, keys, fpMode, fpYaw) {
+    update(dt, keys, fpMode, fpYaw, kb) {
+        // kb = keybinds map (optional, falls back to defaults)
+        const kf = kb ? kb.forward : 'KeyW';
+        const kk = kb ? kb.back : 'KeyS';
+        const kl = kb ? kb.left : 'KeyA';
+        const kr = kb ? kb.right : 'KeyD';
+        const kj = kb ? kb.jump : 'Space';
+        const ks = kb ? kb.sprint : 'ShiftLeft';
+
         let wantDir = 0;
         let strafeDir = 0;
-        if (keys['KeyW'] || keys['ArrowUp']) wantDir += 1;
-        if (keys['KeyS'] || keys['ArrowDown']) wantDir -= 1;
+        if (keys[kf] || keys['ArrowUp']) wantDir += 1;
+        if (keys[kk] || keys['ArrowDown']) wantDir -= 1;
 
         if (fpMode) {
-            if (keys['KeyA'] || keys['ArrowLeft']) strafeDir += 1;
-            if (keys['KeyD'] || keys['ArrowRight']) strafeDir -= 1;
+            if (keys[kl] || keys['ArrowLeft']) strafeDir += 1;
+            if (keys[kr] || keys['ArrowRight']) strafeDir -= 1;
             // Only turn player model when moving
             const isMoving = wantDir !== 0 || strafeDir !== 0;
             if (isMoving) this.group.rotation.y = fpYaw;
         } else {
             // Third person: A/D rotate
-            if (keys['KeyA'] || keys['ArrowLeft']) this.group.rotation.y += this.turnRate * dt;
-            if (keys['KeyD'] || keys['ArrowRight']) this.group.rotation.y -= this.turnRate * dt;
+            if (keys[kl] || keys['ArrowLeft']) this.group.rotation.y += this.turnRate * dt;
+            if (keys[kr] || keys['ArrowRight']) this.group.rotation.y -= this.turnRate * dt;
         }
 
-        const wantSprint = !!(keys['ShiftLeft'] && (wantDir > 0 || strafeDir !== 0));
+        const wantSprint = !!(keys[ks] && (wantDir > 0 || strafeDir !== 0));
         const maxSpeed = wantSprint ? this.sprintSpeed : this.walkSpeed;
 
         // Speed — combine forward and strafe
@@ -295,7 +435,7 @@ export class Player {
         const moveZ = hasInput ? Math.cos(moveAngle) * this.speed * dt : 0;
 
         // Jump — exact same as game.html
-        if ((keys['Space'] || keys['ArrowUp']) && this.isGrounded && keys['Space']) {
+        if (keys[kj] && this.isGrounded) {
             this.jumpVel = this.JUMP_VEL;
             this.isGrounded = false;
         }
@@ -460,6 +600,17 @@ export class Player {
             const idleElbow = cr * -0.35 * (1 - b);
             this.leftArm.elbow.rotation.x += idleElbow;
             this.rightArm.elbow.rotation.x += idleElbow;
+        }
+
+        // ── Staff holding pose — arm out at angle, staff stays vertical ──
+        if (this.staffHeld.visible) {
+            const staffSwing = -legSwing * armSwingMul * 0.3;
+            this.leftArm.shoulder.rotation.x = -0.15 + staffSwing;
+            this.leftArm.shoulder.rotation.z = -0.35;
+            this.leftArm.elbow.rotation.x = -0.4;
+            // Counter-rotate staff to cancel arm tilt so it stays upright
+            this.staffHeld.rotation.x = -(-0.15 + staffSwing + -0.4);
+            this.staffHeld.rotation.z = 0.35;
         }
 
         // ── Swing animation overlay (exact from game.html) ──

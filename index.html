@@ -78,8 +78,9 @@ canvas { display: block; }
     display: none; position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 110;
-    background: rgba(10,12,10,0.94);
-    border: 2px solid rgba(160,140,100,0.4);
+    background: rgba(10,12,10,0.55);
+    backdrop-filter: blur(6px);
+    border: 2px solid rgba(160,140,100,0.3);
     border-radius: 8px;
     padding: 16px;
     min-width: 420px;
@@ -100,15 +101,15 @@ canvas { display: block; }
 }
 .inv-slot {
     width: 44px; height: 44px;
-    background: rgba(40,40,40,0.6);
-    border: 2px solid rgba(100,100,100,0.25);
+    background: rgba(40,40,40,0.4);
+    border: 2px solid rgba(100,100,100,0.2);
     border-radius: 4px;
     position: relative;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
 }
-.inv-slot:hover { border-color: rgba(200,180,120,0.6); background: rgba(60,55,45,0.5); }
-.inv-slot.drag-over { border-color: rgba(255,220,100,0.8); background: rgba(80,70,40,0.5); }
+.inv-slot:hover { border-color: rgba(200,180,120,0.6); background: rgba(60,55,45,0.4); }
+.inv-slot.drag-over { border-color: rgba(255,220,100,0.8); background: rgba(80,70,40,0.4); }
 .inv-slot .block-icon {
     width: 26px; height: 26px; border-radius: 2px; position: relative;
 }
@@ -135,11 +136,11 @@ canvas { display: block; }
 .craft-btn:not([disabled]):hover { background: rgba(80,70,40,0.8) !important; border-color: rgba(220,200,120,0.7) !important; }
 .craft-row {
     display: flex; align-items: center; gap: 4px; padding: 5px 8px;
-    background: rgba(40,35,25,0.6); border: 1px solid rgba(100,90,60,0.3);
+    background: rgba(40,35,25,0.4); border: 1px solid rgba(100,90,60,0.25);
     border-radius: 4px; cursor: pointer; font: 11px monospace;
     color: rgba(200,190,160,0.8); transition: background 0.15s;
 }
-.craft-row:hover:not(.disabled) { background: rgba(70,60,35,0.7); border-color: rgba(180,160,100,0.5); }
+.craft-row:hover:not(.disabled) { background: rgba(70,60,35,0.6); border-color: rgba(180,160,100,0.5); }
 .craft-row.disabled { opacity: 0.4; cursor: default; }
 .craft-icon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
 .craft-arrow { color: rgba(180,160,100,0.5); font-size: 13px; }
@@ -161,9 +162,11 @@ canvas { display: block; }
 }
 #mainMenu {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: linear-gradient(180deg, #1a2a1a 0%, #0a120a 100%);
+    background: rgba(10,15,10,0.85);
+    backdrop-filter: blur(8px);
     z-index: 500; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 12px;
+    overflow-y: auto; padding: 20px 0;
 }
 #mainMenu h1 {
     color: rgba(220,200,160,0.9); font: bold 36px monospace;
@@ -195,18 +198,81 @@ canvas { display: block; }
 </style>
 </head>
 <body>
-<div id="mainMenu">
+<div id="titleScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:510;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;">
+    <canvas id="titleBg" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1;"></canvas>
+    <h1 style="color:rgba(220,200,160,0.95);font:bold 48px monospace;text-shadow:0 0 30px rgba(100,180,60,0.4),0 2px 8px rgba(0,0,0,0.5);margin:0;">Sheep and Tree World</h1>
+    <button class="menu-btn" id="titlePlayBtn" style="width:200px;padding:16px;font-size:18px;font-weight:bold;">Play</button>
+    <div style="color:rgba(180,170,140,0.3);font:11px monospace;position:absolute;bottom:16px;">v1.2</div>
+</div>
+<div id="mainMenu" style="display:none;">
     <h1>Sheep and Tree World</h1>
-    <button class="menu-btn" id="newGameBtn">New Game</button>
-    <div id="savedGames"></div>
-    <div style="margin-top:20px;border-top:1px solid rgba(120,160,80,0.3);padding-top:16px;width:260px;text-align:center;">
-        <div style="color:rgba(180,170,140,0.6);font:11px monospace;margin-bottom:8px;">Multiplayer</div>
-        <button class="menu-btn" id="hostBtn" style="margin-bottom:6px;">Host Game</button>
-        <div style="display:flex;gap:4px;">
-            <input id="joinCode" placeholder="Room code" style="flex:1;padding:10px;font:14px monospace;background:rgba(30,40,25,0.7);color:rgba(220,210,180,0.9);border:2px solid rgba(120,160,80,0.4);border-radius:6px;outline:none;">
-            <button class="menu-btn" id="joinBtn" style="width:80px;">Join</button>
+    <div style="display:flex;gap:30px;align-items:flex-start;">
+        <!-- Left: saves + multiplayer -->
+        <div style="width:280px;">
+            <button class="menu-btn" id="newGameBtn" style="margin-bottom:8px;">New Game</button>
+            <div id="savedGames"></div>
+            <div style="margin-top:16px;border-top:1px solid rgba(120,160,80,0.3);padding-top:12px;">
+                <div style="color:rgba(180,170,140,0.6);font:11px monospace;margin-bottom:8px;">Multiplayer</div>
+                <button class="menu-btn" id="hostBtn" style="margin-bottom:6px;">Host Game</button>
+                <div style="display:flex;gap:4px;">
+                    <input id="joinCode" placeholder="Room code" style="flex:1;padding:10px;font:14px monospace;background:rgba(30,40,25,0.7);color:rgba(220,210,180,0.9);border:2px solid rgba(120,160,80,0.4);border-radius:6px;outline:none;">
+                    <button class="menu-btn" id="joinBtn" style="width:80px;">Join</button>
+                </div>
+                <div id="mpStatus" style="color:rgba(150,200,100,0.7);font:11px monospace;margin-top:6px;min-height:16px;"></div>
+            </div>
         </div>
-        <div id="mpStatus" style="color:rgba(150,200,100,0.7);font:11px monospace;margin-top:6px;min-height:16px;"></div>
+        <!-- Right: character customization + preview -->
+        <div style="width:260px;padding:12px;background:rgba(30,40,25,0.6);border:1px solid rgba(120,160,80,0.3);border-radius:8px;margin-left:60px;">
+            <div style="color:rgba(180,170,140,0.6);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Character</div>
+            <canvas id="charPreview" width="200" height="250" style="display:block;margin:0 auto 10px;border-radius:6px;background:rgba(20,30,20,0.5);"></canvas>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Shirt
+                    <input type="color" id="ccShirt" value="#4477BB" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Pants
+                    <input type="color" id="ccPants" value="#334466" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Skin
+                    <input type="color" id="ccSkin" value="#E8B49D" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Hair
+                    <input type="color" id="ccHair" value="#3B2507" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Shoes
+                    <input type="color" id="ccShoes" value="#332211" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+            </div>
+            <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" id="ccGradientOn" style="accent-color:rgba(120,160,80,0.8);">
+                <label for="ccGradientOn" style="color:rgba(200,190,160,0.7);font:10px monospace;cursor:pointer;">Hair Gradient</label>
+            </div>
+            <div id="ccTipRow" style="display:none;margin-top:2px;">
+            <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Hair Tips
+                    <input type="color" id="ccHairTip" value="#3B2507" style="width:100%;height:24px;border:none;border-radius:3px;cursor:pointer;"></label>
+            </div>
+            <div style="margin-top:6px;">
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Hairstyle
+                    <select id="ccHairStyle" style="width:100%;padding:4px 6px;font:12px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:4px;outline:none;margin-top:2px;">
+                        <option value="short">Short</option>
+                        <option value="flat">Flat Top</option>
+                        <option value="long">Long</option>
+                        <option value="mohawk">Mohawk</option>
+                        <option value="messy">Messy</option>
+                        <option value="curly">Curly</option>
+                        <option value="ponytail">Ponytail</option>
+                        <option value="spiky">Spiky</option>
+                        <option value="bowl">Bowl Cut</option>
+                        <option value="bald">Bald</option>
+                    </select>
+                </label>
+            </div>
+            <div style="margin-top:6px;">
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Player Name
+                    <input type="text" id="ccName" placeholder="Player" maxlength="16" value="Player" style="width:100%;padding:6px 8px;font:13px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:4px;outline:none;margin-top:2px;">
+                </label>
+            </div>
+            <div style="margin-top:6px;">
+                <label style="color:rgba(200,190,160,0.7);font:10px monospace;">Height: <span id="ccHeightLabel">1.0</span>x
+                    <input type="range" id="ccHeight" min="5" max="15" value="10" style="width:100%;accent-color:rgba(120,160,80,0.8);">
+                </label>
+            </div>
+            <button id="ccResetBtn" style="width:100%;margin-top:8px;padding:6px;font:11px monospace;background:rgba(60,40,30,0.6);color:rgba(200,180,150,0.7);border:1px solid rgba(140,100,70,0.4);border-radius:4px;cursor:pointer;">Reset to Default</button>
+        </div>
     </div>
 </div>
 <div id="saveToast">Saved</div>
@@ -220,9 +286,10 @@ canvas { display: block; }
     <h2 style="color:rgba(220,200,160,0.9);font:bold 24px monospace;margin-bottom:10px;">Settings</h2>
     <div style="width:300px;">
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Controls</div>
-        <div style="display:flex;gap:6px;">
-            <button class="menu-btn" id="controlsNewBtn" style="flex:1;padding:10px;font-size:13px;">New (Mouse Look)</button>
-            <button class="menu-btn" id="controlsOldBtn" style="flex:1;padding:10px;font-size:13px;">Classic (A/D Turn)</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="menu-btn" id="controlsNewBtn" style="flex:1;padding:10px;font-size:12px;min-width:80px;" title="Best for combat">Fortnite</button>
+            <button class="menu-btn" id="controlsMCBtn" style="flex:1;padding:10px;font-size:12px;min-width:80px;" title="Best for mining">Minecraft</button>
+            <button class="menu-btn" id="controlsOldBtn" style="flex:1;padding:10px;font-size:12px;min-width:80px;" title="Can't think of what it's good for">Classic</button>
         </div>
     </div>
     <div style="width:300px;">
@@ -233,15 +300,42 @@ canvas { display: block; }
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Mouse Sensitivity: <span id="sensLabel">1.0</span></div>
         <input type="range" id="sensSlider" min="1" max="30" value="10" style="width:100%;accent-color:rgba(120,160,80,0.8);">
     </div>
+    <div style="width:300px;">
+        <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Music Volume: <span id="musicVolLabel">50</span>%</div>
+        <input type="range" id="musicVolSlider" min="0" max="100" value="50" style="width:100%;accent-color:rgba(120,160,80,0.8);">
+    </div>
+    <div style="width:300px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="autoMineSnap" style="accent-color:rgba(120,160,80,0.8);">
+            <label for="autoMineSnap" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Auto 2x2 snap grid when mining underground</label>
+        </div>
+    </div>
+    <div style="width:300px;">
+        <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Keybinds</div>
+        <div id="keybindList" style="max-height:200px;overflow-y:auto;background:rgba(20,25,15,0.5);border:1px solid rgba(120,160,80,0.3);border-radius:6px;padding:6px;"></div>
+        <button class="menu-btn" id="resetKeybindsBtn" style="width:100%;margin-top:6px;padding:8px;font-size:11px;background:rgba(80,40,30,0.5);border-color:rgba(160,80,60,0.4);">Reset Keybinds to Default</button>
+    </div>
     <button class="menu-btn" id="settingsBackBtn" style="margin-top:10px;">Back</button>
 </div>
 <div id="debug"></div>
-<div id="crosshair" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:10;">
-    <div style="position:absolute;width:2px;height:16px;left:7px;top:0;background:rgba(255,255,255,0.6);"></div>
-    <div style="position:absolute;width:16px;height:2px;top:7px;left:0;background:rgba(255,255,255,0.6);"></div>
+<div id="crosshair" style="position:fixed;top:50%;left:50%;pointer-events:none;z-index:10;">
+    <div style="position:absolute;width:2px;height:16px;left:-1px;top:-8px;background:rgba(255,255,255,0.6);"></div>
+    <div style="position:absolute;width:16px;height:2px;top:-1px;left:-8px;background:rgba(255,255,255,0.6);"></div>
 </div>
 <div id="hearts" style="position:fixed;top:8px;right:8px;z-index:20;pointer-events:none;display:flex;gap:2px;"></div>
 <div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
+<div id="brushPanel" style="position:fixed;bottom:75px;left:8px;z-index:20;background:rgba(0,0,0,0.45);padding:6px 10px;border-radius:6px;font:10px monospace;color:rgba(220,210,180,0.8);display:none;user-select:none;">
+    <div style="margin-bottom:3px;font-weight:bold;letter-spacing:1px;">BRUSH <span id="brushLabel">1x1x1</span> <span style="opacity:0.5;margin-left:4px;">[B] size [R] rotate</span></div>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+        <span style="width:36px;">Side:</span><input type="range" id="brushW" min="1" max="2" value="1" style="width:60px;accent-color:rgba(120,160,80,0.8);"><span id="brushWVal">1</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+        <span style="width:36px;">Up:</span><input type="range" id="brushH" min="1" max="2" value="1" style="width:60px;accent-color:rgba(120,160,80,0.8);"><span id="brushHVal">1</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;">
+        <span style="width:36px;">Fwd:</span><input type="range" id="brushD" min="1" max="2" value="1" style="width:60px;accent-color:rgba(120,160,80,0.8);"><span id="brushDVal">1</span>
+    </div>
+</div>
 <div id="hotbar"></div>
 <div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
 <div id="dragGhost"></div>
@@ -253,7 +347,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -297,6 +391,175 @@ shCam.near = 0.5; shCam.far = 60;
 shCam.left = -18; shCam.right = 18; shCam.top = 18; shCam.bottom = -18;
 scene.add(sun);
 scene.add(sun.target);
+
+// ── Title Screen 3D Background ──
+const titleCanvas = document.getElementById('titleBg');
+const titleRenderer = new THREE.WebGLRenderer({ canvas: titleCanvas, antialias: true });
+titleRenderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+titleRenderer.setSize(innerWidth, innerHeight);
+titleRenderer.setClearColor(SKY_COLOR);
+const titleScene = new THREE.Scene();
+titleScene.fog = new THREE.FogExp2(SKY_COLOR, 0.004);
+const titleCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500);
+titleScene.add(new THREE.AmbientLight(0x8899aa, 0.6));
+const titleSun = new THREE.DirectionalLight(0xffeedd, 1.2);
+titleSun.position.set(5, 12, 8); titleScene.add(titleSun);
+titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
+
+// Build voxel terrain from actual game world
+{
+    const BS = BLOCK_SIZE;
+    const step = 3; // sample every 3rd block for performance
+    const S = BS * step; // world-space step size
+    const range = 150; // world units in each direction
+    const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
+    const _getBiome = (wx, wz) => {
+        const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx,wz), sc = getScorchedBlend(wx,wz);
+        if (sc > 0.1) return 'scorched'; if (snow > 0.5) return 'snow'; if (desert > 0.5) return 'desert';
+        if (mtn > 0.3) return 'mountain'; if (snow > 0) return 'snow_transition'; if (desert > 0) return 'desert_transition'; return 'grass';
+    };
+
+    // Collect block positions by color
+    const blocksByColor = {};
+    const addBlock = (x, y, z, color) => {
+        const hex = color;
+        if (!blocksByColor[hex]) blocksByColor[hex] = [];
+        blocksByColor[hex].push(x, y, z);
+    };
+
+    // Terrain surface blocks
+    const gridSize = Math.floor(range / S);
+    for (let gx = -gridSize; gx <= gridSize; gx++) {
+        for (let gz = -gridSize; gz <= gridSize; gz++) {
+            const wx = gx * S, wz = gz * S;
+            const h = getTerrainHeight(wx, wz);
+            if (h < -0.5) continue;
+            const biome = _getBiome(wx, wz);
+            let color;
+            if (biome === 'scorched') color = 0x2a2018;
+            else if (biome === 'snow') color = 0xe0e0e8;
+            else if (biome === 'snow_transition') color = 0xb0c8b0;
+            else if (biome === 'desert') color = 0xd4c07a;
+            else if (biome === 'desert_transition') color = 0xa0a050;
+            else if (biome === 'mountain') color = 0x888888;
+            else color = 0x5b8c3e; // grass
+            addBlock(wx, h, wz, color);
+            // Two layers below surface
+            const dirt = biome === 'desert' || biome === 'desert_transition' ? 0xd4c07a : 0x8b6b3d;
+            addBlock(wx, h - S, wz, dirt);
+            addBlock(wx, h - S * 2, wz, 0x888888);
+        }
+    }
+
+    // Trees — same logic as world.js with full canopy
+    const treeRange = Math.floor(range / BS);
+    for (let bx = -treeRange; bx <= treeRange; bx += 2) {
+        for (let bz = -treeRange; bz <= treeRange; bz += 2) {
+            if (_hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > 0.06) continue;
+            const jx = bx + Math.floor(_hash(bx+11,bz+22)*2);
+            const jz = bz + Math.floor(_hash(bx+33,bz+44)*2);
+            const wx = jx * BS, wz = jz * BS;
+            const h = getTerrainHeight(wx, wz);
+            const biome = _getBiome(wx, wz);
+            if (biome !== 'grass' && biome !== 'desert_transition') continue;
+            if (h < 1 || h > 35) continue;
+            const trunkH = 4 + Math.floor(_hash(jx*1.7, jz*2.3) * 4);
+            const canopyR = 2 + Math.floor(_hash(jx*3.1, jz*1.9) * 2);
+            const canopyHH = canopyR * 2 + 1;
+            // Trunk
+            for (let ty = 1; ty <= trunkH; ty++) {
+                addBlock(wx, h + ty * BS, wz, 0x6B4226);
+            }
+            // Canopy
+            const canopyBase = h + (trunkH - 1) * BS;
+            for (let dy = 0; dy < canopyHH; dy++) {
+                const progress = dy / (canopyHH - 1);
+                const r = Math.ceil(canopyR * (1 - progress * 0.7));
+                for (let ddx = -r; ddx <= r; ddx++) {
+                    for (let ddz = -r; ddz <= r; ddz++) {
+                        if (ddx*ddx + ddz*ddz > r*r+1) continue;
+                        addBlock(wx + ddx * BS, canopyBase + dy * BS, wz + ddz * BS, 0x2d7d2d);
+                    }
+                }
+            }
+        }
+    }
+
+    // Merge all blocks into one geometry with vertex colors for performance
+    const totalBlocks = Object.values(blocksByColor).reduce((s, a) => s + a.length / 3, 0);
+    const mergedPos = new Float32Array(totalBlocks * 24 * 3); // 24 verts per box
+    const mergedNorm = new Float32Array(totalBlocks * 24 * 3);
+    const mergedCol = new Float32Array(totalBlocks * 24 * 3);
+    const mergedIdx = [];
+    const tmpGeo = new THREE.BoxGeometry(S, S, S);
+    const tmpPos = tmpGeo.attributes.position.array;
+    const tmpNorm = tmpGeo.attributes.normal.array;
+    const tmpIdx = tmpGeo.index.array;
+    let vertOff = 0, idxOff = 0;
+    for (const [hex, positions] of Object.entries(blocksByColor)) {
+        const c = new THREE.Color(parseInt(hex));
+        const count = positions.length / 3;
+        for (let i = 0; i < count; i++) {
+            const ox = positions[i*3], oy = positions[i*3+1], oz = positions[i*3+2];
+            for (let v = 0; v < 24; v++) {
+                const vi = vertOff * 3 + v * 3;
+                mergedPos[vi] = tmpPos[v*3] + ox;
+                mergedPos[vi+1] = tmpPos[v*3+1] + oy;
+                mergedPos[vi+2] = tmpPos[v*3+2] + oz;
+                mergedNorm[vi] = tmpNorm[v*3];
+                mergedNorm[vi+1] = tmpNorm[v*3+1];
+                mergedNorm[vi+2] = tmpNorm[v*3+2];
+                mergedCol[vi] = c.r; mergedCol[vi+1] = c.g; mergedCol[vi+2] = c.b;
+            }
+            for (let j = 0; j < tmpIdx.length; j++) {
+                mergedIdx.push(tmpIdx[j] + vertOff);
+            }
+            vertOff += 24;
+        }
+    }
+    const mergedGeo = new THREE.BufferGeometry();
+    mergedGeo.setAttribute('position', new THREE.Float32BufferAttribute(mergedPos, 3));
+    mergedGeo.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNorm, 3));
+    mergedGeo.setAttribute('color', new THREE.Float32BufferAttribute(mergedCol, 3));
+    mergedGeo.setIndex(mergedIdx);
+    const mergedMat = new THREE.MeshStandardMaterial({ vertexColors: true });
+    titleScene.add(new THREE.Mesh(mergedGeo, mergedMat));
+
+    // Water plane
+    const waterGeo = new THREE.PlaneGeometry(range * 3, range * 3);
+    waterGeo.rotateX(-Math.PI / 2);
+    const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.y = 0.2;
+    titleScene.add(water);
+}
+
+let titleActive = true;
+let titleAngle = 0;
+function animateTitle() {
+    if (!titleActive) return;
+    requestAnimationFrame(animateTitle);
+    titleAngle += 0.0015;
+    const r = 150, h = 60;
+    titleCam.position.set(Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, Math.cos(titleAngle) * r);
+    titleCam.lookAt(0, 5, 0);
+    titleRenderer.render(titleScene, titleCam);
+}
+animateTitle();
+
+document.getElementById('titlePlayBtn').addEventListener('click', () => {
+    titleActive = false;
+    document.getElementById('titleScreen').style.display = 'none';
+    document.getElementById('mainMenu').style.display = 'flex';
+    // Start menu music
+    musicSystem.play('menu');
+});
+
+window.addEventListener('resize', () => {
+    titleRenderer.setSize(innerWidth, innerHeight);
+    titleCam.aspect = innerWidth / innerHeight;
+    titleCam.updateProjectionMatrix();
+});
 
 // ── Save/Load System ──
 const SAVE_KEY = 'satw_saves';
@@ -400,7 +663,17 @@ const mp = new Multiplayer(scene);
 
 function startGame(loadSlotName) {
     mainMenuEl.style.display = 'none';
+    previewRunning = false;
     gameStarted = true;
+    // Stop menu music, then start calm after fade
+    if (musicSystem.current) {
+        musicSystem.fadeOut(musicSystem.current);
+        musicSystem.currentName = null;
+        musicSystem.current = null;
+        setTimeout(() => musicSystem.play('calm'), 1200);
+    } else {
+        musicSystem.play('calm');
+    }
 
     // Clean up previous game if any
     if (world) {
@@ -411,7 +684,21 @@ function startGame(loadSlotName) {
     world = new World();
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
     chunkManager = new ChunkManager(scene, world);
+    chunkManager.setRenderDist(settingsRenderDist);
     creatures = new CreatureManager(scene, world);
+    creatures._onCreatureDrop = (item, count) => {
+        for (let i = 0; i < count; i++) addToInventory(item);
+        refreshUI();
+    };
+    creatures._onPlayerHit = (dmg, type) => {
+        playerHP = Math.max(0, playerHP - dmg);
+        updateHeartsUI();
+        // Screen flash red
+        const flash = document.createElement('div');
+        flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(200,0,0,0.2);z-index:50;pointer-events:none;';
+        document.body.appendChild(flash);
+        setTimeout(() => flash.remove(), 150);
+    };
     villageMgr = new VillageManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
@@ -481,6 +768,22 @@ function startGame(loadSlotName) {
     };
     dragonMgr = new DragonManager(scene, world);
     player = new Player(scene, world);
+    saveCharColors(); // read from inputs
+    applyCharColors(player);
+    // Name label above player
+    if (player._nameLabel) player.group.remove(player._nameLabel);
+    const nameCanvas = document.createElement('canvas');
+    nameCanvas.width = 256; nameCanvas.height = 48;
+    const nCtx = nameCanvas.getContext('2d');
+    nCtx.fillStyle = '#fff'; nCtx.font = 'bold 24px monospace'; nCtx.textAlign = 'center';
+    nCtx.fillText(charColors.name, 128, 30);
+    const nameTex = new THREE.CanvasTexture(nameCanvas);
+    const nameMat = new THREE.SpriteMaterial({ map: nameTex, transparent: true, depthWrite: false, depthTest: true });
+    const nameSprite = new THREE.Sprite(nameMat);
+    nameSprite.position.y = 2.3;
+    nameSprite.scale.set(1.2, 0.22, 1);
+    player.group.add(nameSprite);
+    player._nameLabel = nameSprite;
 
     dragonMgr.build((x, z) => world.getHeight(x, z));
 
@@ -578,6 +881,9 @@ let hudHidden = false;
 
 // ── Settings ──
 let useMouseLook = true; // true = new (mouse look), false = classic (A/D turn)
+let cameraMC = false; // minecraft-style third person (camera orbits, resets behind on move)
+let autoMineSnap = false; // auto 3x3 snap grid when mining underground
+let musicVolume = 0.5;
 let mouseSensitivity = 1.0;
 let settingsRenderDist = 200; // chunks (matches RENDER_DIST)
 
@@ -585,15 +891,230 @@ let settingsRenderDist = 200; // chunks (matches RENDER_DIST)
 try {
     const saved = JSON.parse(localStorage.getItem('satw_settings') || '{}');
     if (saved.useMouseLook !== undefined) useMouseLook = saved.useMouseLook;
+    if (saved.cameraMC !== undefined) cameraMC = saved.cameraMC;
+    if (saved.autoMineSnap !== undefined) autoMineSnap = saved.autoMineSnap;
+    if (saved.musicVolume !== undefined) musicVolume = saved.musicVolume;
     if (saved.sensitivity) mouseSensitivity = saved.sensitivity;
     if (saved.renderDist) settingsRenderDist = saved.renderDist;
 } catch(e) {}
 
 function saveSettings() {
     localStorage.setItem('satw_settings', JSON.stringify({
-        useMouseLook, sensitivity: mouseSensitivity, renderDist: settingsRenderDist
+        useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist
     }));
 }
+
+// ── Character colors ──
+const CHAR_COLORS_KEY = 'satw_charcolors';
+let charColors = { shirt: '#4477BB', pants: '#334466', skin: '#E8B49D', hair: '#3B2507', hairTip: '#3B2507', hairGradient: false, shoes: '#332211', name: 'Player', hairStyle: 'short', height: 1.0 };
+try {
+    const saved = JSON.parse(localStorage.getItem(CHAR_COLORS_KEY) || '{}');
+    if (saved.shirt) Object.assign(charColors, saved);
+} catch(e) {}
+
+function loadCharColorInputs() {
+    document.getElementById('ccShirt').value = charColors.shirt;
+    document.getElementById('ccPants').value = charColors.pants;
+    document.getElementById('ccSkin').value = charColors.skin;
+    document.getElementById('ccHair').value = charColors.hair;
+    document.getElementById('ccShoes').value = charColors.shoes;
+    document.getElementById('ccHairTip').value = charColors.hairTip || charColors.hair;
+    document.getElementById('ccGradientOn').checked = !!charColors.hairGradient;
+    document.getElementById('ccTipRow').style.display = charColors.hairGradient ? 'block' : 'none';
+    document.getElementById('ccHeight').value = Math.round((charColors.height || 1.0) * 10);
+    document.getElementById('ccHeightLabel').textContent = (charColors.height || 1.0).toFixed(1);
+    document.getElementById('ccName').value = charColors.name || 'Player';
+    document.getElementById('ccHairStyle').value = charColors.hairStyle || 'short';
+}
+function saveCharColors() {
+    charColors.shirt = document.getElementById('ccShirt').value;
+    charColors.pants = document.getElementById('ccPants').value;
+    charColors.skin = document.getElementById('ccSkin').value;
+    charColors.hair = document.getElementById('ccHair').value;
+    charColors.shoes = document.getElementById('ccShoes').value;
+    charColors.hairTip = document.getElementById('ccHairTip').value;
+    charColors.hairGradient = document.getElementById('ccGradientOn').checked;
+    charColors.height = Number(document.getElementById('ccHeight').value) / 10;
+    charColors.name = document.getElementById('ccName').value.trim() || 'Player';
+    charColors.hairStyle = document.getElementById('ccHairStyle').value;
+    localStorage.setItem(CHAR_COLORS_KEY, JSON.stringify(charColors));
+}
+function applyCharColors(p) {
+    if (p._skinMat) p._skinMat.color.set(charColors.skin);
+    if (p._shirtMat) p._shirtMat.color.set(charColors.shirt);
+    if (p._pantsMat) p._pantsMat.color.set(charColors.pants);
+    if (p._shoeMat) p._shoeMat.color.set(charColors.shoes);
+    if (p._hairMat) p._hairMat.color.set(charColors.hair);
+    if (p.setHairStyle) p.setHairStyle(charColors.hairStyle || 'short', charColors.hairGradient ? charColors.hairTip : null);
+    if (p.setHeight) p.setHeight(charColors.height || 1.0);
+}
+loadCharColorInputs();
+for (const id of ['ccShirt','ccPants','ccSkin','ccHair','ccShoes','ccHairTip']) {
+    document.getElementById(id).addEventListener('input', () => { saveCharColors(); updatePreviewColors(); });
+}
+document.getElementById('ccName').addEventListener('input', saveCharColors);
+document.getElementById('ccName').addEventListener('keydown', e => e.stopPropagation());
+document.getElementById('ccHairStyle').addEventListener('change', () => { saveCharColors(); updatePreviewHair(); });
+document.getElementById('ccHeight').addEventListener('input', () => {
+    saveCharColors();
+    document.getElementById('ccHeightLabel').textContent = charColors.height.toFixed(1);
+    updatePreviewBody();
+});
+document.getElementById('ccGradientOn').addEventListener('change', () => {
+    saveCharColors();
+    document.getElementById('ccTipRow').style.display = charColors.hairGradient ? 'block' : 'none';
+    updatePreviewHair();
+});
+document.getElementById('ccResetBtn').addEventListener('click', () => {
+    charColors = { shirt: '#4477BB', pants: '#334466', skin: '#E8B49D', hair: '#3B2507', hairTip: '#3B2507', hairGradient: false, shoes: '#332211', name: 'Player', hairStyle: 'short', height: 1.0 };
+    localStorage.setItem(CHAR_COLORS_KEY, JSON.stringify(charColors));
+    loadCharColorInputs();
+    updatePreviewColors();
+    updatePreviewHair();
+});
+
+// ── Character preview (spinning 3D model on menu) ──
+let previewRenderer, previewScene, previewCamera, previewModel, previewRunning = false;
+
+function initCharPreview() {
+    const canvas = document.getElementById('charPreview');
+    if (!canvas || previewRenderer) return;
+    previewScene = new THREE.Scene();
+    previewCamera = new THREE.PerspectiveCamera(40, 200 / 250, 0.1, 20);
+    previewCamera.position.set(0, 1.2, 3.5);
+    previewCamera.lookAt(0, 0.8, 0);
+    previewRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    previewRenderer.setSize(200, 250);
+    previewRenderer.setClearColor(0x000000, 0);
+
+    // Lighting
+    previewScene.add(new THREE.AmbientLight(0x667788, 0.8));
+    const pSun = new THREE.DirectionalLight(0xffeedd, 1.5);
+    pSun.position.set(2, 4, 3);
+    previewScene.add(pSun);
+
+    // Build preview character (same structure as player)
+    previewModel = { group: new THREE.Group() };
+    const g = previewModel.group;
+
+    const skinMat = previewModel._skinMat = new THREE.MeshStandardMaterial({ color: charColors.skin });
+    const shirtMat = previewModel._shirtMat = new THREE.MeshStandardMaterial({ color: charColors.shirt });
+    const pantsMat = previewModel._pantsMat = new THREE.MeshStandardMaterial({ color: charColors.pants });
+    const shoeMat = previewModel._shoeMat = new THREE.MeshStandardMaterial({ color: charColors.shoes });
+    const hairMat = previewModel._hairMat = new THREE.MeshStandardMaterial({ color: charColors.hair });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+
+    const body = new THREE.Group(); body.position.y = 0.90; g.add(body);
+    previewModel._body = body;
+    const spine = new THREE.Group(); body.add(spine);
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.55, 0.22), shirtMat);
+    torso.position.y = 0.3; spine.add(torso);
+    previewModel._torso = torso;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), skinMat);
+    neck.position.y = 0.62; spine.add(neck);
+    const headGrp = new THREE.Group(); headGrp.position.y = 0.76; spine.add(headGrp);
+    previewModel._headGrp = headGrp;
+    const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skinMat);
+    headGrp.add(headMesh);
+    previewModel._hairGroup = new THREE.Group();
+    headGrp.add(previewModel._hairGroup);
+    updatePreviewHair();
+    const lEye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), eyeMat);
+    lEye.position.set(-0.06, 0.03, 0.11); headGrp.add(lEye);
+    const rEye = lEye.clone(); rEye.position.x = 0.06; headGrp.add(rEye);
+
+    function mkArm(sign) {
+        const sh = new THREE.Group(); sh.position.set(sign*0.28, 0.5, 0); spine.add(sh);
+        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.28, 0.10), shirtMat);
+        upper.position.y = -0.14; sh.add(upper);
+        const el = new THREE.Group(); el.position.y = -0.28; sh.add(el);
+        const fore = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.26, 0.085), skinMat);
+        fore.position.y = -0.13; el.add(fore);
+        const handGrp = new THREE.Group(); handGrp.position.y = -0.28; el.add(handGrp);
+        const hand = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.05), skinMat);
+        handGrp.add(hand);
+    }
+    mkArm(-1); mkArm(1);
+    function mkLeg(sign) {
+        const hip = new THREE.Group(); hip.position.set(sign*0.11, 0, 0); body.add(hip);
+        const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.42, 0.14), pantsMat);
+        thigh.position.y = -0.21; hip.add(thigh);
+        const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
+        const shin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.40, 0.12), pantsMat);
+        shin.position.y = -0.20; knee.add(shin);
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.24), shoeMat);
+        foot.position.set(0, -0.43, 0.04); knee.add(foot);
+    }
+    mkLeg(-1); mkLeg(1);
+
+    previewScene.add(g);
+    previewRunning = true;
+    animatePreview();
+}
+
+function updatePreviewBody() {
+    if (!previewModel || !previewModel._body || !previewModel._headGrp) return;
+    const h = charColors.height || 1.0;
+    previewModel._body.scale.set(1, h, 1);
+    previewModel._headGrp.scale.set(1, 1/h, 1);
+    previewModel._body.position.y = 0.90 * h;
+}
+
+function updatePreviewColors() {
+    if (!previewModel) return;
+    previewModel._skinMat.color.set(charColors.skin);
+    previewModel._shirtMat.color.set(charColors.shirt);
+    previewModel._pantsMat.color.set(charColors.pants);
+    previewModel._shoeMat.color.set(charColors.shoes);
+    previewModel._hairMat.color.set(charColors.hair);
+    updatePreviewHair(); // rebuild gradient with new colors
+}
+
+function updatePreviewHair() {
+    if (!previewModel || !previewModel._hairGroup) return;
+    const g = previewModel._hairGroup;
+    while (g.children.length) g.remove(g.children[0]);
+    const rc = charColors.hair;
+    const tc = charColors.hairGradient ? (charColors.hairTip || rc) : rc;
+    const style = charColors.hairStyle || 'short';
+    // Gradient box helper
+    const hg = (w,h,d,c1,c2,x,y,z,rx,ry,rz) => {
+        const geo = new THREE.BoxGeometry(w,h,d);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true });
+        const pos = geo.attributes.position;
+        const cols = new Float32Array(pos.count * 3);
+        const a = new THREE.Color(c1), b = new THREE.Color(c2), tmp = new THREE.Color();
+        for (let i = 0; i < pos.count; i++) {
+            const t = Math.max(0, Math.min(1, 0.5 - (pos.getY(i) / h)));
+            tmp.copy(a).lerp(b, t);
+            cols[i*3] = tmp.r; cols[i*3+1] = tmp.g; cols[i*3+2] = tmp.b;
+        }
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x||0,y||0,z||0);
+        if (rx||ry||rz) mesh.rotation.set(rx||0,ry||0,rz||0);
+        return mesh;
+    };
+    if (style==='short') { g.add(hg(0.24,0.08,0.24,rc,tc,0,0.13,0)); }
+    else if (style==='flat') { g.add(hg(0.26,0.12,0.26,rc,tc,0,0.10,0)); g.add(hg(0.24,0.04,0.24,rc,tc,0,0.16,0)); }
+    else if (style==='long') { g.add(hg(0.24,0.08,0.24,rc,tc,0,0.13,0)); g.add(hg(0.24,0.28,0.06,rc,tc,0,-0.02,-0.12)); g.add(hg(0.06,0.20,0.18,rc,tc,-0.13,0,0)); g.add(hg(0.06,0.20,0.18,rc,tc,0.13,0,0)); }
+    else if (style==='mohawk') { g.add(hg(0.06,0.16,0.22,rc,tc,0,0.18,0)); }
+    else if (style==='messy') { g.add(hg(0.26,0.10,0.26,rc,tc,0,0.14,0,0,0.15,0)); g.add(hg(0.08,0.08,0.08,rc,tc,-0.10,0.18,0.08,0,0,0.3)); g.add(hg(0.07,0.09,0.07,rc,tc,0.08,0.19,-0.06,0,0,-0.4)); g.add(hg(0.06,0.07,0.06,rc,tc,0,0.20,0.10,0.3,0,0)); }
+    else if (style==='curly') { for(let i=0;i<8;i++){const a2=(i/8)*Math.PI*2;g.add(hg(0.07,0.07,0.07,rc,tc,Math.cos(a2)*0.10,0.13+Math.sin(i*1.5)*0.03,Math.sin(a2)*0.10));} g.add(hg(0.18,0.06,0.18,rc,rc,0,0.12,0)); }
+    else if (style==='ponytail') { g.add(hg(0.24,0.08,0.24,rc,rc,0,0.13,0)); g.add(hg(0.06,0.06,0.06,rc,rc,0,0.08,-0.13)); g.add(hg(0.05,0.18,0.05,rc,tc,0,-0.04,-0.16)); g.add(hg(0.06,0.06,0.06,tc,tc,0,-0.14,-0.18)); }
+    else if (style==='spiky') { g.add(hg(0.22,0.05,0.22,rc,rc,0,0.12,0)); for(let i=0;i<5;i++){const a2=(i/5)*Math.PI*2+0.3;const s=hg(0.04,0.12,0.04,rc,tc,Math.cos(a2)*0.06,0.20,Math.sin(a2)*0.06);s.rotation.set(Math.sin(a2)*0.4,0,Math.cos(a2)*0.4);g.add(s);} }
+    else if (style==='bowl') { g.add(hg(0.26,0.10,0.26,rc,tc,0,0.10,0)); g.add(hg(0.24,0.04,0.24,tc,tc,0,0.04,0)); g.add(hg(0.26,0.03,0.08,tc,tc,0,0.02,0.12)); }
+}
+
+function animatePreview() {
+    if (!previewRunning) return;
+    requestAnimationFrame(animatePreview);
+    previewModel.group.rotation.y += 0.015;
+    previewRenderer.render(previewScene, previewCamera);
+}
+
+// Start preview when menu is visible
+setTimeout(initCharPreview, 100);
 
 // ── First-person mouse look ──
 let fpYaw = 0, fpPitch = 0;
@@ -606,7 +1127,12 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('mousemove', e => {
     if (!pointerLocked) return;
     fpYaw -= e.movementX * 0.002 * mouseSensitivity;
-    fpPitch += e.movementY * 0.002 * mouseSensitivity;
+    // First person: mouse down = look down. Third person: mouse down = orbit camera down
+    if (fpActive) {
+        fpPitch -= e.movementY * 0.002 * mouseSensitivity;
+    } else {
+        fpPitch += e.movementY * 0.002 * mouseSensitivity;
+    }
     fpPitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, fpPitch));
 });
 // Click to lock pointer (only in mouse look mode)
@@ -636,14 +1162,18 @@ document.getElementById('settingsBackBtn').addEventListener('click', () => {
     pauseMenuEl.style.display = 'flex';
 });
 document.getElementById('controlsNewBtn').addEventListener('click', () => {
-    useMouseLook = true; saveSettings(); updateSettingsUI();
+    useMouseLook = true; cameraMC = false; saveSettings(); updateSettingsUI();
+});
+document.getElementById('controlsMCBtn').addEventListener('click', () => {
+    useMouseLook = true; cameraMC = true; saveSettings(); updateSettingsUI();
 });
 document.getElementById('controlsOldBtn').addEventListener('click', () => {
-    useMouseLook = false; saveSettings(); updateSettingsUI();
+    useMouseLook = false; cameraMC = false; saveSettings(); updateSettingsUI();
 });
 document.getElementById('rdSlider').addEventListener('input', (e) => {
     settingsRenderDist = Number(e.target.value);
     document.getElementById('rdLabel').textContent = settingsRenderDist;
+    if (chunkManager) chunkManager.setRenderDist(settingsRenderDist);
     saveSettings();
 });
 document.getElementById('sensSlider').addEventListener('input', (e) => {
@@ -653,13 +1183,151 @@ document.getElementById('sensSlider').addEventListener('input', (e) => {
 });
 
 function updateSettingsUI() {
-    document.getElementById('controlsNewBtn').style.borderColor = useMouseLook ? 'rgba(160,200,100,0.8)' : 'rgba(120,160,80,0.4)';
-    document.getElementById('controlsOldBtn').style.borderColor = !useMouseLook ? 'rgba(160,200,100,0.8)' : 'rgba(120,160,80,0.4)';
+    const sel = 'rgba(160,200,100,0.8)', unsel = 'rgba(120,160,80,0.4)';
+    document.getElementById('controlsNewBtn').style.borderColor = (useMouseLook && !cameraMC) ? sel : unsel;
+    document.getElementById('controlsMCBtn').style.borderColor = (useMouseLook && cameraMC) ? sel : unsel;
+    document.getElementById('controlsOldBtn').style.borderColor = !useMouseLook ? sel : unsel;
     document.getElementById('rdSlider').value = settingsRenderDist;
     document.getElementById('rdLabel').textContent = settingsRenderDist;
     document.getElementById('sensSlider').value = Math.round(mouseSensitivity * 10);
     document.getElementById('sensLabel').textContent = mouseSensitivity.toFixed(1);
+    document.getElementById('autoMineSnap').checked = autoMineSnap;
+    document.getElementById('musicVolSlider').value = Math.round(musicVolume * 100);
+    document.getElementById('musicVolLabel').textContent = Math.round(musicVolume * 100);
+    renderKeybindList();
 }
+let _rebindingAction = null;
+function renderKeybindList() {
+    const el = document.getElementById('keybindList');
+    if (!el) return;
+    const labels = {
+        forward:'Forward', back:'Back', left:'Left', right:'Right',
+        jump:'Jump', sprint:'Sprint', inventory:'Inventory', map:'Map',
+        hideHUD:'Hide HUD', brush:'Brush Toggle', brushRotate:'Brush Rotate', snapGrid:'Snap Grid',
+    };
+    let html = '';
+    for (const [action, code] of Object.entries(keybinds)) {
+        const label = labels[action] || action;
+        const isRebinding = _rebindingAction === action;
+        const btnStyle = isRebinding
+            ? 'background:rgba(160,120,40,0.6);border-color:rgba(220,180,80,0.8);color:rgba(255,240,180,1);'
+            : 'background:rgba(40,40,40,0.4);border-color:rgba(100,100,100,0.3);color:rgba(200,190,160,0.8);';
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 2px;font:11px monospace;color:rgba(200,190,160,0.7);">`;
+        html += `<span>${label}</span>`;
+        html += `<button data-action="${action}" style="padding:3px 10px;font:11px monospace;border:1px solid;border-radius:3px;cursor:pointer;min-width:60px;text-align:center;${btnStyle}">${isRebinding ? '...' : keyName(code)}</button>`;
+        html += `</div>`;
+    }
+    el.innerHTML = html;
+    el.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _rebindingAction = btn.dataset.action;
+            renderKeybindList();
+        });
+    });
+}
+document.addEventListener('keydown', (e) => {
+    if (_rebindingAction) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.code === 'Escape') {
+            _rebindingAction = null;
+        } else {
+            keybinds[_rebindingAction] = e.code;
+            saveKeybinds();
+            _rebindingAction = null;
+        }
+        renderKeybindList();
+        return;
+    }
+}, true); // capture phase so it fires before game key handlers
+document.getElementById('resetKeybindsBtn').addEventListener('click', () => {
+    keybinds = Object.assign({}, DEFAULT_KEYBINDS);
+    saveKeybinds();
+    renderKeybindList();
+});
+document.getElementById('autoMineSnap').addEventListener('change', (e) => {
+    autoMineSnap = e.target.checked;
+    saveSettings();
+});
+document.getElementById('musicVolSlider').addEventListener('input', (e) => {
+    musicVolume = Number(e.target.value) / 100;
+    document.getElementById('musicVolLabel').textContent = e.target.value;
+    if (musicSystem) musicSystem.setVolume(musicVolume);
+    saveSettings();
+});
+
+// ── Music system ──
+const MUSIC_TRACKS = {
+    calm: 'Field at First Light.mp3',
+    menu: 'Windswept Kingdoms.mp3',
+    // Add more tracks here as they're generated:
+    // combat: 'combat_track.mp3',
+    // cave: 'cave_ambient.mp3',
+    // night: 'night_theme.mp3',
+};
+const musicSystem = {
+    tracks: {},
+    current: null,
+    currentName: null,
+    _initDone: false,
+    init() {
+        if (this._initDone) return;
+        this._initDone = true;
+        for (const [name, file] of Object.entries(MUSIC_TRACKS)) {
+            const audio = new Audio(file);
+            audio.loop = true;
+            audio.volume = musicVolume;
+            this.tracks[name] = audio;
+        }
+    },
+    play(name) {
+        if (!this._initDone) this.init();
+        const track = this.tracks[name];
+        if (!track) return;
+        // If already playing this track and not paused, skip
+        if (this.currentName === name && this.current && !this.current.paused) return;
+        if (this.current && this.current !== track) this.fadeOut(this.current);
+        track.volume = 0;
+        if (this.currentName !== name) track.currentTime = 0;
+        track.play().then(() => console.log('[Music] Playing:', name)).catch(e => console.log('[Music] Blocked:', name, e.message));
+        this.current = track;
+        this.currentName = name;
+        this._fadeIn(track);
+    },
+    _fadeIn(audio) {
+        const target = musicVolume;
+        const step = () => {
+            if (audio.volume < target - 0.02) {
+                audio.volume = Math.min(target, audio.volume + 0.02);
+                setTimeout(step, 50);
+            } else {
+                audio.volume = target;
+            }
+        };
+        step();
+    },
+    fadeOut(audio) {
+        const step = () => {
+            if (audio.volume > 0.02) {
+                audio.volume = Math.max(0, audio.volume - 0.02);
+                setTimeout(step, 50);
+            } else {
+                audio.pause();
+                audio.volume = 0;
+            }
+        };
+        step();
+    },
+    setVolume(v) {
+        musicVolume = v;
+        if (this.current) this.current.volume = v;
+    },
+    stop() {
+        if (this.current) { this.fadeOut(this.current); this.current = null; this.currentName = null; }
+    }
+};
+// Menu music is started by the title screen Play button
 document.getElementById('saveQuitBtn').addEventListener('click', () => {
     gamePaused = false;
     pauseMenuEl.style.display = 'none';
@@ -668,7 +1336,11 @@ document.getElementById('saveQuitBtn').addEventListener('click', () => {
     showToast('Saved & returned to menu');
     gameStarted = false;
     mainMenuEl.style.display = 'flex';
+    musicSystem.play('menu');
     updateMenuUI();
+    updatePreviewColors();
+    previewRunning = true;
+    animatePreview();
 });
 
 // ── Player HP ──
@@ -687,12 +1359,20 @@ const STAFF_PROPS = {
 function fireProjectile(staffType) {
     const props = STAFF_PROPS[staffType];
     if (!props) return;
-    const ry = player.group.rotation.y;
-    const sx = player.position.x + Math.sin(ry) * 0.5;
+    // Find where crosshair (screen center) points in world
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+    // Converge with crosshair at 15 units so projectile lines up early
+    const target = new THREE.Vector3().copy(rc.ray.origin).addScaledVector(rc.ray.direction, 15);
+    // Spawn at player chest
+    const sx = player.position.x;
     const sy = player.position.y + player.EYE_HEIGHT * 0.8;
-    const sz = player.position.z + Math.cos(ry) * 0.5;
-    const vx = Math.sin(ry) * props.speed;
-    const vz = Math.cos(ry) * props.speed;
+    const sz = player.position.z;
+    // Aim from spawn toward crosshair target
+    const dir = new THREE.Vector3(target.x - sx, target.y - sy, target.z - sz).normalize();
+    const vx = dir.x * props.speed;
+    const vy = dir.y * props.speed;
+    const vz = dir.z * props.speed;
 
     const mat = new THREE.MeshBasicMaterial({ color: props.color, transparent: true, opacity: 0.9 });
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(props.size, 6, 4), mat);
@@ -706,7 +1386,7 @@ function fireProjectile(staffType) {
 
     projectiles.push({
         mesh, light, x: sx, y: sy, z: sz,
-        vx, vy: 0, vz,
+        vx, vy, vz,
         life: props.life, age: 0,
         damage: props.damage, staffType,
         trailColor: props.trail,
@@ -766,6 +1446,8 @@ const SWORD_DAMAGE = {
     'wood_sword': 4,
     'stone_sword': 5,
     'iron_sword': 6,
+    'gold_sword': 5,
+    'diamond_sword': 8,
 };
 
 function updateHeartsUI() {
@@ -785,12 +1467,35 @@ function updateHeartsUI() {
     el.innerHTML = html;
 }
 
-// ── Input — same as game.html (no pointer lock, keyboard only) ──
+// ── Keybinds ──
+const DEFAULT_KEYBINDS = {
+    forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
+    jump: 'Space', sprint: 'ShiftLeft',
+    inventory: 'KeyI', map: 'KeyM', hideHUD: 'KeyP',
+    brush: 'KeyB', brushRotate: 'KeyR', snapGrid: 'KeyG',
+};
+let keybinds = Object.assign({}, DEFAULT_KEYBINDS);
+try {
+    const saved = JSON.parse(localStorage.getItem('satw_keybinds') || '{}');
+    if (saved.forward) Object.assign(keybinds, saved);
+} catch(e) {}
+function saveKeybinds() { localStorage.setItem('satw_keybinds', JSON.stringify(keybinds)); }
+// Reverse lookup: code → action name
+function getAction(code) {
+    for (const [action, key] of Object.entries(keybinds)) if (key === code) return action;
+    return null;
+}
+function keyName(code) {
+    if (!code) return '?';
+    return code.replace('Key','').replace('Digit','').replace('ShiftLeft','L-Shift').replace('ShiftRight','R-Shift').replace('ArrowUp','↑').replace('ArrowDown','↓').replace('ArrowLeft','←').replace('ArrowRight','→').replace('Space','Space');
+}
+
+// ── Input ──
 const keys = {};
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if (e.code === 'Space') e.preventDefault();
-    if (e.code === 'KeyP' && gameStarted) {
+    if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
+    if (e.code === keybinds.hideHUD && gameStarted) {
         hudHidden = !hudHidden;
         const vis = hudHidden ? 'none' : '';
         document.getElementById('debug').style.display = vis;
@@ -800,7 +1505,7 @@ document.addEventListener('keydown', e => {
         document.getElementById('prompt').style.display = vis;
         document.getElementById('saveToast').style.display = vis;
     }
-    if (e.code === 'KeyM') {
+    if (e.code === keybinds.map) {
         mapOpen = !mapOpen;
         worldMapEl.style.display = mapOpen ? 'block' : 'none';
         if (mapOpen) {
@@ -1005,6 +1710,16 @@ function getItemInfo(key) {
     if (key === 'iron_ingot') return { name: 'Iron Ingot', top: '#c0c8d0', front: '#8a9098' };
     if (key === 'coal') return { name: 'Coal', top: '#2a2a2a', front: '#1a1a1a' };
     if (key === 'stick') return { name: 'Stick', top: '#a08050', front: '#6b4226', isTool: true };
+    if (key === 'bone') return { name: 'Bone', top: '#e8e0d0', front: '#c8c0b0' };
+    if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
+    if (key === 'diamond') return { name: 'Diamond', top: '#7af8f8', front: '#3ac8d8' };
+    if (key === 'gold_ingot') return { name: 'Gold Ingot', top: '#f0d060', front: '#c8a020' };
+    if (key === 'diamond_sword') return { name: 'Diamond Sword', top: '#5ae8e8', front: '#2ab0c0', isTool: true, toolType: 'sword' };
+    if (key === 'diamond_pickaxe') return { name: 'Diamond Pickaxe', top: '#5ae8e8', front: '#2ab0c0', isTool: true, toolType: 'pickaxe' };
+    if (key === 'diamond_axe') return { name: 'Diamond Axe', top: '#5ae8e8', front: '#2ab0c0', isTool: true, toolType: 'axe' };
+    if (key === 'gold_sword') return { name: 'Gold Sword', top: '#f0d060', front: '#c8a020', isTool: true, toolType: 'sword' };
+    if (key === 'gold_pickaxe') return { name: 'Gold Pickaxe', top: '#f0d060', front: '#c8a020', isTool: true, toolType: 'pickaxe' };
+    if (key === 'gold_axe') return { name: 'Gold Axe', top: '#f0d060', front: '#c8a020', isTool: true, toolType: 'axe' };
     if (typeof key === 'number') return BLOCK_INFO[key];
     if (typeof key === 'string' && key.startsWith('egg_')) {
         const egg = eggItems[key];
@@ -1162,7 +1877,29 @@ function updateInventoryUI() {
     }
     html += '</div>';
 
+    // Brush controls
+    html += '<div class="inv-section-label">Brush [B] toggle [R] rotate</div>';
+    html += '<div style="display:flex;gap:10px;align-items:center;font:11px monospace;color:rgba(200,190,160,0.8);padding:4px 2px;">';
+    html += `<label>Side <input type="range" id="invBrushW" min="1" max="2" value="${brushW}" style="width:50px;vertical-align:middle;accent-color:rgba(120,160,80,0.8);"> ${brushW}</label>`;
+    html += `<label>Up <input type="range" id="invBrushH" min="1" max="2" value="${brushH}" style="width:50px;vertical-align:middle;accent-color:rgba(120,160,80,0.8);"> ${brushH}</label>`;
+    html += `<label>Fwd <input type="range" id="invBrushD" min="1" max="2" value="${brushD}" style="width:50px;vertical-align:middle;accent-color:rgba(120,160,80,0.8);"> ${brushD}</label>`;
+    html += '</div>';
+
     invContentsEl.innerHTML = html;
+
+    // Wire brush sliders in inventory
+    for (const [id, setter] of [['invBrushW', v => brushW = v], ['invBrushH', v => brushH = v], ['invBrushD', v => brushD = v]]) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', function() {
+                setter(Number(this.value));
+                updateBrushUI();
+                updateInventoryUI();
+            });
+            el.addEventListener('mousedown', e => e.stopPropagation());
+            el.addEventListener('keydown', e => e.stopPropagation());
+        }
+    }
 
     // Toggle crafting category
     invContentsEl.querySelectorAll('.craft-cat').forEach(el => {
@@ -1276,7 +2013,7 @@ document.addEventListener('keydown', e => {
         pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
         if (!gamePaused && useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     }
-    if (e.code === 'KeyI') {
+    if (e.code === keybinds.inventory) {
         if (craftingTableOpen) { craftingTableOpen = false; craftTableMenuEl.style.display = 'none'; }
         if (furnaceOpen) { furnaceOpen = false; furnaceMenuEl.style.display = 'none'; }
         inventoryOpen = !inventoryOpen;
@@ -1299,13 +2036,29 @@ document.addEventListener('keydown', e => {
     }
 });
 
+// ── Block highlight (wireframe outline + face highlight) ──
+const _hlGeo = new THREE.BoxGeometry(BLOCK_SIZE * 1.005, BLOCK_SIZE * 1.005, BLOCK_SIZE * 1.005);
+const _hlEdges = new THREE.EdgesGeometry(_hlGeo);
+const _hlLineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.8, depthTest: true });
+const _hlLine = new THREE.LineSegments(_hlEdges, _hlLineMat);
+_hlLine.visible = false;
+_hlLine.renderOrder = 999;
+scene.add(_hlLine);
+// Face highlight quad
+const _faceGeo = new THREE.PlaneGeometry(BLOCK_SIZE * 0.99, BLOCK_SIZE * 0.99);
+const _faceMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthTest: true });
+const _faceMesh = new THREE.Mesh(_faceGeo, _faceMat);
+_faceMesh.visible = false;
+_faceMesh.renderOrder = 999;
+scene.add(_faceMesh);
+
 // ── DDA Raycast helper ──
 const _raycaster = new THREE.Raycaster();
 const _mouse = new THREE.Vector2();
 
 function raycastBlock(e) {
-    if (pointerLocked) {
-        // When pointer locked, always ray from screen center (crosshair)
+    if (pointerLocked || !e) {
+        // When pointer locked or no event, ray from screen center (crosshair)
         _mouse.x = 0;
         _mouse.y = 0;
     } else {
@@ -1375,6 +2128,43 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowUp') { mineDepth = Math.min(3, mineDepth + 1); e.preventDefault(); }
     if (e.code === 'ArrowDown') { mineDepth = Math.max(1, mineDepth - 1); e.preventDefault(); }
 });
+// Brush size toggle + rotate
+document.addEventListener('keydown', e => {
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !mapOpen && gameStarted) {
+        if (e.code === keybinds.brush) {
+            // Cycle: 1x1x1 → 3x3x1 → 1x1x1
+            if (brushW === 1 && brushH === 1) { brushW = 2; brushH = 2; brushD = 1; }
+            else { brushW = 1; brushH = 1; brushD = 1; }
+            updateBrushUI();
+        }
+        if (e.code === keybinds.brushRotate) {
+            brushRotated = !brushRotated;
+            const promptEl = document.getElementById('prompt');
+            promptEl.textContent = 'Brush rotated';
+            promptEl.style.display = 'block';
+            clearTimeout(promptEl._hideTimer);
+            promptEl._hideTimer = setTimeout(() => { promptEl.style.display = 'none'; }, 1000);
+        }
+        if (e.code === keybinds.snapGrid) {
+            snapGrid = !snapGrid;
+            const promptEl = document.getElementById('prompt');
+            promptEl.textContent = 'Snap grid: ' + (snapGrid ? 'ON (2x2x2)' : 'OFF');
+            promptEl.style.display = 'block';
+            clearTimeout(promptEl._hideTimer);
+            promptEl._hideTimer = setTimeout(() => { promptEl.style.display = 'none'; }, 1500);
+        }
+    }
+});
+// Brush slider listeners
+for (const [id, setter] of [['brushW', v => brushW = v], ['brushH', v => brushH = v], ['brushD', v => brushD = v]]) {
+    const el = document.getElementById(id);
+    el.addEventListener('input', function() {
+        setter(Number(this.value));
+        updateBrushUI();
+    });
+    el.addEventListener('mousedown', e => e.stopPropagation());
+    el.addEventListener('keydown', e => e.stopPropagation());
+}
 
 // Check if a wood block is part of a natural tree (has wood above + leaves nearby)
 function isNaturalTree(bx, by, bz) {
@@ -1447,6 +2237,10 @@ const BREAK_TIME = {
     [BLOCK.CRAFTING]: [0.8, 0.3, 0.15],
     [BLOCK.COAL_ORE]: [Infinity, 0.5, 0.2],
     16: [Infinity, 0.5, 0.2],  // COAL_ORE fallback
+    [BLOCK.DIAMOND_ORE]: [Infinity, Infinity, 0.5],  // needs iron pickaxe
+    17: [Infinity, Infinity, 0.5],
+    [BLOCK.GOLD_ORE]: [Infinity, 0.8, 0.3],  // needs stone+ pickaxe
+    18: [Infinity, 0.8, 0.3],
     [BLOCK.FURNACE]: [1.0, 0.5, 0.25],
     15: [1.0, 0.5, 0.25],  // FURNACE fallback
 };
@@ -1466,6 +2260,13 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen) return;
 
+    // Rotate player to face camera direction on click, angled slightly for staff aiming
+    if (useMouseLook && pointerLocked) {
+        const held = hotbarSlots[selectedSlot];
+        const staffAimOffset = STAFF_PROPS[held] ? 0.15 : 0;
+        player.group.rotation.y = fpYaw + staffAimOffset;
+    }
+
     // Always swing on left click
     player.triggerSwing();
 
@@ -1479,11 +2280,12 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         return;
     }
-    // Staff — fire projectile
+    // Staff — fire projectile (delay 1 frame so camera catches up to new rotation)
     if (STAFF_PROPS[held] && inventory[held] > 0 && attackCooldown <= 0) {
         player.triggerSwing();
         attackCooldown = STAFF_PROPS[held].speed > 30 ? 0.3 : 0.6; // lightning fires faster
-        fireProjectile(held);
+        const staffType = held;
+        requestAnimationFrame(() => requestAnimationFrame(() => fireProjectile(staffType)));
         return;
     }
 
@@ -1493,13 +2295,33 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     const hasWoodPick = held === 'pickaxe' && inventory['pickaxe'] > 0;
     const hasStonePick = held === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0;
     const hasIronPick = held === 'iron_pickaxe' && inventory['iron_pickaxe'] > 0;
-    const hasPickaxe = hasWoodPick || hasStonePick || hasIronPick;
+    const hasDiamondPick = held === 'diamond_pickaxe' && inventory['diamond_pickaxe'] > 0;
+    const hasGoldPick = held === 'gold_pickaxe' && inventory['gold_pickaxe'] > 0;
+    const hasPickaxe = hasWoodPick || hasStonePick || hasIronPick || hasDiamondPick || hasGoldPick;
     const hasWoodAxe = held === 'wood_axe' && inventory['wood_axe'] > 0;
     const hasStoneAxe = held === 'stone_axe' && inventory['stone_axe'] > 0;
     const hasIronAxe = held === 'iron_axe' && inventory['iron_axe'] > 0;
-    const hasAxe = hasWoodAxe || hasStoneAxe || hasIronAxe;
-    const pickTier = hasIronPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
-    const bt = hit.block;
+    const hasDiamondAxe = held === 'diamond_axe' && inventory['diamond_axe'] > 0;
+    const hasGoldAxe = held === 'gold_axe' && inventory['gold_axe'] > 0;
+    const hasAxe = hasWoodAxe || hasStoneAxe || hasIronAxe || hasDiamondAxe || hasGoldAxe;
+    const pickTier = hasDiamondPick ? 2 : hasIronPick ? 2 : hasGoldPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
+    // Only use majority block for break time when snap grid is MANUALLY enabled (G key)
+    let bt = hit.block;
+    if (snapGrid) {
+        const snap = v => Math.floor(v / 2) * 2;
+        const bx0 = snap(hit.x), by0 = snap(hit.y), bz0 = snap(hit.z);
+        const counts = {};
+        for (let dx = 0; dx < 2; dx++)
+            for (let dy = 0; dy < 2; dy++)
+                for (let dz = 0; dz < 2; dz++) {
+                    const b = world.getBlockAt(bx0+dx, by0+dy, bz0+dz);
+                    if (b !== 0 && b !== 5 && b !== 7) counts[b] = (counts[b] || 0) + 1;
+                }
+        let maxCount = 0;
+        for (const [block, count] of Object.entries(counts)) {
+            if (count > maxCount) { maxCount = count; bt = Number(block); }
+        }
+    }
 
     let breakTime;
     if (hasAxe) {
@@ -1542,43 +2364,76 @@ renderer.domElement.addEventListener('mouseup', (e) => {
 
 function getBlockDrop(blockType) {
     if (blockType === BLOCK.COAL_ORE) return 'coal';
+    if (blockType === BLOCK.DIAMOND_ORE) return 'diamond';
+    if (blockType === BLOCK.GOLD_ORE) return BLOCK.GOLD_ORE; // smelt to get gold ingot
     if (blockType === 15) return 'furnace_block'; // BLOCK.FURNACE
     return blockType;
 }
 
 function doBreakBlock(hit, hasPickaxe, hasAxe) {
 
-    if (hasPickaxe || hasAxe) {
-        // Pickaxe: snaps to a 3x3 grid on the face plane, 1 layer deep into surface
-        // The hit block snaps to the nearest 3x3 cell on the two perpendicular axes
-        const dnx = hit.nx, dny = hit.ny, dnz = hit.nz;
-        let ax1, ax2;
-        if (dnx !== 0) { ax1 = 'z'; ax2 = 'y'; }
-        else if (dny !== 0) { ax1 = 'x'; ax2 = 'z'; }
-        else { ax1 = 'x'; ax2 = 'y'; }
-
-        // Get the hit block's coords on the two plane axes
-        const getAxis = (a) => a === 'x' ? hit.x : a === 'y' ? hit.y : hit.z;
-        // Snap to 3x3 grid: floor to nearest multiple of 3, then that's the corner
-        const snap = (v) => Math.floor(v / 3) * 3;
-        const base1 = snap(getAxis(ax1));
-        const base2 = snap(getAxis(ax2));
-
+    // Auto snap grid — detect underground mining (natural solid blocks above hit block)
+    let useSnap = snapGrid;
+    if (!useSnap && autoMineSnap) {
+        // Check if there are natural blocks above — means we're underground
+        // Skip planks, wood, leaves, crafting, furnace (building materials)
+        const _isNatural = b => b !== 0 && b !== 5 && b !== BLOCK.WOOD && b !== BLOCK.PLANKS && b !== BLOCK.LEAVES && b !== BLOCK.CRAFTING && b !== 15;
+        let solidAbove = 0;
+        for (let dy = 1; dy <= 4; dy++) {
+            const above = world.getBlockAt(hit.x, hit.y + dy, hit.z);
+            if (_isNatural(above)) solidAbove++;
+        }
+        if (solidAbove >= 2) useSnap = true;
+    }
+    // Snap grid mode — always breaks aligned 2x2x2 cubes
+    if (useSnap) {
+        const snap = v => Math.floor(v / 2) * 2;
+        const bx0 = snap(hit.x), by0 = snap(hit.y), bz0 = snap(hit.z);
         const rebuildSet = new Set();
-        for (let d1 = 0; d1 < 3; d1++) {
-            for (let d2 = 0; d2 < 3; d2++) {
-                let bx = hit.x, by = hit.y, bz = hit.z;
-                // Set the plane axes to the snapped grid position
-                if (ax1 === 'x') bx = base1 + d1; else if (ax1 === 'y') by = base1 + d1; else bz = base1 + d1;
-                if (ax2 === 'x') bx = base2 + d2; else if (ax2 === 'y') by = base2 + d2; else bz = base2 + d2;
-                // Depth axis stays at hit position (1 block deep)
-                const b = world.getBlockAt(bx, by, bz);
-                if (b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.BEDROCK) {
-                    const isTree = b === BLOCK.WOOD && isNaturalTree(bx, by, bz);
-                    addToInventory(getBlockDrop(b));
-                    world.setBlock(bx, by, bz, BLOCK.AIR);
-                    rebuildSet.add(bx + ',' + bz);
-                    if (isTree) fellTree(bx, by, bz, rebuildSet);
+        for (let dx = 0; dx < 2; dx++) {
+            for (let dy = 0; dy < 2; dy++) {
+                for (let dz = 0; dz < 2; dz++) {
+                    const bx = bx0 + dx, by = by0 + dy, bz = bz0 + dz;
+                    const block = world.getBlockAt(bx, by, bz);
+                    if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
+                        const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
+                        addToInventory(getBlockDrop(block));
+                        world.setBlock(bx, by, bz, BLOCK.AIR);
+                        rebuildSet.add(bx + ',' + bz);
+                        if (isTree) fellTree(bx, by, bz, rebuildSet);
+                    }
+                }
+            }
+        }
+        for (const key of rebuildSet) {
+            const [rx, rz] = key.split(',').map(Number);
+            rebuildNear(rx, rz);
+        }
+        return;
+    }
+
+    if (brushW > 1 || brushH > 1 || brushD > 1) {
+        // Brush break — side + up + forward
+        let hAxis;
+        if (hit.nx !== 0) hAxis = brushRotated ? 'x' : 'z';
+        else if (hit.nz !== 0) hAxis = brushRotated ? 'z' : 'x';
+        else hAxis = brushRotated ? 'z' : 'x';
+        const halfW = Math.floor(brushW / 2);
+        const halfH = Math.floor(brushH / 2);
+        const rebuildSet = new Set();
+        for (let d = 0; d < brushD; d++) {
+            for (let a = -halfW; a <= halfW; a++) {
+                for (let b = -halfH; b <= halfH; b++) {
+                    let bx = hit.x + hit.nx * d, by = hit.y + b, bz = hit.z + hit.nz * d;
+                    if (hAxis === 'x') bx += a; else bz += a;
+                    const block = world.getBlockAt(bx, by, bz);
+                    if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
+                        const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
+                        addToInventory(getBlockDrop(block));
+                        world.setBlock(bx, by, bz, BLOCK.AIR);
+                        rebuildSet.add(bx + ',' + bz);
+                        if (isTree) fellTree(bx, by, bz, rebuildSet);
+                    }
                 }
             }
         }
@@ -1629,16 +2484,22 @@ const WB_CATEGORIES = [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'diamond', fromAlt: 'stick', to: 'diamond_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
     ]},
     { name: 'Swords', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+        { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+        { from: 'diamond', fromAlt: 'stick', to: 'diamond_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
     ]},
     { name: 'Axes', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'diamond', fromAlt: 'stick', to: 'diamond_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
     ]},
     { name: 'Staffs', recipes: [
         { from: 'stick', fromAlt: BLOCK.LEAVES, to: 'basic_staff', fc: 3, fcAlt: 4, tc: 1, multi: true },
@@ -1736,6 +2597,7 @@ document.body.appendChild(furnaceMenuEl);
 
 const SMELT_RECIPES = [
     { input: BLOCK.IRON_ORE, output: 'iron_ingot', label: 'Iron Ore → Iron Ingot' },
+    { input: BLOCK.GOLD_ORE, output: 'gold_ingot', label: 'Gold Ore → Gold Ingot' },
     { input: BLOCK.SAND, output: BLOCK.CLAY, label: 'Sand → Clay (brick)' },
 ];
 
@@ -1787,13 +2649,35 @@ function updateFurnaceUI() {
     });
 }
 
+// Brush dimensions: side (horizontal), up (vertical), fwd (depth into surface)
+let brushW = 1, brushH = 1, brushD = 1;
+let brushRotated = false; // R to toggle horizontal axis
+let snapGrid = false; // G to toggle 2x2x2 snap grid for breaking
+function updateBrushUI() {
+    document.getElementById('brushW').value = brushW;
+    document.getElementById('brushH').value = brushH;
+    document.getElementById('brushD').value = brushD;
+    document.getElementById('brushWVal').textContent = brushW;
+    document.getElementById('brushHVal').textContent = brushH;
+    document.getElementById('brushDVal').textContent = brushD;
+    document.getElementById('brushLabel').textContent = brushW + 'x' + brushH + 'x' + brushD;
+    const isDefault = brushW === 1 && brushH === 1 && brushD === 1;
+    document.getElementById('brushPanel').style.display = isDefault ? 'none' : 'block';
+}
+
 // Right click — place block or interact
 let placingHeld = false;
 let placeTimer = 0;
 let placeHoldTime = 0;
 let lastMouseX = 0, lastMouseY = 0;
-const PLACE_INTERVAL = 0.2;
-const PLACE_HOLD_DELAY = 0.3;
+const PLACE_INTERVAL = 0.05;
+const PLACE_HOLD_DELAY = 0.15;
+// Direction lock — locks placement to the same face normal while holding
+// Waits until 2nd placement to lock, so the first block can be on any face
+let placeLock = null; // { nx, ny, nz, yaw, pitch, px, py, pz } or null
+let placeCount = 0;
+const PLACE_LOCK_ANGLE = 0.6; // radians (~34°) before lock breaks
+const PLACE_LOCK_MOVE = 1.0; // world units of player movement before lock breaks
 
 document.addEventListener('mousemove', e => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
 
@@ -1821,6 +2705,19 @@ function doPlace(e) {
         return false;
     }
 
+    // Direction lock — break if looked away too far or moved, reject if face normal changed
+    if (placeLock) {
+        let dYaw = Math.abs(fpYaw - placeLock.yaw);
+        if (dYaw > Math.PI) dYaw = 2 * Math.PI - dYaw;
+        const dPitch = Math.abs(fpPitch - placeLock.pitch);
+        const dMove = Math.abs(player.position.x - placeLock.px) + Math.abs(player.position.y - placeLock.py) + Math.abs(player.position.z - placeLock.pz);
+        if (dYaw > PLACE_LOCK_ANGLE || dPitch > PLACE_LOCK_ANGLE || dMove > PLACE_LOCK_MOVE) {
+            placeLock = null; // looked away or moved — unlock
+        } else if (hit.nx !== placeLock.nx || hit.ny !== placeLock.ny || hit.nz !== placeLock.nz) {
+            return false; // still locked but wrong face — skip
+        }
+    }
+
     let bt = hotbarSlots[selectedSlot];
     if (!bt || !inventory[bt]) return false;
     const isFurnace = bt === 'furnace_block';
@@ -1838,16 +2735,58 @@ function doPlace(e) {
     if (!removeFromInventory(bt)) return false;
 
     if (placeBlock === BLOCK.CRAFTING || placeBlock === 15) {
-        for (let dx = -1; dx <= 1; dx++)
-            for (let dy = 0; dy <= 2; dy++)
-                for (let dz = -1; dz <= 1; dz++)
+        for (let dx = 0; dx <= 1; dx++)
+            for (let dy = 0; dy <= 1; dy++)
+                for (let dz = 0; dz <= 1; dz++)
                     world.setBlock(px + dx, py + dy, pz + dz, placeBlock);
-        for (let dx = -1; dx <= 1; dx++)
-            for (let dz = -1; dz <= 1; dz++)
+        for (let dx = 0; dx <= 1; dx++)
+            for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
     } else {
-        world.setBlock(px, py, pz, bt);
-        rebuildNear(px, pz);
+        // Brush placement — always a vertical wall (Y + one horizontal axis)
+        // Determine horizontal axis for brush
+        let hAxis; // 'x' or 'z'
+        if (hit.nx !== 0) hAxis = brushRotated ? 'x' : 'z';
+        else if (hit.nz !== 0) hAxis = brushRotated ? 'z' : 'x';
+        else hAxis = brushRotated ? 'z' : 'x';
+
+        const halfW = Math.floor(brushW / 2);
+        const halfH = Math.floor(brushH / 2);
+        // On top/bottom faces, shift Y so brush builds away from surface
+        let yShift = 0;
+        if (hit.ny === 1) yShift = halfH;
+        else if (hit.ny === -1) yShift = -halfH;
+        // Depth: expand along the face normal direction (into the surface)
+        const coords = [];
+        for (let d = 0; d < brushD; d++) {
+            for (let b = -halfH; b <= halfH; b++) {
+                for (let a = -halfW; a <= halfW; a++) {
+                    coords.push([a, b, d]);
+                }
+            }
+        }
+        let placedFirst = false;
+        for (const [a, b, d] of coords) {
+            let bx = px - hit.nx * d, by = py + b + yShift - (hit.ny !== 0 ? 0 : 0), bz = pz - hit.nz * d;
+            if (hAxis === 'x') bx += a; else bz += a;
+            const existing = world.getBlockAt(bx, by, bz);
+            if (existing !== BLOCK.AIR && existing !== BLOCK.WATER) continue;
+            if (!placedFirst) {
+                world.setBlock(bx, by, bz, bt);
+                rebuildNear(bx, bz);
+                placedFirst = true;
+            } else if (removeFromInventory(bt)) {
+                world.setBlock(bx, by, bz, bt);
+                rebuildNear(bx, bz);
+            }
+        }
+    }
+    // Lock direction after 2nd placement — first block can be on any face
+    if (placingHeld) {
+        placeCount++;
+        if (!placeLock && placeCount >= 2) {
+            placeLock = { nx: hit.nx, ny: hit.ny, nz: hit.nz, yaw: fpYaw, pitch: fpPitch, px: player.position.x, py: player.position.y, pz: player.position.z };
+        }
     }
     return true;
 }
@@ -1865,10 +2804,10 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     }
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
-    if (e.button === 2) placingHeld = false;
+    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; }
 });
 document.addEventListener('mouseup', (e) => {
-    if (e.button === 2) placingHeld = false;
+    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; }
 });
 
 // ── Resize ──
@@ -1893,7 +2832,7 @@ let camInit = false;
 
 function animate() {
     requestAnimationFrame(animate);
-    if (!gameStarted || gamePaused || settingsOpen) { prevTime = performance.now(); return; }
+    if (!gameStarted || gamePaused || settingsOpen || !dragonMgr) { prevTime = performance.now(); return; }
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
@@ -1911,10 +2850,39 @@ function animate() {
     if (fpsTime >= 1) { fps = frameCount; frameCount = 0; fpsTime = 0; }
 
     // Player update
-    fpActive = zoomLevel < 0.15 && !dragonMgr.ridingDragon;
-    if (!dragonMgr.ridingDragon && !craftingTableOpen && !furnaceOpen) {
+    fpActive = zoomLevel < 0.15 && !(dragonMgr && dragonMgr.ridingDragon);
+    if (!(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen) {
         const useMouse = useMouseLook && pointerLocked;
-        player.update(dt, keys, useMouse, fpYaw);
+        // Axis-lock movement to placement direction while place-locking
+        let moveKeys = keys;
+        if (placeLock && placingHeld) {
+            moveKeys = Object.assign({}, keys);
+            const nx = placeLock.nx, ny = placeLock.ny, nz = placeLock.nz;
+            const kf = keybinds.forward, kk = keybinds.back, kl = keybinds.left, kr = keybinds.right;
+            if (ny !== 0) {
+                moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
+                moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
+                moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
+            } else if (nx !== 0) {
+                if (Math.abs(Math.sin(fpYaw)) > Math.abs(Math.cos(fpYaw))) {
+                    moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
+                    moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
+                } else {
+                    moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
+                    moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                }
+            } else {
+                if (Math.abs(Math.cos(fpYaw)) > Math.abs(Math.sin(fpYaw))) {
+                    moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
+                    moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
+                } else {
+                    moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
+                    moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                }
+            }
+        }
+        player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
     }
     dragonMgr.applyPlayerPose(player);
 
@@ -1925,15 +2893,24 @@ function animate() {
     player.axeHeld.visible = false;
     player.staffHeld.visible = false;
     if (heldItem && typeof heldItem === 'string' && inventory[heldItem] > 0) {
-        if (heldItem.includes('pickaxe')) player.pickaxeHeld.visible = true;
-        else if (heldItem.includes('sword')) player.swordHeld.visible = true;
+        if (heldItem.includes('pickaxe')) {
+            player.pickaxeHeld.visible = true;
+            player.setToolColor(player.pickaxeHeld, heldItem);
+        }
+        else if (heldItem.includes('sword')) {
+            player.swordHeld.visible = true;
+            player.setToolColor(player.swordHeld, heldItem);
+        }
         else if (heldItem.includes('staff')) {
             player.staffHeld.visible = true;
             const staffColors = { basic_staff: [0x44aa44, 0x228822], fire_staff: [0xff6622, 0xff4400], ice_staff: [0x66ccff, 0x3388cc], lightning_staff: [0xffee44, 0xccaa00] };
             const sc = staffColors[heldItem] || [0xffffff, 0xaaaaaa];
             player.setStaffColor(sc[0], sc[1]);
         }
-        else if (heldItem.includes('axe')) player.axeHeld.visible = true;
+        else if (heldItem.includes('axe')) {
+            player.axeHeld.visible = true;
+            player.setToolColor(player.axeHeld, heldItem);
+        }
     }
 
     // Sun follows player (offset same as game.html)
@@ -1972,7 +2949,7 @@ function animate() {
         if (mp._sendAccum >= 0.05) { // 20Hz position updates
             mp._sendAccum = 0;
             const held = hotbarSlots[selectedSlot];
-            mp.sendState(player, held, player.swingTimer);
+            mp.sendState(player, held, player.swingTimer, charColors);
         }
         // Host syncs creatures + villagers at 5Hz
         if (mp.isHost) {
@@ -2046,6 +3023,30 @@ function animate() {
             eyeY + Math.sin(fpPitch) * lookDist,
             player.position.z + Math.cos(fpYaw) * Math.cos(fpPitch) * lookDist
         );
+    } else if (cameraMC) {
+        // Minecraft-style third person — camera orbits, resets behind player on move
+        const isMoving = player.speed > 0.3;
+        if (isMoving) {
+            // Smoothly lerp camera yaw toward behind-player direction
+            let targetYaw = player.group.rotation.y;
+            let dYaw = targetYaw - fpYaw;
+            while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+            while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+            fpYaw += dYaw * 4 * dt;
+            // Keep pitch as-is — only reset horizontal angle
+        }
+        const ridingScale = dragonMgr.ridingDragon && dragonMgr.ridingRef ? Math.max(1, dragonMgr.ridingRef.growthScale * 2.5) : 1;
+        const camDist = 4.0 * zoomLevel * ridingScale;
+        const camH = 2.0 * ridingScale;
+        const pitchAngle = fpPitch;
+        const pitchOffY = Math.sin(pitchAngle) * camDist;
+        const pitchDist = Math.cos(pitchAngle) * camDist;
+
+        _idealOffset.set(0, camH + pitchOffY, -pitchDist)
+            .applyAxisAngle(_upAxis, fpYaw)
+            .add(camTarget);
+        _idealLook.copy(camTarget);
+        _idealLook.y += lookOffY + 0.3;
     } else {
         // Third person — Fortnite-style over-right-shoulder
         const s = player.sprintBlend;
@@ -2054,7 +3055,7 @@ function animate() {
         const baseDist = mix(mix(3.5, 4.5, s), 3.0, cr) * ridingScale;
         const baseH    = mix(mix(2.0, 2.3, s), 1.5, cr) * ridingScale;
         const camDist = baseDist * zoomLevel;
-        const camH    = baseH * (0.7 + 0.3 * zoomLevel);
+        const camH    = baseH;
         const rightOffset = -1.0 * ridingScale; // over left shoulder — player appears right
         const upOffset = 0.5 * ridingScale; // slightly above shoulder height
 
@@ -2072,6 +3073,32 @@ function animate() {
         _idealLook.y += lookOffY + 0.3;
     }
 
+    // Pull ideal camera position forward if it would be inside a solid block
+    if (!firstPerson && world) {
+        const yOff = 128;
+        const ibx = Math.floor(_idealOffset.x / BLOCK_SIZE);
+        const iby = Math.floor(_idealOffset.y / BLOCK_SIZE) + yOff;
+        const ibz = Math.floor(_idealOffset.z / BLOCK_SIZE);
+        const block = world.getBlockAt(ibx, iby, ibz);
+        if (block !== 0 && block !== 5) {
+            const dir = new THREE.Vector3().subVectors(_idealOffset, camTarget).normalize();
+            const maxDist = _idealOffset.distanceTo(camTarget);
+            let safeDist = 0.5;
+            for (let t = 0.5; t < maxDist; t += BLOCK_SIZE * 0.5) {
+                const tx = camTarget.x + dir.x * t;
+                const ty = camTarget.y + dir.y * t;
+                const tz = camTarget.z + dir.z * t;
+                const tbx = Math.floor(tx / BLOCK_SIZE);
+                const tby = Math.floor(ty / BLOCK_SIZE) + yOff;
+                const tbz = Math.floor(tz / BLOCK_SIZE);
+                const tb = world.getBlockAt(tbx, tby, tbz);
+                if (tb !== 0 && tb !== 5) break;
+                safeDist = t;
+            }
+            _idealOffset.copy(camTarget).addScaledVector(dir, safeDist);
+        }
+    }
+
     if (!camInit) {
         camPos.copy(_idealOffset);
         camLook.copy(_idealLook);
@@ -2081,7 +3108,6 @@ function animate() {
         camPos.lerp(_idealOffset, 1 - Math.exp(-lerpSpeed * dt));
         camLook.lerp(_idealLook,  1 - Math.exp(-lerpSpeed * 1.5 * dt));
     }
-
     camera.position.copy(camPos);
     camera.lookAt(camLook);
 
@@ -2104,9 +3130,148 @@ function animate() {
     const mpInfo = mp.active ? `<br>Players: ${mp.playerCount} | ${mp.isHost ? 'Host' : 'Client'} | ${mp.myId}` : '';
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}${mpInfo}`;
 
+    // ── Update block highlight ──
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !mapOpen) {
+        const hlHit = raycastBlock(null);
+        if (hlHit) {
+            const BS = BLOCK_SIZE;
+            const yOff = 128;
+            const nx = hlHit.nx, ny = hlHit.ny, nz = hlHit.nz;
+
+            let cx, cy, cz, sx, sy, sz;
+            // Check if auto-snap would apply
+            let hlSnap = snapGrid;
+            if (!hlSnap && autoMineSnap) {
+                const _isNat = b => b !== 0 && b !== 5 && b !== BLOCK.WOOD && b !== BLOCK.PLANKS && b !== BLOCK.LEAVES && b !== BLOCK.CRAFTING && b !== 15;
+                let sa = 0;
+                for (let dy = 1; dy <= 4; dy++) {
+                    const ab = world.getBlockAt(hlHit.x, hlHit.y + dy, hlHit.z);
+                    if (_isNat(ab)) sa++;
+                }
+                if (sa >= 2) hlSnap = true;
+            }
+            if (hlSnap) {
+                // Snap grid — show aligned 2x2x2 cube
+                const snap = v => Math.floor(v / 2) * 2;
+                const bx0 = snap(hlHit.x), by0 = snap(hlHit.y), bz0 = snap(hlHit.z);
+                cx = (bx0 + 0.5) * BS + BS * 0.5;
+                cy = (by0 + 0.5 - yOff) * BS + BS * 0.5;
+                cz = (bz0 + 0.5) * BS + BS * 0.5;
+                sx = 2; sy = 2; sz = 2;
+            } else {
+                // Brush: side along hAxis, up in Y, depth along face normal
+                let hAxis;
+                if (nx !== 0) hAxis = brushRotated ? 'x' : 'z';
+                else if (nz !== 0) hAxis = brushRotated ? 'z' : 'x';
+                else hAxis = brushRotated ? 'z' : 'x';
+                sx = (hAxis === 'x') ? brushW : (Math.abs(nx) ? brushD : 1);
+                sy = brushH;
+                sz = (hAxis === 'z') ? brushW : (Math.abs(nz) ? brushD : 1);
+                cx = hlHit.x * BS + BS * 0.5;
+                cy = (hlHit.y - yOff) * BS + BS * 0.5;
+                cz = hlHit.z * BS + BS * 0.5;
+            }
+            _hlLine.position.set(cx, cy, cz);
+            _hlLine.scale.set(sx, sy, sz);
+            _hlLine.visible = true;
+            // Inverse color outline
+            const bc = BLOCK_COLORS[hlHit.block] || 0x888888;
+            _hlLineMat.color.setHex(0xffffff - (bc & 0xffffff));
+            // Face highlight — sized to brush
+            const fw = brushW;
+            const fh = brushH;
+            _faceMesh.scale.set(fw, fh, 1);
+            _faceMesh.position.set(cx + nx * BS * 0.503, cy + ny * BS * 0.503, cz + nz * BS * 0.503);
+            if (ny !== 0) {
+                _faceMesh.rotation.set(Math.PI / 2, 0, 0);
+            } else if (nx !== 0) {
+                _faceMesh.rotation.set(0, Math.PI / 2, 0);
+            } else {
+                _faceMesh.rotation.set(0, 0, 0);
+            }
+            _faceMesh.visible = true;
+        } else {
+            _hlLine.visible = false;
+            _faceMesh.visible = false;
+        }
+    } else {
+        _hlLine.visible = false;
+        _faceMesh.visible = false;
+    }
+
     renderer.render(scene, camera);
 }
 animate();
+
+// ── Command system (for terminal / NFC tags) ──
+window._gameCmd = function(data) {
+    const { cmd, args } = data;
+    const msg = (t) => { showToast(t); console.log('[CMD]', t); };
+    switch (cmd) {
+        case 'give': {
+            const item = isNaN(args[0]) ? args[0] : Number(args[0]);
+            const count = Number(args[1]) || 1;
+            inventory[item] = (inventory[item] || 0) + count;
+            const emptyIdx = hotbarSlots.indexOf(0);
+            if (emptyIdx >= 0 && !hotbarSlots.includes(item)) hotbarSlots[emptyIdx] = item;
+            refreshUI();
+            msg('Gave ' + count + 'x ' + item);
+            break;
+        }
+        case 'heal': {
+            playerHP = playerMaxHP;
+            updateHeartsUI();
+            msg('Fully healed');
+            break;
+        }
+        case 'tp': {
+            const tx = Number(args[0]) || 0, ty = Number(args[1]) || 0, tz = Number(args[2]) || 0;
+            player.position.set(tx, ty, tz);
+            msg('Teleported to ' + tx + ', ' + ty + ', ' + tz);
+            break;
+        }
+        case 'speed': {
+            const s = Number(args[0]) || 3;
+            player.walkSpeed = s;
+            player.sprintSpeed = s * 1.8;
+            msg('Speed set to ' + s);
+            break;
+        }
+        case 'fly': {
+            player.vy = 8;
+            msg('Boost!');
+            break;
+        }
+        case 'god': {
+            playerMaxHP = 9999; playerHP = 9999;
+            updateHeartsUI();
+            msg('God mode');
+            break;
+        }
+        case 'time': {
+            // args[0] = 'day' or 'night' or a number 0-1
+            if (args[0] === 'day') timeOfDay = 0.5;
+            else if (args[0] === 'night') timeOfDay = 0.0;
+            else timeOfDay = Number(args[0]) || 0.5;
+            msg('Time set to ' + timeOfDay.toFixed(2));
+            break;
+        }
+        case 'clear': {
+            for (const k in inventory) delete inventory[k];
+            hotbarSlots.fill(0);
+            refreshUI();
+            msg('Inventory cleared');
+            break;
+        }
+        case 'xp':
+        case 'msg': {
+            msg(args.join(' '));
+            break;
+        }
+        default:
+            msg('Unknown command: ' + cmd);
+    }
+};
 </script>
 </body>
 </html>
