@@ -590,8 +590,8 @@ export class DragonManager {
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
-        this.altarX = -50;
-        this.altarZ = -170;
+        this.altarX = -505;
+        this.altarZ = -175;
         this._built = false;
         this.carriedEggGrp = null;
         this.carriedEggMat = null;
@@ -604,8 +604,8 @@ export class DragonManager {
 
     buildCarriedEgg(playerSpine) {
         // Carried egg visual — attached to player spine, hidden until carrying
-        this.carriedEggMat = new THREE.MeshStandardMaterial({ color: 0x882222, roughness: 0.3, metalness: 0.2, emissive: 0x441111, emissiveIntensity: 0.3 });
-        this.carriedVeinMat = new THREE.MeshStandardMaterial({ color: 0xcc4422, emissive: 0xcc4422, emissiveIntensity: 0.5, roughness: 0.2 });
+        this.carriedEggMat = new THREE.MeshStandardMaterial({ color: 0x882222, roughness: 0.3, metalness: 0.2, emissive: 0x441111, emissiveIntensity: 0.1 });
+        this.carriedVeinMat = new THREE.MeshStandardMaterial({ color: 0xcc4422, emissive: 0xcc4422, emissiveIntensity: 0.15, roughness: 0.2 });
         this.carriedEggGrp = new THREE.Group();
         const eggMesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), this.carriedEggMat);
         eggMesh.scale.set(1.0, 1.3, 1.0);
@@ -690,13 +690,13 @@ export class DragonManager {
                 eggGrp.add(nr);
             }
             // Egg mesh
-            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.2, emissive: ed.emissive, emissiveIntensity: 0.3 });
+            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.2, emissive: ed.emissive, emissiveIntensity: 0.1 });
             const eggMesh = new THREE.Mesh(eggGeo, eggMat);
             eggMesh.scale.set(1.0, 1.35, 1.0);
             eggMesh.position.y = 0.45;
             eggGrp.add(eggMesh);
             // Veins
-            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.5, roughness: 0.2 });
+            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.15, roughness: 0.2 });
             for (let vi = 0; vi < 5; vi++) {
                 const va = (vi / 5) * Math.PI * 2;
                 const vein = new THREE.Mesh(veinGeo, veinMat);
@@ -704,10 +704,7 @@ export class DragonManager {
                 vein.rotation.z = (Math.random() - 0.5) * 0.4;
                 eggGrp.add(vein);
             }
-            // Glow light
-            const eggLight = new THREE.PointLight(ed.glowColor, 1.5, 6);
-            eggLight.position.set(0, 0.8, 0);
-            eggGrp.add(eggLight);
+            // No glow light — removed for performance
 
             eggGrp.position.set(ex, ey, ez);
             this.scene.add(eggGrp);
@@ -771,9 +768,26 @@ export class DragonManager {
                 player.group.rotation.x = 0;
                 player.group.rotation.order = 'XYZ';
             } else if (this.heldEgg) {
-                // Check if near altar — hatch!
+                // Check if near altar or campfire — hatch!
+                let canHatch = false;
                 const adx = px - this.altarX, adz = pz - this.altarZ;
-                if (adx * adx + adz * adz < 16) {
+                if (adx * adx + adz * adz < 16) canHatch = true;
+                // Check for nearby campfire blocks
+                if (!canHatch && this._world) {
+                    const BS = 1.9 / 4; // BLOCK_SIZE
+                    const yOff = 128;
+                    for (let dx = -3; dx <= 3 && !canHatch; dx++) {
+                        for (let dz = -3; dz <= 3 && !canHatch; dz++) {
+                            const bx = Math.floor(px / BS) + dx;
+                            const by = Math.floor(py / BS) + yOff;
+                            const bz = Math.floor(pz / BS) + dz;
+                            for (let dy = -2; dy <= 1; dy++) {
+                                if (this._world.getBlockAt(bx, by + dy, bz) === 26) { canHatch = true; break; }
+                            }
+                        }
+                    }
+                }
+                if (canHatch) {
                     const egg = this.heldEgg;
                     // Remove egg from inventory
                     if (this.removeFromInventory) this.removeFromInventory('egg_' + egg._idx);
@@ -1072,7 +1086,17 @@ export class DragonManager {
         if (this.ridingDragon) return 'Press E to dismount' + (this.ridingRef && this.ridingRef.age >= 1550 ? ' | Space/Shift = fly up/down' : '');
         if (this.heldEgg) {
             const adx = px - this.altarX, adz = pz - this.altarZ;
-            return (adx*adx + adz*adz < 16) ? 'Press E to hatch egg on altar' : 'Bring egg to stone altar';
+            let nearHatchSite = adx*adx + adz*adz < 16;
+            if (!nearHatchSite && this._world) {
+                const BS = 1.9 / 4;
+                const yOff = 128;
+                for (let dx = -3; dx <= 3 && !nearHatchSite; dx++)
+                    for (let dz = -3; dz <= 3 && !nearHatchSite; dz++) {
+                        const bx = Math.floor(px / BS) + dx, by = Math.floor(py / BS) + yOff, bz = Math.floor(pz / BS) + dz;
+                        for (let dy = -2; dy <= 1; dy++) if (this._world.getBlockAt(bx, by+dy, bz) === 26) { nearHatchSite = true; break; }
+                    }
+            }
+            return nearHatchSite ? 'Press E to hatch egg' : 'Bring egg to campfire or altar';
         }
         for (const egg of this.eggs) {
             if (egg.pickedUp) continue;
@@ -1080,7 +1104,7 @@ export class DragonManager {
             if (dx*dx + dz*dz < 4) return 'Press E to pick up dragon egg';
         }
         for (const bd of this.dragons) {
-            if (bd.state !== 'alive' || bd.age < 1150) continue;
+            if (bd.state !== 'alive' || bd.age < 1150 || bd._unrideable) continue;
             const dx = px - bd.x, dz = pz - bd.z;
             if (dx*dx + dz*dz < 6 * bd.growthScale + 4) return 'Press E to ride ' + bd.dragonName;
         }

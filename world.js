@@ -4,19 +4,19 @@
 
 export const BLOCK_SIZE = 1.9 / 4; // ≈ 0.475 world units per block
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 256;
+export const WORLD_HEIGHT = 384;
 export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -94,6 +94,20 @@ function getAncientForestHillBlend(x, z) {
     const hx = (x - (-30)) / 200, hz = (z - (-190)) / 200;
     const d = Math.sqrt(hx * hx + hz * hz);
     if (d > 0.85 || d < 0.3) return 0;
+    // Gate gaps — suppress hills at cardinal directions
+    const angle = Math.atan2(hz, hx);
+    const gateAngles = [Math.PI, 0, Math.PI/2, -Math.PI/2]; // west, east, south, north
+    const gateWidth = 0.12;
+    for (const ga of gateAngles) {
+        let diff = Math.abs(angle - ga);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < gateWidth) return 0;
+        if (diff < gateWidth * 2) {
+            const fade = (diff - gateWidth) / gateWidth;
+            const ring = 1 - Math.abs(d - 0.55) / 0.3;
+            return Math.max(0, ring * ring) * fade;
+        }
+    }
     const ring = 1 - Math.abs(d - 0.55) / 0.3;
     return Math.max(0, ring * ring);
 }
@@ -161,7 +175,7 @@ const pondLocs = [
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, getMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend };
+export { getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend };
 
 function getTerrainHeight(x, z) {
     const distFromCenter = Math.sqrt(x * x + z * z);
@@ -373,7 +387,7 @@ export class World {
         const ox = cx * CHUNK_SIZE;
         const oz = cz * CHUNK_SIZE;
         // Y offset: world y=0 maps to block y=WORLD_HEIGHT/2 so we can have underwater
-        const yOff = Math.floor(WORLD_HEIGHT / 2);
+        const yOff = 128;
 
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
             for (let lz = 0; lz < CHUNK_SIZE; lz++) {
@@ -438,10 +452,28 @@ export class World {
                         const goldVein = Math.sin(bx * 0.18 + y * 0.22 + bz * 0.16 + 9.1) *
                                          Math.cos(bx * 0.14 - y * 0.24 + bz * 0.13 + 6.8);
                         const goldLocal = this._hash(bx * 0.53 + y * 0.31, bz * 0.41 + y * 0.47);
-                        if (y < 20 && diamondVein > 0.8 && diamondLocal > 0.6) block = BLOCK.DIAMOND_ORE;
-                        else if (y < 35 && goldVein > 0.75 && goldLocal > 0.55) block = BLOCK.GOLD_ORE;
+                        // Gems: deep, rare — each with unique noise
+                        const rubyVein = Math.sin(bx * 0.19 + y * 0.29 + bz * 0.23 + 14.7) *
+                                         Math.cos(bx * 0.21 - y * 0.17 + bz * 0.25 + 8.3);
+                        const rubyLocal = this._hash(bx * 0.57 + y * 0.39, bz * 0.49 + y * 0.33);
+                        const sapphireVein = Math.sin(bx * 0.21 + y * 0.27 + bz * 0.19 + 17.3) *
+                                             Math.cos(bx * 0.25 - y * 0.21 + bz * 0.17 + 10.1);
+                        const sapphireLocal = this._hash(bx * 0.43 + y * 0.51, bz * 0.59 + y * 0.29);
+                        const emeraldVein = Math.sin(bx * 0.17 + y * 0.23 + bz * 0.21 + 19.9) *
+                                            Math.cos(bx * 0.19 - y * 0.25 + bz * 0.23 + 12.7);
+                        const emeraldLocal = this._hash(bx * 0.63 + y * 0.41, bz * 0.47 + y * 0.37);
+                        const topazVein = Math.sin(bx * 0.22 + y * 0.18 + bz * 0.26 + 22.1) *
+                                          Math.cos(bx * 0.16 - y * 0.22 + bz * 0.2 + 15.3);
+                        const topazLocal = this._hash(bx * 0.51 + y * 0.47, bz * 0.43 + y * 0.31);
+                        const depthBelow = surfaceBlock - y; // how far below surface
+                        if (depthBelow > 35 && diamondVein > 0.82 && diamondLocal > 0.65) block = BLOCK.DIAMOND_ORE;
+                        else if (depthBelow > 25 && rubyVein > 0.78 && rubyLocal > 0.6) block = BLOCK.RUBY_ORE;
+                        else if (depthBelow > 25 && sapphireVein > 0.78 && sapphireLocal > 0.6) block = BLOCK.SAPPHIRE_ORE;
+                        else if (depthBelow > 20 && emeraldVein > 0.76 && emeraldLocal > 0.58) block = BLOCK.EMERALD_ORE;
+                        else if (depthBelow > 20 && topazVein > 0.76 && topazLocal > 0.58) block = BLOCK.TOPAZ_ORE;
+                        else if (depthBelow > 15 && goldVein > 0.6 && goldLocal > 0.45) block = BLOCK.GOLD_ORE;
                         else if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
-                        else if (coalVein > 0.6 && coalLocal > 0.4) block = BLOCK.COAL_ORE;
+                        else if (coalVein > 0.5 && coalLocal > 0.3) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {
                         if (inPond) block = BLOCK.CLAY;
@@ -483,10 +515,63 @@ export class World {
     }
 
     _placeTreesInChunk(cx, cz, data, ox, oz) {
-        const yOff = Math.floor(WORLD_HEIGHT / 2);
+        const yOff = 128;
+        // Hill ring ancient forest — dense tall trees inside the ring
+        const hillCX = -30, hillCZ = -190, hillR = 170; // inner radius (flat area)
+        const chunkWX = ox * BLOCK_SIZE, chunkWZ = oz * BLOCK_SIZE;
+        const dxH = chunkWX + 8*BLOCK_SIZE - hillCX, dzH = chunkWZ + 8*BLOCK_SIZE - hillCZ;
+        const chunkDistToHill = Math.sqrt(dxH*dxH + dzH*dzH);
+        if (chunkDistToHill < hillR) {
+            // Dense ancient forest
+            for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+                for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+                    const bx = ox + lx, bz = oz + lz;
+                    const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+                    const distToCenter = Math.sqrt((wx-hillCX)*(wx-hillCX) + (wz-hillCZ)*(wz-hillCZ));
+                    if (distToCenter > hillR - 10) continue; // fade at edges
+                    // Moderate density — ~10% chance, spaced out
+                    if (this._hash(bx * 0.37 + 1111, bz * 0.53 + 2222) > 0.10) continue;
+                    if (lx % 3 !== 0 || lz % 3 !== 0) continue;
+                    const h = getTerrainHeight(wx, wz);
+                    if (h < 0 || h > 40) continue;
+                    const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
+                    // Tall ancient trees — 8-14 blocks trunk, big canopy
+                    const trunkH = 8 + Math.floor(this._hash(bx*1.7, bz*2.3) * 6);
+                    const canopyR = 3 + Math.floor(this._hash(bx*3.1, bz*1.9) * 2);
+                    const canopyH = canopyR * 2 + 2;
+                    const canopyBase = surfaceBlock + trunkH - 2;
+                    for (let ty = 1; ty <= trunkH; ty++) {
+                        const y = surfaceBlock + ty;
+                        if (y >= WORLD_HEIGHT) break;
+                        data[(y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx] = BLOCK.WOOD;
+                    }
+                    for (let dy = 0; dy < canopyH; dy++) {
+                        const y = canopyBase + dy;
+                        if (y >= WORLD_HEIGHT) break;
+                        const progress = dy / (canopyH - 1);
+                        const r = Math.ceil(canopyR * (1 - progress * 0.6));
+                        for (let ddx = -r; ddx <= r; ddx++) {
+                            for (let ddz = -r; ddz <= r; ddz++) {
+                                if (ddx*ddx + ddz*ddz > r*r+1) continue;
+                                const tlx = lx+ddx, tlz = lz+ddz;
+                                if (tlx<0||tlx>=CHUNK_SIZE||tlz<0||tlz>=CHUNK_SIZE) continue;
+                                const idx = (y*CHUNK_SIZE+tlz)*CHUNK_SIZE+tlx;
+                                if (data[idx] === BLOCK.AIR) data[idx] = BLOCK.LEAVES;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Normal trees
         for (let lx = 0; lx < CHUNK_SIZE; lx += 2) {
             for (let lz = 0; lz < CHUNK_SIZE; lz += 2) {
                 const bx = ox + lx, bz = oz + lz;
+                // Skip normal trees inside hill ring (ancient forest handles it)
+                const twx = bx * BLOCK_SIZE, twz = bz * BLOCK_SIZE;
+                const tdh = Math.sqrt((twx-hillCX)*(twx-hillCX) + (twz-hillCZ)*(twz-hillCZ));
+                if (tdh < hillR - 5) continue;
                 if (this._hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > 0.06) continue;
 
                 const jx = bx + Math.floor(this._hash(bx+11,bz+22)*2);
@@ -532,7 +617,7 @@ export class World {
     }
 
     _carveCaves(cx, cz, data, ox, oz) {
-        const yOff = Math.floor(WORLD_HEIGHT / 2);
+        const yOff = 128;
         const hillCX = -30, hillCZ = -190, hillR = 200;
 
         // Quick check — skip entirely if chunk is far from the hill ring
@@ -614,7 +699,7 @@ export class World {
 
     isSolid(wx, wy, wz) {
         const bx = Math.floor(wx / BLOCK_SIZE);
-        const by = Math.floor(wy / BLOCK_SIZE) + Math.floor(WORLD_HEIGHT / 2);
+        const by = Math.floor(wy / BLOCK_SIZE) + 128;
         const bz = Math.floor(wz / BLOCK_SIZE);
         const b = this.getBlockAt(bx, by, bz);
         return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES;

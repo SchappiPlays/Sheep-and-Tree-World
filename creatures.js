@@ -330,9 +330,10 @@ export class CreatureManager {
             }
         }
 
-        // Despawn far creatures
+        // Despawn far creatures (but never bosses)
         for (let i = this.creatures.length - 1; i >= 0; i--) {
             const sh = this.creatures[i];
+            if (sh._isBoss) continue;
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             if (dx * dx + dz * dz > 30 * 30) {
                 this.scene.remove(sh.group);
@@ -378,6 +379,12 @@ export class CreatureManager {
                 sh.attackTimer = Math.max(0, (sh.attackTimer || 0) - dt);
 
                 if (dist < sh.aggroRange) {
+                    // Boss pause — back off after attacking
+                    if (sh._isBoss && sh._pauseTimer > 0) {
+                        sh._pauseTimer -= dt;
+                        sh.walking = false;
+                        sh.speed *= 0.9;
+                    } else {
                     // Chase player
                     sh.angle = Math.atan2(-dx, -dz);
                     sh.walking = true;
@@ -387,7 +394,10 @@ export class CreatureManager {
                     // Attack when in range
                     if (dist < sh.attackRange && sh.attackTimer <= 0) {
                         sh.attackTimer = sh.attackCD;
-                        if (this._onPlayerHit) this._onPlayerHit(sh.attackDmg, sh.type);
+                        if (this._onPlayerHit) this._onPlayerHit(sh.attackDmg, sh.type, sh.x, sh.z);
+                        // Boss pauses after hitting
+                        if (sh._isBoss) sh._pauseTimer = 1.0 + Math.random() * 1.0;
+                    }
                     }
                 } else {
                     // Wander when not aggro'd
@@ -404,7 +414,7 @@ export class CreatureManager {
                 let da = sh.angle - sh.group.rotation.y;
                 while (da > Math.PI) da -= Math.PI * 2;
                 while (da < -Math.PI) da += Math.PI * 2;
-                sh.group.rotation.y += da * 5 * dt;
+                sh.group.rotation.y += da * (sh._turnSpeed || 5) * dt;
 
                 // Movement
                 if (sh.speed > 0.01) {
@@ -500,9 +510,10 @@ export class CreatureManager {
             const sz = chunkWorldZ + this.world._hash(cx + i * 31, cz + i * 47) * chunkWorldSize;
 
             const biome = this.world._getBiome(sx, sz);
-            if (biome !== 'grass' && biome !== 'desert_transition') continue;
             const terrainY = this.world.getHeight(sx, sz);
-            if (terrainY < 0.5 || terrainY > 35) continue;
+            if (terrainY < 0.5 || terrainY > 80) continue;
+            // Skip desert (no creatures there)
+            if (biome === 'desert') continue;
 
             // Pick creature type based on biome
             const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
@@ -516,9 +527,9 @@ export class CreatureManager {
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
                 // Frozen lands — skeletons and occasional animals
-                if (typeHash < 0.35) {
+                if (typeHash < 0.6) {
                     creature = makeSkeleton(sx, sz, terrainY);
-                } else if (typeHash < 0.55) {
+                } else if (typeHash < 0.75) {
                     creature = makeSheep(sx, sz, terrainY);
                 } else {
                     continue;
@@ -550,6 +561,7 @@ export class CreatureManager {
             // Check facing — creature must be roughly in front
             const dot = (dx * sinA + dz * cosA) / dist;
             if (dot < 0.2) continue;
+            if (sh._mineOnly) continue; // can only be damaged by mining
             sh.hp -= damage;
             // Knockback
             sh.x += (dx / dist) * 0.5;
@@ -560,6 +572,13 @@ export class CreatureManager {
                 sh.deathTimer = 0;
                 sh.walking = false;
                 sh.speed = 0;
+                // Boss death
+                if (sh._isBoss) {
+                    if (sh._isDarkKnight && this._onDarkKnightDeath) this._onDarkKnightDeath(sh);
+                    else if (sh._isHobgoblin && this._onHobgoblinDeath) this._onHobgoblinDeath(sh);
+                    else if (sh._isGateBoss && this._onGateBossDeath) this._onGateBossDeath(sh);
+                    else if (this._onBossDeath) this._onBossDeath(sh);
+                }
                 // Enemy drops
                 if (this._onCreatureDrop) {
                     if (sh.type === 'goblin') {

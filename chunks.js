@@ -9,7 +9,7 @@ const LOD2_DIST = 60;   // surface only + skip every 2nd XZ
 // beyond LOD2: surface only + skip every 4th XZ
 let UNLOAD_DIST = RENDER_DIST + 3;
 const BS = BLOCK_SIZE;
-const Y_OFF = Math.floor(WORLD_HEIGHT / 2); // block y offset: block Y_OFF = world y=0
+const Y_OFF = 128; // block y offset: block Y_OFF = world y=0
 
 // Face definitions: normal direction + quad vertices (in 0-1 block-local space)
 const FACES = [
@@ -141,7 +141,7 @@ export class ChunkManager {
             this.loaded.delete(key);
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(6);
+        this._processQueue(4);
     }
 
     rebuildChunkAt(bx, bz) {
@@ -201,20 +201,23 @@ export class ChunkManager {
 
         const tmpColor = new THREE.Color();
 
-        const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 160);
+        const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 200);
         for (let lx = 0; lx < CHUNK_SIZE; lx += xzStep) {
             for (let lz = 0; lz < CHUNK_SIZE; lz += xzStep) {
                 const bx = ox + lx, bz = oz + lz;
-                // For surface-only LOD, find the surface and render down to fill slopes
-                let yStart = 0, yEnd = scanMaxY;
+                // Find surface for ALL LODs to avoid scanning empty air
+                let surfY = Y_OFF;
+                for (let sy = scanMaxY - 1; sy >= 0; sy--) {
+                    if (this.world.getBlockAt(bx, sy, bz) !== BLOCK.AIR) { surfY = sy; break; }
+                }
+                let yStart, yEnd;
                 if (surfaceOnly) {
-                    let surfY = Y_OFF;
-                    for (let sy = scanMaxY - 1; sy >= 0; sy--) {
-                        if (this.world.getBlockAt(bx, sy, bz) !== BLOCK.AIR) { surfY = sy; break; }
-                    }
-                    // Render deep enough to cover any slope — 20 blocks below surface
                     yStart = Math.max(0, surfY - 20);
                     yEnd = Math.min(scanMaxY, surfY + 1);
+                } else {
+                    // Scan from bedrock to just above surface — covers caves and dug-out areas
+                    yStart = 0;
+                    yEnd = Math.min(scanMaxY, surfY + 2);
                 }
                 for (let y = yStart; y < yEnd; y++) {
                     const block = this.world.getBlockAt(bx, y, bz);
@@ -484,6 +487,12 @@ export class ChunkManager {
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.SNOW]);
                             tmpColor.r -= ch * 0.04;
                             tmpColor.b += ch2 * 0.03;
+                        } else if (block === BLOCK.ANVIL) {
+                            // Skip rendering — anvil uses a separate 3D model above ground
+                            continue;
+                        } else if (block === BLOCK.CAMPFIRE) {
+                            // Render as grass so ground shows beneath campfire model
+                            tmpColor.setHex(BLOCK_COLORS[BLOCK.GRASS]);
                         } else {
                             tmpColor.setHex(BLOCK_COLORS[block] || 0xff00ff);
                         }

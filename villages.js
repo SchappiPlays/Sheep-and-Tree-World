@@ -378,7 +378,7 @@ function getCastleBlocks() {
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {
-    const yOff = Math.floor(WORLD_HEIGHT / 2);
+    const yOff = 128; // must match hardcoded yOff in world.js/chunks.js
     const ox = cx * 16, oz = cz * 16; // chunk origin in block coords
 
     for (const vd of VILLAGE_DEFS) {

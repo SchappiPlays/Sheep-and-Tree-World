@@ -107,7 +107,8 @@ export class Player {
 
         this.swordHeld = this._makeSword();
         this.swordHeld.visible = false;
-        this.swordHeld.rotation.x = Math.PI;
+        this.swordHeld.rotation.x = Math.PI - 0.4;  // tilted forward
+        this.swordHeld.rotation.z = -0.15;           // slight side angle
         this.swordHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.swordHeld);
 
@@ -122,8 +123,151 @@ export class Player {
         this.staffHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.staffHeld);
 
+        // Sheathed sword — on hip (one-handed) or back (two-handed)
+        this.sheathedSword = this._makeSword();
+        this.sheathedSword.visible = false;
+        // Default: hip position (blade pointing down)
+        this.sheathedSword.rotation.set(Math.PI, 0, 0.15); // flipped so blade points down
+        this.sheathedSword.scale.set(0.9, 0.9, 0.9);
+        this.sheathedSword.position.set(0.25, 0.2, -0.05); // right hip
+        this.spine.add(this.sheathedSword);
+
+        // Shield mesh on right arm
+        this._shieldMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5, roughness: 0.3 });
+        this._shieldMesh = new THREE.Group();
+        const shieldFace = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.38, 0.03), this._shieldMat);
+        this._shieldMesh.add(shieldFace);
+        const shieldRim = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.40, 0.01), new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.6 }));
+        shieldRim.position.z = 0.02; this._shieldMesh.add(shieldRim);
+        const shieldBoss = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), this._shieldMat);
+        shieldBoss.position.z = 0.03; this._shieldMesh.add(shieldBoss);
+        // Cross detail
+        const shieldCrossH = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.025, 0.015), new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 }));
+        shieldCrossH.position.z = 0.025; this._shieldMesh.add(shieldCrossH);
+        const shieldCrossV = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.28, 0.015), new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 }));
+        shieldCrossV.position.z = 0.025; this._shieldMesh.add(shieldCrossV);
+        // Default: hanging on outer side of arm, facing outward
+        this._shieldMesh.position.set(0.08, -0.12, 0);
+        this._shieldMesh.rotation.set(0, Math.PI / 2, 0);
+        this._shieldMesh.visible = false;
+        this.rightArm.elbow.add(this._shieldMesh);
+
         // Swing state
         this.swingTimer = -1;
+
+        // Armor overlays — shaped pieces that look like actual armor
+        const _aMat = () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.25 });
+
+        // Helmet — cap with brim and nose guard
+        this._armorHelmetGrp = new THREE.Group();
+        this._armorHelmetGrp.visible = false;
+        const helmetTop = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.24), _aMat());
+        helmetTop.position.y = 0.1; this._armorHelmetGrp.add(helmetTop);
+        const helmetBrim = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 0.28), _aMat());
+        helmetBrim.position.y = 0.02; this._armorHelmetGrp.add(helmetBrim);
+        const helmetNose = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.03), _aMat());
+        helmetNose.position.set(0, -0.02, 0.13); this._armorHelmetGrp.add(helmetNose);
+        const helmetSides = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.22), _aMat());
+        helmetSides.position.y = -0.03; this._armorHelmetGrp.add(helmetSides);
+        this._armorHelmetGrp._mats = [helmetTop.material, helmetBrim.material, helmetNose.material, helmetSides.material];
+        this._armorHelmetGrp.scale.setScalar(1.15);
+        this.headGroup.add(this._armorHelmetGrp);
+
+        // Chestplate — torso plate + shoulder pauldrons
+        this._armorChestGrp = new THREE.Group();
+        this._armorChestGrp.visible = false;
+        const chestFront = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.04), _aMat());
+        chestFront.position.set(0, 0.3, 0.12); this._armorChestGrp.add(chestFront);
+        const chestBack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.04), _aMat());
+        chestBack.position.set(0, 0.3, -0.12); this._armorChestGrp.add(chestBack);
+        const chestSideL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.2), _aMat());
+        chestSideL.position.set(-0.22, 0.32, 0); this._armorChestGrp.add(chestSideL);
+        const chestSideR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.2), _aMat());
+        chestSideR.position.set(0.22, 0.32, 0); this._armorChestGrp.add(chestSideR);
+        // Shoulder pauldrons
+        const pauldronL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.14), _aMat());
+        pauldronL.position.set(-0.3, 0.53, 0); this._armorChestGrp.add(pauldronL);
+        const pauldronR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.14), _aMat());
+        pauldronR.position.set(0.3, 0.53, 0); this._armorChestGrp.add(pauldronR);
+        // Belt
+        const belt = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.24), _aMat());
+        belt.position.set(0, 0.05, 0); this._armorChestGrp.add(belt);
+        this._armorChestGrp._mats = [chestFront.material, chestBack.material, chestSideL.material, chestSideR.material, pauldronL.material, pauldronR.material, belt.material];
+        this._armorChestGrp.scale.setScalar(1.12);
+        this.spine.add(this._armorChestGrp);
+
+        // Leggings — thigh guards
+        this._armorLegL = new THREE.Group();
+        this._armorLegL.visible = false;
+        const legPlateLF = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.4, 0.03), _aMat());
+        legPlateLF.position.set(0, -0.2, 0.07); this._armorLegL.add(legPlateLF);
+        const legPlateLB = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.35, 0.03), _aMat());
+        legPlateLB.position.set(0, -0.18, -0.07); this._armorLegL.add(legPlateLB);
+        const legKneeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), _aMat());
+        legKneeL.position.set(0, -0.38, 0.04); this._armorLegL.add(legKneeL);
+        this._armorLegL._mats = [legPlateLF.material, legPlateLB.material, legKneeL.material];
+        this._armorLegL.scale.setScalar(1.15);
+        this.leftLeg.hip.add(this._armorLegL);
+
+        this._armorLegR = new THREE.Group();
+        this._armorLegR.visible = false;
+        const legPlateRF = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.4, 0.03), _aMat());
+        legPlateRF.position.set(0, -0.2, 0.07); this._armorLegR.add(legPlateRF);
+        const legPlateRB = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.35, 0.03), _aMat());
+        legPlateRB.position.set(0, -0.18, -0.07); this._armorLegR.add(legPlateRB);
+        const legKneeR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), _aMat());
+        legKneeR.position.set(0, -0.38, 0.04); this._armorLegR.add(legKneeR);
+        this._armorLegR._mats = [legPlateRF.material, legPlateRB.material, legKneeR.material];
+        this._armorLegR.scale.setScalar(1.15);
+        this.rightLeg.hip.add(this._armorLegR);
+
+        // Boots — armored shin guards + foot plates
+        this._armorBootL = new THREE.Group();
+        this._armorBootL.visible = false;
+        const bootShinL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.38, 0.04), _aMat());
+        bootShinL.position.set(0, -0.18, 0.07); this._armorBootL.add(bootShinL);
+        const bootFootL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.26), _aMat());
+        bootFootL.position.set(0, -0.44, 0.04); this._armorBootL.add(bootFootL);
+        this._armorBootL._mats = [bootShinL.material, bootFootL.material];
+        this._armorBootL.scale.setScalar(1.15);
+        this.leftLeg.knee.add(this._armorBootL);
+
+        this._armorBootR = new THREE.Group();
+        this._armorBootR.visible = false;
+        const bootShinR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.38, 0.04), _aMat());
+        bootShinR.position.set(0, -0.18, 0.07); this._armorBootR.add(bootShinR);
+        const bootFootR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.26), _aMat());
+        bootFootR.position.set(0, -0.44, 0.04); this._armorBootR.add(bootFootR);
+        this._armorBootR._mats = [bootShinR.material, bootFootR.material];
+        this._armorBootR.scale.setScalar(1.15);
+        this.rightLeg.knee.add(this._armorBootR);
+    }
+
+    setArmorVisuals(slots) {
+        const ARMOR_COLORS = {
+            wood: { c: 0x8a6a3a, m: 0.1, r: 0.7 },
+            stone: { c: 0x888888, m: 0.3, r: 0.5 },
+            iron: { c: 0xc0c8d0, m: 0.7, r: 0.2 },
+            gold: { c: 0xffee44, m: 0.4, r: 0.2 },
+            steel: { c: 0xe8eef5, m: 0.6, r: 0.15 },
+            diamond: { c: 0x88ffff, m: 0.3, r: 0.15 },
+            dragonsteel: { c: 0x1a1a28, m: 0.85, r: 0.05 },
+        };
+        const _setGrp = (grp, item) => {
+            if (!item) { grp.visible = false; return; }
+            const tier = item.replace(/_helmet|_chestplate|_leggings|_boots/, '');
+            const col = ARMOR_COLORS[tier] || ARMOR_COLORS.iron;
+            grp.visible = true;
+            if (grp._mats) for (const m of grp._mats) {
+                m.color.setHex(col.c); m.metalness = col.m; m.roughness = col.r;
+            }
+        };
+        _setGrp(this._armorHelmetGrp, slots.helmet);
+        _setGrp(this._armorChestGrp, slots.chestplate);
+        _setGrp(this._armorLegL, slots.leggings);
+        _setGrp(this._armorLegR, slots.leggings);
+        _setGrp(this._armorBootL, slots.boots);
+        _setGrp(this._armorBootR, slots.boots);
     }
 
     _makePickaxe() {
@@ -144,22 +288,160 @@ export class Player {
 
     _makeSword() {
         const g = new THREE.Group();
+        // Blade
         const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.95, roughness: 0.08 });
+        const bladeGrp = new THREE.Group(); g.add(bladeGrp);
         const blade = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.6, 0.012), bladeMat);
-        blade.position.y = 0.4; blade.castShadow = true; g.add(blade);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.019, 0.09, 4), bladeMat);
-        tip.position.y = 0.745; g.add(tip);
+        blade.position.y = 0.4; blade.castShadow = true; bladeGrp.add(blade);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.08, 4), bladeMat);
+        tip.position.y = 0.74; bladeGrp.add(tip);
+        // Trim stripe on blade
+        const trimMat = new THREE.MeshStandardMaterial({ color: 0x997733, metalness: 0.6 });
+        const trimStripe = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.5, 0.004), trimMat);
+        trimStripe.position.set(0, 0.38, 0.008); trimStripe.visible = false; bladeGrp.add(trimStripe);
+        const trimStripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.5, 0.004), trimMat);
+        trimStripe2.position.set(0, 0.38, -0.008); trimStripe2.visible = false; bladeGrp.add(trimStripe2);
+        // Guard
         const guardMat = new THREE.MeshStandardMaterial({ color: 0x997733, metalness: 0.5 });
-        const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), guardMat);
-        guard.position.y = 0.09; g.add(guard);
+        const guardGrp = new THREE.Group(); guardGrp.position.y = 0.09; g.add(guardGrp);
+        const guardMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), guardMat);
+        guardGrp.add(guardMesh);
+        // Guard extras (for different styles)
+        const guardExtra1 = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), guardMat);
+        guardExtra1.position.set(-0.1, 0, 0); guardExtra1.rotation.z = Math.PI/2; guardExtra1.visible = false; guardGrp.add(guardExtra1);
+        const guardExtra2 = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), guardMat);
+        guardExtra2.position.set(0.1, 0, 0); guardExtra2.rotation.z = -Math.PI/2; guardExtra2.visible = false; guardGrp.add(guardExtra2);
+        // Handle
         const handleMat = new THREE.MeshStandardMaterial({ color: 0x44220a });
         const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.03), handleMat);
         g.add(handle);
-        const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), guardMat);
-        pommel.position.y = -0.08; g.add(pommel);
+        // Pommel
+        const pommelMat = new THREE.MeshStandardMaterial({ color: 0x997733, metalness: 0.5 });
+        const pommelGrp = new THREE.Group(); pommelGrp.position.y = -0.08; g.add(pommelGrp);
+        const pommelMesh = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), pommelMat);
+        pommelGrp.add(pommelMesh);
+        // Store refs
         g._bladeMat = bladeMat;
+        g._bladeGrp = bladeGrp;
         g._guardMat = guardMat;
+        g._guardMesh = guardMesh;
+        g._guardGrp = guardGrp;
+        g._guardExtra1 = guardExtra1;
+        g._guardExtra2 = guardExtra2;
+        g._handleMat = handleMat;
+        g._pommelMat = pommelMat;
+        g._pommelGrp = pommelGrp;
+        g._pommelMesh = pommelMesh;
+        g._trimMat = trimMat;
+        g._trimStripe = trimStripe;
+        g._trimStripe2 = trimStripe2;
         return g;
+    }
+
+    // Apply custom sword visuals
+    applyCustomSword(swordData) {
+        const tool = this.swordHeld;
+        if (!tool || !swordData) return;
+        const MAT_COLORS = {
+            'stick': { color: 0x8a6a3a, metal: 0.0, rough: 0.7 },
+            '3': { color: 0x888888, metal: 0.3, rough: 0.5 },
+            [3]: { color: 0x888888, metal: 0.3, rough: 0.5 },
+            'iron_ingot': { color: 0xc0c8d0, metal: 0.8, rough: 0.15 },
+            'steel_ingot': { color: 0xe8eef5, metal: 0.5, rough: 0.1 },
+            'gold_ingot': { color: 0xffee44, metal: 0.4, rough: 0.2 },
+            'diamond': { color: 0x88ffff, metal: 0.3, rough: 0.15 },
+            'dragonsteel_ingot': { color: 0x1a1a28, metal: 0.85, rough: 0.05 },
+            'ruby': { color: 0xff3355, metal: 0.4, rough: 0.12 },
+            'sapphire': { color: 0x4466ff, metal: 0.4, rough: 0.12 },
+            'emerald': { color: 0x44ff66, metal: 0.4, rough: 0.12 },
+            'topaz': { color: 0xffcc33, metal: 0.4, rough: 0.12 },
+        };
+        const _applyMat = (mat, key) => {
+            const m = MAT_COLORS[key] || MAT_COLORS['iron_ingot'];
+            mat.color.setHex(m.color);
+            mat.metalness = m.metal;
+            mat.roughness = m.rough;
+        };
+        // Two-handed if blade is big enough (length >= 3 or length + thickness >= 5)
+        const bLen = swordData.bladeLength || 2;
+        const bThick = swordData.bladeThickness || 1;
+        this._twoHanded = (bLen >= 3 || bLen + bThick >= 5);
+        // Blade — scale by length and thickness
+        _applyMat(tool._bladeMat, swordData.bladeMat);
+        const bLenScale = bLen / 2;   // normalize: 2 = default (1.0x)
+        tool._bladeGrp.scale.set(bThick, bLenScale, bThick);
+        // Offset blade group so the base stays at the guard (y≈0.1)
+        tool._bladeGrp.position.y = 0.1 * (1 - bLenScale);
+        // Handle
+        _applyMat(tool._handleMat, swordData.handleMat);
+        // Guard
+        _applyMat(tool._guardMat, swordData.guardMat);
+        // Guard style
+        const gs = swordData.guardStyle || 'straight';
+        tool._guardMesh.scale.set(1, 1, 1);
+        tool._guardMesh.geometry.dispose();
+        tool._guardExtra1.visible = false;
+        tool._guardExtra2.visible = false;
+        if (gs === 'curved') {
+            // Center bar + two ends that go up (toward blade)
+            tool._guardMesh.geometry = new THREE.BoxGeometry(0.16, 0.03, 0.04);
+            tool._guardMesh.rotation.set(0, 0, 0);
+            tool._guardExtra1.visible = true;
+            tool._guardExtra1.geometry.dispose();
+            tool._guardExtra1.geometry = new THREE.BoxGeometry(0.03, 0.08, 0.04);
+            tool._guardExtra1.position.set(-0.09, 0.05, 0);
+            tool._guardExtra1.rotation.set(0, 0, 0);
+            tool._guardExtra2.visible = true;
+            tool._guardExtra2.geometry.dispose();
+            tool._guardExtra2.geometry = new THREE.BoxGeometry(0.03, 0.08, 0.04);
+            tool._guardExtra2.position.set(0.09, 0.05, 0);
+            tool._guardExtra2.rotation.set(0, 0, 0);
+        } else if (gs === 'wide') {
+            tool._guardMesh.geometry = new THREE.BoxGeometry(0.26, 0.03, 0.04);
+            tool._guardMesh.rotation.set(0, 0, 0);
+        } else if (gs === 'spiked') {
+            tool._guardMesh.geometry = new THREE.BoxGeometry(0.16, 0.03, 0.04);
+            tool._guardMesh.rotation.set(0, 0, 0);
+            tool._guardExtra1.visible = true;
+            tool._guardExtra1.geometry.dispose();
+            tool._guardExtra1.geometry = new THREE.ConeGeometry(0.025, 0.1, 4);
+            tool._guardExtra1.position.set(-0.1, 0, 0);
+            tool._guardExtra1.rotation.set(0, 0, Math.PI/2);
+            tool._guardExtra2.visible = true;
+            tool._guardExtra2.geometry.dispose();
+            tool._guardExtra2.geometry = new THREE.ConeGeometry(0.025, 0.1, 4);
+            tool._guardExtra2.position.set(0.1, 0, 0);
+            tool._guardExtra2.rotation.set(0, 0, -Math.PI/2);
+        } else if (gs === 'ring') {
+            tool._guardMesh.geometry = new THREE.TorusGeometry(0.06, 0.015, 6, 8);
+            tool._guardMesh.rotation.set(Math.PI/2, 0, 0);
+        } else {
+            // straight
+            tool._guardMesh.geometry = new THREE.BoxGeometry(0.16, 0.03, 0.04);
+            tool._guardMesh.rotation.set(0, 0, 0);
+        }
+        // Handle
+        _applyMat(tool._handleMat, swordData.handleMat);
+        // Pommel
+        _applyMat(tool._pommelMat, swordData.pommelMat);
+        // Pommel style
+        const ps = swordData.pommelStyle || 'round';
+        tool._pommelMesh.geometry.dispose();
+        if (ps === 'gem') tool._pommelMesh.geometry = new THREE.OctahedronGeometry(0.025);
+        else if (ps === 'skull') tool._pommelMesh.geometry = new THREE.BoxGeometry(0.04, 0.04, 0.04);
+        else if (ps === 'wolf') tool._pommelMesh.geometry = new THREE.ConeGeometry(0.025, 0.05, 5);
+        else if (ps === 'claw') tool._pommelMesh.geometry = new THREE.TetrahedronGeometry(0.03);
+        else tool._pommelMesh.geometry = new THREE.SphereGeometry(0.025, 8, 8);
+        // Trim
+        const trimKey = swordData.trimMat;
+        if (trimKey && trimKey !== '' && (MAT_COLORS[trimKey] || MAT_COLORS[String(trimKey)])) {
+            _applyMat(tool._trimMat, trimKey);
+            tool._trimStripe.visible = true;
+            tool._trimStripe2.visible = true;
+        } else {
+            tool._trimStripe.visible = false;
+            tool._trimStripe2.visible = false;
+        }
     }
 
     _makeAxe() {
@@ -184,20 +466,31 @@ export class Player {
             pickaxe:        { head: 0x8a6a3a, metal: 0.0, rough: 0.7 }, // wood
             stone_pickaxe:  { head: 0x888888, metal: 0.3, rough: 0.5 },
             iron_pickaxe:   { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
-            gold_pickaxe:   { head: 0xf0d060, metal: 0.9, rough: 0.1 },
-            diamond_pickaxe:{ head: 0x4ae8e8, metal: 0.7, rough: 0.08 },
+            gold_pickaxe:   { head: 0xffee44, metal: 0.4, rough: 0.2 },
+            steel_pickaxe:  { head: 0xe8eef5, metal: 0.5, rough: 0.1 },
+            dragonsteel_pickaxe:{ head: 0x1a1a28, metal: 0.85, rough: 0.05 },
+            diamond_pickaxe:{ head: 0x88ffff, metal: 0.3, rough: 0.15 },
             wood_sword:     { blade: 0x8a6a3a, guard: 0x5c3a1e, metal: 0.0, rough: 0.7 },
             stone_sword:    { blade: 0x999999, guard: 0x666666, metal: 0.3, rough: 0.4 },
             iron_sword:     { blade: 0xe8ecf4, guard: 0x997733, metal: 0.95, rough: 0.08 },
-            gold_sword:     { blade: 0xf8e860, guard: 0xc8a020, metal: 0.9, rough: 0.1 },
-            diamond_sword:  { blade: 0x6af8f8, guard: 0x2ab0c0, metal: 0.7, rough: 0.05 },
+            gold_sword:     { blade: 0xffee44, guard: 0xeedd22, metal: 0.4, rough: 0.2 },
+            steel_sword:    { blade: 0xe8eef5, guard: 0xd0d8e8, metal: 0.5, rough: 0.1 },
+            dragonsteel_sword: { blade: 0x1a1a28, guard: 0x101018, metal: 0.85, rough: 0.05 },
+            diamond_sword:  { blade: 0x88ffff, guard: 0x55eeff, metal: 0.3, rough: 0.15 },
             wood_axe:       { head: 0x8a6a3a, metal: 0.0, rough: 0.7 },
             stone_axe:      { head: 0x888888, metal: 0.3, rough: 0.5 },
             iron_axe:       { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
-            gold_axe:       { head: 0xf0d060, metal: 0.9, rough: 0.1 },
-            diamond_axe:    { head: 0x4ae8e8, metal: 0.7, rough: 0.08 },
+            gold_axe:       { head: 0xffee44, metal: 0.4, rough: 0.2 },
+            steel_axe:      { head: 0xe8eef5, metal: 0.5, rough: 0.1 },
+            dragonsteel_axe: { head: 0x1a1a28, metal: 0.85, rough: 0.05 },
+            diamond_axe:    { head: 0x88ffff, metal: 0.3, rough: 0.15 },
         };
-        const t = TIER_COLORS[itemName];
+        let t = TIER_COLORS[itemName];
+        // Handle custom swords (csword_xxx) — look up tier from global custom sword data
+        if (!t && itemName.startsWith('csword_') && window._customSwords && window._customSwords[itemName]) {
+            const tier = window._customSwords[itemName].tier;
+            t = TIER_COLORS[tier + '_sword'];
+        }
         if (!t) return;
         if (tool._headMat) {
             tool._headMat.color.setHex(t.head);
@@ -329,7 +622,20 @@ export class Player {
     }
 
     triggerSwing() {
+        // Don't allow new swing until current one is at least 50% done
+        if (this.swingTimer >= 0 && this.swingTimer < 0.5) {
+            // Buffer one click so the combo continues when ready
+            this._swingQueued = true;
+            return;
+        }
+        // Combo: if clicked within 1.5s of last swing start, advance combo
+        if (this.swingTimer >= 0 && this.swingTimer < 1.5) {
+            this._comboCount = ((this._comboCount || 0) + 1) % 3;
+        } else {
+            this._comboCount = 0;
+        }
         this.swingTimer = 0;
+        this._swingQueued = false;
     }
 
     _makeArm(side, shirtMat, skinMat) {
@@ -602,6 +908,17 @@ export class Player {
             this.rightArm.elbow.rotation.x += idleElbow;
         }
 
+        // ── Two-handed sword idle pose — both arms hold sword in front ──
+        if (this.swordHeld.visible && this._twoHanded) {
+            // Left arm: push sword to center and forward
+            this.leftArm.shoulder.rotation.z += 0.3;
+            this.leftArm.shoulder.rotation.x -= 0.5;
+            // Right arm: mirror left arm but forward to avoid body clip
+            this.rightArm.shoulder.rotation.x = this.leftArm.shoulder.rotation.x - 0.15;
+            this.rightArm.shoulder.rotation.z = -this.leftArm.shoulder.rotation.z * 0.85;
+            this.rightArm.elbow.rotation.x = this.leftArm.elbow.rotation.x - 0.15;
+        }
+
         // ── Staff holding pose — arm out at angle, staff stays vertical ──
         if (this.staffHeld.visible) {
             const staffSwing = -legSwing * armSwingMul * 0.3;
@@ -615,43 +932,100 @@ export class Player {
 
         // ── Swing animation overlay (exact from game.html) ──
         if (this.swingTimer >= 0) {
-            this.swingTimer += dt / 0.5; // 0.5s swing duration
+            const isSword = this.swordHeld.visible;
+            const dur = isSword ? (this._twoHanded ? 0.6 : 0.45) : 0.5;
+            this.swingTimer += dt / dur;
+            // Process queued swing when threshold reached
+            if (this._swingQueued && this.swingTimer >= 0.5) {
+                this._swingQueued = false;
+                this._comboCount = ((this._comboCount || 0) + 1) % 3;
+                this.swingTimer = 0;
+            }
             const t = this.swingTimer;
-            let swShX, swShZ, swElX, swSpineX, swSpineY;
-
             const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
 
-            if (t < 0.2) {
-                // Wind up — raise arm to horizontal, torso coils back
-                const u = ss(0, 0.2, t);
-                swShX    = u * (-1.1);
-                swShZ    = u * 0.3;
-                swElX    = u * (-0.25);
-                swSpineY = u * (-0.45);
-                swSpineX = u * 0.03;
-            } else if (t < 0.45) {
-                // Sweep — torso drives a big twist, arm stays horizontal
-                const u = ss(0.2, 0.45, t);
-                swShX    = -1.1;
-                swShZ    = 0.3 + (-0.15 - 0.3) * u;
-                swElX    = -0.25 + (-0.1 - (-0.25)) * u;
-                swSpineY = -0.45 + (0.55 - (-0.45)) * u;
-                swSpineX = 0.03 + (0.06 - 0.03) * u;
-            } else {
-                // Recovery — everything returns to rest
-                const u = ss(0.45, 1.0, t);
-                swShX    = -1.1 * (1 - u);
-                swShZ    = -0.15 * (1 - u);
-                swElX    = -0.1 * (1 - u);
-                swSpineY = 0.55 * (1 - u);
-                swSpineX = 0.06 * (1 - u);
-            }
+            if (isSword) {
+                const twoH = this._twoHanded;
+                // Two-handed swords: slower, bigger swings with more body
+                const combo = this._comboCount || 0;
+                let lShX=0, lShZ=0, lElX=0, rShX=0, rShZ=0, rElX=0, spY=0, spX=0;
+                // Scale up motion for two-handed
+                const motionScale = twoH ? 1.3 : 1.0;
 
-            this.leftArm.shoulder.rotation.x += swShX;
-            this.leftArm.shoulder.rotation.z += swShZ;
-            this.leftArm.elbow.rotation.x    += swElX;
-            this.spine.rotation.x += swSpineX;
-            this.spine.rotation.y += swSpineY;
+                // Smooth keyframe interpolation
+                const _lerp = (a, b, u) => a + (b - a) * u;
+                const kf = (t, keys) => {
+                    if (t <= keys[0][0]) return keys[0][1];
+                    if (t >= keys[keys.length-1][0]) return keys[keys.length-1][1];
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        if (t < keys[i+1][0]) {
+                            return _lerp(keys[i][1], keys[i+1][1], ss(keys[i][0], keys[i+1][0], t));
+                        }
+                    }
+                    return keys[keys.length-1][1];
+                };
+
+                if (combo === 0) {
+                    // Strike 1: high slash left-to-right
+                    lShX = kf(t, [[0,0],[0.12,-1.8],[0.30,-0.8],[0.6,0]]);
+                    lShZ = kf(t, [[0,0],[0.12,-0.6],[0.30,0.8],[0.6,0]]);
+                    lElX = kf(t, [[0,0],[0.12,-0.8],[0.30,0.2],[0.6,0]]);
+                    spY  = kf(t, [[0,0],[0.12,-0.4],[0.30,0.6],[0.6,0]]);
+                    spX  = kf(t, [[0,0],[0.20,0],[0.30,0.1],[0.6,0]]);
+                    rShX = kf(t, [[0,0],[0.12,0.2],[0.30,-0.2],[0.6,0]]);
+                } else if (combo === 1) {
+                    // Strike 2: reverse slash right-to-left
+                    lShX = kf(t, [[0,0],[0.12,-1.5],[0.28,-0.7],[0.6,0]]);
+                    lShZ = kf(t, [[0,0],[0.12,0.8],[0.28,-0.8],[0.6,0]]);
+                    lElX = kf(t, [[0,0],[0.12,-0.6],[0.28,0.2],[0.6,0]]);
+                    spY  = kf(t, [[0,0],[0.12,0.4],[0.28,-0.6],[0.6,0]]);
+                    spX  = kf(t, [[0,0],[0.20,0],[0.28,0.1],[0.6,0]]);
+                    rShX = kf(t, [[0,0],[0.12,-0.2],[0.28,0.2],[0.6,0]]);
+                } else {
+                    // Strike 3: overhead chop
+                    lShX = kf(t, [[0,0],[0.15,1.5],[0.35,-2.0],[0.7,0]]);
+                    lShZ = kf(t, [[0,0],[0.15,-0.3],[0.35,0],[0.7,0]]);
+                    lElX = kf(t, [[0,0],[0.15,-1.5],[0.35,0.3],[0.7,0]]);
+                    spX  = kf(t, [[0,0],[0.15,-0.15],[0.35,0.2],[0.7,0]]);
+                    rShX = kf(t, [[0,0],[0.15,0.4],[0.35,-0.4],[0.7,0]]);
+                }
+                this.leftArm.shoulder.rotation.x += lShX * motionScale;
+                this.leftArm.shoulder.rotation.z += lShZ * motionScale;
+                this.leftArm.elbow.rotation.x    += lElX * motionScale;
+                this.spine.rotation.y += spY * motionScale;
+                this.spine.rotation.x += spX * motionScale;
+                if (twoH) {
+                    // Two-handed: glue right arm to left arm's final position
+                    this.rightArm.shoulder.rotation.x = this.leftArm.shoulder.rotation.x - 0.15;
+                    this.rightArm.shoulder.rotation.z = -this.leftArm.shoulder.rotation.z * 0.85;
+                    this.rightArm.elbow.rotation.x = this.leftArm.elbow.rotation.x - 0.15;
+                } else {
+                    this.rightArm.shoulder.rotation.x += rShX;
+                }
+            } else {
+                // Non-sword: original horizontal sweep
+                let swShX, swShZ, swElX, swSpineX, swSpineY;
+                if (t < 0.2) {
+                    const u = ss(0, 0.2, t);
+                    swShX = u * (-1.1); swShZ = u * 0.3; swElX = u * (-0.25);
+                    swSpineY = u * (-0.45); swSpineX = u * 0.03;
+                } else if (t < 0.45) {
+                    const u = ss(0.2, 0.45, t);
+                    swShX = -1.1; swShZ = 0.3 + (-0.15 - 0.3) * u;
+                    swElX = -0.25 + 0.15 * u; swSpineY = -0.45 + 1.0 * u;
+                    swSpineX = 0.03 + 0.03 * u;
+                } else {
+                    const u = ss(0.45, 1.0, t);
+                    swShX = -1.1 * (1 - u); swShZ = -0.15 * (1 - u);
+                    swElX = -0.1 * (1 - u); swSpineY = 0.55 * (1 - u);
+                    swSpineX = 0.06 * (1 - u);
+                }
+                this.leftArm.shoulder.rotation.x += swShX;
+                this.leftArm.shoulder.rotation.z += swShZ;
+                this.leftArm.elbow.rotation.x    += swElX;
+                this.spine.rotation.x += swSpineX;
+                this.spine.rotation.y += swSpineY;
+            }
 
             if (this.swingTimer >= 1) this.swingTimer = -1;
         }
