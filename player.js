@@ -510,13 +510,277 @@ export class Player {
     _makeStaff() {
         const g = new THREE.Group();
         const shaftMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e });
+        g._shaftMat = shaftMat;
         const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 2.0, 0.03), shaftMat);
         shaft.position.y = 0.15; shaft.castShadow = true; g.add(shaft);
         // Orb at top — color will be set dynamically
         const orbMat = new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff4400, emissiveIntensity: 0.5 });
-        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), orbMat);
-        orb.position.y = 1.18; orb.castShadow = true; g.add(orb);
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), orbMat);
+        orb.position.y = 1.26; orb.castShadow = true; g.add(orb);
         g._orbMat = orbMat;
+        g._orbMesh = orb;
+        g._shaft = shaft;
+
+        // Custom staff holder group — rebuilt dynamically for custom staffs
+        const customGrp = new THREE.Group();
+        customGrp.visible = false;
+        g._customGrp = customGrp;
+        g.add(customGrp);
+
+        // Fire staff extras — hidden by default, shown when fire_staff equipped
+        const fireGrp = new THREE.Group();
+        fireGrp.visible = false;
+        g._fireExtras = fireGrp;
+
+        // Charred dark shaft
+        const fireShaft = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, 0.04),
+            new THREE.MeshStandardMaterial({ color: 0x2a1008, roughness: 0.9 }));
+        fireShaft.position.y = 0.15; fireGrp.add(fireShaft);
+
+        // Ember cracks along the shaft (glowing orange lines)
+        const emberMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+        for (let i = 0; i < 5; i++) {
+            const ember = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.02, 0.045), emberMat);
+            ember.position.y = -0.2 + i * 0.45;
+            ember.rotation.y = i * 1.2;
+            fireGrp.add(ember);
+        }
+
+        // Iron cage/crown at top holding the flame
+        const cageMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.7, roughness: 0.4 });
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            // Vertical bars
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.18, 0.015), cageMat);
+            bar.position.set(Math.cos(a) * 0.055, 1.28, Math.sin(a) * 0.055);
+            fireGrp.add(bar);
+            // Curved tips
+            const tip = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.04, 0.012), cageMat);
+            tip.position.set(Math.cos(a) * 0.035, 1.39, Math.sin(a) * 0.035);
+            tip.rotation.x = Math.sin(a) * 0.5;
+            tip.rotation.z = -Math.cos(a) * 0.5;
+            fireGrp.add(tip);
+        }
+        // Iron ring around cage base
+        const cageRing = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.008, 4, 12), cageMat);
+        cageRing.position.y = 1.19; cageRing.rotation.x = Math.PI / 2; fireGrp.add(cageRing);
+
+        // Fire core — layered flame shapes
+        const flameMat1 = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.85 });
+        const flameMat2 = new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.7 });
+        const flameMat3 = new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.6 });
+        // Outer flame
+        const flame1 = new THREE.Mesh(new THREE.SphereGeometry(0.065, 6, 4), flameMat1);
+        flame1.position.y = 1.30; flame1.scale.set(1, 1.4, 1); fireGrp.add(flame1);
+        // Middle flame
+        const flame2 = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 4), flameMat2);
+        flame2.position.y = 1.33; flame2.scale.set(0.8, 1.6, 0.8); fireGrp.add(flame2);
+        // Inner bright core
+        const flame3 = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), flameMat3);
+        flame3.position.y = 1.32; fireGrp.add(flame3);
+
+        // Floating ember particles
+        const fireEmbers = [];
+        for (let i = 0; i < 6; i++) {
+            const e = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, 0.015),
+                new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 }));
+            e.position.y = 1.3;
+            e._phase = Math.random() * Math.PI * 2;
+            fireGrp.add(e);
+            fireEmbers.push(e);
+        }
+        g._fireEmbers = fireEmbers;
+        g._fireFlames = [flame1, flame2, flame3];
+
+        // Fire light
+        const fireLight = new THREE.PointLight(0xff4400, 1.5, 3);
+        fireLight.position.y = 1.30; fireGrp.add(fireLight);
+        g._fireLight = fireLight;
+
+        g.add(fireGrp);
+
+        // Ice staff extras — frozen crystal staff
+        const iceGrp = new THREE.Group();
+        iceGrp.visible = false;
+        g._iceExtras = iceGrp;
+
+        // Pale blue-white frozen shaft
+        const iceShaftMat = new THREE.MeshStandardMaterial({ color: 0xc8dde8, roughness: 0.3, metalness: 0.2 });
+        const iceShaft = new THREE.Mesh(new THREE.BoxGeometry(0.035, 2.1, 0.035), iceShaftMat);
+        iceShaft.position.y = 0.15; iceGrp.add(iceShaft);
+
+        // Frost patches on shaft
+        const frostMat = new THREE.MeshBasicMaterial({ color: 0xeef8ff, transparent: true, opacity: 0.5 });
+        for (let i = 0; i < 4; i++) {
+            const frost = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.05), frostMat);
+            frost.position.set((i%2-0.5)*0.01, -0.1 + i * 0.5, 0);
+            frost.rotation.y = i * 1.1;
+            iceGrp.add(frost);
+        }
+
+        // Crystal cluster at top — 5 angular shards
+        const crystalMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, metalness: 0.4, transparent: true, opacity: 0.8 });
+        const crystalGlowMat = new THREE.MeshBasicMaterial({ color: 0xaaeeff, transparent: true, opacity: 0.4 });
+        // Main crystal (tall, center)
+        const mainCrystal = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), crystalMat);
+        mainCrystal.position.y = 1.32; iceGrp.add(mainCrystal);
+        // Side crystals (angled outward)
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2 + 0.4;
+            const h = 0.12 + Math.random() * 0.08;
+            const shard = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, 0.03), crystalMat);
+            shard.position.set(Math.cos(a) * 0.04, 1.24 + h * 0.3, Math.sin(a) * 0.04);
+            shard.rotation.x = Math.sin(a) * 0.3;
+            shard.rotation.z = -Math.cos(a) * 0.4;
+            iceGrp.add(shard);
+        }
+        // Inner glow orb inside crystals
+        const iceCore = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), crystalGlowMat);
+        iceCore.position.y = 1.28; iceGrp.add(iceCore);
+
+        // Floating ice particles (tiny cubes that orbit slowly)
+        const iceParticles = [];
+        for (let i = 0; i < 5; i++) {
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02),
+                new THREE.MeshBasicMaterial({ color: 0xcceeFF, transparent: true, opacity: 0.6 }));
+            p._phase = (i / 5) * Math.PI * 2;
+            p.position.y = 1.3;
+            iceGrp.add(p);
+            iceParticles.push(p);
+        }
+        g._iceParticles = iceParticles;
+        g._iceCore = iceCore;
+
+        // Cold light
+        const iceLight = new THREE.PointLight(0x66ccff, 1.2, 3);
+        iceLight.position.y = 1.30; iceGrp.add(iceLight);
+        g._iceLight = iceLight;
+
+        g.add(iceGrp);
+
+        // Lightning staff extras — crackling energy rod
+        const lightGrp = new THREE.Group();
+        lightGrp.visible = false;
+        g._lightningExtras = lightGrp;
+
+        // Metallic copper shaft
+        const lightShaftMat = new THREE.MeshStandardMaterial({ color: 0x8a7040, metalness: 0.6, roughness: 0.3 });
+        const lightShaft = new THREE.Mesh(new THREE.BoxGeometry(0.035, 2.0, 0.035), lightShaftMat);
+        lightShaft.position.y = 0.15; lightGrp.add(lightShaft);
+
+        // Copper coil wraps around shaft
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0xcc9944, metalness: 0.7, roughness: 0.2 });
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 * 3; // 3 full wraps
+            const coil = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.03, 0.015), coilMat);
+            coil.position.set(Math.cos(a) * 0.03, 0.2 + i * 0.22, Math.sin(a) * 0.03);
+            lightGrp.add(coil);
+        }
+
+        // Fork prongs at top (like a lightning rod split into 3)
+        const prongMat2 = new THREE.MeshStandardMaterial({ color: 0x9a8050, metalness: 0.7, roughness: 0.2 });
+        for (let i = 0; i < 3; i++) {
+            const a = (i / 3) * Math.PI * 2;
+            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.02), prongMat2);
+            prong.position.set(Math.cos(a) * 0.03, 1.32, Math.sin(a) * 0.03);
+            prong.rotation.x = Math.sin(a) * 0.25;
+            prong.rotation.z = -Math.cos(a) * 0.25;
+            lightGrp.add(prong);
+            // Pointed tip
+            const tip = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.06, 0.01), prongMat2);
+            tip.position.set(Math.cos(a) * 0.045, 1.44, Math.sin(a) * 0.045);
+            tip.rotation.x = Math.sin(a) * 0.4;
+            tip.rotation.z = -Math.cos(a) * 0.4;
+            lightGrp.add(tip);
+        }
+
+        // Electric arc ball between prongs
+        const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffee44, transparent: true, opacity: 0.8 });
+        const sparkCore = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), sparkMat);
+        sparkCore.position.y = 1.36; lightGrp.add(sparkCore);
+        g._sparkCore = sparkCore;
+
+        // Crackling mini-arcs (small lines that flash)
+        const arcs = [];
+        for (let i = 0; i < 4; i++) {
+            const arcMat = new THREE.MeshBasicMaterial({ color: 0xffff88, transparent: true, opacity: 0.7 });
+            const arc = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.1, 0.006), arcMat);
+            arc._phase = (i / 4) * Math.PI * 2;
+            arc.position.y = 1.36;
+            lightGrp.add(arc);
+            arcs.push(arc);
+        }
+        g._lightningArcs = arcs;
+
+        // Electric light
+        const lightLight = new THREE.PointLight(0xffee44, 1.5, 3);
+        lightLight.position.y = 1.36; lightGrp.add(lightLight);
+        g._lightningLight = lightLight;
+
+        g.add(lightGrp);
+
+        // Void staff extras — hidden by default, shown when void_staff equipped
+        const voidGrp = new THREE.Group();
+        voidGrp.visible = false;
+        g._voidExtras = voidGrp;
+
+        // Dark shaft overlay
+        const darkShaft = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, 0.04),
+            new THREE.MeshStandardMaterial({ color: 0x1a1018, roughness: 0.9 }));
+        darkShaft.position.y = 0.15; voidGrp.add(darkShaft);
+
+        // Gnarled knots
+        const knotMat = new THREE.MeshStandardMaterial({ color: 0x2a1a2a });
+        for (let i = 0; i < 4; i++) {
+            const knot = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 0.055), knotMat);
+            knot.position.set((i%2)*0.01, -0.3 + i*0.4, 0);
+            knot.rotation.y = i * 0.8;
+            voidGrp.add(knot);
+        }
+
+        // Skull headpiece
+        const skullMat = new THREE.MeshStandardMaterial({ color: 0xc0b8a0, roughness: 0.7 });
+        const skull = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.07), skullMat);
+        skull.position.y = 1.26; voidGrp.add(skull);
+        const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.035, 0.05), skullMat);
+        jaw.position.set(0, 1.20, 0.01); voidGrp.add(jaw);
+        // Eye sockets
+        const socketMat = new THREE.MeshBasicMaterial({ color: 0x6622aa });
+        for (const sx of [-0.022, 0.022]) {
+            const s = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.022, 0.015), socketMat);
+            s.position.set(sx, 1.28, 0.035); voidGrp.add(s);
+        }
+
+        // Prongs
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.13, 0.018),
+                new THREE.MeshStandardMaterial({ color: 0x1a1018 }));
+            prong.position.set(Math.cos(a)*0.05, 1.38, Math.sin(a)*0.05);
+            prong.rotation.x = Math.sin(a) * 0.3;
+            prong.rotation.z = -Math.cos(a) * 0.3;
+            voidGrp.add(prong);
+        }
+
+        // Inner bright orb
+        const innerOrb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4),
+            new THREE.MeshBasicMaterial({ color: 0xdd88ff }));
+        innerOrb.position.y = 1.44; voidGrp.add(innerOrb);
+
+        // Energy rings
+        const ringGeo = new THREE.TorusGeometry(0.09, 0.006, 4, 16);
+        const ring1 = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.5 }));
+        ring1.position.y = 1.44; ring1.rotation.x = Math.PI * 0.3; voidGrp.add(ring1);
+        const ring2 = new THREE.Mesh(ringGeo.clone(), new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.5 }));
+        ring2.position.y = 1.44; ring2.rotation.x = Math.PI * 0.7; ring2.rotation.z = 0.5; voidGrp.add(ring2);
+        g._voidRings = [ring1, ring2];
+
+        // Orb light
+        const voidLight = new THREE.PointLight(0x8833cc, 1.5, 3);
+        voidLight.position.y = 1.44; voidGrp.add(voidLight);
+        g._voidLight = voidLight;
+
+        g.add(voidGrp);
         return g;
     }
 
@@ -619,6 +883,94 @@ export class Player {
             this.staffHeld._orbMat.color.setHex(color);
             this.staffHeld._orbMat.emissive.setHex(emissive);
         }
+    }
+
+    applyCustomStaff(config) {
+        const s = this.staffHeld;
+        if (!s._customGrp) return;
+
+        // Material color map
+        const matCol = { 'stick': 0x5c3a1e, '3': 0x999999, [3]: 0x999999, 'iron_ingot': 0xc0c8d0, 'gold_ingot': 0xddcc44, 'steel_ingot': 0xd0d8e0, 'diamond': 0x88ffff, 'dragonsteel_ingot': 0x2a2a40, 'ruby': 0xff3355, 'sapphire': 0x4466ff, 'emerald': 0x44ff66, 'topaz': 0xffcc33, 'coal': 0x333333, [11]: 0x35b535, [10]: 0x6B4226 };
+        const getCol = k => matCol[k] || matCol[String(k)] || 0xaaaaaa;
+
+        const shaftColor = getCol(config.shaftMat);
+        const holderColor = getCol(config.holderMat);
+        const gemColor = getCol(config.gem);
+
+        // Recolor default shaft
+        s._shaftMat.color.setHex(shaftColor);
+        s._shaft.visible = true;
+
+        // Recolor orb to gem color
+        s._orbMat.color.setHex(gemColor);
+        s._orbMat.emissive.setHex(new THREE.Color(gemColor).multiplyScalar(0.5).getHex());
+        s._orbMesh.visible = true;
+
+        // Clear old custom holder
+        const cg = s._customGrp;
+        while (cg.children.length) { const c = cg.children[0]; cg.remove(c); }
+        cg.visible = true;
+
+        const hMat = new THREE.MeshStandardMaterial({ color: holderColor, metalness: 0.5, roughness: 0.4 });
+        const style = config.holderStyle || 'prongs';
+
+        if (style === 'prongs') {
+            for (let i = 0; i < 4; i++) {
+                const a = (i / 4) * Math.PI * 2;
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.14, 0.015), hMat);
+                p.position.set(Math.cos(a)*0.055, 1.25, Math.sin(a)*0.055);
+                p.rotation.x = Math.sin(a) * 0.3;
+                p.rotation.z = -Math.cos(a) * 0.3;
+                cg.add(p);
+            }
+        } else if (style === 'cage') {
+            for (let i = 0; i < 4; i++) {
+                const a = (i / 4) * Math.PI * 2;
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.012), hMat);
+                bar.position.set(Math.cos(a)*0.06, 1.22, Math.sin(a)*0.06);
+                cg.add(bar);
+            }
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.008, 4, 12), hMat);
+            ring.position.y = 1.12; ring.rotation.x = Math.PI/2; cg.add(ring);
+            const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.006, 4, 12), hMat);
+            ring2.position.y = 1.30; ring2.rotation.x = Math.PI/2; cg.add(ring2);
+        } else if (style === 'coil') {
+            for (let i = 0; i < 10; i++) {
+                const a = (i / 10) * Math.PI * 2 * 2.5;
+                const coil = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.012), hMat);
+                coil.position.set(Math.cos(a)*0.05, 1.10 + i*0.02, Math.sin(a)*0.05);
+                cg.add(coil);
+            }
+        } else if (style === 'claws') {
+            for (let i = 0; i < 3; i++) {
+                const a = (i / 3) * Math.PI * 2;
+                const claw = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.01), hMat);
+                claw.position.set(Math.cos(a)*0.06, 1.26, Math.sin(a)*0.06);
+                claw.rotation.x = Math.sin(a) * 0.5;
+                claw.rotation.z = -Math.cos(a) * 0.5;
+                cg.add(claw);
+                // Claw tip curving inward
+                const tip = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.05, 0.01), hMat);
+                tip.position.set(Math.cos(a)*0.03, 1.36, Math.sin(a)*0.03);
+                tip.rotation.x = Math.sin(a) * 0.8;
+                tip.rotation.z = -Math.cos(a) * 0.8;
+                cg.add(tip);
+            }
+        } else if (style === 'crown') {
+            for (let i = 0; i < 5; i++) {
+                const a = (i / 5) * Math.PI * 2;
+                const spike = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.1 + (i%2)*0.05, 0.015), hMat);
+                spike.position.set(Math.cos(a)*0.06, 1.27, Math.sin(a)*0.06);
+                cg.add(spike);
+            }
+            const base = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.01, 4, 12), hMat);
+            base.position.y = 1.14; base.rotation.x = Math.PI/2; cg.add(base);
+        }
+
+        // Add a point light matching the gem
+        const light = new THREE.PointLight(gemColor, 1.0, 2.5);
+        light.position.y = 1.26; cg.add(light);
+        s._customLight = light;
     }
 
     triggerSwing() {

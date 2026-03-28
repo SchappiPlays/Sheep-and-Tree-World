@@ -581,6 +581,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
 
 
 // ── Dragon Manager ──
+export { makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane };
+
 export class DragonManager {
     constructor(scene, world) {
         this.scene = scene;

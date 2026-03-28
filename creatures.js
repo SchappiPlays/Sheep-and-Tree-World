@@ -375,10 +375,33 @@ export class CreatureManager {
 
             // ── Hostile AI — chase and attack player ──
             if (sh.hostile) {
+                // Summoned skeletons are handled separately in the game loop
+                if (sh._isSummon) continue;
+
                 const dist = Math.sqrt(dist2);
                 sh.attackTimer = Math.max(0, (sh.attackTimer || 0) - dt);
 
-                if (dist < sh.aggroRange) {
+                // Check if a summoned skeleton is closer than the player — target it instead
+                let targetSummon = null, summonDist = dist;
+                for (const other of this.creatures) {
+                    if (!other._isSummon || other.dead) continue;
+                    const sdx = other.x - sh.x, sdz = other.z - sh.z;
+                    const sd = Math.sqrt(sdx*sdx + sdz*sdz);
+                    if (sd < summonDist && sd < sh.aggroRange) { targetSummon = other; summonDist = sd; }
+                }
+
+                if (targetSummon) {
+                    // Chase and attack the summoned skeleton instead of player
+                    const sdx = targetSummon.x - sh.x, sdz = targetSummon.z - sh.z;
+                    sh.angle = Math.atan2(sdx, sdz);
+                    sh.walking = true;
+                    sh.speed += ((summonDist > sh.attackRange ? sh.chaseSpeed : 0) - sh.speed) * 5 * dt;
+                    if (summonDist < sh.attackRange && sh.attackTimer <= 0) {
+                        sh.attackTimer = sh.attackCD;
+                        targetSummon.hp -= sh.attackDmg;
+                        if (targetSummon.hp <= 0) { targetSummon.hp = 0; targetSummon.dead = true; targetSummon.deathTimer = 0; }
+                    }
+                } else if (dist < sh.aggroRange) {
                     // Boss pause — back off after attacking
                     if (sh._isBoss && sh._pauseTimer > 0) {
                         sh._pauseTimer -= dt;
@@ -562,6 +585,7 @@ export class CreatureManager {
             const dot = (dx * sinA + dz * cosA) / dist;
             if (dot < 0.2) continue;
             if (sh._mineOnly) continue; // can only be damaged by mining
+            if (sh._shielded) continue; // necromancer shield active
             sh.hp -= damage;
             // Knockback
             sh.x += (dx / dist) * 0.5;
@@ -574,7 +598,9 @@ export class CreatureManager {
                 sh.speed = 0;
                 // Boss death
                 if (sh._isBoss) {
+                    if (sh._bossName && window._killedBosses) window._killedBosses.add(sh._bossName);
                     if (sh._isDarkKnight && this._onDarkKnightDeath) this._onDarkKnightDeath(sh);
+                    else if (sh._isNecromancer && this._onNecromancerDeath) this._onNecromancerDeath(sh);
                     else if (sh._isHobgoblin && this._onHobgoblinDeath) this._onHobgoblinDeath(sh);
                     else if (sh._isGateBoss && this._onGateBossDeath) this._onGateBossDeath(sh);
                     else if (this._onBossDeath) this._onBossDeath(sh);

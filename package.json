@@ -1,12 +1,14 @@
 {
   "name": "sheep-and-tree-world",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "main": "main.js",
   "author": "Lucas",
   "description": "Sheep and Tree World",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac"
+    "build": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
   },
   "build": {
     "appId": "com.lucas.sheepandtreeworld",
@@ -23,6 +25,8 @@
       "main.js",
       "index.html",
       "*.js",
+      "*.png",
+      "*.mp3",
       "!node_modules"
     ]
   },

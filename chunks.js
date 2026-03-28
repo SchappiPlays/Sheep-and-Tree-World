@@ -490,6 +490,11 @@ export class ChunkManager {
                         } else if (block === BLOCK.ANVIL) {
                             // Skip rendering — anvil uses a separate 3D model above ground
                             continue;
+                        } else if (block === BLOCK.CHEST) {
+                            // Chest: darker sides, lighter top (lid), golden front latch hint
+                            if (fi === 2) tmpColor.setHex(0x9a7540); // top = lighter lid
+                            else if (fi === 3) tmpColor.setHex(0x5a3a18); // bottom = dark
+                            else tmpColor.setHex(0x6b4a20); // sides = medium brown
                         } else if (block === BLOCK.CAMPFIRE) {
                             // Render as grass so ground shows beneath campfire model
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.GRASS]);

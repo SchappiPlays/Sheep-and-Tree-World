@@ -329,6 +329,7 @@ canvas { display: block; }
     <div style="position:absolute;width:16px;height:2px;top:-1px;left:-8px;background:rgba(255,255,255,0.6);"></div>
 </div>
 <div id="hearts" style="position:fixed;top:8px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
+<div id="manaBar" style="position:fixed;top:48px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
 <div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
 <div id="chatBox" style="position:fixed;bottom:100px;left:10px;z-index:25;width:380px;display:none;pointer-events:none;">
     <div id="chatLog" style="max-height:180px;overflow-y:auto;padding:4px 8px;font:11px monospace;color:rgba(220,210,180,0.9);text-shadow:0 1px 2px rgba(0,0,0,0.8);pointer-events:none;"></div>
@@ -361,7 +362,7 @@ import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, g
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
-import { DragonManager } from './dragons.js';
+import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
 import { Multiplayer } from './multiplayer.js';
 import { VillageManager, placeVillageInChunk } from './villages.js';
 
@@ -981,7 +982,10 @@ function collectSaveData() {
         selectedSlot,
         armorSlots: JSON.parse(JSON.stringify(armorSlots)),
         equippedShield,
+        playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt,
+        killedBosses: [...killedBosses],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
+        customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
         eggItems: JSON.parse(JSON.stringify(eggItems)),
         modifiedBlocks: world._modifiedBlocks ? Object.fromEntries(world._modifiedBlocks) : {},
         dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian).map(bd => ({
@@ -990,6 +994,7 @@ function collectSaveData() {
             dragonName: bd.dragonName, hp: bd.hp,
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
+        chests: JSON.parse(JSON.stringify(chestData)),
     };
 }
 
@@ -1962,6 +1967,125 @@ function startGame(loadSlotName) {
                 rb(rx+cx, gy+3, rz+cz, S, 0.3);
             }
         }
+
+        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-30, -190)
+        {
+            const rx = Math.round(hillCX / BS), rz = Math.round(hillCZ / BS);
+            const gy = Math.floor(getTerrainHeight(hillCX, hillCZ) / BS) + yOff;
+
+            // Large floor — cracked stone tiles (20×16 blocks)
+            for (let dx = -10; dx <= 10; dx++) for (let dz = -8; dz <= 8; dz++) {
+                const floorBlock = hash(rx+dx+99, rz+dz+77) < 0.3 ? SM : S;
+                rb(rx+dx, gy, rz+dz, floorBlock, 0.08);
+            }
+
+            // Outer walls — partially collapsed (3 walls, front open)
+            // Back wall (north)
+            for (let dx = -10; dx <= 10; dx++) {
+                const h = 7 - Math.floor(Math.abs(dx) * 0.2) - Math.floor(hash(rx+dx, rz-8) * 3);
+                for (let y = 1; y <= Math.max(1, h); y++)
+                    rb(rx+dx, gy+y, rz-8, S, 0.06 + y * 0.03);
+            }
+            // Left wall (west)
+            for (let dz = -8; dz <= 4; dz++) {
+                const h = 6 - Math.floor(hash(rx-10, rz+dz) * 3);
+                for (let y = 1; y <= Math.max(1, h); y++)
+                    rb(rx-10, gy+y, rz+dz, S, 0.08 + y * 0.03);
+            }
+            // Right wall (east) — more broken
+            for (let dz = -8; dz <= 2; dz++) {
+                const h = 5 - Math.floor(hash(rx+10, rz+dz) * 4);
+                for (let y = 1; y <= Math.max(1, h); y++)
+                    rb(rx+10, gy+y, rz+dz, S, 0.12 + y * 0.04);
+            }
+
+            // Grand pillars — 6 tall pillars (some broken)
+            const pillars = [[-7,-5],[-7,3],[0,-5],[0,3],[7,-5],[7,3]];
+            for (let pi = 0; pi < pillars.length; pi++) {
+                const [px, pz] = pillars[pi];
+                const broken = hash(pi*31, pi*17) < 0.3;
+                const h = broken ? 2 + Math.floor(hash(px*3, pz*7) * 3) : 10;
+                for (let y = 1; y <= h; y++) {
+                    rb(rx+px, gy+y, rz+pz, SM, 0.04);
+                    rb(rx+px+1, gy+y, rz+pz, SM, 0.04);
+                    rb(rx+px, gy+y, rz+pz+1, SM, 0.04);
+                    rb(rx+px+1, gy+y, rz+pz+1, SM, 0.04);
+                }
+                // Pillar capital on intact ones
+                if (!broken) {
+                    for (let cdx = -1; cdx <= 2; cdx++) for (let cdz = -1; cdz <= 2; cdz++)
+                        rb(rx+px+cdx, gy+h+1, rz+pz+cdz, S, 0.1);
+                }
+            }
+
+            // Fallen pillar across the floor
+            for (let dx = -4; dx <= 5; dx++) {
+                rb(rx+dx, gy+1, rz-2, SM, 0.08);
+                rb(rx+dx, gy+2, rz-2, SM, 0.12);
+            }
+
+            // Central raised platform / altar base
+            for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++) {
+                rb(rx+dx, gy+1, rz+dz, SM, 0.03);
+                if (Math.abs(dx) <= 2 && Math.abs(dz) <= 1)
+                    rb(rx+dx, gy+2, rz+dz, SM, 0.05);
+            }
+            // Altar stone on top
+            rb(rx, gy+3, rz, BLOCK.DARK_STONE, 0.02);
+            rb(rx+1, gy+3, rz, BLOCK.DARK_STONE, 0.02);
+            rb(rx, gy+3, rz+1, BLOCK.DARK_STONE, 0.02);
+            rb(rx+1, gy+3, rz+1, BLOCK.DARK_STONE, 0.02);
+
+            // Scattered rubble around the ruin
+            for (let i = 0; i < 20; i++) {
+                const rdx = Math.floor((hash(i*17+5, i*31+9) - 0.5) * 26);
+                const rdz = Math.floor((hash(i*23+3, i*43+7) - 0.5) * 20);
+                if (Math.abs(rdx) <= 10 && Math.abs(rdz) <= 8) continue; // skip inside
+                rb(rx+rdx, gy+1, rz+rdz, hash(rdx*3, rdz*7) < 0.5 ? S : SM, 0.3);
+            }
+
+            // Broken archway entrance (south side)
+            for (let y = 0; y < 6; y++) {
+                rb(rx-4, gy+y, rz+8, S, 0.06);
+                rb(rx+4, gy+y, rz+8, S, 0.06);
+            }
+            // Arch top (partially collapsed)
+            for (let dx = -3; dx <= 3; dx++) {
+                const archH = 6 + (3 - Math.abs(dx)) * 0.5;
+                rb(rx+dx, gy+Math.floor(archH), rz+8, S, 0.15 + Math.abs(dx) * 0.05);
+            }
+        }
+    }
+
+    // Naturally spawning chests in ruins
+    {
+        const yOff = 128;
+        const BS = BLOCK_SIZE;
+        const _placeRuinChest = (wx, wz, loot) => {
+            const bx = Math.round(wx / BS), bz = Math.round(wz / BS);
+            const gy = Math.floor(getTerrainHeight(wx, wz) / BS) + yOff;
+            // Place 2x2x2 chest blocks
+            for (let dx = 0; dx <= 1; dx++)
+                for (let dy = 0; dy <= 1; dy++)
+                    for (let dz = 0; dz <= 1; dz++)
+                        world.setBlock(bx+dx, gy+1+dy, bz+dz, BLOCK.CHEST);
+            // Register with loot
+            const key = _chestKey(bx, gy+1, bz);
+            chestData[key] = { items: { ...loot } };
+        };
+
+        // Chest in Broken Temple (-60, -210) — near the altar
+        _placeRuinChest(-58, -210, { 'iron_ingot': 3, 'gold_ingot': 1, 'stick': 6 });
+        // Chest in Collapsed Tower (-10, -160) — in the rubble
+        _placeRuinChest(-8, -160, { 'diamond': 1, 'coal': 8, [BLOCK.STONE]: 16 });
+        // Chest at Stone Circle (-20, -220) — ritual offering
+        _placeRuinChest(-20, -218, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
+        // Chest in Staircase ruins (0, -180) — hidden under steps
+        _placeRuinChest(2, -180, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
+        // Chest in Foundation ruins (-40, -190) — corner stash
+        _placeRuinChest(-46, -190, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
+        // Central ruin — behind the altar
+        _placeRuinChest(-28, -194, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
     }
 
     // Hook setBlock to broadcast changes in multiplayer
@@ -2232,7 +2356,7 @@ function startGame(loadSlotName) {
     }
 
     // === Giant Skeleton Boss at east gate ===
-    {
+    if (!killedBosses.has('The Ancient One')) {
         const bossX = 80, bossZ = -190;
 
         // Pre-generate the sword it will drop and wield
@@ -2412,7 +2536,7 @@ function startGame(loadSlotName) {
     }
 
     // === Earth Colossus Boss near the western gate ===
-    {
+    if (!killedBosses.has('Colossus of the Gate')) {
         const colX = -155, colZ = -190;
         const colY = getTerrainHeight(colX, colZ);
         const colossus = {
@@ -2535,7 +2659,7 @@ function startGame(loadSlotName) {
     }
 
     // === Dark Knight Boss at north gate ===
-    {
+    if (!killedBosses.has('The Dark Knight')) {
         const dkX = -30, dkZ = -300;
         const dkY = getTerrainHeight(dkX, dkZ);
 
@@ -2612,8 +2736,201 @@ function startGame(loadSlotName) {
         };
     }
 
+    // === Necromancer Boss at central ancient forest ruin ===
+    if (!killedBosses.has('The Necromancer')) {
+        const necX = -30, necZ = -190;
+        const necY = getTerrainHeight(necX, necZ) + 1.5; // on the altar platform
+
+        const necro = new Player(scene, world);
+        necro.group.position.set(necX, necY, necZ);
+        necro.position.set(necX, necY, necZ);
+
+        // Dark robes appearance
+        necro._skinMat.color.setHex(0x2a2a30);
+        necro._shirtMat.color.setHex(0x15101a);
+        necro._pantsMat.color.setHex(0x100a14);
+        necro._shoeMat.color.setHex(0x0a0810);
+        necro._hairMat.color.setHex(0x1a0a2a);
+
+        // Custom necromancer staff — dark twisted shaft with skull headpiece and floating orb
+        necro.staffHeld.visible = false;
+        necro.swordHeld.visible = false;
+        const necStaff = new THREE.Group();
+        // Dark shaft — slightly tapered, bone-colored
+        const shaftMat = new THREE.MeshStandardMaterial({ color: 0x1a1018, roughness: 0.9 });
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, 0.04), shaftMat);
+        shaft.position.y = 0.15; necStaff.add(shaft);
+        // Gnarled knots on the shaft
+        const knotMat = new THREE.MeshStandardMaterial({ color: 0x2a1a2a });
+        for (let i = 0; i < 4; i++) {
+            const knot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), knotMat);
+            knot.position.set((i%2)*0.01, -0.3 + i*0.4, 0);
+            knot.rotation.y = i * 0.8;
+            necStaff.add(knot);
+        }
+        // Skull-like headpiece at top
+        const skullMat = new THREE.MeshStandardMaterial({ color: 0xc0b8a0, roughness: 0.7 });
+        const skull = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.08), skullMat);
+        skull.position.y = 1.28; necStaff.add(skull);
+        // Jaw
+        const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.06), skullMat);
+        jaw.position.set(0, 1.21, 0.01); necStaff.add(jaw);
+        // Eye sockets (dark holes with purple glow)
+        const socketMat = new THREE.MeshBasicMaterial({ color: 0x6622aa });
+        const lSocket = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.02), socketMat);
+        lSocket.position.set(-0.025, 1.30, 0.04); necStaff.add(lSocket);
+        const rSocket = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.02), socketMat);
+        rSocket.position.set(0.025, 1.30, 0.04); necStaff.add(rSocket);
+        // Prongs cradling the orb (4 curved fingers)
+        const prongMat = new THREE.MeshStandardMaterial({ color: 0x1a1018 });
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.02), prongMat);
+            prong.position.set(Math.cos(a)*0.06, 1.42, Math.sin(a)*0.06);
+            prong.rotation.x = Math.sin(a) * 0.3;
+            prong.rotation.z = -Math.cos(a) * 0.3;
+            necStaff.add(prong);
+        }
+        // Floating orb — glowing purple
+        const orbMat = new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.85 });
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), orbMat);
+        orb.position.y = 1.48; necStaff.add(orb);
+        // Orb inner glow
+        const innerOrb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4),
+            new THREE.MeshBasicMaterial({ color: 0xdd88ff }));
+        innerOrb.position.y = 1.48; necStaff.add(innerOrb);
+        // Energy ring around orb
+        const ringGeo = new THREE.TorusGeometry(0.1, 0.008, 4, 16);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.5 });
+        const ring1 = new THREE.Mesh(ringGeo, ringMat);
+        ring1.position.y = 1.48; ring1.rotation.x = Math.PI * 0.3; necStaff.add(ring1);
+        const ring2 = new THREE.Mesh(ringGeo, ringMat.clone());
+        ring2.position.y = 1.48; ring2.rotation.x = Math.PI * 0.7; ring2.rotation.z = 0.5; necStaff.add(ring2);
+        // Point light from the orb
+        const orbLight = new THREE.PointLight(0x8833cc, 1.5, 4);
+        orbLight.position.y = 1.48; necStaff.add(orbLight);
+        necStaff._orbMesh = orb;
+        necStaff._rings = [ring1, ring2];
+        necStaff._orbLight = orbLight;
+        necStaff.position.y = 0.02;
+        necro.leftArm.handGrp.add(necStaff);
+
+        // Glowing purple eyes
+        const necEyeMat = new THREE.MeshBasicMaterial({ color: 0xaa44ff });
+        const necLEye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), necEyeMat);
+        necLEye.position.set(-0.06, 0.08, 0.13); necro.headGroup.add(necLEye);
+        const necREye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), necEyeMat);
+        necREye.position.set(0.06, 0.08, 0.13); necro.headGroup.add(necREye);
+
+        // Floating particles around the necromancer
+        const necParticles = new THREE.Group();
+        for (let i = 0; i < 8; i++) {
+            const p = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 0.04, 0.04),
+                new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.6 })
+            );
+            p.position.set(
+                (Math.random() - 0.5) * 0.8,
+                0.5 + Math.random() * 1.2,
+                (Math.random() - 0.5) * 0.8
+            );
+            p._phase = Math.random() * Math.PI * 2;
+            necParticles.add(p);
+        }
+        necro.group.add(necParticles);
+
+        // Name label
+        const necCanvas = document.createElement('canvas');
+        necCanvas.width = 256; necCanvas.height = 48;
+        const necCtxL = necCanvas.getContext('2d');
+        necCtxL.fillStyle = '#aa44ff'; necCtxL.font = 'bold 24px monospace'; necCtxL.textAlign = 'center';
+        necCtxL.fillText('The Necromancer', 128, 30);
+        const necTex = new THREE.CanvasTexture(necCanvas);
+        const necLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: necTex, transparent: true, depthWrite: false }));
+        necLabel.position.y = 2.3; necLabel.scale.set(1.5, 0.28, 1);
+        necro.group.add(necLabel);
+
+        scene.add(necro.group);
+
+        const necCreature = {
+            group: necro.group, legs: [necro.leftLeg.hip, necro.rightLeg.hip],
+            headGrp: necro.headGroup,
+            x: necX, z: necZ, angle: 0, speed: 0,
+            walkPhase: 0, wanderTimer: 3, idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+            type: 'skeleton', hostile: true, aggroRange: 25, attackRange: 12, attackDmg: 5, attackCD: 3.0, attackTimer: 0,
+            hp: 250, maxHP: 250, dead: false, chaseSpeed: 2.0, _turnSpeed: 4,
+            _isBoss: true, _bossName: 'The Necromancer', _isNecromancer: true,
+            _smashTimer: -1, _necSummonTimer: 0, _necProjectileTimer: 0,
+            _necParticles: necParticles,
+            _arms: [
+                { shoulder: necro.leftArm.shoulder, elbow: necro.leftArm.elbow },
+                { shoulder: necro.rightArm.shoulder, elbow: necro.rightArm.elbow },
+            ],
+            _spine: necro.spine,
+            _playerModel: necro,
+        };
+        creatures.creatures.push(necCreature);
+
+        // Protective barrier — blocks access until all 4 gate bosses are dead
+        const _necShieldActive = () => !killedBosses.has('The Ancient One') || !killedBosses.has('Colossus of the Gate') || !killedBosses.has('The Dark Knight') || !killedBosses.has('Grokthak the Warchief');
+
+        // Shield dome mesh
+        const shieldGeo = new THREE.SphereGeometry(8, 24, 16, 0, Math.PI * 2, 0, Math.PI);
+        const shieldMat = new THREE.MeshBasicMaterial({
+            color: 0x8833cc, transparent: true, opacity: 0.15, side: THREE.DoubleSide,
+        });
+        const necShield = new THREE.Mesh(shieldGeo, shieldMat);
+        necShield.position.set(necX, getTerrainHeight(necX, necZ), necZ);
+        scene.add(necShield);
+
+        // Shield ring at base
+        const ringGeo2 = new THREE.TorusGeometry(8, 0.08, 8, 48);
+        const ringMat2 = new THREE.MeshBasicMaterial({ color: 0xaa55ff, transparent: true, opacity: 0.4 });
+        const necShieldRing = new THREE.Mesh(ringGeo2, ringMat2);
+        necShieldRing.position.set(necX, getTerrainHeight(necX, necZ) + 0.1, necZ);
+        necShieldRing.rotation.x = Math.PI / 2;
+        scene.add(necShieldRing);
+
+        // Second ring higher up
+        const necShieldRing2 = new THREE.Mesh(
+            new THREE.TorusGeometry(6, 0.06, 6, 36),
+            new THREE.MeshBasicMaterial({ color: 0xcc77ff, transparent: true, opacity: 0.3 })
+        );
+        necShieldRing2.position.set(necX, getTerrainHeight(necX, necZ) + 4, necZ);
+        necShieldRing2.rotation.x = Math.PI / 2;
+        scene.add(necShieldRing2);
+
+        // Store for animation and removal
+        necCreature._shield = necShield;
+        necCreature._shieldRing = necShieldRing;
+        necCreature._shieldRing2 = necShieldRing2;
+        necCreature._shieldActive = _necShieldActive;
+
+        // While shield is active: disable aggro and make invulnerable
+        if (_necShieldActive()) {
+            necCreature.hostile = false;
+            necCreature.aggroRange = 0;
+            necCreature._shielded = true;
+        }
+
+        // Drop handler
+        creatures._onNecromancerDeath = (boss) => {
+            // Drop rare loot
+            const drops = ['diamond', 'diamond', 'gold_ingot', 'gold_ingot', 'gold_ingot', 'ruby', 'sapphire', 'emerald'];
+            for (const d of drops) inventory[d] = (inventory[d] || 0) + 1;
+            // Drop the Void Staff
+            inventory['void_staff'] = (inventory['void_staff'] || 0) + 1;
+            const ei = hotbarSlots.indexOf(0);
+            if (ei >= 0) hotbarSlots[ei] = 'void_staff';
+            playerMaxHP += 2;
+            playerHP = Math.min(playerHP + 2, playerMaxHP);
+            updateHeartsUI();
+            addChatMessage('The Necromancer has been destroyed! (+1 heart)', 'rgba(170,68,255,0.95)');
+        };
+    }
+
     // === Hobgoblin Warchief + Goblins at south gate ===
-    {
+    if (!killedBosses.has('Grokthak the Warchief')) {
         const hgX = -30, hgZ = -80;
         const hgY = getTerrainHeight(hgX, hgZ);
 
@@ -2786,7 +3103,25 @@ function startGame(loadSlotName) {
             Object.assign(eggItems, s.eggItems || {});
             if (s.armorSlots) Object.assign(armorSlots, s.armorSlots);
             if (s.equippedShield) equippedShield = s.equippedShield;
+            if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP; }
+            if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
+            if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
+            if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
             window._customSwords = s.customSwords || {};
+            window._customStaffs = s.customStaffs || {};
+            // Re-register custom staff props
+            for (const [id, cs] of Object.entries(window._customStaffs)) {
+                const baseType = STAFF_GEM_TYPE[cs.gem] || 'basic_staff';
+                const gemBolt = STAFF_GEM_BOLT[cs.gem];
+                if (gemBolt) {
+                    STAFF_PROPS[id] = { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: cs.isDragonstaff ? 0.15 : 0.1, trail: gemBolt.color, life: 2.5 };
+                } else {
+                    STAFF_PROPS[id] = { ...STAFF_PROPS[baseType] };
+                }
+                if (cs.isDragonstaff) STAFF_PROPS[id]._dragonProjectile = true;
+                const gemSpellKey = 'gem_' + (typeof cs.gem === 'number' ? { [BLOCK.LEAVES]: 'leaves', [BLOCK.WOOD]: 'wood', [BLOCK.STONE]: 'stone' }[cs.gem] || 'basic' : cs.gem.replace('_ingot', ''));
+                STAFF_SPELLS[id] = STAFF_SPELLS[gemSpellKey] || STAFF_SPELLS[baseType] || STAFF_SPELLS['basic_staff'];
+            }
             // Migrate old custom swords with wrong tier
             const _tierFix = { 'stick': 'wood', '3': 'stone', [BLOCK.STONE]: 'stone', 'iron_ingot': 'iron', 'gold_ingot': 'gold', 'steel_ingot': 'steel', 'diamond': 'diamond' };
             for (const [id, cs] of Object.entries(window._customSwords)) {
@@ -2831,6 +3166,12 @@ function startGame(loadSlotName) {
                 for (const key of campfireOrigins) {
                     const [cx, cy, cz] = key.split(',').map(Number);
                     placeCampfireModel(cx, cy, cz);
+                }
+            }
+            // Restore chests
+            if (s.chests) {
+                for (const [key, data] of Object.entries(s.chests)) {
+                    chestData[key] = data;
                 }
             }
             // Restore picked up eggs
@@ -3386,6 +3727,9 @@ document.getElementById('saveQuitBtn').addEventListener('click', () => {
 
 // ── Player HP ──
 let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
+let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
+const killedBosses = new Set(); // boss names that have been killed
+window._killedBosses = killedBosses;
 let attackCooldown = 0;
 
 // ── Shield system ──
@@ -3403,8 +3747,30 @@ const SHIELD_TIERS = {
     'dragonsteel_shield': { protection: 1.0, color: 0x1a1a28 },
 };
 
+let staffShielding = false; // true when holding right-click with a staff
+
+// Magic shield disc mesh (created once, toggled visible)
+const _magicShieldGeo = new THREE.CircleGeometry(0.7, 24);
+const _magicShieldMat = new THREE.MeshBasicMaterial({
+    color: 0x8833cc, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+});
+const magicShieldMesh = new THREE.Mesh(_magicShieldGeo, _magicShieldMat);
+magicShieldMesh.visible = false;
+
+// Outer ring
+const _magicRingGeo = new THREE.TorusGeometry(0.7, 0.03, 8, 32);
+const _magicRingMat = new THREE.MeshBasicMaterial({ color: 0xaa55ff, transparent: true, opacity: 0.6 });
+const magicShieldRing = new THREE.Mesh(_magicRingGeo, _magicRingMat);
+magicShieldMesh.add(magicShieldRing);
+
+// Inner rune ring
+const _innerRingGeo = new THREE.TorusGeometry(0.4, 0.015, 6, 20);
+const _innerRingMat = new THREE.MeshBasicMaterial({ color: 0xcc88ff, transparent: true, opacity: 0.4 });
+const magicInnerRing = new THREE.Mesh(_innerRingGeo, _innerRingMat);
+magicShieldMesh.add(magicInnerRing);
+
 function isShieldBlocking(dmgSourceX, dmgSourceZ) {
-    if (!shieldRaised || !equippedShield) return false;
+    if (!(shieldRaised && equippedShield) && !staffShielding) return false;
     // Check if damage comes from the front 180 degrees
     const facing = player.group.rotation.y;
     const dx = dmgSourceX - player.position.x;
@@ -3443,14 +3809,81 @@ function applyArmorDamage(rawDmg) {
     return Math.max(1, Math.round(rawDmg * (1 - reduction / 10)));
 }
 
-// ── Projectile system ──
+// ── Projectile & Spell system ──
 const projectiles = [];
 const STAFF_PROPS = {
     basic_staff:     { color: 0x44aa44, speed: 18, damage: 3, size: 0.08, trail: 0x66cc66, life: 1.8 },
     fire_staff:      { color: 0xff4400, speed: 25, damage: 8, size: 0.12, trail: 0xff6600, life: 2.0 },
     ice_staff:       { color: 0x66ccff, speed: 20, damage: 6, size: 0.10, trail: 0xaaeeff, life: 2.5 },
     lightning_staff:  { color: 0xffee44, speed: 40, damage: 12, size: 0.08, trail: 0xffff88, life: 1.5 },
+    void_staff:      { color: 0x8833cc, speed: 22, damage: 15, size: 0.14, trail: 0xaa55dd, life: 3.0 },
 };
+
+// Spell slots: 1=projectile, 2=shield, 3=unique
+let activeSpellSlot = 1; // 1-6
+let staffDamageDealt = 0; // total damage dealt with staffs, persisted
+// Spell unlock thresholds: slot 4 at 50 dmg, slot 5 at 150 (50+100), slot 6 at 350 (150+200)
+const SPELL_UNLOCK_THRESHOLDS = { 4: 50, 5: 150, 6: 350 };
+function getMaxSpellSlot() {
+    if (staffDamageDealt >= 350) return 6;
+    if (staffDamageDealt >= 150) return 5;
+    if (staffDamageDealt >= 50) return 4;
+    return 3;
+}
+
+const STAFF_SPELLS = {
+    basic_staff:      { name3: 'Heal',         desc3: 'Restore 4 HP',                mana3: 6,  color3: 0x44ff44 },
+    fire_staff:       { name3: 'Inferno',      desc3: 'Ring of fire around you',     mana3: 5,  color3: 0xff2200 },
+    ice_staff:        { name3: 'Frost Nova',   desc3: 'Freeze nearby enemies',       mana3: 5,  color3: 0x88ddff },
+    lightning_staff:  { name3: 'Chain',        desc3: 'Lightning hits 3 enemies',    mana3: 6,  color3: 0xffee44 },
+    void_staff:       { name3: 'Raise Dead',   desc3: 'Summon skeletons (all mana)', mana3: 2,  color3: 0xaa22ff },
+    // Universal unlockable spells (all staffs)
+    _slot4:           { name3: 'Arcane Barrage', desc3: '5 homing bolts',           mana3: 5,  color3: 0xcc88ff },
+    _slot5:           { name3: 'Teleport',       desc3: 'Blink forward 15 units',   mana3: 4,  color3: 0x44ddff },
+    _slot6:           { name3: 'Meteor',         desc3: 'Massive AOE from the sky', mana3: 10, color3: 0xff4400 },
+    // Gem-specific unique spells
+    gem_diamond:      { name3: 'Crystal Storm',desc3: 'Shard burst, 8 shards fan out', mana3: 6, color3: 0x88ffff },
+    gem_emerald:      { name3: 'Poison Cloud', desc3: 'Poison AOE, 3 DMG/s for 5s',   mana3: 5, color3: 0x22cc44 },
+    gem_gold_ingot:   { name3: 'Midas Touch',  desc3: 'Enemies drop double loot',     mana3: 7, color3: 0xffdd44 },
+    gem_iron_ingot:   { name3: 'Iron Wall',    desc3: 'Place 3 block wall for 8s',     mana3: 4, color3: 0xb0b8c0 },
+    gem_steel_ingot:  { name3: 'Ricochet',     desc3: 'Bolt bounces to 4 enemies',     mana3: 6, color3: 0xe0e8f0 },
+    gem_leaves:       { name3: 'Regrowth',     desc3: 'Heal 6 HP + 2 HP/s for 3s',    mana3: 7, color3: 0x44aa44 },
+    gem_wood:         { name3: 'Splinter Bomb', desc3: 'Exploding splinter, 5 DMG AOE', mana3: 4, color3: 0x8a6a3a },
+    gem_stone:        { name3: 'Quake',        desc3: 'Ground pound, stun 3s',          mana3: 5, color3: 0x888888 },
+    gem_dragonsteel:  { name3: 'Dragon Breath',desc3: 'Cone of dragon fire, 15 DMG',   mana3: 8, color3: 0x4444aa },
+};
+
+// Spell slot indicator UI
+const spellSlotEl = document.createElement('div');
+spellSlotEl.id = 'spellSlots';
+spellSlotEl.style.cssText = 'position:fixed;top:80px;right:8px;z-index:20;pointer-events:none;display:none;font:11px monospace;color:#ccc;text-shadow:0 0 4px #000;';
+document.body.appendChild(spellSlotEl);
+
+function updateSpellSlotUI() {
+    const held = hotbarSlots[selectedSlot];
+    if (!held || !STAFF_PROPS[held]) { spellSlotEl.style.display = 'none'; return; }
+    spellSlotEl.style.display = 'block';
+    const sp = STAFF_SPELLS[held] || {};
+    const maxSlot = getMaxSpellSlot();
+    const names = ['Bolt', 'Shield', sp.name3 || '???',
+        STAFF_SPELLS._slot4.name3, STAFF_SPELLS._slot5.name3, STAFF_SPELLS._slot6.name3];
+    let html = '';
+    // Show damage progress
+    const nextUnlock = staffDamageDealt < 50 ? 50 : staffDamageDealt < 150 ? 150 : staffDamageDealt < 350 ? 350 : null;
+    if (nextUnlock) html += `<div style="color:#666;font:9px monospace;margin-bottom:3px;">DMG: ${Math.floor(staffDamageDealt)}/${nextUnlock}</div>`;
+    for (let i = 0; i < 6; i++) {
+        const slot = i + 1;
+        const locked = slot > maxSlot;
+        const active = activeSpellSlot === slot;
+        const col = locked ? '#444' : active ? '#fff' : '#888';
+        const bg = locked ? 'rgba(0,0,0,0.1)' : active ? 'rgba(100,100,255,0.3)' : 'rgba(0,0,0,0.2)';
+        const border = locked ? '1px solid rgba(40,40,40,0.3)' : active ? '1px solid rgba(150,150,255,0.5)' : '1px solid rgba(80,80,80,0.3)';
+        html += `<div style="color:${col};background:${bg};border:${border};padding:2px 6px;margin-bottom:2px;border-radius:3px;">`;
+        html += `<span style="color:${locked ? '#333' : '#aaa'};">⇧${slot}</span> ${locked ? '???' : names[i]}`;
+        html += '</div>';
+    }
+    spellSlotEl.innerHTML = html;
+}
 
 function fireProjectile(staffType) {
     const props = STAFF_PROPS[staffType];
@@ -3470,9 +3903,18 @@ function fireProjectile(staffType) {
     const vy = dir.y * props.speed;
     const vz = dir.z * props.speed;
 
-    const mat = new THREE.MeshBasicMaterial({ color: props.color, transparent: true, opacity: 0.9 });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(props.size, 6, 4), mat);
-    mesh.position.set(sx, sy, sz);
+    let mesh;
+    const isDragon = props._dragonProjectile;
+    if (isDragon) {
+        mesh = _makeDragonProjectile(props.color);
+        mesh.position.set(sx, sy, sz);
+        // Face the direction of travel
+        mesh.lookAt(sx + dir.x, sy + dir.y, sz + dir.z);
+    } else {
+        const mat = new THREE.MeshBasicMaterial({ color: props.color, transparent: true, opacity: 0.9 });
+        mesh = new THREE.Mesh(new THREE.SphereGeometry(props.size, 6, 4), mat);
+        mesh.position.set(sx, sy, sz);
+    }
     scene.add(mesh);
 
     // Glow light
@@ -3486,7 +3928,464 @@ function fireProjectile(staffType) {
         life: props.life, age: 0,
         damage: props.damage, staffType,
         trailColor: props.trail,
+        _isDragon: isDragon,
     });
+}
+
+function castUniversalSpell(slot, staffType) {
+    const px = player.position.x, py = player.position.y, pz = player.position.z;
+    const props = STAFF_PROPS[staffType] || STAFF_PROPS['basic_staff'];
+
+    if (slot === 4) {
+        // Arcane Barrage: 5 homing bolts that seek nearest enemies
+        const enemies = creatures.creatures.filter(c => !c.dead && !c._isSummon);
+        for (let i = 0; i < 5; i++) {
+            const a = player.group.rotation.y + (i - 2) * 0.3;
+            const mat = new THREE.MeshBasicMaterial({ color: 0xcc88ff, transparent: true, opacity: 0.85 });
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), mat);
+            mesh.position.set(px, py + 1.2 + i * 0.15, pz);
+            scene.add(mesh);
+            const light = new THREE.PointLight(0xcc88ff, 0.8, 4);
+            light.position.copy(mesh.position); scene.add(light);
+            // Find a target for this bolt
+            const target = enemies.length > 0 ? enemies[i % enemies.length] : null;
+            projectiles.push({
+                mesh, light, x: px, y: py + 1.2 + i * 0.15, z: pz,
+                vx: Math.sin(a) * 14, vy: 3, vz: Math.cos(a) * 14,
+                life: 3, age: 0, damage: 4, staffType: staffType,
+                _homing: true, _target: target,
+            });
+        }
+    } else if (slot === 5) {
+        // Teleport: blink forward 15 units in facing direction
+        const facing = player.group.rotation.y;
+        const tx = px + Math.sin(facing) * 15;
+        const tz = pz + Math.cos(facing) * 15;
+        const ty = getTerrainHeight(tx, tz);
+        // Departure particles
+        for (let i = 0; i < 10; i++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08),
+                new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.8 }));
+            m.position.set(px + (Math.random()-0.5)*0.6, py + Math.random()*1.8, pz + (Math.random()-0.5)*0.6);
+            scene.add(m);
+            setTimeout(() => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }, 500);
+        }
+        // Move player
+        player.position.set(tx, ty + 0.1, tz);
+        player.group.position.copy(player.position);
+        // Arrival particles
+        for (let i = 0; i < 10; i++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08),
+                new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.8 }));
+            m.position.set(tx + (Math.random()-0.5)*0.6, ty + Math.random()*1.8, tz + (Math.random()-0.5)*0.6);
+            scene.add(m);
+            setTimeout(() => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }, 500);
+        }
+    } else if (slot === 6) {
+        // Meteor: huge fireball falls from sky at crosshair target, massive AOE
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const target = new THREE.Vector3().copy(rc.ray.origin).addScaledVector(rc.ray.direction, 30);
+        // Clamp to terrain
+        const tx = target.x, tz = target.z;
+        const ty = getTerrainHeight(tx, tz);
+
+        // Spawn meteor high up, falling
+        const meteorMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.9 });
+        const meteor = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 6), meteorMat);
+        meteor.position.set(tx, ty + 40, tz);
+        scene.add(meteor);
+        const meteorLight = new THREE.PointLight(0xff4400, 5, 20);
+        meteorLight.position.copy(meteor.position);
+        scene.add(meteorLight);
+        // Trail
+        const trailMat = new THREE.MeshBasicMaterial({ color: 0xff8822, transparent: true, opacity: 0.5 });
+
+        let mAge = 0;
+        const animMeteor = () => {
+            mAge += 0.016;
+            meteor.position.y -= 1.5; // fall speed
+            meteorLight.position.copy(meteor.position);
+            // Trail particles
+            if (mAge % 0.032 < 0.017) {
+                const t = new THREE.Mesh(new THREE.SphereGeometry(0.3, 4, 3), trailMat.clone());
+                t.position.copy(meteor.position);
+                scene.add(t);
+                setTimeout(() => { scene.remove(t); t.geometry.dispose(); t.material.dispose(); }, 300);
+            }
+            if (meteor.position.y > ty + 1) {
+                requestAnimationFrame(animMeteor);
+            } else {
+                // Impact!
+                scene.remove(meteor); scene.remove(meteorLight);
+                meteor.geometry.dispose(); meteorMat.dispose();
+                // Damage all enemies in range
+                const range = 12;
+                for (const c of creatures.creatures) {
+                    if (c.dead || c._isSummon) continue;
+                    const dx = c.x - tx, dz = c.z - tz;
+                    if (dx*dx + dz*dz < range*range) {
+                        const dmg = 20;
+                        c.hp -= dmg;
+                        staffDamageDealt += dmg;
+                        if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                    }
+                }
+                // Explosion visual
+                for (let r = 0; r < 4; r++) {
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.2, 6, 24),
+                        new THREE.MeshBasicMaterial({ color: r < 2 ? 0xff4400 : 0xff8822, transparent: true, opacity: 0.7 }));
+                    ring.position.set(tx, ty + 0.5 + r*0.5, tz);
+                    ring.rotation.x = Math.PI/2;
+                    scene.add(ring);
+                    let a = 0;
+                    const anim = () => { a+=0.016; const s=1+a*25; ring.scale.set(s,s,1); ring.material.opacity=Math.max(0,0.7-a*1.2);
+                        if(a<0.7)requestAnimationFrame(anim);else{scene.remove(ring);ring.geometry.dispose();ring.material.dispose();}};
+                    setTimeout(() => requestAnimationFrame(anim), r * 60);
+                }
+                // Flash
+                const flash = new THREE.PointLight(0xff6600, 10, 25);
+                flash.position.set(tx, ty + 2, tz); scene.add(flash);
+                setTimeout(() => scene.remove(flash), 500);
+                updateSpellSlotUI();
+            }
+        };
+        requestAnimationFrame(animMeteor);
+    }
+}
+
+const summonedSkeletons = []; // { creature, timer, group }
+
+function castUniqueSpell(staffType, manaSpent) {
+    const px = player.position.x, py = player.position.y, pz = player.position.z;
+
+    if (staffType === 'basic_staff') {
+        // Heal: restore 4 HP, green particles
+        playerHP = Math.min(playerMaxHP, playerHP + 4);
+        updateHeartsUI();
+        // Visual: green burst
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1),
+                new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.8 }));
+            m.position.set(px + Math.cos(angle) * 0.5, py + 1 + Math.random(), pz + Math.sin(angle) * 0.5);
+            scene.add(m);
+            setTimeout(() => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }, 800);
+        }
+    } else if (staffType === 'fire_staff') {
+        // Inferno: ring of fire dealing 6 damage to all enemies within 6 units
+        const range = 6;
+        for (const c of creatures.creatures) {
+            if (c.dead) continue;
+            const dx = c.x - px, dz = c.z - pz;
+            if (dx*dx + dz*dz < range*range) {
+                c.hp -= 6;
+                if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+            }
+        }
+        // Visual: expanding fire ring
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.15, 6, 24),
+            new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 }));
+        ring.position.set(px, py + 0.3, pz);
+        ring.rotation.x = Math.PI / 2;
+        scene.add(ring);
+        let ringAge = 0;
+        const animRing = () => {
+            ringAge += 0.016;
+            const s = 1 + ringAge * 15;
+            ring.scale.set(s, s, 1);
+            ring.material.opacity = Math.max(0, 0.8 - ringAge * 2);
+            if (ringAge < 0.5) requestAnimationFrame(animRing);
+            else { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); }
+        };
+        requestAnimationFrame(animRing);
+    } else if (staffType === 'ice_staff') {
+        // Frost Nova: slow/freeze enemies within 8 units for 4 seconds
+        const range = 8;
+        for (const c of creatures.creatures) {
+            if (c.dead) continue;
+            const dx = c.x - px, dz = c.z - pz;
+            if (dx*dx + dz*dz < range*range) {
+                c.hp -= 3;
+                if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                // Freeze: store original speed, set to 0
+                if (!c._frozen) {
+                    c._frozen = true;
+                    c._origChaseSpeed = c.chaseSpeed || 3;
+                    c.chaseSpeed = 0;
+                    setTimeout(() => { c._frozen = false; c.chaseSpeed = c._origChaseSpeed; }, 4000);
+                }
+            }
+        }
+        // Visual: ice burst
+        for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            const r = 2 + Math.random() * 4;
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3),
+                new THREE.MeshBasicMaterial({ color: 0x88ddff, transparent: true, opacity: 0.7 }));
+            m.position.set(px + Math.cos(a)*r, py + 0.3 + Math.random()*0.5, pz + Math.sin(a)*r);
+            scene.add(m);
+            setTimeout(() => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }, 1500);
+        }
+    } else if (staffType === 'lightning_staff') {
+        // Chain Lightning: hits up to 3 nearest enemies, 10 damage each
+        const sorted = creatures.creatures
+            .filter(c => !c.dead)
+            .map(c => ({ c, d: (c.x-px)*(c.x-px) + (c.z-pz)*(c.z-pz) }))
+            .sort((a, b) => a.d - b.d)
+            .slice(0, 3);
+        let prevX = px, prevZ = pz, prevY = py + 1.2;
+        for (const { c } of sorted) {
+            if (c.d > 20*20) continue;
+            c.hp -= 10;
+            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+            // Visual: lightning bolt line
+            const cy = getTerrainHeight(c.x, c.z) + 1;
+            const geo = new THREE.BufferGeometry();
+            const pts = [];
+            const segs = 6;
+            for (let s = 0; s <= segs; s++) {
+                const t = s / segs;
+                pts.push(
+                    prevX + (c.x - prevX) * t + (s > 0 && s < segs ? (Math.random()-0.5)*0.8 : 0),
+                    prevY + (cy - prevY) * t + (s > 0 && s < segs ? (Math.random()-0.5)*0.5 : 0),
+                    prevZ + (c.z - prevZ) * t + (s > 0 && s < segs ? (Math.random()-0.5)*0.8 : 0)
+                );
+            }
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffee44, linewidth: 2 }));
+            scene.add(line);
+            setTimeout(() => { scene.remove(line); geo.dispose(); }, 300);
+            prevX = c.x; prevZ = c.z; prevY = cy;
+        }
+    } else if (staffType === 'void_staff') {
+        // Raise Dead: uses ALL remaining mana, summons 1 skeleton per full mana star (2 mana)
+        const skeletonCount = Math.floor((manaSpent || 0) / 2);
+        if (skeletonCount <= 0) return;
+
+        const boneMat = new THREE.MeshStandardMaterial({ color: 0xd0c8b8, roughness: 0.8 });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x8833cc }); // purple eyes for summoned
+
+        for (let si = 0; si < skeletonCount; si++) {
+            const angle = (si / skeletonCount) * Math.PI * 2 + Math.random() * 0.5;
+            const dist = 2 + Math.random() * 2;
+            const sx = px + Math.cos(angle) * dist;
+            const sz = pz + Math.sin(angle) * dist;
+            const sy = getTerrainHeight(sx, sz);
+
+            // Build skeleton mesh (same as creatures.js but with purple eyes)
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.35, 0.14), boneMat);
+            body.position.y = 0.7; g.add(body);
+            const spine = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.06), boneMat);
+            spine.position.set(0, 0.7, -0.06); g.add(spine);
+            const headGrp = new THREE.Group();
+            headGrp.position.set(0, 1.0, 0); g.add(headGrp);
+            const skull = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), boneMat);
+            headGrp.add(skull);
+            const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.14), boneMat);
+            jaw.position.set(0, -0.1, 0.02); headGrp.add(jaw);
+            const eyeG = new THREE.SphereGeometry(0.03, 6, 6);
+            headGrp.add(new THREE.Mesh(eyeG, eyeMat).translateX(-0.05).translateY(0.02).translateZ(0.1));
+            headGrp.add(new THREE.Mesh(eyeG, eyeMat).translateX(0.05).translateY(0.02).translateZ(0.1));
+            const armGeo = new THREE.BoxGeometry(0.05, 0.3, 0.05);
+            g.add(new THREE.Mesh(armGeo, boneMat).translateX(-0.17).translateY(0.6));
+            g.add(new THREE.Mesh(armGeo, boneMat).translateX(0.17).translateY(0.6));
+            const legs = [];
+            const legGeo = new THREE.BoxGeometry(0.05, 0.35, 0.05);
+            for (const lx of [-0.07, 0.07]) {
+                const hip = new THREE.Group(); hip.position.set(lx, 0.5, 0); g.add(hip);
+                hip.add(new THREE.Mesh(legGeo, boneMat).translateY(-0.175));
+                hip.add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.12), boneMat).translateY(-0.37).translateZ(0.03));
+                legs.push(hip);
+            }
+            g.position.set(sx, sy, sz);
+            g.rotation.y = Math.random() * Math.PI * 2;
+            scene.add(g);
+
+            // Create creature entry — friendly skeleton that attacks enemies
+            const skel = {
+                group: g, legs, headGrp, x: sx, z: sz, angle: g.rotation.y, speed: 0,
+                walkPhase: Math.random() * Math.PI * 2, wanderTimer: 0,
+                idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+                type: 'skeleton', hostile: true, aggroRange: 15, attackRange: 1.5,
+                attackDmg: 3, attackCD: 1.5, attackTimer: 0,
+                hp: 5, maxHP: 5, dead: false, chaseSpeed: 3.0,
+                _isSummon: true, _summonTimer: 20, // dies after 20s
+                _friendlyToPlayer: true, // won't target player, enemies target it
+            };
+            creatures.creatures.push(skel);
+            summonedSkeletons.push(skel);
+
+            // Spawn visual: purple particles rising from ground
+            for (let pi = 0; pi < 6; pi++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06),
+                    new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.7 }));
+                p.position.set(sx + (Math.random()-0.5)*0.5, sy + Math.random()*0.3, sz + (Math.random()-0.5)*0.5);
+                scene.add(p);
+                let pAge = 0;
+                const animP = () => {
+                    pAge += 0.016;
+                    p.position.y += 0.03;
+                    p.material.opacity = Math.max(0, 0.7 - pAge * 1.5);
+                    if (pAge < 0.8) requestAnimationFrame(animP);
+                    else { scene.remove(p); p.geometry.dispose(); p.material.dispose(); }
+                };
+                setTimeout(() => requestAnimationFrame(animP), pi * 50);
+            }
+        }
+
+        // Dark flash
+        const flash = new THREE.PointLight(0x8833cc, 5, 15);
+        flash.position.set(px, py + 1, pz);
+        scene.add(flash);
+        setTimeout(() => scene.remove(flash), 400);
+    }
+
+    // Custom staff — route to standard spell if gem maps to a standard type, otherwise gem-specific
+    if (typeof staffType === 'string' && staffType.startsWith('cstaff_') && window._customStaffs) {
+        const cs = window._customStaffs[staffType];
+        if (!cs) return;
+        const gem = cs.gem;
+        const gemKey = typeof gem === 'number' ? { [BLOCK.LEAVES]: 'leaves', [BLOCK.WOOD]: 'wood', [BLOCK.STONE]: 'stone' }[gem] : gem;
+        // If this gem maps to a standard staff type (fire/ice/lightning), use that spell instead
+        const stdType = STAFF_GEM_TYPE[gem];
+        if (stdType) {
+            castUniqueSpell(stdType, manaSpent);
+            return;
+        }
+
+        if (gemKey === 'diamond') {
+            // Crystal Storm: 8 piercing shards fan out
+            for (let i = 0; i < 8; i++) {
+                const a = player.group.rotation.y + (i / 8) * Math.PI * 2;
+                const mat = new THREE.MeshBasicMaterial({ color: 0x88ffff, transparent: true, opacity: 0.8 });
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.12), mat);
+                mesh.position.set(px, py + 1.2, pz);
+                scene.add(mesh);
+                const light = new THREE.PointLight(0x88ffff, 0.5, 3);
+                scene.add(light);
+                projectiles.push({ mesh, light, x: px, y: py+1.2, z: pz, vx: Math.sin(a)*16, vy: 1, vz: Math.cos(a)*16, life: 1.5, age: 0, damage: 4, staffType: 'ice_staff' });
+            }
+        } else if (gemKey === 'emerald') {
+            // Poison Cloud: AOE damage over time
+            const cloud = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 6),
+                new THREE.MeshBasicMaterial({ color: 0x22cc44, transparent: true, opacity: 0.2 }));
+            cloud.position.set(px, py + 1, pz); scene.add(cloud);
+            let age = 0;
+            const tick = () => { age += 0.5;
+                for (const c of creatures.creatures) { if (c.dead) continue; const dx=c.x-px,dz=c.z-pz; if(dx*dx+dz*dz<64) { c.hp-=3; if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;} } }
+                cloud.material.opacity = 0.2 * (1 - age/5);
+                if (age < 5) setTimeout(tick, 500); else { scene.remove(cloud); cloud.geometry.dispose(); }
+            }; setTimeout(tick, 500);
+        } else if (gemKey === 'gold_ingot' || gemKey === 'gold') {
+            // Midas Touch: burst of 5 gold bolts
+            for (let i = 0; i < 5; i++) {
+                const a = player.group.rotation.y + (i-2)*0.15;
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.9 });
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), mat);
+                mesh.position.set(px, py+1.2, pz); scene.add(mesh);
+                const light = new THREE.PointLight(0xffdd44, 0.5, 3); scene.add(light);
+                projectiles.push({ mesh, light, x:px, y:py+1.2, z:pz, vx:Math.sin(a)*18, vy:0.5+i*0.3, vz:Math.cos(a)*18, life:2, age:0, damage:3, staffType:'basic_staff' });
+            }
+        } else if (gemKey === 'iron_ingot' || gemKey === 'iron') {
+            // Iron Wall: spawn 3 temporary iron blocks in front of player
+            const facing = player.group.rotation.y;
+            const bx = Math.round((px + Math.sin(facing)*2) / BLOCK_SIZE);
+            const bz = Math.round((pz + Math.cos(facing)*2) / BLOCK_SIZE);
+            const by = Math.floor(py / BLOCK_SIZE) + 128;
+            for (let i = -1; i <= 1; i++) {
+                const wx = bx + Math.round(Math.cos(facing)*i), wz = bz - Math.round(Math.sin(facing)*i);
+                for (let dy = 0; dy < 3; dy++) world.setBlock(wx, by+dy, wz, BLOCK.IRON_ORE);
+                chunkManager.rebuildChunkAt(wx, wz);
+                setTimeout(() => { for (let dy = 0; dy < 3; dy++) world.setBlock(wx, by+dy, wz, BLOCK.AIR); chunkManager.rebuildChunkAt(wx, wz); }, 8000);
+            }
+        } else if (gemKey === 'steel_ingot' || gemKey === 'steel') {
+            // Ricochet: bolt that bounces between 4 enemies
+            const sorted = creatures.creatures.filter(c=>!c.dead).map(c=>({c,d:(c.x-px)*(c.x-px)+(c.z-pz)*(c.z-pz)})).sort((a,b)=>a.d-b.d).slice(0,4);
+            let prevX=px,prevZ=pz,prevY=py+1.2;
+            for (const{c} of sorted) { if(c.d>25*25)continue; c.hp-=8; if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}
+                const cy=getTerrainHeight(c.x,c.z)+1;
+                const geo=new THREE.BufferGeometry(); const pts=[];
+                for(let s=0;s<=4;s++){const t=s/4;pts.push(prevX+(c.x-prevX)*t+(s>0&&s<4?(Math.random()-0.5)*0.3:0),prevY+(cy-prevY)*t,prevZ+(c.z-prevZ)*t+(s>0&&s<4?(Math.random()-0.5)*0.3:0));}
+                geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+                const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xe0e8f0})); scene.add(line);
+                setTimeout(()=>{scene.remove(line);geo.dispose();},400);
+                prevX=c.x;prevZ=c.z;prevY=cy;
+            }
+        } else if (gemKey === 'leaves') {
+            // Regrowth: heal 6 + regen
+            playerHP = Math.min(playerMaxHP, playerHP + 6); updateHeartsUI();
+            let ticks = 0;
+            const regen = () => { ticks++; playerHP = Math.min(playerMaxHP, playerHP + 2); updateHeartsUI();
+                if (ticks < 3) setTimeout(regen, 1000); };
+            setTimeout(regen, 1000);
+            for (let i = 0; i < 10; i++) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08), new THREE.MeshBasicMaterial({color:0x44ff44,transparent:true,opacity:0.7}));
+                m.position.set(px+(Math.random()-0.5),py+0.5+Math.random()*1.5,pz+(Math.random()-0.5)); scene.add(m);
+                setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},1200);
+            }
+        } else if (gemKey === 'wood' || gemKey === String(BLOCK.WOOD)) {
+            // Splinter Bomb: explosive AOE 5 damage
+            const facing = player.group.rotation.y;
+            const tx = px + Math.sin(facing)*5, tz = pz + Math.cos(facing)*5;
+            for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-tx,dz=c.z-tz; if(dx*dx+dz*dz<25){c.hp-=5;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}}}
+            for (let i = 0; i < 12; i++) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.04,0.04), new THREE.MeshBasicMaterial({color:0x8a6a3a}));
+                m.position.set(tx+(Math.random()-0.5)*2,py+1+Math.random(),tz+(Math.random()-0.5)*2); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3); scene.add(m);
+                setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},600);
+            }
+        } else if (gemKey === 'stone' || gemKey === String(BLOCK.STONE)) {
+            // Quake: stun all enemies within 7 units for 3s
+            for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-px,dz=c.z-pz;
+                if(dx*dx+dz*dz<49){c.hp-=4;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}
+                if(!c._frozen){c._frozen=true;c._origChaseSpeed=c.chaseSpeed||3;c.chaseSpeed=0;setTimeout(()=>{c._frozen=false;c.chaseSpeed=c._origChaseSpeed;},3000);}}}
+            // Ground pound visual
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.2,6,24), new THREE.MeshBasicMaterial({color:0x888888,transparent:true,opacity:0.6}));
+            ring.position.set(px,py+0.1,pz); ring.rotation.x=Math.PI/2; scene.add(ring);
+            let a=0; const anim=()=>{a+=0.016;ring.scale.set(1+a*18,1+a*18,1);ring.material.opacity=Math.max(0,0.6-a*1.5);if(a<0.5)requestAnimationFrame(anim);else{scene.remove(ring);ring.geometry.dispose();}};requestAnimationFrame(anim);
+        } else if (gemKey === 'dragonsteel_ingot' || gemKey === 'dragonsteel') {
+            // Dragon Breath: cone of fire in front, 15 damage
+            const facing = player.group.rotation.y;
+            for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-px,dz=c.z-pz;const dist=Math.sqrt(dx*dx+dz*dz);
+                if(dist>10)continue; const aToE=Math.atan2(dx,dz); let diff=aToE-facing; while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;
+                if(Math.abs(diff)<Math.PI/4){c.hp-=15;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}}}
+            // Fire cone visual
+            for (let i = 0; i < 20; i++) {
+                const spread=(Math.random()-0.5)*0.8; const dist=1+Math.random()*8;
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,0.15), new THREE.MeshBasicMaterial({color:i<10?0xff4400:0xffaa22,transparent:true,opacity:0.7}));
+                m.position.set(px+Math.sin(facing+spread)*dist,py+0.8+Math.random()*0.8,pz+Math.cos(facing+spread)*dist); scene.add(m);
+                setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},400+Math.random()*300);
+            }
+        }
+    }
+}
+
+// Dragon wyvern projectile — uses the REAL wyvern model from dragons.js
+function _makeDragonProjectile(color) {
+    // Create an actual wyvern using the same function that makes baby dragons
+    const eggColor = color;
+    const wingColor = new THREE.Color(color).multiplyScalar(0.6).getHex();
+    const bd = makeBabyDragon(0, 0, 0, eggColor, wingColor, true); // isWyvern=true
+    const g = bd.group;
+
+    // Set to flying pose immediately
+    bd.flying = true;
+    bd._flapT = Math.random() * 2; // random start phase
+    bd.walkPhase = 0;
+
+    // Scale to visible projectile size
+    g.scale.setScalar(0.8 * (bd.growthScale || 0.15));
+
+    // Set legs to flying tuck
+    for (const leg of bd.legs) leg.rotation.x = 0.6;
+    bd.headGrp.rotation.x = -0.08;
+    if (bd.neckGrp) bd.neckGrp.rotation.x = 0.15;
+
+    // Store dragon data for animation
+    g._dragonData = bd;
+    g._wings = bd.wings;
+    return g;
 }
 
 function updateProjectiles(dt) {
@@ -3495,9 +4394,23 @@ function updateProjectiles(dt) {
         p.age += dt;
         if (p.age > p.life) {
             scene.remove(p.mesh); scene.remove(p.light);
-            p.mesh.geometry.dispose(); p.mesh.material.dispose();
+            if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
             projectiles.splice(i, 1);
             continue;
+        }
+        // Homing projectiles (Arcane Barrage)
+        if (p._homing && p._target && !p._target.dead) {
+            const dx = p._target.x - p.x;
+            const dy = (getTerrainHeight(p._target.x, p._target.z) + 0.8) - p.y;
+            const dz = p._target.z - p.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+            const homingStrength = 8;
+            p.vx += (dx/dist) * homingStrength * dt;
+            p.vy += (dy/dist) * homingStrength * dt;
+            p.vz += (dz/dist) * homingStrength * dt;
+            // Clamp speed
+            const spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy + p.vz*p.vz);
+            if (spd > 18) { p.vx *= 18/spd; p.vy *= 18/spd; p.vz *= 18/spd; }
         }
         // Gravity for fire, none for lightning
         if (p.staffType === 'fire_staff') p.vy -= 5 * dt;
@@ -3506,30 +4419,89 @@ function updateProjectiles(dt) {
         p.mesh.position.set(p.x, p.y, p.z);
         p.light.position.set(p.x, p.y, p.z);
 
+        // Dragon wyvern projectile: face direction + real flying animation
+        if (p._isDragon && p.mesh._dragonData) {
+            p.mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
+            const bd = p.mesh._dragonData;
+            bd._flapT = (bd._flapT || 0) + dt;
+            bd.walkPhase += dt * 12;
+            for (const w of bd.wings) {
+                const si = w._s;
+                if (bd.isWyvern && w._elbow) {
+                    // Exact wyvern flying animation from dragons.js
+                    const [sFlap, eFlap] = computeFlap(bd._flapT);
+                    w.rotation.set(0, 0, 0);
+                    w.rotation.y = si * 0.15;
+                    w.rotation.z = si * (-0.1 + sFlap * 0.4);
+                    w.rotation.x = sFlap * 0.08;
+                    w._elbow.rotation.set(0, si * -0.25, si * (-0.15 + eFlap * 0.45));
+                    if (w._hand) w._hand.rotation.set(0, 0, 0);
+                    if (w._flyFRots) applyFingerRots(w, w._flyFRots);
+                    updateWyvernMembrane(w);
+                }
+            }
+            // Tail sway
+            if (bd.tailSegs) {
+                for (let ti = 0; ti < bd.tailSegs.length; ti++) {
+                    bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 0.5 + ti * 0.35) * 0.07;
+                }
+            }
+        }
+
         // Fade out
-        p.mesh.material.opacity = 1 - (p.age / p.life) * 0.5;
+        if (p.mesh.material) p.mesh.material.opacity = 1 - (p.age / p.life) * 0.5;
         p.light.intensity = 2 * (1 - p.age / p.life);
 
         // Hit terrain — destroy on contact
         if (world && world.isSolid(p.x, p.y, p.z)) {
             scene.remove(p.mesh); scene.remove(p.light);
-            p.mesh.geometry.dispose(); p.mesh.material.dispose();
+            if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
             projectiles.splice(i, 1);
             continue;
         }
 
-        // Hit creatures
-        if (creatures) {
+        // Enemy projectiles hit player
+        if (p._isEnemyProjectile && player) {
+            const dx = player.position.x - p.x, dz = player.position.z - p.z;
+            const dy = (player.position.y + 0.8) - p.y;
+            if (dx*dx + dy*dy + dz*dz < 1.5) {
+                if (typeof playerTakeDamage === 'function') playerTakeDamage(p.damage);
+                scene.remove(p.mesh); scene.remove(p.light);
+                if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
+                projectiles.splice(i, 1);
+                continue;
+            }
+        }
+
+        // Hit creatures (player projectiles only)
+        if (!p._isEnemyProjectile && creatures) {
             for (const sh of creatures.creatures) {
-                if (sh.dead) continue;
+                if (sh.dead || sh._shielded) continue;
                 const dx = sh.x - p.x, dz = sh.z - p.z;
                 const dy = (world.getHeight(sh.x, sh.z) + 0.5) - p.y;
                 if (dx * dx + dy * dy + dz * dz < 2) {
                     sh.hp -= p.damage;
+                    staffDamageDealt += p.damage;
+                    const prevMax = getMaxSpellSlot();
                     sh.x += dx * 0.1; sh.z += dz * 0.1; // tiny knockback
-                    if (sh.hp <= 0) { sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0; }
+                    if (sh.hp <= 0) {
+                        sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0;
+                        // Trigger boss death handlers for projectile kills
+                        if (sh._isBoss) {
+                            if (sh._bossName) killedBosses.add(sh._bossName);
+                            if (sh._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(sh);
+                            else if (sh._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(sh);
+                            else if (sh._isHobgoblin && creatures._onHobgoblinDeath) creatures._onHobgoblinDeath(sh);
+                            else if (sh._isGateBoss && creatures._onGateBossDeath) creatures._onGateBossDeath(sh);
+                            else if (creatures._onBossDeath) creatures._onBossDeath(sh);
+                        }
+                    }
+                    if (getMaxSpellSlot() > prevMax) {
+                        addChatMessage(`New spell unlocked: Shift+${getMaxSpellSlot()}!`, 'rgba(200,170,255,0.95)');
+                        updateSpellSlotUI();
+                    }
                     scene.remove(p.mesh); scene.remove(p.light);
-                    p.mesh.geometry.dispose(); p.mesh.material.dispose();
+                    if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
                     projectiles.splice(i, 1);
                     break;
                 }
@@ -3566,6 +4538,24 @@ function updateHeartsUI() {
     el.innerHTML = html;
 }
 
+function updateManaUI() {
+    const el = document.getElementById('manaBar');
+    if (!el) return;
+    let html = '';
+    const starCount = Math.ceil(playerMaxMana / 2);
+    for (let i = 0; i < starCount; i++) {
+        const manaForStar = (i + 1) * 2;
+        if (playerMana >= manaForStar) {
+            html += '<span style="font-size:28px;color:#4488ff;text-shadow:0 0 6px #2266cc;">★</span>';
+        } else if (playerMana >= manaForStar - 1) {
+            html += '<span style="font-size:14px;color:#4488ff;opacity:0.5;text-shadow:0 0 4px #2266cc;">★</span>';
+        } else {
+            html += '<span style="font-size:28px;color:#333;opacity:0.4;">★</span>';
+        }
+    }
+    el.innerHTML = html;
+}
+
 // ── Keybinds ──
 const DEFAULT_KEYBINDS = {
     forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
@@ -3591,9 +4581,24 @@ function keyName(code) {
 
 // ── Input ──
 const keys = {};
+let _leftMouseDown = false;
+renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) _leftMouseDown = true; });
+document.addEventListener('mouseup', e => { if (e.button === 0) _leftMouseDown = false; });
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
+    // Spell slot switching: Shift+1-6
+    if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit6') {
+        const slot = parseInt(e.code.replace('Digit', ''));
+        if (slot <= getMaxSpellSlot()) {
+            activeSpellSlot = slot;
+            updateSpellSlotUI();
+        } else {
+            addChatMessage(`Spell slot ${slot} locked — deal more staff damage to unlock!`, 'rgba(200,150,100,0.8)');
+        }
+        e.preventDefault();
+        return;
+    }
     if (e.code === keybinds.hideHUD && gameStarted) {
         hudHidden = !hudHidden;
         const vis = hudHidden ? 'none' : '';
@@ -4200,6 +5205,7 @@ const BLOCK_INFO = {
     [BLOCK.EMERALD_ORE]: { name:'Emerald Ore', top:'#22cc44', front:'#18aa33' },
     [BLOCK.TOPAZ_ORE]: { name:'Topaz Ore', top:'#ddaa22', front:'#bb8818' },
     [BLOCK.DARK_STONE]: { name:'Dark Stone', top:'#4a4a50', front:'#3a3a3e' },
+    [BLOCK.CHEST]: { name:'Chest', top:'#8a6535', front:'#6b4a20' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -4228,6 +5234,8 @@ function getItemInfo(key) {
     if (key === 'anvil_block') return { name: 'Anvil', top: '#666', front: '#444' };
     if (key === 'blast_furnace_block') return { name: 'Blast Furnace', top: '#555560', front: '#3a3a40' };
     if (key === 'campfire_block') return { name: 'Campfire', top: '#cc6622', front: '#8a4a1a' };
+    if (key === 'chest_block') return { name: 'Chest', top: '#8a6535', front: '#6b4a20' };
+    if (key === 'void_staff') return { name: 'Void Staff', top: '#8833cc', front: '#551a99', isTool: true, toolType: 'staff' };
     if (key === 'steel_ingot') return { name: 'Steel Ingot', top: '#d0d8e0', front: '#a0a8b8' };
     if (key === 'steel_sword') return { name: 'Steel Sword', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'sword' };
     if (key === 'steel_pickaxe') return { name: 'Steel Pickaxe', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'pickaxe' };
@@ -4639,9 +5647,10 @@ updateHotbarUI();
 // Key handlers: 1-9 for hotbar, I for inventory
 document.addEventListener('keydown', e => {
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 9 && !inventoryOpen) {
+    if (num >= 1 && num <= 9 && !inventoryOpen && !e.shiftKey) {
         selectedSlot = num - 1;
         updateHotbarUI();
+        updateSpellSlotUI();
     }
     if (e.code === 'Escape' && settingsOpen) {
         settingsOpen = false;
@@ -4663,7 +5672,11 @@ document.addEventListener('keydown', e => {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
-    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !inventoryOpen && !mapOpen && gameStarted) {
+    } else if (e.code === 'Escape' && chestOpen) {
+        chestOpen = false; chestOpenKey = null;
+        chestMenuEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
         gamePaused = !gamePaused;
         pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
         if (!gamePaused && useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
@@ -4673,6 +5686,7 @@ document.addEventListener('keydown', e => {
         if (furnaceOpen) { furnaceOpen = false; furnaceMenuEl.style.display = 'none'; }
         if (anvilOpen) { anvilOpen = false; anvilMenuEl.style.display = 'none'; }
         if (blastFurnaceOpen) { blastFurnaceOpen = false; blastFurnaceMenuEl.style.display = 'none'; }
+        if (chestOpen) { chestOpen = false; chestOpenKey = null; chestMenuEl.style.display = 'none'; }
         inventoryOpen = !inventoryOpen;
         invScreenEl.style.display = inventoryOpen ? 'block' : 'none';
         if (inventoryOpen) {
@@ -4949,13 +5963,44 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         return;
     }
-    // Staff — fire projectile (delay 1 frame so camera catches up to new rotation)
+    // Staff spells — depends on activeSpellSlot
     if (STAFF_PROPS[held] && inventory[held] > 0 && attackCooldown <= 0) {
-        player.triggerSwing();
-        attackCooldown = STAFF_PROPS[held].speed > 30 ? 0.3 : 0.6; // lightning fires faster
-        const staffType = held;
-        requestAnimationFrame(() => requestAnimationFrame(() => fireProjectile(staffType)));
-        return;
+        if (activeSpellSlot === 1 && playerMana >= 2) {
+            // Spell 1: Projectile bolt
+            playerMana -= 2;
+            updateManaUI();
+            player.triggerSwing();
+            attackCooldown = STAFF_PROPS[held].speed > 30 ? 0.3 : 0.6;
+            const staffType = held;
+            requestAnimationFrame(() => requestAnimationFrame(() => fireProjectile(staffType)));
+            return;
+        } else if (activeSpellSlot === 3) {
+            // Spell 3: Unique per staff
+            const sp = STAFF_SPELLS[held];
+            const minMana = (held === 'void_staff') ? 2 : sp.mana3;
+            if (sp && playerMana >= minMana) {
+                const manaSpent = (held === 'void_staff') ? playerMana : sp.mana3;
+                playerMana -= manaSpent;
+                updateManaUI();
+                player.triggerSwing();
+                attackCooldown = 1.5;
+                castUniqueSpell(held, manaSpent);
+                return;
+            }
+        } else if (activeSpellSlot >= 4 && activeSpellSlot <= 6) {
+            // Universal unlockable spells
+            const slotKey = '_slot' + activeSpellSlot;
+            const sp = STAFF_SPELLS[slotKey];
+            if (sp && playerMana >= sp.mana3) {
+                playerMana -= sp.mana3;
+                updateManaUI();
+                player.triggerSwing();
+                attackCooldown = 1.5;
+                castUniversalSpell(activeSpellSlot, held);
+                return;
+            }
+        }
+        // Spell 2 (shield) is handled by right-click, not left-click
     }
 
     miningHeld = true;
@@ -5043,6 +6088,7 @@ function getBlockDrop(blockType) {
     if (blockType === BLOCK.ANVIL) return 'anvil_block';
     if (blockType === BLOCK.BLAST_FURNACE) return 'blast_furnace_block';
     if (blockType === BLOCK.CAMPFIRE) return 'campfire_block';
+    if (blockType === BLOCK.CHEST) return 'chest_block';
     if (blockType === BLOCK.GOLD_ORE) return BLOCK.GOLD_ORE; // smelt to get gold ingot
     if (blockType === 15) return 'furnace_block'; // BLOCK.FURNACE
     return blockType;
@@ -5053,6 +6099,17 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
     // Remove anvil/campfire model if breaking
     if (hit.block === BLOCK.ANVIL) removeAnvilModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CAMPFIRE) removeCampfireModel(hit.x, hit.y, hit.z);
+    if (hit.block === BLOCK.CHEST) {
+        // Spill chest contents into player inventory
+        const ck = _findChestKey(hit.x, hit.y, hit.z);
+        if (ck && chestData[ck]) {
+            for (const [item, count] of Object.entries(chestData[ck].items)) {
+                inventory[item] = (inventory[item] || 0) + count;
+            }
+            delete chestData[ck];
+            updateHotbar();
+        }
+    }
 
     // Auto snap grid — detect underground mining (natural solid blocks above hit block)
     let useSnap = snapGrid;
@@ -5164,6 +6221,7 @@ const WB_CATEGORIES = [
         { from: 'iron_ingot', to: 'anvil_block', fc: 5, tc: 1 },
         { from: 'iron_ingot', fromAlt: BLOCK.STONE, to: 'blast_furnace_block', fc: 5, fcAlt: 8, tc: 1, multi: true },
         { from: BLOCK.WOOD, fromAlt: 'coal', to: 'campfire_block', fc: 4, fcAlt: 1, tc: 1, multi: true },
+        { from: BLOCK.WOOD, to: 'chest_block', fc: 8, tc: 1 },
     ]},
     { name: 'Pickaxes', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
@@ -5573,6 +6631,34 @@ const ACCENT_MATERIALS = [
 ];
 const BLADE_DAMAGE = { 'stick': 3, [BLOCK.STONE]: 4, 'iron_ingot': 6, 'gold_ingot': 5, 'steel_ingot': 8, 'diamond': 8, 'dragonsteel_ingot': 12 };
 
+// Staff gem → type mapping
+const STAFF_GEM_TYPE = {
+    'sapphire': 'ice_staff', 'coal': 'fire_staff', 'ruby': 'fire_staff',
+    'topaz': 'lightning_staff',
+};
+// Unique gem bolt properties for non-standard gems
+const STAFF_GEM_BOLT = {
+    'diamond':    { color: 0x88ffff, damage: 10, name: 'Diamond Staff', speed: 24, desc: 'Piercing shard bolt' },
+    'emerald':    { color: 0x22cc44, damage: 7, name: 'Emerald Staff', speed: 20, desc: 'Poison burst' },
+    'gold_ingot': { color: 0xffdd44, damage: 5, name: 'Gold Staff', speed: 18, desc: 'Golden barrage (3 bolts)' },
+    'iron_ingot': { color: 0xb0b8c0, damage: 6, name: 'Iron Staff', speed: 22, desc: 'Heavy slug' },
+    'steel_ingot':{ color: 0xe0e8f0, damage: 8, name: 'Steel Staff', speed: 26, desc: 'Ricocheting bolt' },
+    [BLOCK.LEAVES]:{ color: 0x44aa44, damage: 3, name: 'Nature Staff', speed: 18, desc: 'Healing aura on hit' },
+    [BLOCK.WOOD]: { color: 0x8a6a3a, damage: 3, name: 'Wooden Staff', speed: 16, desc: 'Splinter shot' },
+    [BLOCK.STONE]:{ color: 0x888888, damage: 5, name: 'Stone Staff', speed: 16, desc: 'Boulder toss' },
+    'dragonsteel_ingot': { color: 0x4444aa, damage: 14, name: 'Dragonsteel Staff', speed: 28, desc: 'Dragon flame bolt' },
+};
+
+const HOLDER_STYLES = ['prongs', 'cage', 'coil', 'claws', 'crown'];
+
+let anvilStaffConfig = {
+    shaftMat: 'stick',
+    holderStyle: 'prongs',
+    holderMat: 'iron_ingot',
+    gem: 'ruby',
+    name: '',
+};
+
 let anvilSwordConfig = {
     pommelStyle: 'round', pommelMat: 'iron_ingot',
     handleMat: 'stick',
@@ -5667,6 +6753,52 @@ function updateAnvilUI() {
     // Cost summary + forge button
     html += '<div id="anvilCostSummary" style="margin-top:6px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
     html += '<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Sword</button>';
+    html += '</div>';
+
+    // ── Custom Staff Forge ──
+    html += '<div style="margin-top:12px;border-top:1px solid rgba(120,160,80,0.3);padding-top:10px;">';
+    html += '<div style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Custom Staff Forge</div>';
+
+    const _gemOpts = [
+        { value: 'coal', label: 'Coal (Fire)' }, { value: 'ruby', label: 'Ruby (Fire)' },
+        { value: 'sapphire', label: 'Sapphire (Ice)' }, { value: 'topaz', label: 'Topaz (Lightning)' },
+        { value: 'diamond', label: 'Diamond' }, { value: 'emerald', label: 'Emerald' },
+        { value: 'gold_ingot', label: 'Gold' }, { value: 'iron_ingot', label: 'Iron' },
+        { value: 'steel_ingot', label: 'Steel' }, { value: String(BLOCK.LEAVES), label: 'Leaves' },
+        { value: String(BLOCK.WOOD), label: 'Wood' }, { value: String(BLOCK.STONE), label: 'Stone' },
+        { value: 'dragonsteel_ingot', label: 'Dragonsteel' },
+    ];
+    // Shaft (2x material)
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Shaft</span>`;
+    html += `<span style="flex:1;">${_sel('staffShaftMat', _matOpts, anvilStaffConfig.shaftMat)}</span>`;
+    html += `<span style="${_lbl}">×2</span></div>`;
+    // Gem holder style + material (1x)
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Holder</span>`;
+    html += `<span style="flex:1;">${_sel('staffHolderStyle', _styleOpts(HOLDER_STYLES), anvilStaffConfig.holderStyle)}</span>`;
+    html += `<span style="flex:1;">${_sel('staffHolderMat', _matOpts, anvilStaffConfig.holderMat)}</span>`;
+    html += `<span style="${_lbl}">×1</span></div>`;
+    // Gem (1x)
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Gem</span>`;
+    html += `<span style="flex:1;">${_sel('staffGem', _gemOpts, anvilStaffConfig.gem)}</span>`;
+    html += `<span style="${_lbl}">×1</span></div>`;
+    // Name
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Name</span>`;
+    html += `<input type="text" id="staffName" maxlength="24" placeholder="Unnamed Staff" value="${anvilStaffConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
+    html += `</div>`;
+    // Staff type preview
+    const previewGem = anvilStaffConfig.gem;
+    const previewType = STAFF_GEM_TYPE[previewGem] || 'basic_staff';
+    const previewBolt = STAFF_GEM_BOLT[previewGem];
+    const gemKey2 = typeof previewGem === 'number' ? { [BLOCK.LEAVES]: 'leaves', [BLOCK.WOOD]: 'wood', [BLOCK.STONE]: 'stone' }[previewGem] || 'basic' : previewGem.replace('_ingot', '');
+    const gemSpell = STAFF_SPELLS['gem_' + gemKey2] || STAFF_SPELLS[previewType] || STAFF_SPELLS['basic_staff'];
+    const typeLabel = previewBolt ? previewBolt.name : previewType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const descLabel = (previewBolt ? previewBolt.desc + ' + ' : '') + gemSpell.name3 + ': ' + gemSpell.desc3;
+    const isDragonPreview = String(anvilStaffConfig.shaftMat) === 'dragonsteel_ingot' && String(anvilStaffConfig.holderMat) === 'dragonsteel_ingot';
+    html += `<div style="font:10px monospace;color:rgba(150,200,130,0.7);margin-top:4px;">Type: ${typeLabel} — ${descLabel}</div>`;
+    if (isDragonPreview) html += `<div style="font:10px monospace;color:rgba(130,130,200,0.8);margin-top:2px;">✦ Dragonsteel Synergy: Projectiles are tiny flying wyverns!</div>`;
+    // Cost + forge button
+    html += '<div id="staffCostSummary" style="margin-top:4px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
+    html += '<button class="menu-btn" id="forgeStaffBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Staff</button>';
     html += '</div>';
 
     html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.4);font:10px monospace;">Escape to close</div>';
@@ -5798,6 +6930,93 @@ function updateAnvilUI() {
         showToast('Forged: ' + (c.name || tier + ' sword'));
     });
 
+    // ── Staff forge wiring ──
+    const _readStaffConfig = () => {
+        const c = anvilStaffConfig;
+        c.shaftMat = document.getElementById('staffShaftMat')?.value || 'stick';
+        c.holderStyle = document.getElementById('staffHolderStyle')?.value || 'prongs';
+        c.holderMat = document.getElementById('staffHolderMat')?.value || 'iron_ingot';
+        c.gem = document.getElementById('staffGem')?.value || 'ruby';
+        c.name = document.getElementById('staffName')?.value?.trim() || '';
+        if (!isNaN(c.shaftMat)) c.shaftMat = Number(c.shaftMat);
+        if (!isNaN(c.holderMat)) c.holderMat = Number(c.holderMat);
+        if (!isNaN(c.gem)) c.gem = Number(c.gem);
+    };
+
+    const _updateStaffCost = () => {
+        _readStaffConfig();
+        const costs = {};
+        const add = (mat, n) => { if (!mat) return; costs[mat] = (costs[mat] || 0) + n; };
+        add(anvilStaffConfig.shaftMat, 2);
+        add(anvilStaffConfig.holderMat, 1);
+        add(anvilStaffConfig.gem, 1);
+        let text = 'Cost: ';
+        let canForge = true;
+        for (const [mat, count] of Object.entries(costs)) {
+            const info = getItemInfo(typeof mat === 'string' ? mat : Number(mat));
+            const have = inventory[mat] || inventory[Number(mat)] || 0;
+            const ok = have >= count;
+            if (!ok) canForge = false;
+            text += `<span style="color:${ok ? 'rgba(150,200,100,0.8)' : 'rgba(200,80,80,0.8)'}">${count}× ${info?.name || mat}</span> `;
+        }
+        const el = document.getElementById('staffCostSummary');
+        if (el) el.innerHTML = text;
+        const btn = document.getElementById('forgeStaffBtn');
+        if (btn) { btn.style.opacity = canForge ? '1' : '0.4'; btn.dataset.canForge = canForge; }
+    };
+
+    for (const id of ['staffShaftMat','staffHolderStyle','staffHolderMat','staffGem']) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', () => { _updateStaffCost(); updateAnvilUI(); });
+    }
+    _updateStaffCost();
+
+    const forgeStaffBtn = document.getElementById('forgeStaffBtn');
+    if (forgeStaffBtn) forgeStaffBtn.addEventListener('click', () => {
+        _readStaffConfig();
+        const c = anvilStaffConfig;
+        const costs = {};
+        const add = (mat, n) => { if (!mat) return; costs[mat] = (costs[mat] || 0) + n; };
+        add(c.shaftMat, 2); add(c.holderMat, 1); add(c.gem, 1);
+        for (const [mat, count] of Object.entries(costs)) {
+            const have = inventory[mat] || inventory[Number(mat)] || 0;
+            if (have < count) return;
+        }
+        for (const [mat, count] of Object.entries(costs)) _consume(mat, count);
+
+        // Determine staff type from gem
+        const baseType = STAFF_GEM_TYPE[c.gem] || 'basic_staff';
+        const gemBolt = STAFF_GEM_BOLT[c.gem];
+        const isDragonstaff = (String(c.shaftMat) === 'dragonsteel_ingot' && String(c.holderMat) === 'dragonsteel_ingot');
+
+        const staffId = 'cstaff_' + Date.now();
+        if (!window._customStaffs) window._customStaffs = {};
+        window._customStaffs[staffId] = {
+            baseType,
+            shaftMat: c.shaftMat, holderStyle: c.holderStyle, holderMat: c.holderMat,
+            gem: c.gem, name: c.name || (gemBolt ? gemBolt.name : baseType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())),
+            customBolt: gemBolt ? { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: 0.1, trail: gemBolt.color, life: 2.0 } : null,
+            isDragonstaff,
+        };
+        // Register in STAFF_PROPS so it can fire
+        if (gemBolt) {
+            STAFF_PROPS[staffId] = { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: isDragonstaff ? 0.15 : 0.1, trail: gemBolt.color, life: 2.5 };
+        } else {
+            STAFF_PROPS[staffId] = { ...STAFF_PROPS[baseType] };
+        }
+        if (isDragonstaff) STAFF_PROPS[staffId]._dragonProjectile = true;
+        // Gem-specific spell 3
+        const gemSpellKey = 'gem_' + (typeof c.gem === 'number' ? { [BLOCK.LEAVES]: 'leaves', [BLOCK.WOOD]: 'wood', [BLOCK.STONE]: 'stone' }[c.gem] || 'basic' : c.gem.replace('_ingot', ''));
+        STAFF_SPELLS[staffId] = STAFF_SPELLS[gemSpellKey] || STAFF_SPELLS[baseType] || STAFF_SPELLS['basic_staff'];
+
+        inventory[staffId] = 1;
+        const emptyIdx = hotbarSlots.indexOf(0);
+        if (emptyIdx >= 0) hotbarSlots[emptyIdx] = staffId;
+        refreshUI();
+        updateAnvilUI();
+        showToast('Forged: ' + (c.name || 'Custom Staff'));
+    });
+
     // Prevent keydown from propagating on inputs
     anvilMenuEl.querySelectorAll('input,select').forEach(el => {
         el.addEventListener('keydown', e => e.stopPropagation());
@@ -5805,18 +7024,19 @@ function updateAnvilUI() {
     });
 }
 
-// Handle custom sword items in getItemInfo
+// Handle custom sword AND staff items in getItemInfo
 const _origGetItemInfo = getItemInfo;
+const _matCol = { 'stick': '#8a6a3a', '3': '#999', [3]: '#999', 'iron_ingot': '#c8d0d8', 'gold_ingot': '#ffee44', 'steel_ingot': '#d0d8e0', 'diamond': '#88ffff', 'dragonsteel_ingot': '#2a2a40', 'ruby': '#ff3355', 'sapphire': '#4466ff', 'emerald': '#44ff66', 'topaz': '#ffcc33', 'coal': '#333', [BLOCK.LEAVES]: '#35b535', [BLOCK.WOOD]: '#6B4226', [BLOCK.STONE]: '#999' };
+const _mc = (k) => _matCol[k] || _matCol[String(k)] || '#c8d0d8';
 getItemInfo = function(key) {
     if (typeof key === 'string' && key.startsWith('csword_') && window._customSwords && window._customSwords[key]) {
         const cs = window._customSwords[key];
-        const _matCol = { 'stick': '#8a6a3a', '3': '#999', [3]: '#999', 'iron_ingot': '#c8d0d8', 'gold_ingot': '#ffee44', 'steel_ingot': '#d0d8e0', 'diamond': '#88ffff', 'dragonsteel_ingot': '#2a2a40', 'ruby': '#ff3355', 'sapphire': '#4466ff', 'emerald': '#44ff66', 'topaz': '#ffcc33' };
-        const _mc = (k) => _matCol[k] || _matCol[String(k)] || '#c8d0d8';
-        const bladeCol = _mc(cs.bladeMat);
-        const guardCol = _mc(cs.guardMat);
-        const handleCol = _mc(cs.handleMat);
-        const pommelCol = _mc(cs.pommelMat);
-        return { name: cs.name, top: bladeCol, front: handleCol, isTool: true, toolType: 'sword', customSword: cs, guardCol, pommelCol, bladeCol, handleCol };
+        return { name: cs.name, top: _mc(cs.bladeMat), front: _mc(cs.handleMat), isTool: true, toolType: 'sword', customSword: cs, guardCol: _mc(cs.guardMat), pommelCol: _mc(cs.pommelMat), bladeCol: _mc(cs.bladeMat), handleCol: _mc(cs.handleMat) };
+    }
+    if (typeof key === 'string' && key.startsWith('cstaff_') && window._customStaffs && window._customStaffs[key]) {
+        const cs = window._customStaffs[key];
+        const gemCol = _mc(cs.gem);
+        return { name: cs.name, top: gemCol, front: _mc(cs.shaftMat), isTool: true, toolType: 'staff' };
     }
     return _origGetItemInfo(key);
 };
@@ -5829,6 +7049,121 @@ const _getSwordDamage = (held) => {
         return window._customSwords[held].damage || 6;
     }
     return 0;
+};
+
+// ── Chest system ──
+const chestData = {}; // key "bx,by,bz" → { items: { itemKey: count, ... } }
+let chestOpen = false;
+let chestOpenKey = null; // which chest is open
+const CHEST_SLOTS = 27; // 27 item slots
+
+function _chestKey(bx, by, bz) { return bx + ',' + by + ',' + bz; }
+
+function _registerChest(bx, by, bz) {
+    const key = _chestKey(bx, by, bz);
+    if (!chestData[key]) chestData[key] = { items: {} };
+}
+
+function _findChestKey(bx, by, bz) {
+    // A chest is 2x2x2, so clicking any of its blocks should find the origin
+    for (let dx = 0; dx >= -1; dx--)
+        for (let dy = 0; dy >= -1; dy--)
+            for (let dz = 0; dz >= -1; dz--) {
+                const k = _chestKey(bx+dx, by+dy, bz+dz);
+                if (chestData[k]) return k;
+            }
+    return null;
+}
+
+const chestMenuEl = document.createElement('div');
+chestMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.55);backdrop-filter:blur(6px);border:2px solid rgba(160,140,100,0.3);border-radius:8px;padding:16px;min-width:360px;max-height:80vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(chestMenuEl);
+
+function updateChestUI() {
+    if (!chestOpenKey || !chestData[chestOpenKey]) return;
+    const chest = chestData[chestOpenKey];
+    const items = chest.items;
+    let html = '<div style="color:#e0d8c0;font:bold 16px monospace;text-align:center;margin-bottom:10px;">Chest</div>';
+
+    // Chest contents
+    html += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px;margin-bottom:12px;">';
+    const keys = Object.keys(items);
+    for (let i = 0; i < CHEST_SLOTS; i++) {
+        const itemKey = keys[i];
+        const count = itemKey ? items[itemKey] : 0;
+        const info = itemKey ? getItemInfo(itemKey) : null;
+        const bg = info ? info.front : 'rgba(40,40,40,0.5)';
+        const border = itemKey ? 'rgba(180,160,100,0.4)' : 'rgba(80,80,80,0.3)';
+        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
+        if (itemKey) html += `onclick="window._chestTakeItem('${itemKey}')"`;
+        html += '>';
+        if (info) {
+            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
+            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+
+    // Player inventory for depositing
+    html += '<div style="color:#a09880;font:11px monospace;margin-bottom:4px;">Your Items (click to deposit)</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px;">';
+    const invKeys = Object.keys(inventory);
+    for (let i = 0; i < 27; i++) {
+        const itemKey = invKeys[i];
+        const count = itemKey ? inventory[itemKey] : 0;
+        const info = itemKey ? getItemInfo(itemKey) : null;
+        const bg = info ? info.front : 'rgba(30,30,30,0.4)';
+        const border = itemKey ? 'rgba(100,140,100,0.4)' : 'rgba(60,60,60,0.3)';
+        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
+        if (itemKey) html += `onclick="window._chestDepositItem('${itemKey}')"`;
+        html += '>';
+        if (info) {
+            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
+            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+
+    // Close button
+    html += '<div style="text-align:center;margin-top:8px;"><button onclick="window._closeChest()" style="background:rgba(80,60,40,0.5);color:#c0b090;border:1px solid rgba(140,120,80,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
+    chestMenuEl.innerHTML = html;
+}
+
+window._chestTakeItem = (itemKey) => {
+    if (!chestOpenKey || !chestData[chestOpenKey]) return;
+    const chest = chestData[chestOpenKey];
+    if (!chest.items[itemKey]) return;
+    // Move 1 item (or shift-click for all — just do 1 for now)
+    const amount = 1;
+    inventory[itemKey] = (inventory[itemKey] || 0) + amount;
+    chest.items[itemKey] -= amount;
+    if (chest.items[itemKey] <= 0) delete chest.items[itemKey];
+    updateChestUI();
+    updateHotbar();
+};
+
+window._chestDepositItem = (itemKey) => {
+    if (!chestOpenKey || !chestData[chestOpenKey]) return;
+    const chest = chestData[chestOpenKey];
+    // Check slot limit
+    const chestItemCount = Object.keys(chest.items).length;
+    if (!chest.items[itemKey] && chestItemCount >= CHEST_SLOTS) return; // full
+    const amount = 1;
+    if (!inventory[itemKey] || inventory[itemKey] < amount) return;
+    chest.items[itemKey] = (chest.items[itemKey] || 0) + amount;
+    inventory[itemKey] -= amount;
+    if (inventory[itemKey] <= 0) delete inventory[itemKey];
+    updateChestUI();
+    updateHotbar();
+    if (inventoryOpen) updateInventoryUI();
+};
+
+window._closeChest = () => {
+    chestOpen = false;
+    chestOpenKey = null;
+    chestMenuEl.style.display = 'none';
 };
 
 // ── Blast Furnace system ──
@@ -5935,7 +7270,7 @@ const PLACE_LOCK_MOVE = 1.0; // world units of player movement before lock break
 document.addEventListener('mousemove', e => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
 
 function doPlace(e) {
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen) return false;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
     const hit = raycastBlock(mouseEvt);
     if (!hit) return false;
@@ -5956,6 +7291,20 @@ function doPlace(e) {
         placingHeld = false;
         if (pointerLocked) document.exitPointerLock();
         return false;
+    }
+
+    // Right-click on chest → open chest
+    if (hit.block === BLOCK.CHEST && placeHoldTime < 0.05) {
+        const ck = _findChestKey(hit.x, hit.y, hit.z);
+        if (ck) {
+            chestOpen = true;
+            chestOpenKey = ck;
+            chestMenuEl.style.display = 'block';
+            updateChestUI();
+            placingHeld = false;
+            if (pointerLocked) document.exitPointerLock();
+            return false;
+        }
     }
 
     // Right-click on anvil → open anvil menu
@@ -5996,8 +7345,9 @@ function doPlace(e) {
     const isBlastFurnace = bt === 'blast_furnace_block';
     const isAnvil = bt === 'anvil_block';
     const isCampfire = bt === 'campfire_block';
-    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isCampfire ? BLOCK.CAMPFIRE : bt;
-    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isCampfire) return false;
+    const isChest = bt === 'chest_block';
+    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isCampfire ? BLOCK.CAMPFIRE : isChest ? BLOCK.CHEST : bt;
+    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isCampfire && !isChest) return false;
 
     const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
     const BS = BLOCK_SIZE;
@@ -6018,7 +7368,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         placeCampfireModel(px, py, pz);
-    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.BLAST_FURNACE) {
+    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
         for (let dx = 0; dx <= 1; dx++)
             for (let dy = 0; dy <= 1; dy++)
                 for (let dz = 0; dz <= 1; dz++)
@@ -6027,6 +7377,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
+        if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
         // Determine horizontal axis for brush
@@ -6081,10 +7432,15 @@ renderer.domElement.addEventListener('contextmenu', (e) => { e.preventDefault();
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 2) return;
     // Raise shield if equipped and holding weapon/tool/nothing placeable
+    const held = hotbarSlots[selectedSlot];
+    // Staff shielding — hold right-click with any staff (spell slot 2)
+    if (held && typeof held === 'string' && held.includes('staff') && STAFF_PROPS[held] && activeSpellSlot === 2) {
+        staffShielding = true;
+        return;
+    }
     if (equippedShield) {
-        const held = hotbarSlots[selectedSlot];
         const info = held ? getItemInfo(held) : null;
-        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block');
+        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
         if (!isPlaceable) {
             shieldRaised = true;
             return; // don't place blocks while shielding
@@ -6099,10 +7455,10 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     }
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
-    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; shieldRaised = false; }
+    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; shieldRaised = false; staffShielding = false; }
 });
 document.addEventListener('mouseup', (e) => {
-    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; shieldRaised = false; }
+    if (e.button === 2) { placingHeld = false; placeLock = null; placeCount = 0; shieldRaised = false; staffShielding = false; }
 });
 
 // ── Resize ──
@@ -6180,6 +7536,41 @@ function animate() {
         player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
     }
     dragonMgr.applyPlayerPose(player);
+
+    // Staff magic shield visual
+    if (staffShielding && player.staffHeld.visible) {
+        // Mid-cast pose — staff arm raised, body leaning forward
+        player.leftArm.shoulder.rotation.x = -1.8;
+        player.leftArm.shoulder.rotation.z = -0.2;
+        player.leftArm.elbow.rotation.x = -0.4;
+        player.spine.rotation.x = 0.1;
+        // Position magic shield disc in front of player
+        if (!magicShieldMesh.parent) scene.add(magicShieldMesh);
+        magicShieldMesh.visible = true;
+        const facing = player.group.rotation.y;
+        magicShieldMesh.position.set(
+            player.position.x + Math.sin(facing) * 1.0,
+            player.position.y + 1.0,
+            player.position.z + Math.cos(facing) * 1.0
+        );
+        magicShieldMesh.rotation.set(0, facing, 0);
+        // Animate
+        const st = performance.now() * 0.001;
+        _magicShieldMat.opacity = 0.25 + Math.sin(st * 3) * 0.1;
+        _magicRingMat.opacity = 0.5 + Math.sin(st * 2.5) * 0.15;
+        magicInnerRing.rotation.z = st * 1.5;
+        // Color based on staff type
+        const heldStaff = hotbarSlots[selectedSlot];
+        const staffCol = {
+            basic_staff: 0x44aa44, fire_staff: 0xff4400, ice_staff: 0x66ccff,
+            lightning_staff: 0xffee44, void_staff: 0x8833cc
+        };
+        const col = staffCol[heldStaff] || 0x8833cc;
+        _magicShieldMat.color.setHex(col);
+        _magicRingMat.color.setHex(col);
+    } else {
+        magicShieldMesh.visible = false;
+    }
 
     // Update shield visual
     if (equippedShield && SHIELD_TIERS[equippedShield]) {
@@ -6360,9 +7751,37 @@ function animate() {
         }
         else if (heldItem.includes('staff')) {
             player.staffHeld.visible = true;
-            const staffColors = { basic_staff: [0x44aa44, 0x228822], fire_staff: [0xff6622, 0xff4400], ice_staff: [0x66ccff, 0x3388cc], lightning_staff: [0xffee44, 0xccaa00] };
-            const sc = staffColors[heldItem] || [0xffffff, 0xaaaaaa];
-            player.setStaffColor(sc[0], sc[1]);
+            const isCustom = heldItem.startsWith('cstaff_') && window._customStaffs && window._customStaffs[heldItem];
+
+            if (isCustom) {
+                // Custom forged staff — use dynamic visuals from config
+                const cs = window._customStaffs[heldItem];
+                // Hide ALL pre-built extras
+                if (player.staffHeld._voidExtras) player.staffHeld._voidExtras.visible = false;
+                if (player.staffHeld._fireExtras) player.staffHeld._fireExtras.visible = false;
+                if (player.staffHeld._iceExtras) player.staffHeld._iceExtras.visible = false;
+                if (player.staffHeld._lightningExtras) player.staffHeld._lightningExtras.visible = false;
+                // Apply custom shaft color, holder shape, gem color
+                player.applyCustomStaff(cs);
+            } else {
+                // Standard staff — use pre-built models
+                // Hide custom group
+                if (player.staffHeld._customGrp) player.staffHeld._customGrp.visible = false;
+                const staffColors = { basic_staff: [0x44aa44, 0x228822], fire_staff: [0xff6622, 0xff4400], ice_staff: [0x66ccff, 0x3388cc], lightning_staff: [0xffee44, 0xccaa00], void_staff: [0x8833cc, 0x6622aa] };
+                const sc = staffColors[heldItem] || [0xffffff, 0xaaaaaa];
+                player.setStaffColor(sc[0], sc[1]);
+                const isVoid = heldItem === 'void_staff';
+                const isFire = heldItem === 'fire_staff';
+                const isIce = heldItem === 'ice_staff';
+                const isLightning = heldItem === 'lightning_staff';
+                const hasSpecial = isVoid || isFire || isIce || isLightning;
+                if (player.staffHeld._voidExtras) player.staffHeld._voidExtras.visible = isVoid;
+                if (player.staffHeld._fireExtras) player.staffHeld._fireExtras.visible = isFire;
+                if (player.staffHeld._iceExtras) player.staffHeld._iceExtras.visible = isIce;
+                if (player.staffHeld._lightningExtras) player.staffHeld._lightningExtras.visible = isLightning;
+                player.staffHeld._orbMesh.visible = !hasSpecial;
+                player.staffHeld._shaft.visible = !hasSpecial;
+            }
         }
         else if (heldItem.includes('axe')) {
             player.axeHeld.visible = true;
@@ -6390,6 +7809,27 @@ function animate() {
 
     // Attack cooldown
     if (attackCooldown > 0) attackCooldown -= dt;
+
+    // Mana regeneration — passive 0.5/s + active channel (hold click + right shift) 2/s
+    if (!staffShielding && playerMana < playerMaxMana) {
+        playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5);
+        updateManaUI();
+    }
+    const mouseHeld = placingHeld || shieldRaised || staffShielding || _leftMouseDown;
+    const channeling = mouseHeld && keys['ShiftRight'] && playerMana < playerMaxMana;
+    if (channeling && !staffShielding) {
+        playerMana = Math.min(playerMaxMana, playerMana + dt * 2.0);
+        updateManaUI();
+    }
+    // Staff shield drains mana (3 mana per second)
+    if (staffShielding) {
+        playerMana -= dt * 3.0;
+        if (playerMana <= 0) {
+            playerMana = 0;
+            staffShielding = false;
+        }
+        updateManaUI();
+    }
 
     // Projectiles
     updateProjectiles(dt);
@@ -6433,8 +7873,10 @@ function animate() {
         }
     }
 
-    // Hearts UI
+    // Hearts, Mana & Spell UI
     updateHeartsUI();
+    updateManaUI();
+    updateSpellSlotUI();
 
     // Mining progress
     if (miningTarget && miningHeld) {
@@ -6601,38 +8043,152 @@ function animate() {
         }
     }
 
-    // Boss smash attack animation (all bosses with _arms)
+    // Boss attack animations
     {
         const allBosses = creatures.creatures.filter(c => c._isBoss && !c.dead && c._arms && c._spine);
+        const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+        const _lerp = (a, b, u) => a + (b - a) * u;
+        const kf = (t, keys) => {
+            if (t <= keys[0][0]) return keys[0][1];
+            if (t >= keys[keys.length-1][0]) return keys[keys.length-1][1];
+            for (let i = 0; i < keys.length - 1; i++) {
+                if (t < keys[i+1][0]) return _lerp(keys[i][1], keys[i+1][1], ss(keys[i][0], keys[i+1][0], t));
+            }
+            return keys[keys.length-1][1];
+        };
         for (const boss of allBosses) {
             const bdx = player.position.x - boss.x, bdz = player.position.z - boss.z;
             const bDist = Math.sqrt(bdx*bdx + bdz*bdz);
-            // Trigger smash when in range and attack ready
+            // Trigger attack when in range and attack ready
             if (bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
                 boss._smashTimer = 0;
+                if (boss._isDarkKnight) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
             }
-            // Animate smash
+            // Animate attack
             if (boss._smashTimer >= 0) {
-                boss._smashTimer += dt / 0.8;
-                const t = boss._smashTimer;
-                const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
-                let armX = 0, elbX = 0, spnX = 0;
-                if (t < 0.3) {
-                    const u = ss(0, 0.3, t);
-                    armX = u * 2.5; elbX = u * (-1.0); spnX = u * (-0.2);
-                } else if (t < 0.5) {
-                    const u = ss(0.3, 0.5, t);
-                    armX = 2.5 - u * 4.0; elbX = -1.0 + u * 1.5; spnX = -0.2 + u * 0.4;
+                if (boss._isNecromancer) {
+                    // Necromancer: raise staff then fire purple projectile
+                    const dur = 1.0;
+                    boss._smashTimer += dt / dur;
+                    const t = boss._smashTimer;
+                    // Raise left arm (staff arm) overhead
+                    const raiseArm = kf(t, [[0,0],[0.3,-2.5],[0.5,-2.8],[0.65,-1.0],[1,0]]);
+                    const raiseElb = kf(t, [[0,0],[0.3,-0.5],[0.5,-0.3],[0.65,0.2],[1,0]]);
+                    const spnX = kf(t, [[0,0],[0.3,-0.15],[0.5,-0.2],[0.65,0.05],[1,0]]);
+                    boss._arms[0].shoulder.rotation.x = raiseArm;
+                    boss._arms[0].elbow.rotation.x = raiseElb;
+                    boss._arms[1].shoulder.rotation.x = raiseArm * 0.3;
+                    boss._spine.rotation.x = spnX;
+                    // Fire projectile at t=0.55
+                    if (t >= 0.55 && t < 0.6) {
+                        const dx = player.position.x - boss.x, dz = player.position.z - boss.z;
+                        const dy = (player.position.y + 0.8) - (boss.group.position.y + 1.5);
+                        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+                        const spd = 12;
+                        const mat = new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.9 });
+                        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 4), mat);
+                        mesh.position.set(boss.x, boss.group.position.y + 1.8, boss.z);
+                        scene.add(mesh);
+                        const light = new THREE.PointLight(0x8833cc, 2, 8);
+                        light.position.copy(mesh.position);
+                        scene.add(light);
+                        projectiles.push({
+                            mesh, light, x: boss.x, y: boss.group.position.y + 1.8, z: boss.z,
+                            vx: (dx/dist)*spd, vy: (dy/dist)*spd, vz: (dz/dist)*spd,
+                            life: 3, age: 0, damage: 5, staffType: 'necro',
+                            _isEnemyProjectile: true,
+                        });
+                    }
+                    if (boss._smashTimer >= 1) boss._smashTimer = -1;
+                } else if (boss._isDarkKnight) {
+                    // Dark Knight: player-style sword combo animation
+                    const dur = 0.6;
+                    boss._smashTimer += dt / dur;
+                    const t = boss._smashTimer;
+                    const combo = boss._dkCombo || 0;
+                    const M = 1.3; // motion scale (menacing big swings)
+                    let lShX=0, lShZ=0, lElX=0, rShX=0, spY=0, spX=0;
+
+                    if (combo === 0) {
+                        // Strike 1: high slash left-to-right
+                        lShX = kf(t, [[0,0],[0.12,-1.8],[0.30,-0.8],[0.6,0]]);
+                        lShZ = kf(t, [[0,0],[0.12,-0.6],[0.30,0.8],[0.6,0]]);
+                        lElX = kf(t, [[0,0],[0.12,-0.8],[0.30,0.2],[0.6,0]]);
+                        spY  = kf(t, [[0,0],[0.12,-0.4],[0.30,0.6],[0.6,0]]);
+                        spX  = kf(t, [[0,0],[0.20,0],[0.30,0.1],[0.6,0]]);
+                        rShX = kf(t, [[0,0],[0.12,0.2],[0.30,-0.2],[0.6,0]]);
+                    } else if (combo === 1) {
+                        // Strike 2: reverse slash right-to-left
+                        lShX = kf(t, [[0,0],[0.12,-1.5],[0.28,-0.7],[0.6,0]]);
+                        lShZ = kf(t, [[0,0],[0.12,0.8],[0.28,-0.8],[0.6,0]]);
+                        lElX = kf(t, [[0,0],[0.12,-0.6],[0.28,0.2],[0.6,0]]);
+                        spY  = kf(t, [[0,0],[0.12,0.4],[0.28,-0.6],[0.6,0]]);
+                        spX  = kf(t, [[0,0],[0.20,0],[0.28,0.1],[0.6,0]]);
+                        rShX = kf(t, [[0,0],[0.12,-0.2],[0.28,0.2],[0.6,0]]);
+                    } else {
+                        // Strike 3: overhead chop
+                        lShX = kf(t, [[0,0],[0.15,1.5],[0.35,-2.0],[0.7,0]]);
+                        lShZ = kf(t, [[0,0],[0.15,-0.3],[0.35,0],[0.7,0]]);
+                        lElX = kf(t, [[0,0],[0.15,-1.5],[0.35,0.3],[0.7,0]]);
+                        spX  = kf(t, [[0,0],[0.15,-0.15],[0.35,0.2],[0.7,0]]);
+                        rShX = kf(t, [[0,0],[0.15,0.4],[0.35,-0.4],[0.7,0]]);
+                    }
+                    boss._arms[0].shoulder.rotation.x = lShX * M;
+                    boss._arms[0].shoulder.rotation.z = lShZ * M;
+                    boss._arms[0].elbow.rotation.x = lElX * M;
+                    boss._spine.rotation.y = spY * M;
+                    boss._spine.rotation.x = spX * M;
+                    // Right arm mirrors/follows for two-handed look
+                    boss._arms[1].shoulder.rotation.x = lShX * M - 0.15;
+                    boss._arms[1].shoulder.rotation.z = -lShZ * M * 0.85;
+                    boss._arms[1].elbow.rotation.x = lElX * M - 0.15;
+
+                    if (boss._smashTimer >= 1) boss._smashTimer = -1;
                 } else {
-                    const u = ss(0.5, 1.0, t);
-                    armX = -1.5 * (1-u); elbX = 0.5 * (1-u); spnX = 0.2 * (1-u);
+                    // Other bosses: original smash animation
+                    boss._smashTimer += dt / 0.8;
+                    const t = boss._smashTimer;
+                    let armX = 0, elbX = 0, spnX = 0;
+                    if (t < 0.3) {
+                        const u = ss(0, 0.3, t);
+                        armX = u * 2.5; elbX = u * (-1.0); spnX = u * (-0.2);
+                    } else if (t < 0.5) {
+                        const u = ss(0.3, 0.5, t);
+                        armX = 2.5 - u * 4.0; elbX = -1.0 + u * 1.5; spnX = -0.2 + u * 0.4;
+                    } else {
+                        const u = ss(0.5, 1.0, t);
+                        armX = -1.5 * (1-u); elbX = 0.5 * (1-u); spnX = 0.2 * (1-u);
+                    }
+                    for (const arm of boss._arms) {
+                        arm.shoulder.rotation.x = armX;
+                        arm.elbow.rotation.x = elbX;
+                    }
+                    boss._spine.rotation.x = spnX;
+                    if (boss._smashTimer >= 1) boss._smashTimer = -1;
                 }
-                for (const arm of boss._arms) {
-                    arm.shoulder.rotation.x = armX;
-                    arm.elbow.rotation.x = elbX;
+            }
+            // Necromancer: always animate floating particles + staff effects
+            if (boss._isNecromancer) {
+                const time = performance.now() * 0.001;
+                if (boss._necParticles) {
+                    for (const p of boss._necParticles.children) {
+                        p.position.y = 0.5 + Math.sin(time * 1.5 + p._phase) * 0.4 + Math.cos(time * 0.7 + p._phase * 2) * 0.2;
+                        p.position.x = Math.sin(time * 0.8 + p._phase) * 0.5;
+                        p.position.z = Math.cos(time * 0.8 + p._phase) * 0.5;
+                        p.material.opacity = 0.3 + Math.sin(time * 2 + p._phase) * 0.3;
+                    }
                 }
-                boss._spine.rotation.x = spnX;
-                if (boss._smashTimer >= 1) boss._smashTimer = -1;
+                // Animate staff orb pulse and ring rotation
+                const pm = boss._playerModel;
+                if (pm) {
+                    const staff = pm.leftArm.handGrp.children[pm.leftArm.handGrp.children.length - 1];
+                    if (staff && staff._rings) {
+                        staff._rings[0].rotation.z = time * 1.5;
+                        staff._rings[1].rotation.y = time * 1.2;
+                        if (staff._orbMesh) staff._orbMesh.material.opacity = 0.65 + Math.sin(time * 3) * 0.2;
+                        if (staff._orbLight) staff._orbLight.intensity = 1.2 + Math.sin(time * 2.5) * 0.5;
+                    }
+                }
             }
         }
     }
@@ -7039,6 +8595,191 @@ function animate() {
     } else {
         _hlLine.visible = false;
         _faceMesh.visible = false;
+    }
+
+    // Necromancer shield — animate, check, and block player
+    {
+        const nec = creatures.creatures.find(c => c._isNecromancer && !c.dead);
+        if (nec && nec._shield) {
+            const shieldShouldBeActive = nec._shieldActive();
+            if (shieldShouldBeActive) {
+                // Animate shield dome
+                const st = performance.now() * 0.001;
+                nec._shield.visible = true;
+                nec._shieldRing.visible = true;
+                nec._shieldRing2.visible = true;
+                nec._shield.material.opacity = 0.1 + Math.sin(st * 1.5) * 0.05;
+                nec._shieldRing.rotation.z = st * 0.3;
+                nec._shieldRing2.rotation.z = -st * 0.5;
+                nec._shieldRing2.material.opacity = 0.2 + Math.sin(st * 2) * 0.1;
+
+                // Block player from entering the shield radius
+                const dx = player.position.x - nec.x, dz = player.position.z - nec.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < 8 && dist > 0.1) {
+                    // Push player back to edge
+                    const pushX = nec.x + (dx / dist) * 8.1;
+                    const pushZ = nec.z + (dz / dist) * 8.1;
+                    player.position.x = pushX;
+                    player.position.z = pushZ;
+                    player.group.position.x = pushX;
+                    player.group.position.z = pushZ;
+                }
+
+                // Keep necromancer passive
+                nec.hostile = false;
+                nec.aggroRange = 0;
+            } else if (nec._shielded) {
+                // Shield just dropped! Activate the necromancer
+                nec._shielded = false;
+                nec.hostile = true;
+                nec.aggroRange = 25;
+                // Remove shield visuals
+                scene.remove(nec._shield);
+                scene.remove(nec._shieldRing);
+                scene.remove(nec._shieldRing2);
+                nec._shield.geometry.dispose();
+                nec._shieldRing.geometry.dispose();
+                nec._shieldRing2.geometry.dispose();
+                nec._shield = null;
+                addChatMessage('The barrier shatters! The Necromancer awakens...', 'rgba(170,68,255,0.95)');
+            }
+        }
+    }
+
+    // Update summoned skeletons — timer and cleanup
+    for (let i = summonedSkeletons.length - 1; i >= 0; i--) {
+        const sk = summonedSkeletons[i];
+        sk._summonTimer -= dt;
+        if (sk._summonTimer <= 0 || sk.dead) {
+            // Despawn — death poof
+            sk.hp = 0; sk.dead = true; sk.deathTimer = 0; sk.walking = false; sk.speed = 0;
+            summonedSkeletons.splice(i, 1);
+        } else {
+            // Summoned skeletons seek nearest hostile enemy
+            let nearest = null, nearDist = Infinity;
+            for (const c of creatures.creatures) {
+                if (c === sk || c.dead || c._isSummon || c._friendlyToPlayer) continue;
+                if (!c.hostile) continue;
+                const dx = c.x - sk.x, dz = c.z - sk.z;
+                const d = dx*dx + dz*dz;
+                if (d < nearDist) { nearDist = d; nearest = c; }
+            }
+            if (nearest && nearDist < 20*20) {
+                // Chase the enemy
+                const dx = nearest.x - sk.x, dz = nearest.z - sk.z;
+                const dist = Math.sqrt(dx*dx + dz*dz) || 1;
+                sk.angle = Math.atan2(dx, dz);
+                sk.group.rotation.y = sk.angle;
+                if (dist > sk.attackRange) {
+                    sk.x += (dx/dist) * sk.chaseSpeed * dt;
+                    sk.z += (dz/dist) * sk.chaseSpeed * dt;
+                    sk.walking = true;
+                } else {
+                    // Attack
+                    sk.attackTimer -= dt;
+                    if (sk.attackTimer <= 0) {
+                        nearest.hp -= sk.attackDmg;
+                        if (nearest.hp <= 0) { nearest.hp = 0; nearest.dead = true; nearest.deathTimer = 0; nearest.walking = false; nearest.speed = 0; }
+                        sk.attackTimer = sk.attackCD;
+                    }
+                    sk.walking = false;
+                }
+                sk.group.position.set(sk.x, getTerrainHeight(sk.x, sk.z), sk.z);
+            }
+            // Flash when about to expire (last 5 seconds)
+            if (sk._summonTimer < 5) {
+                sk.group.visible = Math.sin(sk._summonTimer * 8) > 0;
+            }
+        }
+    }
+
+    // Animate ice staff if held
+    if (player.staffHeld.visible && player.staffHeld._iceExtras && player.staffHeld._iceExtras.visible) {
+        const it = performance.now() * 0.001;
+        // Orbiting ice particles
+        if (player.staffHeld._iceParticles) {
+            for (const p of player.staffHeld._iceParticles) {
+                const a = it * 0.8 + p._phase;
+                p.position.x = Math.cos(a) * 0.1;
+                p.position.z = Math.sin(a) * 0.1;
+                p.position.y = 1.28 + Math.sin(it * 1.5 + p._phase) * 0.08;
+                p.material.opacity = 0.4 + Math.sin(it * 2 + p._phase) * 0.2;
+            }
+        }
+        // Core glow pulse
+        if (player.staffHeld._iceCore) {
+            player.staffHeld._iceCore.material.opacity = 0.3 + Math.sin(it * 2) * 0.15;
+            player.staffHeld._iceCore.scale.setScalar(1 + Math.sin(it * 3) * 0.1);
+        }
+        // Light flicker
+        if (player.staffHeld._iceLight) {
+            player.staffHeld._iceLight.intensity = 1.0 + Math.sin(it * 2.5) * 0.3;
+        }
+    }
+
+    // Animate lightning staff if held
+    if (player.staffHeld.visible && player.staffHeld._lightningExtras && player.staffHeld._lightningExtras.visible) {
+        const lt = performance.now() * 0.001;
+        // Crackling arcs — randomly reposition and flash
+        if (player.staffHeld._lightningArcs) {
+            for (const arc of player.staffHeld._lightningArcs) {
+                const a = lt * 3 + arc._phase;
+                arc.position.x = Math.cos(a) * 0.04;
+                arc.position.z = Math.sin(a) * 0.04;
+                arc.rotation.z = Math.sin(lt * 15 + arc._phase) * 1.5;
+                arc.rotation.x = Math.cos(lt * 12 + arc._phase * 2) * 1.0;
+                // Random flash — occasionally go bright or dim
+                arc.material.opacity = Math.sin(lt * 20 + arc._phase * 7) > 0.3 ? 0.8 : 0.1;
+                arc.scale.y = 0.5 + Math.random() * 1.5;
+            }
+        }
+        // Spark core flicker
+        if (player.staffHeld._sparkCore) {
+            player.staffHeld._sparkCore.material.opacity = 0.6 + Math.sin(lt * 8) * 0.3;
+            player.staffHeld._sparkCore.scale.setScalar(0.8 + Math.sin(lt * 6) * 0.3);
+        }
+        // Light crackle
+        if (player.staffHeld._lightningLight) {
+            player.staffHeld._lightningLight.intensity = 1.0 + Math.random() * 1.5;
+        }
+    }
+
+    // Animate fire staff if held
+    if (player.staffHeld.visible && player.staffHeld._fireExtras && player.staffHeld._fireExtras.visible) {
+        const ft = performance.now() * 0.001;
+        // Flickering flames
+        if (player.staffHeld._fireFlames) {
+            player.staffHeld._fireFlames[0].scale.y = 1.3 + Math.sin(ft * 8) * 0.3;
+            player.staffHeld._fireFlames[0].scale.x = 1 + Math.sin(ft * 6 + 1) * 0.15;
+            player.staffHeld._fireFlames[1].scale.y = 1.5 + Math.sin(ft * 10 + 2) * 0.4;
+            player.staffHeld._fireFlames[2].position.y = 1.32 + Math.sin(ft * 12) * 0.02;
+        }
+        // Floating ember particles
+        if (player.staffHeld._fireEmbers) {
+            for (const e of player.staffHeld._fireEmbers) {
+                e.position.y = 1.3 + Math.sin(ft * 3 + e._phase) * 0.15 + ((ft * 0.5 + e._phase) % 0.4);
+                e.position.x = Math.sin(ft * 2 + e._phase) * 0.08;
+                e.position.z = Math.cos(ft * 2 + e._phase * 1.3) * 0.08;
+                e.material.opacity = 0.5 + Math.sin(ft * 5 + e._phase) * 0.3;
+            }
+        }
+        // Pulsing light
+        if (player.staffHeld._fireLight) {
+            player.staffHeld._fireLight.intensity = 1.2 + Math.sin(ft * 4) * 0.6;
+        }
+    }
+
+    // Animate void staff rings/light if player is holding it
+    if (player.staffHeld.visible && player.staffHeld._voidExtras && player.staffHeld._voidExtras.visible) {
+        const vt = performance.now() * 0.001;
+        if (player.staffHeld._voidRings) {
+            player.staffHeld._voidRings[0].rotation.z = vt * 1.5;
+            player.staffHeld._voidRings[1].rotation.y = vt * 1.2;
+        }
+        if (player.staffHeld._voidLight) {
+            player.staffHeld._voidLight.intensity = 1.2 + Math.sin(vt * 2.5) * 0.5;
+        }
     }
 
     // Keep sun at fixed direction from player (so it doesn't move as you walk)
