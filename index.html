@@ -1114,21 +1114,16 @@ function startGame(loadSlotName) {
         refreshUI();
     };
     creatures._onPlayerHit = (dmg, type, srcX, srcZ) => {
+        if (playerDead) return;
         // Check shield block
         if (srcX !== undefined && isShieldBlocking(srcX, srcZ)) {
-            // Blocked! Flash blue instead
             const flash = document.createElement('div');
             flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(100,150,255,0.15);z-index:50;pointer-events:none;';
             document.body.appendChild(flash);
             setTimeout(() => flash.remove(), 100);
             return;
         }
-        playerHP = Math.max(0, playerHP - applyArmorDamage(dmg));
-        updateHeartsUI();
-        const flash = document.createElement('div');
-        flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(200,0,0,0.2);z-index:50;pointer-events:none;';
-        document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 150);
+        playerTakeDamage(applyArmorDamage(dmg));
     };
     villageMgr = new VillageManager(scene, world);
     world._placeVillages = placeVillageInChunk;
@@ -2155,6 +2150,8 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     player = new Player(scene, world);
+    // Give starting potions
+    if (!inventory['hp_potion']) inventory['hp_potion'] = 5;
     saveCharColors(); // read from inputs
     applyCharColors(player);
     // Name label above player
@@ -2974,7 +2971,7 @@ function startGame(loadSlotName) {
             group: new THREE.Group(), legs: [], headGrp: new THREE.Group(),
             x: hgX, z: hgZ, angle: 0, speed: 0,
             walkPhase: 0, wanderTimer: 5, idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
-            type: 'goblin', hostile: true, aggroRange: 18, attackRange: 2, attackDmg: 5, attackCD: 2.5, attackTimer: 0,
+            type: 'goblin', hostile: true, aggroRange: 18, attackRange: 2, attackDmg: 3, attackCD: 2.5, attackTimer: 0,
             hp: 80, maxHP: 80, dead: false, chaseSpeed: 2.0, _turnSpeed: 4,
             _isBoss: true, _bossName: 'Grokthak the Warchief', _isHobgoblin: true,
             _smashTimer: -1,
@@ -3730,6 +3727,49 @@ let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
 let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
 const killedBosses = new Set(); // boss names that have been killed
 window._killedBosses = killedBosses;
+let playerDead = false;
+let deathScreenTimer = 0;
+
+// Death screen overlay
+const deathScreen = document.createElement('div');
+deathScreen.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(80,0,0,0.7);z-index:200;display:none;justify-content:center;align-items:center;flex-direction:column;';
+deathScreen.innerHTML = '<div style="color:#ff4444;font:bold 48px monospace;text-shadow:0 0 20px #ff0000;">You Died</div><div style="color:#cc8888;font:14px monospace;margin-top:16px;">Respawning...</div>';
+document.body.appendChild(deathScreen);
+
+function playerTakeDamage(dmg) {
+    if (playerDead) return;
+    playerHP = Math.max(0, playerHP - dmg);
+    updateHeartsUI();
+    // Red flash
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(200,0,0,0.2);z-index:50;pointer-events:none;';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 150);
+    // Check death
+    if (playerHP <= 0) {
+        playerDead = true;
+        deathScreenTimer = 3; // 3 second death screen
+        deathScreen.style.display = 'flex';
+    }
+}
+
+function respawnPlayer() {
+    playerDead = false;
+    deathScreen.style.display = 'none';
+    // Restore HP to full
+    playerHP = playerMaxHP;
+    playerMana = playerMaxMana;
+    updateHeartsUI();
+    updateManaUI();
+    // Move to spawn (0, 0)
+    const spawnY = getTerrainHeight(0, 0) + 0.1;
+    player.position.set(0, spawnY, 0);
+    player.group.position.set(0, spawnY, 0);
+    // Give 5 HP potions
+    inventory['hp_potion'] = (inventory['hp_potion'] || 0) + 5;
+    refreshUI();
+    addChatMessage('You have respawned with 5 health potions.', 'rgba(255,150,150,0.9)');
+}
 let attackCooldown = 0;
 
 // ── Shield system ──
@@ -5244,6 +5284,7 @@ function getItemInfo(key) {
     if (key === 'campfire_block') return { name: 'Campfire', top: '#cc6622', front: '#8a4a1a' };
     if (key === 'chest_block') return { name: 'Chest', top: '#8a6535', front: '#6b4a20' };
     if (key === 'void_staff') return { name: 'Void Staff', top: '#8833cc', front: '#551a99', isTool: true, toolType: 'staff' };
+    if (key === 'hp_potion') return { name: 'Health Potion', top: '#ff4444', front: '#cc2222' };
     if (key === 'steel_ingot') return { name: 'Steel Ingot', top: '#d0d8e0', front: '#a0a8b8' };
     if (key === 'steel_sword') return { name: 'Steel Sword', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'sword' };
     if (key === 'steel_pickaxe') return { name: 'Steel Pickaxe', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'pickaxe' };
@@ -5961,8 +6002,25 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         player.group.rotation.y = fpYaw + staffAimOffset;
     }
 
-    // Sword attack — damage creatures in front of player
+    // Use HP potion
     const held = hotbarSlots[selectedSlot];
+    if (held === 'hp_potion' && inventory['hp_potion'] > 0 && playerHP < playerMaxHP) {
+        playerHP = Math.min(playerMaxHP, playerHP + 2);
+        inventory['hp_potion']--;
+        if (inventory['hp_potion'] <= 0) { delete inventory['hp_potion']; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === 'hp_potion') hotbarSlots[i] = 0; }
+        updateHeartsUI();
+        refreshUI();
+        // Red heal particles
+        for (let i = 0; i < 6; i++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06), new THREE.MeshBasicMaterial({color:0xff4444,transparent:true,opacity:0.7}));
+            m.position.set(player.position.x+(Math.random()-0.5)*0.5, player.position.y+0.5+Math.random()*1.2, player.position.z+(Math.random()-0.5)*0.5);
+            scene.add(m);
+            setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},600);
+        }
+        return;
+    }
+
+    // Sword attack — damage creatures in front of player
     const swordDmg = _getSwordDamage(held);
     if (swordDmg && inventory[held] > 0 && attackCooldown <= 0) {
         player.triggerSwing();
@@ -7818,6 +7876,13 @@ function animate() {
     // Attack cooldown
     if (attackCooldown > 0) attackCooldown -= dt;
 
+    // Death timer — respawn after 3 seconds
+    if (playerDead) {
+        deathScreenTimer -= dt;
+        if (deathScreenTimer <= 0) respawnPlayer();
+        return; // skip all other updates while dead
+    }
+
     // Mana regeneration — passive 0.5/s + active channel (hold click + right shift) 2/s
     if (!staffShielding && playerMana < playerMaxMana) {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5);
@@ -8338,7 +8403,7 @@ function animate() {
                 // Damage player — 3 per second
                 if (fd._breathTimer >= 0.33) {
                     fd._breathTimer = 0;
-                    playerHP = Math.max(0, playerHP - applyArmorDamage(1)); // 1 HP per tick, reduced by armor
+                    playerTakeDamage(applyArmorDamage(1)); // 1 HP per tick, reduced by armor
                     updateHeartsUI();
                     // Screen flash
                     const flash = document.createElement('div');
