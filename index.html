@@ -3932,6 +3932,24 @@ function fireProjectile(staffType) {
     });
 }
 
+// Helper: deal spell damage to a creature, triggering boss death handlers if killed
+function spellDamage(c, dmg) {
+    if (c.dead || c._shielded) return;
+    c.hp -= dmg;
+    staffDamageDealt += dmg;
+    if (c.hp <= 0) {
+        c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0;
+        if (c._isBoss) {
+            if (c._bossName) killedBosses.add(c._bossName);
+            if (c._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(c);
+            else if (c._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(c);
+            else if (c._isHobgoblin && creatures._onHobgoblinDeath) creatures._onHobgoblinDeath(c);
+            else if (c._isGateBoss && creatures._onGateBossDeath) creatures._onGateBossDeath(c);
+            else if (creatures._onBossDeath) creatures._onBossDeath(c);
+        }
+    }
+}
+
 function castUniversalSpell(slot, staffType) {
     const px = player.position.x, py = player.position.y, pz = player.position.z;
     const props = STAFF_PROPS[staffType] || STAFF_PROPS['basic_staff'];
@@ -4024,12 +4042,7 @@ function castUniversalSpell(slot, staffType) {
                 for (const c of creatures.creatures) {
                     if (c.dead || c._isSummon) continue;
                     const dx = c.x - tx, dz = c.z - tz;
-                    if (dx*dx + dz*dz < range*range) {
-                        const dmg = 20;
-                        c.hp -= dmg;
-                        staffDamageDealt += dmg;
-                        if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
-                    }
+                    if (dx*dx + dz*dz < range*range) spellDamage(c, 20);
                 }
                 // Explosion visual
                 for (let r = 0; r < 4; r++) {
@@ -4078,10 +4091,7 @@ function castUniqueSpell(staffType, manaSpent) {
         for (const c of creatures.creatures) {
             if (c.dead) continue;
             const dx = c.x - px, dz = c.z - pz;
-            if (dx*dx + dz*dz < range*range) {
-                c.hp -= 6;
-                if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
-            }
+            if (dx*dx + dz*dz < range*range) spellDamage(c, 6);
         }
         // Visual: expanding fire ring
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.15, 6, 24),
@@ -4106,8 +4116,7 @@ function castUniqueSpell(staffType, manaSpent) {
             if (c.dead) continue;
             const dx = c.x - px, dz = c.z - pz;
             if (dx*dx + dz*dz < range*range) {
-                c.hp -= 3;
-                if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                spellDamage(c, 3);
                 // Freeze: store original speed, set to 0
                 if (!c._frozen) {
                     c._frozen = true;
@@ -4137,8 +4146,7 @@ function castUniqueSpell(staffType, manaSpent) {
         let prevX = px, prevZ = pz, prevY = py + 1.2;
         for (const { c } of sorted) {
             if (c.d > 20*20) continue;
-            c.hp -= 10;
-            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+            spellDamage(c, 10);
             // Visual: lightning bolt line
             const cy = getTerrainHeight(c.x, c.z) + 1;
             const geo = new THREE.BufferGeometry();
@@ -4274,7 +4282,7 @@ function castUniqueSpell(staffType, manaSpent) {
             cloud.position.set(px, py + 1, pz); scene.add(cloud);
             let age = 0;
             const tick = () => { age += 0.5;
-                for (const c of creatures.creatures) { if (c.dead) continue; const dx=c.x-px,dz=c.z-pz; if(dx*dx+dz*dz<64) { c.hp-=3; if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;} } }
+                for (const c of creatures.creatures) { if (c.dead) continue; const dx=c.x-px,dz=c.z-pz; if(dx*dx+dz*dz<64) spellDamage(c, 3); }
                 cloud.material.opacity = 0.2 * (1 - age/5);
                 if (age < 5) setTimeout(tick, 500); else { scene.remove(cloud); cloud.geometry.dispose(); }
             }; setTimeout(tick, 500);
@@ -4304,7 +4312,7 @@ function castUniqueSpell(staffType, manaSpent) {
             // Ricochet: bolt that bounces between 4 enemies
             const sorted = creatures.creatures.filter(c=>!c.dead).map(c=>({c,d:(c.x-px)*(c.x-px)+(c.z-pz)*(c.z-pz)})).sort((a,b)=>a.d-b.d).slice(0,4);
             let prevX=px,prevZ=pz,prevY=py+1.2;
-            for (const{c} of sorted) { if(c.d>25*25)continue; c.hp-=8; if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}
+            for (const{c} of sorted) { if(c.d>25*25)continue; spellDamage(c, 8);
                 const cy=getTerrainHeight(c.x,c.z)+1;
                 const geo=new THREE.BufferGeometry(); const pts=[];
                 for(let s=0;s<=4;s++){const t=s/4;pts.push(prevX+(c.x-prevX)*t+(s>0&&s<4?(Math.random()-0.5)*0.3:0),prevY+(cy-prevY)*t,prevZ+(c.z-prevZ)*t+(s>0&&s<4?(Math.random()-0.5)*0.3:0));}
@@ -4329,7 +4337,7 @@ function castUniqueSpell(staffType, manaSpent) {
             // Splinter Bomb: explosive AOE 5 damage
             const facing = player.group.rotation.y;
             const tx = px + Math.sin(facing)*5, tz = pz + Math.cos(facing)*5;
-            for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-tx,dz=c.z-tz; if(dx*dx+dz*dz<25){c.hp-=5;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}}}
+            for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-tx,dz=c.z-tz; if(dx*dx+dz*dz<25) spellDamage(c, 5);}
             for (let i = 0; i < 12; i++) {
                 const m = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.04,0.04), new THREE.MeshBasicMaterial({color:0x8a6a3a}));
                 m.position.set(tx+(Math.random()-0.5)*2,py+1+Math.random(),tz+(Math.random()-0.5)*2); m.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3); scene.add(m);
@@ -4338,7 +4346,7 @@ function castUniqueSpell(staffType, manaSpent) {
         } else if (gemKey === 'stone' || gemKey === String(BLOCK.STONE)) {
             // Quake: stun all enemies within 7 units for 3s
             for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-px,dz=c.z-pz;
-                if(dx*dx+dz*dz<49){c.hp-=4;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}
+                if(dx*dx+dz*dz<49){spellDamage(c, 4);
                 if(!c._frozen){c._frozen=true;c._origChaseSpeed=c.chaseSpeed||3;c.chaseSpeed=0;setTimeout(()=>{c._frozen=false;c.chaseSpeed=c._origChaseSpeed;},3000);}}}
             // Ground pound visual
             const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.2,6,24), new THREE.MeshBasicMaterial({color:0x888888,transparent:true,opacity:0.6}));
@@ -4349,7 +4357,7 @@ function castUniqueSpell(staffType, manaSpent) {
             const facing = player.group.rotation.y;
             for (const c of creatures.creatures) { if(c.dead)continue; const dx=c.x-px,dz=c.z-pz;const dist=Math.sqrt(dx*dx+dz*dz);
                 if(dist>10)continue; const aToE=Math.atan2(dx,dz); let diff=aToE-facing; while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;
-                if(Math.abs(diff)<Math.PI/4){c.hp-=15;if(c.hp<=0){c.hp=0;c.dead=true;c.deathTimer=0;c.walking=false;c.speed=0;}}}
+                if(Math.abs(diff)<Math.PI/4) spellDamage(c, 15);}
             // Fire cone visual
             for (let i = 0; i < 20; i++) {
                 const spread=(Math.random()-0.5)*0.8; const dist=1+Math.random()*8;
