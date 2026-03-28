@@ -2150,8 +2150,6 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     player = new Player(scene, world);
-    // Give starting potions
-    if (!inventory['hp_potion']) inventory['hp_potion'] = 5;
     saveCharColors(); // read from inputs
     applyCharColors(player);
     // Name label above player
@@ -3206,6 +3204,15 @@ function startGame(loadSlotName) {
         showToast('New game started');
     }
 
+    // Give starting potions (after save load so they aren't overwritten)
+    if (!inventory['hp_potion'] || inventory['hp_potion'] < 1) {
+        inventory['hp_potion'] = 5;
+    }
+    if (!hotbarSlots.includes('hp_potion')) {
+        const ei = hotbarSlots.indexOf(0);
+        if (ei >= 0) hotbarSlots[ei] = 'hp_potion';
+    }
+
     refreshUI();
 
     // Show loading screen while chunks build
@@ -3767,6 +3774,10 @@ function respawnPlayer() {
     player.group.position.set(0, spawnY, 0);
     // Give 5 HP potions
     inventory['hp_potion'] = (inventory['hp_potion'] || 0) + 5;
+    if (!hotbarSlots.includes('hp_potion')) {
+        const ei = hotbarSlots.indexOf(0);
+        if (ei >= 0) hotbarSlots[ei] = 'hp_potion';
+    }
     refreshUI();
     addChatMessage('You have respawned with 5 health potions.', 'rgba(255,150,150,0.9)');
 }
