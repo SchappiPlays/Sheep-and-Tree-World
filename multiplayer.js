@@ -79,6 +79,8 @@ export class Multiplayer {
         conn.on('data', data => {
             if (data.type === 'state') {
                 this._applyRemoteState(pid, data);
+                // Host relays player state to other clients so everyone sees each other
+                if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: pid });
             } else if (data.type === 'block') {
                 if (this.onBlockChange) this.onBlockChange(data.bx, data.by, data.bz, data.b);
                 // Host relays to other clients
@@ -255,7 +257,11 @@ export class Multiplayer {
     }
 
     _applyRemoteState(pid, s) {
-        const rp = this.remotePlayers.get(pid);
+        // If this is relayed state from another client, use their pid
+        const actualPid = s._fromPid || pid;
+        if (actualPid === this.myId) return; // don't render self
+        if (!this.remotePlayers.has(actualPid)) this._createRemotePlayer(actualPid);
+        const rp = this.remotePlayers.get(actualPid);
         if (!rp) return;
 
         // Apply character colors and name from remote player

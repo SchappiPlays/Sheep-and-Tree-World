@@ -3849,12 +3849,23 @@ document.addEventListener('mousemove', e => {
     fpPitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, fpPitch));
 });
 // Click to lock pointer (only in mouse look mode)
-renderer.domElement.addEventListener('click', () => {
-    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen) {
+const _tryPointerLock = () => {
+    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
         renderer.domElement.requestPointerLock();
         fpYaw = player ? player.group.rotation.y : 0;
         fpPitch = 0;
     }
+};
+renderer.domElement.addEventListener('click', () => {
+    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
+        renderer.domElement.requestPointerLock();
+        fpYaw = player ? player.group.rotation.y : 0;
+        fpPitch = 0;
+    }
+});
+// Also re-lock on any click on the document body (catches clicks after tab-switching)
+document.addEventListener('mousedown', (e) => {
+    if (e.target === renderer.domElement || e.target === document.body) _tryPointerLock();
 });
 const pauseMenuEl = document.getElementById('pauseMenu');
 
@@ -8352,6 +8363,17 @@ function animate() {
         _magicRingMat.color.setHex(col);
     } else {
         magicShieldMesh.visible = false;
+    }
+
+    // Mana channeling pose — hold staff up when right-clicking with staff to recharge
+    const heldForChannel = hotbarSlots[selectedSlot];
+    const isChanneling = (placingHeld || shieldRaised) && !staffShielding && heldForChannel && typeof heldForChannel === 'string' && heldForChannel.includes('staff') && STAFF_PROPS[heldForChannel] && player.staffHeld.visible;
+    if (isChanneling) {
+        // Staff raised overhead, arm up
+        player.leftArm.shoulder.rotation.x = -2.2;
+        player.leftArm.shoulder.rotation.z = 0.1;
+        player.leftArm.elbow.rotation.x = -0.3;
+        player.spine.rotation.x = -0.05;
     }
 
     // Update shield visual
