@@ -395,7 +395,7 @@ const SKY_COLOR = 0x87CEEB;
 const renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.5 });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = optShadows;
+renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
@@ -3607,6 +3607,9 @@ try {
     if (saved.optClouds !== undefined) optClouds = saved.optClouds;
     if (saved.optParticles !== undefined) optParticles = saved.optParticles;
 } catch(e) {}
+// Apply performance settings after load
+renderer.shadowMap.enabled = optShadows;
+sun.castShadow = optShadows;
 
 function saveSettings() {
     localStorage.setItem('satw_settings', JSON.stringify({
