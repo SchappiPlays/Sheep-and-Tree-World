@@ -354,8 +354,8 @@ export class CreatureManager {
                 continue;
             }
 
-            // Client in multiplayer — just update visual position from synced data, skip AI
-            if (this.skipAI) {
+            // Client in multiplayer — skip AI for regular mobs, but bosses still attack locally
+            if (this.skipAI && !sh._isBoss) {
                 sh.group.position.set(sh.x, this.world.getHeight(sh.x, sh.z), sh.z);
                 // Still animate legs
                 const wb = clamp01(sh.speed / 0.25);
