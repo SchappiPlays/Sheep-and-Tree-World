@@ -982,7 +982,7 @@ function collectSaveData() {
         selectedSlot,
         armorSlots: JSON.parse(JSON.stringify(armorSlots)),
         equippedShield,
-        playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt,
+        playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
         killedBosses: [...killedBosses],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
         customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
@@ -3101,6 +3101,7 @@ function startGame(loadSlotName) {
             if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
+            if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
@@ -3200,6 +3201,41 @@ function startGame(loadSlotName) {
         world.getOrCreateChunk(0, 0);
         const spawnY = world.getHeight(0, 0);
         player.position.set(0, spawnY, 0);
+
+        // Starting kit
+        inventory['copper_sword'] = 1;
+        inventory['copper_pickaxe'] = 1;
+        inventory['guide_book'] = 1;
+        inventory['hp_potion'] = 5;
+
+        // Random copper staff with random gem
+        const startGems = ['ruby', 'sapphire', 'emerald', 'topaz', 'diamond'];
+        const startGem = startGems[Math.floor(Math.random() * startGems.length)];
+        const startStaffId = 'cstaff_start_' + Date.now();
+        if (!window._customStaffs) window._customStaffs = {};
+        const baseType = STAFF_GEM_TYPE[startGem] || 'basic_staff';
+        const gemBolt = STAFF_GEM_BOLT[startGem];
+        window._customStaffs[startStaffId] = {
+            baseType, shaftMat: 'copper_ingot', holderStyle: 'prongs', holderMat: 'copper_ingot',
+            gem: startGem, name: startGem.charAt(0).toUpperCase() + startGem.slice(1) + ' Copper Staff',
+            customBolt: gemBolt ? { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: 0.1, trail: gemBolt.color, life: 2.0 } : null,
+        };
+        if (gemBolt) {
+            STAFF_PROPS[startStaffId] = { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: 0.1, trail: gemBolt.color, life: 2.0 };
+        } else {
+            STAFF_PROPS[startStaffId] = { ...STAFF_PROPS[baseType] };
+        }
+        const gemSpellKey = 'gem_' + startGem;
+        STAFF_SPELLS[startStaffId] = STAFF_SPELLS[gemSpellKey] || STAFF_SPELLS[baseType] || STAFF_SPELLS['basic_staff'];
+        inventory[startStaffId] = 1;
+
+        // Fill hotbar: sword, pickaxe, staff, potions, book
+        hotbarSlots[0] = 'copper_sword';
+        hotbarSlots[1] = 'copper_pickaxe';
+        hotbarSlots[2] = startStaffId;
+        hotbarSlots[3] = 'hp_potion';
+        hotbarSlots[4] = 'guide_book';
+
         // Save name already set at top of startGame
         showToast('New game started');
     }
@@ -3734,6 +3770,12 @@ let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
 let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
 const killedBosses = new Set(); // boss names that have been killed
 window._killedBosses = killedBosses;
+// Day/night cycle: 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
+let timeOfDay = 0.35; // start at morning
+const DAY_LENGTH = 600; // 10 minutes per full cycle
+let shootingStarTimer = 0;
+const shootingStars = []; // { mesh, trail, x, y, z, landed, item }
+
 let playerDead = false;
 let deathScreenTimer = 0;
 
@@ -4572,6 +4614,7 @@ function updateProjectiles(dt) {
 const SWORD_DAMAGE = {
     'wood_sword': 4,
     'stone_sword': 5,
+    'copper_sword': 5.5,
     'iron_sword': 6,
     'gold_sword': 5,
     'steel_sword': 8,
@@ -5265,6 +5308,7 @@ const BLOCK_INFO = {
     [BLOCK.TOPAZ_ORE]: { name:'Topaz Ore', top:'#ddaa22', front:'#bb8818' },
     [BLOCK.DARK_STONE]: { name:'Dark Stone', top:'#4a4a50', front:'#3a3a3e' },
     [BLOCK.CHEST]: { name:'Chest', top:'#8a6535', front:'#6b4a20' },
+    [BLOCK.COPPER_ORE]: { name:'Copper Ore', top:'#b87333', front:'#996030' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -5296,6 +5340,13 @@ function getItemInfo(key) {
     if (key === 'chest_block') return { name: 'Chest', top: '#8a6535', front: '#6b4a20' };
     if (key === 'void_staff') return { name: 'Void Staff', top: '#8833cc', front: '#551a99', isTool: true, toolType: 'staff' };
     if (key === 'hp_potion') return { name: 'Health Potion', top: '#ff4444', front: '#cc2222' };
+    if (key === 'guide_book') return { name: 'Guide Book', top: '#8b6b3d', front: '#5a3a1e' };
+    if (key === 'star_fragment') return { name: 'Star Fragment', top: '#ffffaa', front: '#ccaa44' };
+    if (key === 'mana_crystal') return { name: 'Mana Crystal', top: '#4488ff', front: '#2255cc' };
+    if (key === 'copper_ingot') return { name: 'Copper Ingot', top: '#cc8844', front: '#aa6630' };
+    if (key === 'copper_pickaxe') return { name: 'Copper Pickaxe', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'pickaxe' };
+    if (key === 'copper_sword') return { name: 'Copper Sword', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'sword' };
+    if (key === 'copper_axe') return { name: 'Copper Axe', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'axe' };
     if (key === 'steel_ingot') return { name: 'Steel Ingot', top: '#d0d8e0', front: '#a0a8b8' };
     if (key === 'steel_sword') return { name: 'Steel Sword', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'sword' };
     if (key === 'steel_pickaxe') return { name: 'Steel Pickaxe', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'pickaxe' };
@@ -5391,6 +5442,134 @@ function blockIconHTML(info) {
     if (info.isEgg) {
         return `<div class="block-icon" style="border-radius:50%"><div class="top-face" style="background:${info.top};border-radius:50%"></div><div class="front-face" style="background:${info.front};border-radius:6px"></div></div>`;
     }
+    // Distinct icons for specific item types
+    const n = (info.name || '').toLowerCase();
+    if (n.includes('ingot')) {
+        // Ingot: trapezoid bar shape
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <polygon points="4,16 20,16 18,10 6,10" fill="${info.top}" stroke="${info.front}" stroke-width="0.8"/>
+            <polygon points="6,10 18,10 16,7 8,7" fill="${info.front}" opacity="0.6"/>
+            <line x1="8" y1="13" x2="16" y2="13" stroke="${info.front}" stroke-width="0.5" opacity="0.4"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('helmet')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M5,16 L5,10 Q5,4 12,4 Q19,4 19,10 L19,16 Z" fill="${info.top}" stroke="${info.front}" stroke-width="0.8"/>
+            <rect x="7" y="12" width="10" height="2" fill="${info.front}" opacity="0.5"/>
+            <rect x="8" y="14" width="3" height="3" fill="${info.front}" opacity="0.3"/>
+            <rect x="13" y="14" width="3" height="3" fill="${info.front}" opacity="0.3"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('chestplate')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M4,6 L8,4 L12,5 L16,4 L20,6 L20,18 L16,20 L12,18 L8,20 L4,18 Z" fill="${info.top}" stroke="${info.front}" stroke-width="0.8"/>
+            <path d="M8,4 L12,5 L16,4 L16,8 L12,9 L8,8 Z" fill="${info.front}" opacity="0.4"/>
+            <line x1="12" y1="9" x2="12" y2="18" stroke="${info.front}" stroke-width="0.5" opacity="0.3"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('legging')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M7,3 L17,3 L17,10 L15,20 L13,20 L12,12 L11,20 L9,20 L7,10 Z" fill="${info.top}" stroke="${info.front}" stroke-width="0.8"/>
+            <rect x="8" y="3" width="8" height="3" fill="${info.front}" opacity="0.3"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('boot')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M8,4 L16,4 L16,16 L20,16 L20,20 L4,20 L4,16 L8,16 Z" fill="${info.top}" stroke="${info.front}" stroke-width="0.8"/>
+            <rect x="8" y="4" width="8" height="3" fill="${info.front}" opacity="0.3"/>
+            <rect x="4" y="18" width="16" height="2" fill="${info.front}" opacity="0.2"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('shield')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M4,4 L20,4 L20,14 Q20,22 12,22 Q4,22 4,14 Z" fill="${info.top}" stroke="${info.front}" stroke-width="1"/>
+            <path d="M8,6 L16,6 L16,12 Q16,18 12,18 Q8,18 8,12 Z" fill="${info.front}" opacity="0.3"/>
+            <line x1="12" y1="4" x2="12" y2="22" stroke="${info.front}" stroke-width="0.5" opacity="0.3"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('potion')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <rect x="10" y="2" width="4" height="4" rx="1" fill="#aaa"/>
+            <path d="M9,6 L8,10 L6,20 Q6,22 12,22 Q18,22 18,20 L16,10 L15,6 Z" fill="${info.top}" opacity="0.7"/>
+            <path d="M8,14 Q12,12 16,14 L18,20 Q18,22 12,22 Q6,22 6,20 Z" fill="${info.top}"/>
+            <ellipse cx="12" cy="14" rx="4" ry="1.5" fill="#fff" opacity="0.25"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n === 'coal') {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <polygon points="6,8 12,4 18,8 20,14 16,20 8,20 4,14" fill="#2a2a2a" stroke="#444" stroke-width="0.5"/>
+            <polygon points="10,8 14,6 16,10 14,14 10,12" fill="#3a3a3a"/>
+            <polygon points="8,14 12,12 14,16 10,18" fill="#333"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('star fragment')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <polygon points="12,2 14,9 21,9 15,14 17,21 12,17 7,21 9,14 3,9 10,9" fill="#ffffaa" stroke="#ccaa44" stroke-width="0.5"/>
+            <polygon points="12,5 13,9 16,9 13.5,12 14.5,16 12,14 9.5,16 10.5,12 8,9 11,9" fill="#fff" opacity="0.4"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('mana crystal')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <polygon points="12,1 17,8 17,18 12,23 7,18 7,8" fill="#4488ff" stroke="#2255cc" stroke-width="0.8"/>
+            <polygon points="12,1 7,8 12,10 17,8" fill="#66aaff" opacity="0.6"/>
+            <polygon points="7,8 12,10 12,18 7,18" fill="#3366dd" opacity="0.5"/>
+            <polygon points="17,8 12,10 12,18 17,18" fill="#4488ff" opacity="0.7"/>
+            <line x1="10" y1="4" x2="12" y2="10" stroke="#aaccff" stroke-width="0.5" opacity="0.5"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('book') || n.includes('guide')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <rect x="4" y="3" width="16" height="18" rx="1.5" fill="${info.front}"/>
+            <rect x="6" y="3" width="14" height="18" rx="1" fill="${info.top}"/>
+            <rect x="8" y="6" width="10" height="1" fill="${info.front}" opacity="0.3"/>
+            <rect x="8" y="9" width="8" height="1" fill="${info.front}" opacity="0.3"/>
+            <rect x="8" y="12" width="10" height="1" fill="${info.front}" opacity="0.3"/>
+            <rect x="8" y="15" width="6" height="1" fill="${info.front}" opacity="0.3"/>
+            <rect x="4" y="3" width="3" height="18" rx="1" fill="${info.front}" opacity="0.6"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n === 'stick') {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <rect x="10.5" y="2" width="3" height="20" rx="1" fill="#8a6a3a" transform="rotate(-15 12 12)"/>
+            <rect x="10.5" y="2" width="1.5" height="20" rx="0.5" fill="#a08050" opacity="0.4" transform="rotate(-15 12 12)"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('ruby') || n.includes('sapphire') || n.includes('emerald') || n.includes('topaz') || n.includes('diamond')) {
+        // Gem: faceted diamond shape
+        if (!n.includes('ore') && !n.includes('pick') && !n.includes('sword') && !n.includes('axe') && !n.includes('helmet') && !n.includes('chest') && !n.includes('leg') && !n.includes('boot')) {
+            const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+                <polygon points="12,2 20,9 12,22 4,9" fill="${info.top}"/>
+                <polygon points="12,2 4,9 12,9" fill="${info.front}" opacity="0.6"/>
+                <polygon points="12,2 20,9 12,9" fill="${info.top}" opacity="0.8"/>
+                <polygon points="4,9 12,22 12,9" fill="${info.front}" opacity="0.4"/>
+                <polygon points="20,9 12,22 12,9" fill="${info.top}" opacity="0.6"/>
+                <line x1="8" y1="5.5" x2="12" y2="9" stroke="#fff" stroke-width="0.5" opacity="0.4"/>
+            </svg>`;
+            return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+        }
+    }
+    if (n === 'chest' || n.includes('chest_block')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <rect x="3" y="8" width="18" height="12" rx="1" fill="${info.front}" stroke="${info.top}" stroke-width="0.8"/>
+            <rect x="3" y="8" width="18" height="5" rx="1" fill="${info.top}"/>
+            <rect x="10" y="12" width="4" height="3" rx="0.5" fill="#c0a040"/>
+            <rect x="11" y="11" width="2" height="2" rx="0.5" fill="#ddb840"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    // Default block icon (dirt, stone, wood, etc.)
     return `<div class="block-icon"><div class="top-face" style="background:${info.top}"></div><div class="front-face" style="background:${info.front}"></div></div>`;
 }
 
@@ -5732,6 +5911,10 @@ document.addEventListener('keydown', e => {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && guideBookOpen) {
+        guideBookOpen = false;
+        guideBookEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && chestOpen) {
         chestOpen = false; chestOpenKey = null;
         chestMenuEl.style.display = 'none';
@@ -5966,6 +6149,7 @@ const BREAK_TIME = {
     [BLOCK.SNOW]: [0.3, 0.15, 0.08, 0.05],
     [BLOCK.STONE]: [Infinity, 0.6, 0.25, 0.15],
     [BLOCK.IRON_ORE]: [Infinity, 0.8, 0.35, 0.2],
+    [BLOCK.COPPER_ORE]: [Infinity, 0.7, 0.3, 0.18],
     [BLOCK.CRAFTING]: [0.8, 0.3, 0.15, 0.1],
     [BLOCK.COAL_ORE]: [Infinity, 0.5, 0.2, 0.12],
     16: [Infinity, 0.5, 0.2, 0.12],
@@ -6013,8 +6197,36 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         player.group.rotation.y = fpYaw + staffAimOffset;
     }
 
-    // Use HP potion
+    // Open guide book
     const held = hotbarSlots[selectedSlot];
+    if (held === 'guide_book' && inventory['guide_book'] > 0) {
+        guideBookOpen = true;
+        guideBookEl.style.display = 'block';
+        updateGuideBookUI();
+        if (pointerLocked) document.exitPointerLock();
+        return;
+    }
+
+    // Use mana crystal — permanent +1 mana star
+    if (held === 'mana_crystal' && inventory['mana_crystal'] > 0) {
+        playerMaxMana += 2; // +1 star = 2 mana
+        playerMana = playerMaxMana;
+        inventory['mana_crystal']--;
+        if (inventory['mana_crystal'] <= 0) { delete inventory['mana_crystal']; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === 'mana_crystal') hotbarSlots[i] = 0; }
+        updateManaUI();
+        refreshUI();
+        addChatMessage('Mana crystal absorbed! +1 mana star (permanent)', 'rgba(68,136,255,0.95)');
+        // Blue particle burst
+        for (let i = 0; i < 10; i++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06), new THREE.MeshBasicMaterial({color:0x4488ff,transparent:true,opacity:0.8}));
+            m.position.set(player.position.x+(Math.random()-0.5)*0.6, player.position.y+0.5+Math.random()*1.5, player.position.z+(Math.random()-0.5)*0.6);
+            scene.add(m);
+            setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},800);
+        }
+        return;
+    }
+
+    // Use HP potion
     if (held === 'hp_potion' && inventory['hp_potion'] > 0 && playerHP < playerMaxHP) {
         playerHP = Math.min(playerMaxHP, playerHP + 2);
         inventory['hp_potion']--;
@@ -6085,19 +6297,23 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (!hit) return;
     const hasWoodPick = held === 'pickaxe' && inventory['pickaxe'] > 0;
     const hasStonePick = held === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0;
+    const hasCopperPick = held === 'copper_pickaxe' && inventory['copper_pickaxe'] > 0;
     const hasIronPick = held === 'iron_pickaxe' && inventory['iron_pickaxe'] > 0;
     const hasSteelPick = held === 'steel_pickaxe' && inventory['steel_pickaxe'] > 0;
     const hasDiamondPick = held === 'diamond_pickaxe' && inventory['diamond_pickaxe'] > 0;
     const hasGoldPick = held === 'gold_pickaxe' && inventory['gold_pickaxe'] > 0;
-    const hasPickaxe = hasWoodPick || hasStonePick || hasIronPick || hasSteelPick || hasDiamondPick || hasGoldPick;
+    const hasPickaxe = hasWoodPick || hasStonePick || hasCopperPick || hasIronPick || hasSteelPick || hasDiamondPick || hasGoldPick;
     const hasWoodAxe = held === 'wood_axe' && inventory['wood_axe'] > 0;
     const hasStoneAxe = held === 'stone_axe' && inventory['stone_axe'] > 0;
+    const hasCopperAxe = held === 'copper_axe' && inventory['copper_axe'] > 0;
     const hasIronAxe = held === 'iron_axe' && inventory['iron_axe'] > 0;
     const hasSteelAxe = held === 'steel_axe' && inventory['steel_axe'] > 0;
     const hasDiamondAxe = held === 'diamond_axe' && inventory['diamond_axe'] > 0;
     const hasGoldAxe = held === 'gold_axe' && inventory['gold_axe'] > 0;
-    const hasAxe = hasWoodAxe || hasStoneAxe || hasIronAxe || hasSteelAxe || hasDiamondAxe || hasGoldAxe;
-    const pickTier = hasDiamondPick ? 3 : hasSteelPick ? 3 : hasIronPick ? 3 : hasGoldPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
+    const hasAxe = hasWoodAxe || hasStoneAxe || hasCopperAxe || hasIronAxe || hasSteelAxe || hasDiamondAxe || hasGoldAxe;
+    const pickTier = hasDiamondPick ? 3 : hasSteelPick ? 3 : hasIronPick ? 3 : hasGoldPick ? 2 : hasCopperPick ? 2 : hasStonePick ? 2 : hasWoodPick ? 1 : 0;
+    // Copper pick: slightly faster than stone (0.85x break time at same tier)
+    const copperSpeedMult = hasCopperPick ? 0.85 : 1.0;
     // Only use majority block for break time when snap grid is MANUALLY enabled (G key)
     let bt = hit.block;
     if (snapGrid) {
@@ -6119,7 +6335,8 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     let breakTime;
     if (hasAxe) {
         // Axes: fast on wood/planks/leaves, slow on stone, can't do iron/coal
-        const axeTier = hasIronAxe ? 2 : hasStoneAxe ? 1 : 0;
+        const axeTier = hasDiamondAxe ? 2 : hasSteelAxe ? 2 : hasIronAxe ? 2 : hasGoldAxe ? 1 : hasCopperAxe ? 1 : hasStoneAxe ? 1 : 0;
+        const copperAxeMult = hasCopperAxe ? 0.85 : 1.0;
         const AXE_TIMES = {
             [BLOCK.WOOD]: [0.15, 0.1, 0.06],
             [BLOCK.PLANKS]: [0.15, 0.1, 0.06],
@@ -6132,12 +6349,12 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             15: [0.5, 0.3, 0.2], // FURNACE
         };
         const axeTimes = AXE_TIMES[bt];
-        if (axeTimes) breakTime = axeTimes[axeTier];
+        if (axeTimes) breakTime = axeTimes[axeTier] * copperAxeMult;
         else if (bt === BLOCK.IRON_ORE || bt === 16) breakTime = Infinity; // can't break iron/coal with axe
         else breakTime = (BREAK_TIME[bt] || [0.5, 0.25, 0.12, 0.08])[0]; // default no-tool speed
     } else {
         const times = BREAK_TIME[bt] || [0.5, 0.25, 0.12, 0.08];
-        breakTime = times[pickTier];
+        breakTime = times[pickTier] * copperSpeedMult;
     }
 
     if (breakTime === Infinity) return; // can't break without pickaxe
@@ -6166,6 +6383,7 @@ function getBlockDrop(blockType) {
     if (blockType === BLOCK.BLAST_FURNACE) return 'blast_furnace_block';
     if (blockType === BLOCK.CAMPFIRE) return 'campfire_block';
     if (blockType === BLOCK.CHEST) return 'chest_block';
+    if (blockType === BLOCK.COPPER_ORE) return BLOCK.COPPER_ORE;
     if (blockType === BLOCK.GOLD_ORE) return BLOCK.GOLD_ORE; // smelt to get gold ingot
     if (blockType === 15) return 'furnace_block'; // BLOCK.FURNACE
     return blockType;
@@ -6290,6 +6508,7 @@ const WB_CATEGORIES = [
         { from: BLOCK.GRAVEL, to: BLOCK.STONE, fc: 4, tc: 1 },
         { from: BLOCK.DIRT, to: BLOCK.CLAY, fc: 4, tc: 1 },
         { from: BLOCK.PLANKS, to: BLOCK.LEAVES, fc: 2, tc: 1 },
+        { from: 'star_fragment', to: 'mana_crystal', fc: 5, tc: 1 },
     ]},
     { name: 'Stations', recipes: [
         { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1 },
@@ -6303,14 +6522,17 @@ const WB_CATEGORIES = [
     { name: 'Pickaxes', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'copper_ingot', fromAlt: 'stick', to: 'copper_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
     ]},
     { name: 'Swords', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
+        { from: 'copper_ingot', fromAlt: 'stick', to: 'copper_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
     ]},
     { name: 'Axes', recipes: [
         { from: BLOCK.PLANKS, fromAlt: 'stick', to: 'wood_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: BLOCK.STONE, fromAlt: 'stick', to: 'stone_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
+        { from: 'copper_ingot', fromAlt: 'stick', to: 'copper_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
     ]},
     { name: 'Armor (Wood)', recipes: [
         { from: BLOCK.PLANKS, to: 'wood_helmet', fc: 5, tc: 1 },
@@ -6425,6 +6647,7 @@ furnaceMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;tran
 document.body.appendChild(furnaceMenuEl);
 
 const SMELT_RECIPES = [
+    { input: BLOCK.COPPER_ORE, output: 'copper_ingot', label: 'Copper Ore → Copper Ingot', time: 3 },
     { input: BLOCK.IRON_ORE, output: 'iron_ingot', label: 'Iron Ore → Iron Ingot', time: 4 },
     { input: BLOCK.GOLD_ORE, output: 'gold_ingot', label: 'Gold Ore → Gold Ingot', time: 5 },
     { input: BLOCK.SAND, output: BLOCK.CLAY, label: 'Sand → Clay (brick)', time: 3 },
@@ -6631,22 +6854,18 @@ document.body.appendChild(anvilMenuEl);
 
 const ANVIL_RECIPES = [
     { name: 'Pickaxes', recipes: [
+        { from: 'copper_ingot', fromAlt: 'stick', to: 'copper_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'steel_ingot', fromAlt: 'stick', to: 'steel_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'diamond', fromAlt: 'stick', to: 'diamond_pickaxe', fc: 3, fcAlt: 2, tc: 1, multi: true },
     ]},
     { name: 'Axes', recipes: [
+        { from: 'copper_ingot', fromAlt: 'stick', to: 'copper_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'steel_ingot', fromAlt: 'stick', to: 'steel_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
         { from: 'diamond', fromAlt: 'stick', to: 'diamond_axe', fc: 3, fcAlt: 2, tc: 1, multi: true },
-    ]},
-    { name: 'Swords', recipes: [
-        { from: 'iron_ingot', fromAlt: 'stick', to: 'iron_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
-        { from: 'gold_ingot', fromAlt: 'stick', to: 'gold_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
-        { from: 'steel_ingot', fromAlt: 'stick', to: 'steel_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
-        { from: 'diamond', fromAlt: 'stick', to: 'diamond_sword', fc: 2, fcAlt: 1, tc: 1, multi: true },
     ]},
     { name: 'Armor (Iron)', recipes: [
         { from: 'iron_ingot', to: 'iron_helmet', fc: 5, tc: 1 },
@@ -6693,6 +6912,7 @@ const POMMEL_STYLES = ['round', 'gem', 'skull', 'wolf', 'claw'];
 const SWORD_MATERIALS = [
     { key: 'stick', name: 'Wood', cost: 'stick' },
     { key: BLOCK.STONE, name: 'Stone', cost: BLOCK.STONE },
+    { key: 'copper_ingot', name: 'Copper', cost: 'copper_ingot' },
     { key: 'iron_ingot', name: 'Iron', cost: 'iron_ingot' },
     { key: 'gold_ingot', name: 'Gold', cost: 'gold_ingot' },
     { key: 'steel_ingot', name: 'Steel', cost: 'steel_ingot' },
@@ -6706,7 +6926,7 @@ const ACCENT_MATERIALS = [
     { key: 'emerald', name: 'Emerald', cost: 'emerald' },
     { key: 'topaz', name: 'Topaz', cost: 'topaz' },
 ];
-const BLADE_DAMAGE = { 'stick': 3, [BLOCK.STONE]: 4, 'iron_ingot': 6, 'gold_ingot': 5, 'steel_ingot': 8, 'diamond': 8, 'dragonsteel_ingot': 12 };
+const BLADE_DAMAGE = { 'stick': 3, [BLOCK.STONE]: 4, 'copper_ingot': 5, 'iron_ingot': 6, 'gold_ingot': 5, 'steel_ingot': 8, 'diamond': 8, 'dragonsteel_ingot': 12 };
 
 // Staff gem → type mapping
 const STAFF_GEM_TYPE = {
@@ -6745,12 +6965,16 @@ let anvilSwordConfig = {
     name: '',
 };
 
+const _anvilCollapsed = {}; // track which categories are collapsed
+
 function updateAnvilUI() {
     let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Anvil</h2>';
 
     // Standard recipes
     for (const cat of ANVIL_RECIPES) {
-        html += `<div class="craft-cat open">${cat.name}</div><div class="craft-grid">`;
+        const collapsed = _anvilCollapsed[cat.name];
+        const arrow = collapsed ? '▶' : '▼';
+        html += `<div class="craft-cat open" data-toggle="${cat.name}" style="cursor:pointer;user-select:none;">${arrow} ${cat.name}</div><div class="craft-grid" style="${collapsed ? 'display:none;' : ''}">`;
         for (let ri = 0; ri < cat.recipes.length; ri++) {
             const r = cat.recipes[ri];
             const has1 = (inventory[r.from] || 0) >= r.fc;
@@ -6783,8 +7007,10 @@ function updateAnvilUI() {
     const _lbl = 'color:rgba(180,170,140,0.6);font:10px monospace;';
     const _row = 'display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(80,80,60,0.2);';
 
+    const swordCollapsed = _anvilCollapsed['_swordForge'];
     html += '<div style="margin-top:12px;border-top:1px solid rgba(120,160,80,0.3);padding-top:10px;">';
-    html += '<div style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Custom Sword Forge</div>';
+    html += `<div data-toggle="_swordForge" style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${swordCollapsed ? '▶' : '▼'} Custom Sword Forge</div>`;
+    html += `<div style="${swordCollapsed ? 'display:none;' : ''}">`;
 
     // 1. Pommel (1x material + style)
     html += `<div style="${_row}"><span style="${_lbl}width:55px;">Pommel</span>`;
@@ -6830,11 +7056,13 @@ function updateAnvilUI() {
     // Cost summary + forge button
     html += '<div id="anvilCostSummary" style="margin-top:6px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
     html += '<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Sword</button>';
-    html += '</div>';
+    html += '</div></div>'; // close sword collapsible + outer div
 
     // ── Custom Staff Forge ──
+    const staffCollapsed = _anvilCollapsed['_staffForge'];
     html += '<div style="margin-top:12px;border-top:1px solid rgba(120,160,80,0.3);padding-top:10px;">';
-    html += '<div style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Custom Staff Forge</div>';
+    html += `<div data-toggle="_staffForge" style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${staffCollapsed ? '▶' : '▼'} Custom Staff Forge</div>`;
+    html += `<div style="${staffCollapsed ? 'display:none;' : ''}">`;
 
     const _gemOpts = [
         { value: 'coal', label: 'Coal (Fire)' }, { value: 'ruby', label: 'Ruby (Fire)' },
@@ -6876,10 +7104,19 @@ function updateAnvilUI() {
     // Cost + forge button
     html += '<div id="staffCostSummary" style="margin-top:4px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
     html += '<button class="menu-btn" id="forgeStaffBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Staff</button>';
-    html += '</div>';
+    html += '</div></div>'; // close staff collapsible + outer div
 
     html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.4);font:10px monospace;">Escape to close</div>';
     anvilMenuEl.innerHTML = html;
+
+    // Wire up collapsible category toggles
+    anvilMenuEl.querySelectorAll('[data-toggle]').forEach(el => {
+        el.addEventListener('click', () => {
+            const key = el.dataset.toggle;
+            _anvilCollapsed[key] = !_anvilCollapsed[key];
+            updateAnvilUI();
+        });
+    });
 
     // Wire up standard recipe clicks
     anvilMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
@@ -6985,7 +7222,7 @@ function updateAnvilUI() {
         // Consume all
         for (const [mat, count] of Object.entries(costs)) _consume(mat, count);
         // Determine tier from blade material
-        const tierMap = { 'stick': 'wood', [BLOCK.STONE]: 'stone', 'iron_ingot': 'iron', 'gold_ingot': 'gold', 'steel_ingot': 'steel', 'diamond': 'diamond', 'dragonsteel_ingot': 'dragonsteel' };
+        const tierMap = { 'stick': 'wood', [BLOCK.STONE]: 'stone', 'copper_ingot': 'copper', 'iron_ingot': 'iron', 'gold_ingot': 'gold', 'steel_ingot': 'steel', 'diamond': 'diamond', 'dragonsteel_ingot': 'dragonsteel' };
         const tier = tierMap[c.bladeMat] || 'iron';
         // Create custom sword
         const swordId = 'csword_' + Date.now();
@@ -7103,7 +7340,7 @@ function updateAnvilUI() {
 
 // Handle custom sword AND staff items in getItemInfo
 const _origGetItemInfo = getItemInfo;
-const _matCol = { 'stick': '#8a6a3a', '3': '#999', [3]: '#999', 'iron_ingot': '#c8d0d8', 'gold_ingot': '#ffee44', 'steel_ingot': '#d0d8e0', 'diamond': '#88ffff', 'dragonsteel_ingot': '#2a2a40', 'ruby': '#ff3355', 'sapphire': '#4466ff', 'emerald': '#44ff66', 'topaz': '#ffcc33', 'coal': '#333', [BLOCK.LEAVES]: '#35b535', [BLOCK.WOOD]: '#6B4226', [BLOCK.STONE]: '#999' };
+const _matCol = { 'stick': '#8a6a3a', '3': '#999', [3]: '#999', 'copper_ingot': '#cc8844', 'iron_ingot': '#c8d0d8', 'gold_ingot': '#ffee44', 'steel_ingot': '#d0d8e0', 'diamond': '#88ffff', 'dragonsteel_ingot': '#2a2a40', 'ruby': '#ff3355', 'sapphire': '#4466ff', 'emerald': '#44ff66', 'topaz': '#ffcc33', 'coal': '#333', [BLOCK.LEAVES]: '#35b535', [BLOCK.WOOD]: '#6B4226', [BLOCK.STONE]: '#999' };
 const _mc = (k) => _matCol[k] || _matCol[String(k)] || '#c8d0d8';
 getItemInfo = function(key) {
     if (typeof key === 'string' && key.startsWith('csword_') && window._customSwords && window._customSwords[key]) {
@@ -7127,6 +7364,44 @@ const _getSwordDamage = (held) => {
     }
     return 0;
 };
+
+// ── Guide Book ──
+let guideBookOpen = false;
+let guideBookPage = 0;
+const GUIDE_PAGES = [
+    { title: 'Welcome, Adventurer', text: 'You have awoken on an island of mystery. Explore the land, mine resources, craft tools, and uncover the secrets of the Ancient Forest.\n\nUse WASD to move, Space to jump, Shift to sprint.\nLeft-click to mine blocks and attack.\nRight-click to place blocks.\nPress I to open your inventory.' },
+    { title: 'Getting Started', text: 'Your copper tools will serve you well at first. Mine stone and coal, then build a Workbench (4 wood) to craft better equipment.\n\nSmelt ores in a Furnace (8 stone) — copper smelts fastest, then iron, then gold.\n\nCraft an Anvil (5 iron ingots) to forge advanced weapons and custom staffs.' },
+    { title: 'Combat & Magic', text: 'Swords deal melee damage. Staffs cast spells.\n\nWith a staff equipped:\n  Shift+1: Bolt (projectile attack)\n  Shift+2: Shield (hold right-click)\n  Shift+3: Unique spell (varies by staff)\n\nMore spell slots unlock as you deal staff damage.\n\nMana (blue stars) regenerates slowly. Hold click + Right Shift to channel faster regen.' },
+    { title: 'The Ancient Forest', text: 'To the northwest lies an ancient forest surrounded by a hill ring. Four gates guard its entrances, each protected by a powerful boss.\n\nDefeat all four gate bosses to break the barrier around the final boss — The Necromancer — who awaits at the central ruins.\n\nThe Necromancer drops the legendary Void Staff.' },
+    { title: 'The Gate Bosses', text: '• The Ancient One (East Gate) — A giant skeleton. Dodge its smash attacks.\n\n• Colossus of the Gate (West Gate) — Can only be damaged by mining its blocks with a pickaxe.\n\n• The Dark Knight (North Gate) — Skilled swordsman with 3-hit combos. Use a shield.\n\n• Grokthak the Warchief (South Gate) — Kill his 6 goblin minions first, then focus him.' },
+    { title: 'Dragons & Exploration', text: 'Dragon eggs can be found throughout the world. Bring them to the stone altar in the ruined fortress to hatch them.\n\nRaise your dragon — feed it to speed growth. Once large enough, you can ride and fly!\n\nDiscover caves for rare ores, and sail boats along the coast.' },
+    { title: 'Villages & Villagers', text: 'Several villages are scattered across the island. Villagers wander around their homes during the day.\n\nRight-click a villager while looking at them to talk. They may share tips, lore, or just greet you.\n\nVillages are good landmarks and safe places to rest. Look for the well at the center of each village.' },
+    { title: 'Crafting Guide', text: 'Key recipes:\n  4 Wood → Workbench\n  8 Stone → Furnace\n  5 Iron Ingot → Anvil\n  3 Copper Ingot + 2 Stick → Copper Pickaxe\n  8 Wood → Chest (storage)\n  3 Stick + 4 Leaves → Basic Staff\n  2 Iron + 4 Coal → Fire Staff\n  2 Iron + 8 Snow → Ice Staff\n  3 Iron + 6 Sand → Lightning Staff' },
+    { title: 'Night Sky', text: 'The world has a day/night cycle. At night the sky darkens and the stars come out.\n\nWatch for shooting stars — they land near you once per minute at night. Walk over a fallen star to collect a Star Fragment.\n\nCraft 5 Star Fragments into a Mana Crystal at a workbench. Use the crystal to permanently gain +1 mana star!' },
+];
+
+const guideBookEl = document.createElement('div');
+guideBookEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(60,45,25,0.95);border:3px solid rgba(120,90,50,0.6);border-radius:6px;padding:20px;width:420px;max-height:80vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(guideBookEl);
+
+function updateGuideBookUI() {
+    const p = GUIDE_PAGES[guideBookPage];
+    let html = '<div style="text-align:center;margin-bottom:12px;">';
+    html += `<span style="color:rgba(200,180,140,0.9);font:bold 16px Georgia,serif;">${p.title}</span>`;
+    html += '</div>';
+    html += `<div style="color:rgba(190,175,145,0.85);font:13px Georgia,serif;white-space:pre-wrap;line-height:1.6;">${p.text}</div>`;
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
+    html += `<button onclick="window._guidePagePrev()" style="background:rgba(80,60,30,0.6);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 14px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;${guideBookPage <= 0 ? 'opacity:0.3;' : ''}">← Prev</button>`;
+    html += `<span style="color:rgba(150,130,100,0.6);font:11px Georgia,serif;">Page ${guideBookPage + 1} of ${GUIDE_PAGES.length}</span>`;
+    html += `<button onclick="window._guidePageNext()" style="background:rgba(80,60,30,0.6);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 14px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;${guideBookPage >= GUIDE_PAGES.length - 1 ? 'opacity:0.3;' : ''}">Next →</button>`;
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;"><button onclick="window._closeGuideBook()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;">Close</button></div>';
+    guideBookEl.innerHTML = html;
+}
+
+window._guidePagePrev = () => { if (guideBookPage > 0) { guideBookPage--; updateGuideBookUI(); } };
+window._guidePageNext = () => { if (guideBookPage < GUIDE_PAGES.length - 1) { guideBookPage++; updateGuideBookUI(); } };
+window._closeGuideBook = () => { guideBookOpen = false; guideBookEl.style.display = 'none'; };
 
 // ── Chest system ──
 const chestData = {}; // key "bx,by,bz" → { items: { itemKey: count, ... } }
@@ -7346,9 +7621,69 @@ const PLACE_LOCK_MOVE = 1.0; // world units of player movement before lock break
 
 document.addEventListener('mousemove', e => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
 
+// Villager dialogue system
+const VILLAGER_LINES = [
+    "Beautiful day, isn't it?",
+    "Watch out for the goblins to the west.",
+    "They say the Ancient Forest hides great power.",
+    "Have you visited the castle? It's seen better days.",
+    "I heard strange noises from the gates last night.",
+    "Star fragments fall from the sky at night. Keep your eyes open!",
+    "The four gates protect something ancient... and dangerous.",
+    "Copper ore is easy to find near the surface. Good for starting out.",
+    "If you find dragon eggs, look for the stone altar.",
+    "Craft a staff at a workbench — magic is useful against the bosses.",
+    "The Necromancer can't be reached until the gate guardians fall.",
+    "I once saw a shooting star land right next to me!",
+    "Be careful in the scorched lands. Nothing grows there.",
+    "The old fortress to the west is full of ruins. Some say there's treasure.",
+    "You can smelt copper faster than iron in a furnace.",
+    "The well has the freshest water in the village.",
+    "Some say a great mage once built the gates to protect the forest.",
+    "My grandmother told me stories about dragons... I never believed her.",
+];
+let villagerDialogOpen = false;
+const villagerDialogEl = document.createElement('div');
+villagerDialogEl.style.cssText = 'display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:110;background:rgba(40,30,15,0.9);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:12px 20px;max-width:400px;user-select:none;';
+document.body.appendChild(villagerDialogEl);
+
+function showVillagerDialog(line) {
+    villagerDialogOpen = true;
+    villagerDialogEl.style.display = 'block';
+    villagerDialogEl.innerHTML = `<div style="color:rgba(220,200,160,0.9);font:14px Georgia,serif;text-align:center;">"${line}"</div>`;
+    // Auto-close after 3 seconds
+    setTimeout(() => { villagerDialogOpen = false; villagerDialogEl.style.display = 'none'; }, 3000);
+}
+
 function doPlace(e) {
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
+
+    // Check for villager interaction (right-click while looking at villager)
+    if (villageMgr && placeHoldTime < 0.05) {
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+        for (const v of villageMgr.villagers) {
+            const dx = v.x - player.position.x, dz = v.z - player.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > 5) continue; // must be close
+            // Check if looking at them — project villager to screen and check angle
+            const vPos = new THREE.Vector3(v.x, v.group.position.y + 1, v.z);
+            const dir = vPos.clone().sub(rc.ray.origin);
+            const dot = dir.normalize().dot(rc.ray.direction);
+            if (dot > 0.95) { // looking roughly at them
+                const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
+                showVillagerDialog(line);
+                // Make villager face player
+                v.angle = Math.atan2(-dx, -dz);
+                v.group.rotation.y = v.angle;
+                v.walking = false;
+                v.wanderTimer = 5; // pause wandering
+                return false;
+            }
+        }
+    }
+
     const hit = raycastBlock(mouseEvt);
     if (!hit) return false;
 
@@ -7780,6 +8115,7 @@ function animate() {
                 const SC = {
                     'wood_sword':    { blade: 0x8a6a3a, guard: 0x5c3a1e, handle: 0x44220a, pommel: 0x5c3a1e, metal: 0.0, rough: 0.7 },
                     'stone_sword':   { blade: 0x999999, guard: 0x666666, handle: 0x44220a, pommel: 0x666666, metal: 0.3, rough: 0.4 },
+                    'copper_sword':  { blade: 0xcc8844, guard: 0xaa6630, handle: 0x44220a, pommel: 0xaa6630, metal: 0.5, rough: 0.3 },
                     'iron_sword':    { blade: 0xe8ecf4, guard: 0x997733, handle: 0x44220a, pommel: 0x997733, metal: 0.8, rough: 0.15 },
                     'gold_sword':    { blade: 0xffee44, guard: 0xeedd22, handle: 0x44220a, pommel: 0xeedd22, metal: 0.4, rough: 0.2 },
                     'steel_sword':   { blade: 0xd0d8e0, guard: 0xb0b8c8, handle: 0x44220a, pommel: 0xb0b8c8, metal: 0.7, rough: 0.08 },
@@ -7866,14 +8202,182 @@ function animate() {
         }
     }
 
-    // Sun follows player (offset same as game.html)
+    // Day/night cycle
+    timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
+    const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
+    const isDusk = timeOfDay > 0.72 && timeOfDay <= 0.78;
+    const isDawn = timeOfDay >= 0.22 && timeOfDay < 0.28;
+
+    // Sun angle follows time of day
+    const sunAngle = (timeOfDay - 0.25) * Math.PI * 2; // 0.25=sunrise=horizon, 0.5=noon=top
+    const sunDist = 400;
+    const sunY = Math.sin(sunAngle) * sunDist;
+    const sunX = Math.cos(sunAngle) * sunDist * 0.5;
+
+    // Lighting intensity based on time
+    let dayBright = Math.max(0, Math.sin(sunAngle));
+    if (isNight) dayBright = 0.08;
+    else if (isDusk || isDawn) dayBright = 0.15 + dayBright * 0.5;
+
+    sun.intensity = 0.3 + dayBright * 1.2;
+    ambient.intensity = 0.1 + dayBright * 0.4;
+    hemi.intensity = 0.1 + dayBright * 0.5;
+
+    // Sky color shifts
+    const daySky = new THREE.Color(0x87CEEB);
+    const duskSky = new THREE.Color(0xff7744);
+    const nightSky = new THREE.Color(0x0a0a1a);
+    const skyColor = new THREE.Color();
+    if (isNight) skyColor.copy(nightSky);
+    else if (isDusk) skyColor.lerpColors(daySky, duskSky, (timeOfDay - 0.72) / 0.06);
+    else if (isDawn) skyColor.lerpColors(duskSky, daySky, (timeOfDay - 0.22) / 0.06);
+    else skyColor.copy(daySky);
+    renderer.setClearColor(skyColor);
+    scene.fog.color.copy(skyColor);
+
+    // Sun sphere visibility + color
+    sunSphere.visible = !isNight;
+    sunGlow.visible = !isNight;
+    if (isDusk || isDawn) {
+        sunSphere.material.color.setHex(0xff8833);
+        sunGlow.material.color.setHex(0xff6622);
+    } else {
+        sunSphere.material.color.setHex(0xffdd44);
+        sunGlow.material.color.setHex(0xffcc22);
+    }
+
+    // Sun follows player at orbital position
     sun.position.set(
-        player.position.x + 5,
-        player.position.y + 12,
+        player.position.x + sunX * 0.01,
+        player.position.y + Math.max(2, sunY * 0.03),
         player.position.z + 8
     );
     sun.target.position.copy(player.position);
     sun.target.updateMatrixWorld();
+
+    // Sun sphere follows at sky distance
+    sunSphere.position.set(player.position.x + sunX, sunY, player.position.z - 300);
+    sunGlow.position.copy(sunSphere.position);
+
+    // ── Shooting Stars (nighttime only) ──
+    if (isNight) {
+        shootingStarTimer -= dt;
+        if (shootingStarTimer <= 0) {
+            shootingStarTimer = 50 + Math.random() * 20; // every ~50-70 seconds at night
+            // Spawn shooting star heading toward a point near the player
+            const landAngle = Math.random() * Math.PI * 2;
+            const landDist = 5 + Math.random() * 15;
+            const landX = player.position.x + Math.cos(landAngle) * landDist;
+            const landZ = player.position.z + Math.sin(landAngle) * landDist;
+            const landY = getTerrainHeight(landX, landZ) + 0.3;
+
+            // Start high in the sky, offset
+            const startX = landX + (Math.random() - 0.5) * 80;
+            const startZ = landZ + (Math.random() - 0.5) * 80;
+            const startY = 150 + Math.random() * 50;
+
+            const starMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.9 });
+            const starMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 4), starMat);
+            starMesh.position.set(startX, startY, startZ);
+            scene.add(starMesh);
+
+            const starLight = new THREE.PointLight(0xffffaa, 2, 15);
+            starLight.position.copy(starMesh.position);
+            scene.add(starLight);
+
+            shootingStars.push({
+                mesh: starMesh, light: starLight,
+                sx: startX, sy: startY, sz: startZ,
+                tx: landX, ty: landY, tz: landZ,
+                age: 0, duration: 1.5 + Math.random() * 1.0,
+                landed: false, trail: [],
+            });
+        }
+    }
+
+    // Update shooting stars
+    for (let i = shootingStars.length - 1; i >= 0; i--) {
+        const ss = shootingStars[i];
+        ss.age += dt;
+        const t = Math.min(1, ss.age / ss.duration);
+
+        if (!ss.landed) {
+            // Interpolate position
+            const ease = t * t; // accelerate
+            ss.mesh.position.set(
+                ss.sx + (ss.tx - ss.sx) * ease,
+                ss.sy + (ss.ty - ss.sy) * ease,
+                ss.sz + (ss.tz - ss.sz) * ease
+            );
+            ss.light.position.copy(ss.mesh.position);
+            ss.mesh.material.opacity = 0.9;
+            ss.light.intensity = 2 + Math.sin(ss.age * 20) * 0.5;
+
+            // Trail particles
+            if (ss.age % 0.05 < dt) {
+                const tp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08),
+                    new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.6 }));
+                tp.position.copy(ss.mesh.position);
+                scene.add(tp);
+                ss.trail.push({ mesh: tp, life: 0.5 });
+            }
+
+            if (t >= 1) {
+                // Landed! Create glowing item on ground
+                ss.landed = true;
+                ss.mesh.position.set(ss.tx, ss.ty, ss.tz);
+                ss.mesh.material.color.setHex(0xffffaa);
+                ss.mesh.scale.setScalar(0.6);
+                ss.light.intensity = 1.5;
+                ss.light.distance = 8;
+                ss.light.position.copy(ss.mesh.position);
+                // Impact flash
+                const flash = new THREE.PointLight(0xffffaa, 5, 20);
+                flash.position.set(ss.tx, ss.ty + 1, ss.tz);
+                scene.add(flash);
+                setTimeout(() => scene.remove(flash), 300);
+            }
+        } else {
+            // Landed star — bob and glow, collectible
+            const bob = Math.sin(ss.age * 3) * 0.15;
+            ss.mesh.position.y = ss.ty + 0.3 + bob;
+            ss.mesh.rotation.y += dt * 2;
+            ss.light.position.copy(ss.mesh.position);
+            ss.light.intensity = 1 + Math.sin(ss.age * 4) * 0.4;
+
+            // Check if player picks it up (walk near)
+            const dx = player.position.x - ss.tx, dz = player.position.z - ss.tz;
+            if (dx * dx + dz * dz < 4) {
+                inventory['star_fragment'] = (inventory['star_fragment'] || 0) + 1;
+                refreshUI();
+                addChatMessage('Picked up a Star Fragment!', 'rgba(255,255,170,0.95)');
+                scene.remove(ss.mesh); scene.remove(ss.light);
+                ss.mesh.geometry.dispose(); ss.mesh.material.dispose();
+                shootingStars.splice(i, 1);
+                continue;
+            }
+
+            // Despawn after 5 minutes if not collected
+            if (ss.age > ss.duration + 300) {
+                scene.remove(ss.mesh); scene.remove(ss.light);
+                ss.mesh.geometry.dispose(); ss.mesh.material.dispose();
+                shootingStars.splice(i, 1);
+                continue;
+            }
+        }
+
+        // Update trail particles
+        for (let ti = ss.trail.length - 1; ti >= 0; ti--) {
+            ss.trail[ti].life -= dt;
+            ss.trail[ti].mesh.material.opacity = Math.max(0, ss.trail[ti].life * 1.2);
+            if (ss.trail[ti].life <= 0) {
+                scene.remove(ss.trail[ti].mesh);
+                ss.trail[ti].mesh.geometry.dispose();
+                ss.trail[ti].mesh.material.dispose();
+                ss.trail.splice(ti, 1);
+            }
+        }
+    }
 
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
@@ -8866,9 +9370,7 @@ function animate() {
         }
     }
 
-    // Keep sun at fixed direction from player (so it doesn't move as you walk)
-    sunSphere.position.set(player.position.x + 400, 600, player.position.z - 300);
-    sunGlow.position.copy(sunSphere.position);
+    // (sun sphere position now handled by day/night cycle above)
 
     updateClouds(dt);
     renderer.render(scene, camera);

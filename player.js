@@ -465,6 +465,7 @@ export class Player {
         const TIER_COLORS = {
             pickaxe:        { head: 0x8a6a3a, metal: 0.0, rough: 0.7 }, // wood
             stone_pickaxe:  { head: 0x888888, metal: 0.3, rough: 0.5 },
+            copper_pickaxe: { head: 0xcc8844, metal: 0.5, rough: 0.3 },
             iron_pickaxe:   { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
             gold_pickaxe:   { head: 0xffee44, metal: 0.4, rough: 0.2 },
             steel_pickaxe:  { head: 0xe8eef5, metal: 0.5, rough: 0.1 },
@@ -472,6 +473,7 @@ export class Player {
             diamond_pickaxe:{ head: 0x88ffff, metal: 0.3, rough: 0.15 },
             wood_sword:     { blade: 0x8a6a3a, guard: 0x5c3a1e, metal: 0.0, rough: 0.7 },
             stone_sword:    { blade: 0x999999, guard: 0x666666, metal: 0.3, rough: 0.4 },
+            copper_sword:   { blade: 0xcc8844, guard: 0xaa6630, metal: 0.5, rough: 0.3 },
             iron_sword:     { blade: 0xe8ecf4, guard: 0x997733, metal: 0.95, rough: 0.08 },
             gold_sword:     { blade: 0xffee44, guard: 0xeedd22, metal: 0.4, rough: 0.2 },
             steel_sword:    { blade: 0xe8eef5, guard: 0xd0d8e8, metal: 0.5, rough: 0.1 },
@@ -479,6 +481,7 @@ export class Player {
             diamond_sword:  { blade: 0x88ffff, guard: 0x55eeff, metal: 0.3, rough: 0.15 },
             wood_axe:       { head: 0x8a6a3a, metal: 0.0, rough: 0.7 },
             stone_axe:      { head: 0x888888, metal: 0.3, rough: 0.5 },
+            copper_axe:     { head: 0xcc8844, metal: 0.5, rough: 0.3 },
             iron_axe:       { head: 0xb0b8c0, metal: 0.8, rough: 0.15 },
             gold_axe:       { head: 0xffee44, metal: 0.4, rough: 0.2 },
             steel_axe:      { head: 0xe8eef5, metal: 0.5, rough: 0.1 },
@@ -890,7 +893,7 @@ export class Player {
         if (!s._customGrp) return;
 
         // Material color map
-        const matCol = { 'stick': 0x5c3a1e, '3': 0x999999, [3]: 0x999999, 'iron_ingot': 0xc0c8d0, 'gold_ingot': 0xddcc44, 'steel_ingot': 0xd0d8e0, 'diamond': 0x88ffff, 'dragonsteel_ingot': 0x2a2a40, 'ruby': 0xff3355, 'sapphire': 0x4466ff, 'emerald': 0x44ff66, 'topaz': 0xffcc33, 'coal': 0x333333, [11]: 0x35b535, [10]: 0x6B4226 };
+        const matCol = { 'stick': 0x5c3a1e, '3': 0x999999, [3]: 0x999999, 'copper_ingot': 0xcc8844, 'iron_ingot': 0xc0c8d0, 'gold_ingot': 0xddcc44, 'steel_ingot': 0xd0d8e0, 'diamond': 0x88ffff, 'dragonsteel_ingot': 0x2a2a40, 'ruby': 0xff3355, 'sapphire': 0x4466ff, 'emerald': 0x44ff66, 'topaz': 0xffcc33, 'coal': 0x333333, [11]: 0x35b535, [10]: 0x6B4226 };
         const getCol = k => matCol[k] || matCol[String(k)] || 0xaaaaaa;
 
         const shaftColor = getCol(config.shaftMat);

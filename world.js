@@ -9,14 +9,14 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -473,6 +473,14 @@ export class World {
                         else if (depthBelow > 20 && topazVein > 0.76 && topazLocal > 0.58) block = BLOCK.TOPAZ_ORE;
                         else if (depthBelow > 15 && goldVein > 0.6 && goldLocal > 0.45) block = BLOCK.GOLD_ORE;
                         else if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
+                        else if (depthBelow > 3 && depthBelow < 25) {
+                            const copperVein = Math.sin(bx * 0.19 + y * 0.23 + bz * 0.17 + 8.5) *
+                                               Math.cos(bx * 0.21 - y * 0.15 + bz * 0.24 + 5.2);
+                            const copperLocal = this._hash(bx * 0.43 + y * 0.37, bz * 0.51 + y * 0.29);
+                            if (copperVein > 0.6 && copperLocal > 0.45) block = BLOCK.COPPER_ORE;
+                            else if (coalVein > 0.5 && coalLocal > 0.3) block = BLOCK.COAL_ORE;
+                            else block = BLOCK.STONE;
+                        }
                         else if (coalVein > 0.5 && coalLocal > 0.3) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {
