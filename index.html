@@ -317,6 +317,27 @@ canvas { display: block; }
         </div>
     </div>
     <div style="width:300px;">
+        <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:6px;">Performance</div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="optShadows" checked style="accent-color:rgba(120,160,80,0.8);">
+                <label for="optShadows" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Shadows</label>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="optFarTerrain" checked style="accent-color:rgba(120,160,80,0.8);">
+                <label for="optFarTerrain" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Far terrain (LOD)</label>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="optClouds" checked style="accent-color:rgba(120,160,80,0.8);">
+                <label for="optClouds" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Clouds</label>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="optParticles" checked style="accent-color:rgba(120,160,80,0.8);">
+                <label for="optParticles" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Particles & effects</label>
+            </div>
+        </div>
+    </div>
+    <div style="width:300px;">
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Keybinds</div>
         <div id="keybindList" style="max-height:200px;overflow-y:auto;background:rgba(20,25,15,0.5);border:1px solid rgba(120,160,80,0.3);border-radius:6px;padding:6px;"></div>
         <button class="menu-btn" id="resetKeybindsBtn" style="width:100%;margin-top:6px;padding:8px;font-size:11px;background:rgba(80,40,30,0.5);border-color:rgba(160,80,60,0.4);">Reset Keybinds to Default</button>
@@ -374,7 +395,7 @@ const SKY_COLOR = 0x87CEEB;
 const renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.5 });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = optShadows;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
@@ -3567,6 +3588,10 @@ let autoMineSnap = false; // auto 3x3 snap grid when mining underground
 let musicVolume = 0.5;
 let mouseSensitivity = 1.0;
 let settingsRenderDist = 200; // chunks (matches RENDER_DIST)
+let optShadows = true;
+let optFarTerrain = true;
+let optClouds = true;
+let optParticles = true;
 
 // Load saved settings
 try {
@@ -3577,11 +3602,15 @@ try {
     if (saved.musicVolume !== undefined) musicVolume = saved.musicVolume;
     if (saved.sensitivity) mouseSensitivity = saved.sensitivity;
     if (saved.renderDist) settingsRenderDist = saved.renderDist;
+    if (saved.optShadows !== undefined) optShadows = saved.optShadows;
+    if (saved.optFarTerrain !== undefined) optFarTerrain = saved.optFarTerrain;
+    if (saved.optClouds !== undefined) optClouds = saved.optClouds;
+    if (saved.optParticles !== undefined) optParticles = saved.optParticles;
 } catch(e) {}
 
 function saveSettings() {
     localStorage.setItem('satw_settings', JSON.stringify({
-        useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist
+        useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist, optShadows, optFarTerrain, optClouds, optParticles
     }));
 }
 
@@ -3875,6 +3904,10 @@ function updateSettingsUI() {
     document.getElementById('autoMineSnap').checked = autoMineSnap;
     document.getElementById('musicVolSlider').value = Math.round(musicVolume * 100);
     document.getElementById('musicVolLabel').textContent = Math.round(musicVolume * 100);
+    document.getElementById('optShadows').checked = optShadows;
+    document.getElementById('optFarTerrain').checked = optFarTerrain;
+    document.getElementById('optClouds').checked = optClouds;
+    document.getElementById('optParticles').checked = optParticles;
     renderKeybindList();
 }
 let _rebindingAction = null;
@@ -3935,6 +3968,27 @@ document.getElementById('musicVolSlider').addEventListener('input', (e) => {
     musicVolume = Number(e.target.value) / 100;
     document.getElementById('musicVolLabel').textContent = e.target.value;
     if (musicSystem) musicSystem.setVolume(musicVolume);
+    saveSettings();
+});
+document.getElementById('optShadows').addEventListener('change', (e) => {
+    optShadows = e.target.checked;
+    renderer.shadowMap.enabled = optShadows;
+    sun.castShadow = optShadows;
+    saveSettings();
+});
+document.getElementById('optFarTerrain').addEventListener('change', (e) => {
+    optFarTerrain = e.target.checked;
+    if (farTerrain) farTerrain.visible = optFarTerrain;
+    if (farWater) farWater.visible = optFarTerrain;
+    saveSettings();
+});
+document.getElementById('optClouds').addEventListener('change', (e) => {
+    optClouds = e.target.checked;
+    for (const c of clouds) c.group.visible = optClouds;
+    saveSettings();
+});
+document.getElementById('optParticles').addEventListener('change', (e) => {
+    optParticles = e.target.checked;
     saveSettings();
 });
 
