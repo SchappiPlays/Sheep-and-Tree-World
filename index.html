@@ -448,7 +448,7 @@ function makeCloud(x, y, z) {
 }
 
 // Spawn clouds in a grid pattern with randomness
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 20; i++) {
     const x = (Math.random() - 0.5) * 2000;
     const z = (Math.random() - 0.5) * 2000;
     const y = 180 + Math.random() * 80;
@@ -1121,8 +1121,26 @@ function startGame(loadSlotName) {
             flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(100,150,255,0.15);z-index:50;pointer-events:none;';
             document.body.appendChild(flash);
             setTimeout(() => flash.remove(), 100);
+            // Track shield hits on the attacking boss for stagger mechanic
+            for (const c of creatures.creatures) {
+                if (c.dead || !c._isBoss) continue;
+                const dx = (srcX || 0) - c.x, dz = (srcZ || 0) - c.z;
+                if (dx*dx + dz*dz < 16) {
+                    c._shieldHits = (c._shieldHits || 0) + 1;
+                    if (c._shieldHits >= 3) {
+                        // Stagger! Boss kneels for 3 seconds
+                        c._shieldHits = 0;
+                        c._pauseTimer = 3.0;
+                        c.speed = 0;
+                        c.walking = false;
+                        c._smashTimer = -1;
+                    }
+                    break;
+                }
+            }
             return;
         }
+        // Reset shield hit counter when player takes damage
         playerTakeDamage(applyArmorDamage(dmg));
     };
     villageMgr = new VillageManager(scene, world);
@@ -3066,6 +3084,244 @@ function startGame(loadSlotName) {
         };
     }
 
+    // === Scorched Fortress & Ember Lord Boss ===
+    {
+        const sfX = -300, sfZ = 280; // center of scorched lands
+        const BS = BLOCK_SIZE;
+        const yOff = 128;
+        const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
+        const sfBX = Math.round(sfX / BS), sfBZ = Math.round(sfZ / BS);
+        const sfGY = Math.floor(getTerrainHeight(sfX, sfZ) / BS) + yOff;
+        const S = BLOCK.STONE, DS = BLOCK.DARK_STONE;
+
+        const _pb = (bx, by, bz, block) => {
+            world.setBlock(bx, by, bz, block);
+            if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
+            world._modifiedBlocks.set(bx+','+by+','+bz, block);
+        };
+        const box = (x0,y0,z0,x1,y1,z1,block) => {
+            for (let x=x0;x<=x1;x++) for (let y=y0;y<=y1;y++) for (let z=z0;z<=z1;z++) _pb(x,y,z,block);
+        };
+        const room = (rx,ry,rz,rw,rd,rh,block) => {
+            box(rx,ry,rz,rx+rw,ry,rz+rd,block); // floor
+            box(rx,ry+rh,rz,rx+rw,ry+rh,rz+rd,block); // ceiling
+            box(rx,ry,rz,rx,ry+rh,rz+rd,block); // walls
+            box(rx+rw,ry,rz,rx+rw,ry+rh,rz+rd,block);
+            box(rx,ry,rz,rx+rw,ry+rh,rz,block);
+            box(rx,ry,rz+rd,rx+rw,ry+rh,rz+rd,block);
+            // clear interior
+            for (let x=rx+1;x<rx+rw;x++) for (let y=ry+1;y<ry+rh;y++) for (let z=rz+1;z<rz+rd;z++) _pb(x,y,z,BLOCK.AIR);
+        };
+
+        // Flatten ground
+        const hw = 25, hd = 20;
+        for (let dx = -hw; dx <= hw; dx++) for (let dz = -hd; dz <= hd; dz++) {
+            for (let dy = 0; dy <= 2; dy++) _pb(sfBX+dx, sfGY+dy, sfBZ+dz, BLOCK.AIR);
+            _pb(sfBX+dx, sfGY, sfBZ+dz, DS);
+        }
+
+        // Outer walls (50x40, 10 high, dark stone)
+        for (let dx = -hw; dx <= hw; dx++) for (let dy = 1; dy <= 10; dy++) {
+            _pb(sfBX+dx, sfGY+dy, sfBZ-hd, DS);
+            _pb(sfBX+dx, sfGY+dy, sfBZ+hd, DS);
+        }
+        for (let dz = -hd; dz <= hd; dz++) for (let dy = 1; dy <= 10; dy++) {
+            _pb(sfBX-hw, sfGY+dy, sfBZ+dz, DS);
+            _pb(sfBX+hw, sfGY+dy, sfBZ+dz, DS);
+        }
+        // Crenellations
+        for (let dx = -hw; dx <= hw; dx += 2) {
+            _pb(sfBX+dx, sfGY+11, sfBZ-hd, DS);
+            _pb(sfBX+dx, sfGY+11, sfBZ+hd, DS);
+        }
+        for (let dz = -hd; dz <= hd; dz += 2) {
+            _pb(sfBX-hw, sfGY+11, sfBZ+dz, DS);
+            _pb(sfBX+hw, sfGY+11, sfBZ+dz, DS);
+        }
+
+        // 4 corner towers (radius 3, height 14)
+        for (const [cx,cz] of [[-hw,-hd],[-hw,hd],[hw,-hd],[hw,hd]]) {
+            for (let dy = 1; dy <= 14; dy++) {
+                for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+                    if (dx*dx+dz*dz > 10) continue;
+                    _pb(sfBX+cx+dx, sfGY+dy, sfBZ+cz+dz, DS);
+                }
+            }
+        }
+
+        // Gate (south wall, 4 wide, 6 tall)
+        for (let dx = -2; dx <= 2; dx++) for (let dy = 1; dy <= 6; dy++) _pb(sfBX+dx, sfGY+dy, sfBZ+hd, BLOCK.AIR);
+
+        // Throne room (center, 20x14x8)
+        room(sfBX-10, sfGY, sfBZ-7, 20, 14, 8, DS);
+        // Clear doorways
+        for (let dy = 1; dy <= 5; dy++) {
+            _pb(sfBX, sfGY+dy, sfBZ+7, BLOCK.AIR); _pb(sfBX+1, sfGY+dy, sfBZ+7, BLOCK.AIR); // south door
+            _pb(sfBX, sfGY+dy, sfBZ-7, BLOCK.AIR); _pb(sfBX+1, sfGY+dy, sfBZ-7, BLOCK.AIR); // north door
+        }
+        // Throne platform
+        box(sfBX-2, sfGY+1, sfBZ-4, sfBX+2, sfGY+1, sfBZ-2, DS);
+        box(sfBX-1, sfGY+2, sfBZ-3, sfBX+1, sfGY+2, sfBZ-2, DS);
+        // Throne back
+        for (let dy = 2; dy <= 5; dy++) { _pb(sfBX, sfGY+dy, sfBZ-4, DS); _pb(sfBX-1, sfGY+dy, sfBZ-4, DS); _pb(sfBX+1, sfGY+dy, sfBZ-4, DS); }
+
+        // Braziers (8 in throne room — just dark stone pillars with campfire blocks on top)
+        const braziers = [[-8,-5],[-8,5],[8,-5],[8,5],[-4,-5],[-4,5],[4,-5],[4,5]];
+        for (const [bx,bz] of braziers) {
+            for (let dy = 1; dy <= 3; dy++) _pb(sfBX+bx, sfGY+dy, sfBZ+bz, DS);
+        }
+
+        // Side rooms
+        room(sfBX-hw+2, sfGY, sfBZ-10, 10, 8, 6, DS); // west barracks
+        room(sfBX+hw-12, sfGY, sfBZ-10, 10, 8, 6, DS); // east armory
+    }
+
+    // === Ember Lord Boss ===
+    if (!killedBosses.has('The Ember Lord')) {
+        const elX = -300, elZ = 280;
+        const elY = getTerrainHeight(elX, elZ) + 1;
+
+        const emberLord = new Player(scene, world);
+        emberLord.group.position.set(elX, elY, elZ);
+        emberLord.position.set(elX, elY, elZ);
+
+        // Scale up — 1.8x player size
+        emberLord.group.scale.setScalar(1.8);
+
+        // Fiery orange appearance
+        emberLord._skinMat.color.setHex(0xff6622);
+        emberLord._shirtMat.color.setHex(0xcc3300);
+        emberLord._pantsMat.color.setHex(0x881100);
+        emberLord._shoeMat.color.setHex(0x661100);
+        emberLord._hairMat.color.setHex(0xff4400);
+
+        // Custom fire armor — glowing dark plates with ember cracks
+        const fireArmorMat = new THREE.MeshStandardMaterial({ color: 0x2a1008, emissive: 0xff3300, emissiveIntensity: 0.3, metalness: 0.7, roughness: 0.3 });
+        // Helmet
+        const elHelmet = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.28), fireArmorMat);
+        elHelmet.position.y = 0.14; emberLord.headGroup.add(elHelmet);
+        // Horns
+        for (const s of [-1, 1]) {
+            const horn = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 4), new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff2200, emissiveIntensity: 0.2 }));
+            horn.position.set(s * 0.14, 0.22, 0); horn.rotation.z = s * -0.4;
+            emberLord.headGroup.add(horn);
+        }
+        // Chestplate
+        const elChest = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.32, 0.22), fireArmorMat);
+        elChest.position.set(0, 0.32, 0); emberLord.spine.add(elChest);
+        // Shoulder pauldrons
+        for (const s of [-1, 1]) {
+            const pauldron = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.14), fireArmorMat);
+            pauldron.position.set(s * 0.22, 0.42, 0); emberLord.spine.add(pauldron);
+            // Spike on pauldron
+            const spike = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4), fireArmorMat);
+            spike.position.set(s * 0.22, 0.48, 0); emberLord.spine.add(spike);
+        }
+        // Glowing eyes
+        const emberEyeMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+        const elLE = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.02), emberEyeMat);
+        elLE.position.set(-0.06, 0.08, 0.14); emberLord.headGroup.add(elLE);
+        const elRE = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.02), emberEyeMat);
+        elRE.position.set(0.06, 0.08, 0.14); emberLord.headGroup.add(elRE);
+
+        // Fire sword in left hand — oversized flaming blade
+        emberLord.swordHeld.visible = true;
+        emberLord.setToolColor(emberLord.swordHeld, 'diamond_sword');
+        emberLord.swordHeld._bladeMat.color.setHex(0xff4400);
+        emberLord.swordHeld._bladeMat.emissive.setHex(0xff2200);
+        emberLord.swordHeld._bladeMat.emissiveIntensity = 0.6;
+        emberLord.swordHeld._guardMat.color.setHex(0x2a1008);
+        emberLord.swordHeld._bladeGrp.scale.set(1.8, 3.0/2, 1.8);
+        emberLord.swordHeld._bladeGrp.position.y = 0.1 * (1 - 3.0/2);
+
+        // Fire staff in right hand
+        emberLord.staffHeld.visible = true;
+        if (emberLord.staffHeld._fireExtras) emberLord.staffHeld._fireExtras.visible = true;
+        emberLord.staffHeld._orbMesh.visible = false;
+        if (emberLord.staffHeld._shaft) emberLord.staffHeld._shaft.visible = false;
+        emberLord.staffHeld.position.set(0, 0.02, 0);
+        emberLord.rightArm.handGrp.add(emberLord.staffHeld);
+
+        // Fire particle aura
+        const emberParticles = new THREE.Group();
+        for (let i = 0; i < 10; i++) {
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05),
+                new THREE.MeshBasicMaterial({ color: i < 5 ? 0xff4400 : 0xff8822, transparent: true, opacity: 0.6 }));
+            p._phase = Math.random() * Math.PI * 2;
+            emberParticles.add(p);
+        }
+        emberLord.group.add(emberParticles);
+
+        // Point light — boss glows
+        const emberGlow = new THREE.PointLight(0xff4400, 2, 10);
+        emberGlow.position.y = 1.5;
+        emberLord.group.add(emberGlow);
+
+        // Name label
+        const elCanvas = document.createElement('canvas');
+        elCanvas.width = 256; elCanvas.height = 48;
+        const elCtx = elCanvas.getContext('2d');
+        elCtx.fillStyle = '#ff6622'; elCtx.font = 'bold 24px monospace'; elCtx.textAlign = 'center';
+        elCtx.fillText('The Ember Lord', 128, 30);
+        const elTex = new THREE.CanvasTexture(elCanvas);
+        const elLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: elTex, transparent: true, depthWrite: false }));
+        elLabel.position.y = 2.5; elLabel.scale.set(1.5, 0.28, 1);
+        emberLord.group.add(elLabel);
+
+        scene.add(emberLord.group);
+
+        const elCreature = {
+            group: emberLord.group, legs: [emberLord.leftLeg.hip, emberLord.rightLeg.hip],
+            headGrp: emberLord.headGroup,
+            x: elX, z: elZ, angle: 0, speed: 0,
+            walkPhase: 0, wanderTimer: 3, idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+            type: 'skeleton', hostile: true, aggroRange: 22, attackRange: 3.5, attackDmg: 5, attackCD: 2.5, attackTimer: 0,
+            hp: 250, maxHP: 250, dead: false, chaseSpeed: 2.5, _turnSpeed: 5,
+            _shieldHits: 0, // tracks consecutive shield blocks for stagger
+            _isBoss: true, _bossName: 'The Ember Lord', _isEmberLord: true,
+            _smashTimer: -1, _dkCombo: 0, // uses Dark Knight sword combo
+            _emberParticles: emberParticles, _emberGlow: emberGlow,
+            _arms: [
+                { shoulder: emberLord.leftArm.shoulder, elbow: emberLord.leftArm.elbow },
+                { shoulder: emberLord.rightArm.shoulder, elbow: emberLord.rightArm.elbow },
+            ],
+            _spine: emberLord.spine,
+            _playerModel: emberLord,
+        };
+        creatures.creatures.push(elCreature);
+
+        // Drop handler — drops fire armor set + fire sword
+        creatures._onEmberLordDeath = (boss) => {
+            // Custom fire sword drop
+            const swordId = 'csword_emberlord_' + Date.now();
+            if (!window._customSwords) window._customSwords = {};
+            window._customSwords[swordId] = {
+                tier: 'dragonsteel', damage: 14,
+                pommelStyle: 'skull', pommelMat: 'ruby',
+                handleMat: 'dragonsteel_ingot', guardStyle: 'spiked', guardMat: 'ruby',
+                bladeMat: 'dragonsteel_ingot', bladeLength: 3.0, bladeThickness: 1.6,
+                trimMat: 'ruby', name: 'Infernal Greatsword',
+            };
+            inventory[swordId] = 1;
+            const ei = hotbarSlots.indexOf(0);
+            if (ei >= 0) hotbarSlots[ei] = swordId;
+            // Fire armor set (unique items)
+            inventory['ember_helmet'] = 1;
+            inventory['ember_chestplate'] = 1;
+            inventory['ember_leggings'] = 1;
+            inventory['ember_boots'] = 1;
+            // Bonus loot
+            inventory['ruby'] = (inventory['ruby'] || 0) + 5;
+            inventory['diamond'] = (inventory['diamond'] || 0) + 3;
+            playerMaxHP += 4; // +2 hearts
+            playerHP = Math.min(playerHP + 4, playerMaxHP);
+            updateHeartsUI();
+            refreshUI();
+            addChatMessage('The Ember Lord is extinguished! (+2 hearts)', 'rgba(255,102,34,0.95)');
+            addChatMessage('Obtained: Infernal Greatsword + Ember Armor Set', 'rgba(255,200,100,0.95)');
+        };
+    }
+
     // Cave entrances are now natural openings in the hill ring — no beacons needed
     dragonMgr.buildCarriedEgg(player.spine);
     dragonMgr.addToInventory = addToInventory;
@@ -3142,7 +3398,7 @@ function startGame(loadSlotName) {
                     // Track anvil blocks — snap to 2x2x2 origin
                     if (val === BLOCK.ANVIL) {
                         const ox = mbx - (((mbx % 2) + 2) % 2);
-                        const oy = mby - (mby % 2);
+                        const oy = mby - (((mby % 2) + 2) % 2);
                         const oz = mbz - (((mbz % 2) + 2) % 2);
                         anvilOrigins.add(ox + ',' + oy + ',' + oz);
                     }
@@ -3153,6 +3409,9 @@ function startGame(loadSlotName) {
                         campfireOrigins.add(ox + ',' + mby + ',' + oz);
                     }
                 }
+                // Clear existing anvil models before recreating
+                for (const [k, m] of anvilModels) scene.remove(m);
+                anvilModels.clear();
                 // Recreate anvil 3D models
                 for (const key of anvilOrigins) {
                     const [ax, ay, az] = key.split(',').map(Number);
@@ -3197,7 +3456,14 @@ function startGame(loadSlotName) {
             showToast('Loaded: ' + loadSlotName);
         }
     } else {
-        // New game — spawn at center
+        // New game — spawn at center, reset progression
+        staffDamageDealt = 0;
+        activeSpellSlot = 1;
+        playerHP = 10; playerMaxHP = 10;
+        playerMana = 10; playerMaxMana = 10;
+        killedBosses.clear();
+        armorSlots.helmet = null; armorSlots.chestplate = null; armorSlots.leggings = null; armorSlots.boots = null;
+        equippedShield = null;
         world.getOrCreateChunk(0, 0);
         const spawnY = world.getHeight(0, 0);
         player.position.set(0, spawnY, 0);
@@ -3674,17 +3940,19 @@ document.getElementById('musicVolSlider').addEventListener('input', (e) => {
 
 // ── Music system ──
 const MUSIC_TRACKS = {
-    calm: 'Field at First Light.mp3',
-    menu: 'Windswept Kingdoms.mp3',
-    boss: 'Titan of the Shattered Gate.mp3',
-    gateBoss: 'colossus of the fallen gate.mp3',
-    fortress: 'Echoes in the Fallen Keep.mp3',
-    village: 'sunny steps in stonebridge.mp3',
-    darkKnight: 'Rivals at First Light.mp3',
-    hobgoblin: 'goblin frenzy ambush.mp3',
+    calm: 'music/Field at First Light.mp3',
+    menu: 'music/Windswept Kingdoms.mp3',
+    boss: 'music/Titan of the Shattered Gate.mp3',
+    gateBoss: 'music/colossus of the fallen gate.mp3',
+    fortress: 'music/Echoes in the Fallen Keep.mp3',
+    village: 'music/Sunny Steps in Stonebridge.mp3',
+    darkKnight: 'music/Rivals at First Light.mp3',
+    hobgoblin: 'music/Goblin Frenzy Ambush.mp3',
+    necromancer: 'music/purple throne of ash.mp3',
+    emberLord: 'music/flame and fury.mp3',
     // Add more tracks here as they're generated:
-    // cave: 'cave_ambient.mp3',
-    // night: 'night_theme.mp3',
+    // cave: 'music/cave_ambient.mp3',
+    // night: 'music/night_theme.mp3',
 };
 const musicSystem = {
     tracks: {},
@@ -3885,6 +4153,7 @@ const ARMOR_TIERS = {
     steel:       { helmet: 1.2, chestplate: 2.5, leggings: 2.0, boots: 1.0, total: 6.7 },
     diamond:     { helmet: 1.5, chestplate: 3.0, leggings: 2.5, boots: 1.2, total: 8.2 },
     dragonsteel: { helmet: 2.0, chestplate: 4.0, leggings: 3.0, boots: 1.5, total: 10.5 },
+    ember:       { helmet: 2.2, chestplate: 4.5, leggings: 3.5, boots: 1.8, total: 12.0 },
 };
 
 function getArmorReduction() {
@@ -4035,6 +4304,7 @@ function spellDamage(c, dmg) {
         if (c._isBoss) {
             if (c._bossName) killedBosses.add(c._bossName);
             if (c._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(c);
+            else if (c._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(c);
             else if (c._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(c);
             else if (c._isHobgoblin && creatures._onHobgoblinDeath) creatures._onHobgoblinDeath(c);
             else if (c._isGateBoss && creatures._onGateBossDeath) creatures._onGateBossDeath(c);
@@ -4566,7 +4836,16 @@ function updateProjectiles(dt) {
             const dx = player.position.x - p.x, dz = player.position.z - p.z;
             const dy = (player.position.y + 0.8) - p.y;
             if (dx*dx + dy*dy + dz*dz < 1.5) {
-                if (typeof playerTakeDamage === 'function') playerTakeDamage(p.damage);
+                // Check if shield blocks the projectile
+                if (isShieldBlocking(p.x, p.z)) {
+                    // Blocked! Destroy projectile, blue flash
+                    const flash = document.createElement('div');
+                    flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(100,150,255,0.15);z-index:50;pointer-events:none;';
+                    document.body.appendChild(flash);
+                    setTimeout(() => flash.remove(), 100);
+                } else {
+                    if (typeof playerTakeDamage === 'function') playerTakeDamage(p.damage);
+                }
                 scene.remove(p.mesh); scene.remove(p.light);
                 if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
                 projectiles.splice(i, 1);
@@ -4591,6 +4870,7 @@ function updateProjectiles(dt) {
                         if (sh._isBoss) {
                             if (sh._bossName) killedBosses.add(sh._bossName);
                             if (sh._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(sh);
+                            else if (sh._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(sh);
                             else if (sh._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(sh);
                             else if (sh._isHobgoblin && creatures._onHobgoblinDeath) creatures._onHobgoblinDeath(sh);
                             else if (sh._isGateBoss && creatures._onGateBossDeath) creatures._onGateBossDeath(sh);
@@ -4685,7 +4965,7 @@ function keyName(code) {
 const keys = {};
 let _leftMouseDown = false;
 renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) _leftMouseDown = true; });
-document.addEventListener('mouseup', e => { if (e.button === 0) _leftMouseDown = false; });
+document.addEventListener('mouseup', e => { if (e.button === 0) { _leftMouseDown = false; staffShielding = false; } });
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
@@ -5309,6 +5589,10 @@ const BLOCK_INFO = {
     [BLOCK.DARK_STONE]: { name:'Dark Stone', top:'#4a4a50', front:'#3a3a3e' },
     [BLOCK.CHEST]: { name:'Chest', top:'#8a6535', front:'#6b4a20' },
     [BLOCK.COPPER_ORE]: { name:'Copper Ore', top:'#b87333', front:'#996030' },
+    [BLOCK.FLOWER_RED]: { name:'Red Flower', top:'#dd3333', front:'#2a6a1a' },
+    [BLOCK.FLOWER_YELLOW]: { name:'Yellow Flower', top:'#ddcc33', front:'#2a6a1a' },
+    [BLOCK.FLOWER_BLUE]: { name:'Blue Flower', top:'#4466dd', front:'#2a6a1a' },
+    [BLOCK.FLOWER_WHITE]: { name:'White Flower', top:'#eeeeff', front:'#2a6a1a' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -5347,6 +5631,10 @@ function getItemInfo(key) {
     if (key === 'copper_pickaxe') return { name: 'Copper Pickaxe', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'pickaxe' };
     if (key === 'copper_sword') return { name: 'Copper Sword', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'sword' };
     if (key === 'copper_axe') return { name: 'Copper Axe', top: '#cc8844', front: '#aa6630', isTool: true, toolType: 'axe' };
+    if (key === 'ember_helmet') return { name: 'Ember Helmet', top: '#ff4400', front: '#2a1008', isArmor: true };
+    if (key === 'ember_chestplate') return { name: 'Ember Chestplate', top: '#ff4400', front: '#2a1008', isArmor: true };
+    if (key === 'ember_leggings') return { name: 'Ember Leggings', top: '#ff4400', front: '#2a1008', isArmor: true };
+    if (key === 'ember_boots') return { name: 'Ember Boots', top: '#ff4400', front: '#2a1008', isArmor: true };
     if (key === 'steel_ingot') return { name: 'Steel Ingot', top: '#d0d8e0', front: '#a0a8b8' };
     if (key === 'steel_sword') return { name: 'Steel Sword', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'sword' };
     if (key === 'steel_pickaxe') return { name: 'Steel Pickaxe', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'pickaxe' };
@@ -5507,6 +5795,18 @@ function blockIconHTML(info) {
             <polygon points="6,8 12,4 18,8 20,14 16,20 8,20 4,14" fill="#2a2a2a" stroke="#444" stroke-width="0.5"/>
             <polygon points="10,8 14,6 16,10 14,14 10,12" fill="#3a3a3a"/>
             <polygon points="8,14 12,12 14,16 10,18" fill="#333"/>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
+    if (n.includes('flower')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <rect x="11" y="12" width="2" height="10" fill="#2a6a1a"/>
+            <circle cx="12" cy="9" r="4" fill="${info.top}"/>
+            <circle cx="12" cy="9" r="2" fill="#ffee66" opacity="0.7"/>
+            <circle cx="9" cy="7" r="2.5" fill="${info.top}" opacity="0.8"/>
+            <circle cx="15" cy="7" r="2.5" fill="${info.top}" opacity="0.8"/>
+            <circle cx="10" cy="11" r="2.5" fill="${info.top}" opacity="0.8"/>
+            <circle cx="14" cy="11" r="2.5" fill="${info.top}" opacity="0.8"/>
         </svg>`;
         return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
     }
@@ -6146,6 +6446,10 @@ const BREAK_TIME = {
     [BLOCK.WOOD]: [0.8, 0.3, 0.15, 0.1],
     [BLOCK.PLANKS]: [0.6, 0.25, 0.12, 0.08],
     [BLOCK.LEAVES]: [0.15, 0.1, 0.05, 0.03],
+    [BLOCK.FLOWER_RED]: [0.05, 0.03, 0.02, 0.01],
+    [BLOCK.FLOWER_YELLOW]: [0.05, 0.03, 0.02, 0.01],
+    [BLOCK.FLOWER_BLUE]: [0.05, 0.03, 0.02, 0.01],
+    [BLOCK.FLOWER_WHITE]: [0.05, 0.03, 0.02, 0.01],
     [BLOCK.SNOW]: [0.3, 0.15, 0.08, 0.05],
     [BLOCK.STONE]: [Infinity, 0.6, 0.25, 0.15],
     [BLOCK.IRON_ORE]: [Infinity, 0.8, 0.35, 0.2],
@@ -6245,15 +6549,29 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 
     // Sword attack — damage creatures in front of player
     const swordDmg = _getSwordDamage(held);
-    if (swordDmg && inventory[held] > 0 && attackCooldown <= 0) {
-        player.triggerSwing();
-        attackCooldown = 0.6;
-        if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
-        if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
+    if (swordDmg && inventory[held] > 0) {
+        if (attackCooldown <= 0) {
+            player.triggerSwing();
+            attackCooldown = 0.6;
+            if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
+            if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
+        } else {
+            // Buffer combo swing even during cooldown
+            player.triggerSwing();
+        }
         return;
     }
     // Staff spells — depends on activeSpellSlot
-    if (STAFF_PROPS[held] && inventory[held] > 0 && attackCooldown <= 0) {
+    if (STAFF_PROPS[held] && inventory[held] > 0) {
+        if (activeSpellSlot === 2 && playerMana > 0) {
+            // Spell 2: Shield — toggle on, stays until mouse released or mana runs out
+            staffShielding = true;
+            return;
+        }
+        if (attackCooldown > 0) {
+            // Buffer combo for swords handled above; staffs just ignore
+            return;
+        }
         if (activeSpellSlot === 1 && playerMana >= 2) {
             // Spell 1: Projectile bolt
             playerMana -= 2;
@@ -7371,7 +7689,7 @@ let guideBookPage = 0;
 const GUIDE_PAGES = [
     { title: 'Welcome, Adventurer', text: 'You have awoken on an island of mystery. Explore the land, mine resources, craft tools, and uncover the secrets of the Ancient Forest.\n\nUse WASD to move, Space to jump, Shift to sprint.\nLeft-click to mine blocks and attack.\nRight-click to place blocks.\nPress I to open your inventory.' },
     { title: 'Getting Started', text: 'Your copper tools will serve you well at first. Mine stone and coal, then build a Workbench (4 wood) to craft better equipment.\n\nSmelt ores in a Furnace (8 stone) — copper smelts fastest, then iron, then gold.\n\nCraft an Anvil (5 iron ingots) to forge advanced weapons and custom staffs.' },
-    { title: 'Combat & Magic', text: 'Swords deal melee damage. Staffs cast spells.\n\nWith a staff equipped:\n  Shift+1: Bolt (projectile attack)\n  Shift+2: Shield (hold right-click)\n  Shift+3: Unique spell (varies by staff)\n\nMore spell slots unlock as you deal staff damage.\n\nMana (blue stars) regenerates slowly. Hold click + Right Shift to channel faster regen.' },
+    { title: 'Combat & Magic', text: 'Swords deal melee damage. Staffs cast spells.\n\nWith a staff equipped:\n  Shift+1: Bolt (projectile attack)\n  Shift+2: Shield (hold left-click to maintain)\n  Shift+3: Unique spell (varies by staff)\n\nMore spell slots unlock as you deal staff damage.\n\nMana (blue stars) regenerates slowly. Hold right-click to channel faster regen.' },
     { title: 'The Ancient Forest', text: 'To the northwest lies an ancient forest surrounded by a hill ring. Four gates guard its entrances, each protected by a powerful boss.\n\nDefeat all four gate bosses to break the barrier around the final boss — The Necromancer — who awaits at the central ruins.\n\nThe Necromancer drops the legendary Void Staff.' },
     { title: 'The Gate Bosses', text: '• The Ancient One (East Gate) — A giant skeleton. Dodge its smash attacks.\n\n• Colossus of the Gate (West Gate) — Can only be damaged by mining its blocks with a pickaxe.\n\n• The Dark Knight (North Gate) — Skilled swordsman with 3-hit combos. Use a shield.\n\n• Grokthak the Warchief (South Gate) — Kill his 6 goblin minions first, then focus him.' },
     { title: 'Dragons & Exploration', text: 'Dragon eggs can be found throughout the world. Bring them to the stone altar in the ruined fortress to hatch them.\n\nRaise your dragon — feed it to speed growth. Once large enough, you can ride and fly!\n\nDiscover caves for rare ores, and sail boats along the coast.' },
@@ -7845,11 +8163,6 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 2) return;
     // Raise shield if equipped and holding weapon/tool/nothing placeable
     const held = hotbarSlots[selectedSlot];
-    // Staff shielding — hold right-click with any staff (spell slot 2)
-    if (held && typeof held === 'string' && held.includes('staff') && STAFF_PROPS[held] && activeSpellSlot === 2) {
-        staffShielding = true;
-        return;
-    }
     if (equippedShield) {
         const info = held ? getItemInfo(held) : null;
         const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
@@ -8015,6 +8328,78 @@ function animate() {
     player.axeHeld.visible = false;
     player.staffHeld.visible = false;
     player.sheathedSword.visible = false;
+    player.sheathedStaff.visible = false;
+
+    // Check if player has a staff in hotbar but not currently holding one
+    const holdingStaff = heldItem && typeof heldItem === 'string' && heldItem.includes('staff');
+    if (!holdingStaff) {
+        const hotbarStaff = hotbarSlots.find(s => s && typeof s === 'string' && s.includes('staff') && inventory[s] > 0);
+        if (hotbarStaff) {
+            player.sheathedStaff.visible = true;
+            const ss = player.sheathedStaff;
+            const isCustom = hotbarStaff.startsWith('cstaff_') && window._customStaffs && window._customStaffs[hotbarStaff];
+
+            if (isCustom) {
+                // Custom staff — apply dynamic visuals (same as held)
+                const cs = window._customStaffs[hotbarStaff];
+                if (player.applyCustomStaff) {
+                    // Temporarily swap target to sheathed staff
+                    const origCustomGrp = player.staffHeld._customGrp;
+                    // Apply to sheathed staff's custom group
+                    if (ss._customGrp) {
+                        const cg = ss._customGrp;
+                        while (cg.children.length) cg.remove(cg.children[0]);
+                    }
+                }
+                // Hide all pre-built extras on sheathed staff
+                if (ss._voidExtras) ss._voidExtras.visible = false;
+                if (ss._fireExtras) ss._fireExtras.visible = false;
+                if (ss._iceExtras) ss._iceExtras.visible = false;
+                if (ss._lightningExtras) ss._lightningExtras.visible = false;
+                // Show default shaft + orb, recolor
+                ss._orbMesh.visible = true;
+                ss._shaft.visible = true;
+                if (ss._customGrp) ss._customGrp.visible = true;
+                // Apply custom colors
+                const matCol2 = { 'stick': 0x5c3a1e, 'copper_ingot': 0xcc8844, 'iron_ingot': 0xc0c8d0, 'gold_ingot': 0xddcc44, 'steel_ingot': 0xd0d8e0, 'diamond': 0x88ffff, 'dragonsteel_ingot': 0x2a2a40, [3]: 0x999999 };
+                const gemCol2 = { 'ruby': 0xff3355, 'sapphire': 0x4466ff, 'emerald': 0x44ff66, 'topaz': 0xffcc33, 'diamond': 0x88ffff, 'coal': 0x333333, 'copper_ingot': 0xcc8844, 'iron_ingot': 0xc0c8d0, 'gold_ingot': 0xddcc44, 'steel_ingot': 0xd0d8e0, 'dragonsteel_ingot': 0x4444aa, [11]: 0x35b535, [10]: 0x6B4226, [3]: 0x999999 };
+                ss._shaftMat.color.setHex(matCol2[cs.shaftMat] || 0x5c3a1e);
+                ss._orbMat.color.setHex(gemCol2[cs.gem] || 0x44aa44);
+                ss._orbMat.emissive.setHex(new THREE.Color(gemCol2[cs.gem] || 0x228822).multiplyScalar(0.5).getHex());
+                // Build holder on sheathed staff
+                if (ss._customGrp && cs.holderStyle) {
+                    const cg = ss._customGrp;
+                    while (cg.children.length) cg.remove(cg.children[0]);
+                    cg.visible = true;
+                    const hMat = new THREE.MeshStandardMaterial({ color: matCol2[cs.holderMat] || 0xc0c8d0, metalness: 0.5, roughness: 0.4 });
+                    const style = cs.holderStyle;
+                    if (style === 'prongs') { for (let i=0;i<4;i++){const a=(i/4)*Math.PI*2;const p=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.14,0.015),hMat);p.position.set(Math.cos(a)*0.055,1.25,Math.sin(a)*0.055);p.rotation.x=Math.sin(a)*0.3;p.rotation.z=-Math.cos(a)*0.3;cg.add(p);}}
+                    else if (style === 'cage') { for(let i=0;i<4;i++){const a=(i/4)*Math.PI*2;const bar=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.2,0.012),hMat);bar.position.set(Math.cos(a)*0.06,1.22,Math.sin(a)*0.06);cg.add(bar);} const cRing=new THREE.Mesh(new THREE.TorusGeometry(0.065,0.008,4,12),hMat);cRing.position.set(0,1.12,0);cRing.rotation.x=Math.PI/2;cg.add(cRing);}
+                    else if (style === 'coil') { for(let i=0;i<24;i++){const t=i/24;const a=t*Math.PI*2*3;const r=0.045+t*0.015;const seg=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.015,0.015),hMat);seg.position.set(Math.cos(a)*r,1.08+t*0.22,Math.sin(a)*r);cg.add(seg);} const topR=new THREE.Mesh(new THREE.TorusGeometry(0.05,0.008,4,12),hMat);topR.position.set(0,1.30,0);topR.rotation.x=Math.PI/2;cg.add(topR);}
+                    else if (style === 'claws') { for(let i=0;i<3;i++){const a=(i/3)*Math.PI*2;const cl=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.16,0.01),hMat);cl.position.set(Math.cos(a)*0.06,1.26,Math.sin(a)*0.06);cl.rotation.x=Math.sin(a)*0.5;cl.rotation.z=-Math.cos(a)*0.5;cg.add(cl);const tip=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.05,0.01),hMat);tip.position.set(Math.cos(a)*0.03,1.36,Math.sin(a)*0.03);tip.rotation.x=Math.sin(a)*0.8;tip.rotation.z=-Math.cos(a)*0.8;cg.add(tip);}}
+                    else if (style === 'crown') { for(let i=0;i<5;i++){const a=(i/5)*Math.PI*2;const sp=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.1+(i%2)*0.05,0.015),hMat);sp.position.set(Math.cos(a)*0.06,1.27,Math.sin(a)*0.06);cg.add(sp);} const crRing=new THREE.Mesh(new THREE.TorusGeometry(0.065,0.01,4,12),hMat);crRing.position.set(0,1.14,0);crRing.rotation.x=Math.PI/2;cg.add(crRing);}
+                }
+            } else {
+                // Standard staff — show matching pre-built model
+                const staffColors = { basic_staff: [0x44aa44, 0x228822], fire_staff: [0xff6622, 0xff4400], ice_staff: [0x66ccff, 0x3388cc], lightning_staff: [0xffee44, 0xccaa00], void_staff: [0x8833cc, 0x6622aa] };
+                const sc = staffColors[hotbarStaff] || [0x44aa44, 0x228822];
+                ss._orbMat.color.setHex(sc[0]);
+                ss._orbMat.emissive.setHex(sc[1]);
+                const isVoid = hotbarStaff === 'void_staff';
+                const isFire = hotbarStaff === 'fire_staff';
+                const isIce = hotbarStaff === 'ice_staff';
+                const isLightning = hotbarStaff === 'lightning_staff';
+                const hasSpecial = isVoid || isFire || isIce || isLightning;
+                if (ss._voidExtras) ss._voidExtras.visible = isVoid;
+                if (ss._fireExtras) ss._fireExtras.visible = isFire;
+                if (ss._iceExtras) ss._iceExtras.visible = isIce;
+                if (ss._lightningExtras) ss._lightningExtras.visible = isLightning;
+                if (ss._customGrp) ss._customGrp.visible = false;
+                ss._orbMesh.visible = !hasSpecial;
+                ss._shaft.visible = !hasSpecial;
+            }
+        }
+    }
 
     // Check if player has a sword in inventory but not currently holding one
     const holdingSword = heldItem && typeof heldItem === 'string' && heldItem.includes('sword');
@@ -8314,7 +8699,7 @@ function animate() {
             ss.light.intensity = 2 + Math.sin(ss.age * 20) * 0.5;
 
             // Trail particles
-            if (ss.age % 0.05 < dt) {
+            if (ss.age % 0.12 < dt) {
                 const tp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08),
                     new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.6 }));
                 tp.position.copy(ss.mesh.position);
@@ -8384,7 +8769,7 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    if (farDx * farDx + farDz * farDz > 60 * 60) {
+    if (farDx * farDx + farDz * farDz > 120 * 120) {
         buildFarTerrain(player.position.x, player.position.z);
     }
 
@@ -8398,14 +8783,14 @@ function animate() {
         return; // skip all other updates while dead
     }
 
-    // Mana regeneration — passive 0.5/s + active channel (hold click + right shift) 2/s
+    // Mana regeneration — passive 0.5/s + active channel (hold right-click) 2/s
     if (!staffShielding && playerMana < playerMaxMana) {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5);
         updateManaUI();
     }
-    const mouseHeld = placingHeld || shieldRaised || staffShielding || _leftMouseDown;
-    const channeling = mouseHeld && keys['ShiftRight'] && playerMana < playerMaxMana;
-    if (channeling && !staffShielding) {
+    // Hold right-click to channel mana (2/s extra regen)
+    const rightMouseHeld = placingHeld || shieldRaised;
+    if (rightMouseHeld && !staffShielding && playerMana < playerMaxMana) {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 2.0);
         updateManaUI();
     }
@@ -8650,7 +9035,7 @@ function animate() {
             // Trigger attack when in range and attack ready
             if (bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
                 boss._smashTimer = 0;
-                if (boss._isDarkKnight) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
+                if (boss._isDarkKnight || boss._isEmberLord) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
             }
             // Animate attack
             if (boss._smashTimer >= 0) {
@@ -8688,8 +9073,8 @@ function animate() {
                         });
                     }
                     if (boss._smashTimer >= 1) boss._smashTimer = -1;
-                } else if (boss._isDarkKnight) {
-                    // Dark Knight: player-style sword combo animation
+                } else if (boss._isDarkKnight || boss._isEmberLord) {
+                    // Dark Knight / Ember Lord: player-style sword combo animation
                     const dur = 0.6;
                     boss._smashTimer += dt / dur;
                     const t = boss._smashTimer;
@@ -8778,6 +9163,42 @@ function animate() {
                     }
                 }
             }
+            // Ember Lord: fire particle aura + occasional fire projectile
+            if (boss._isEmberLord && boss._emberParticles) {
+                const time = performance.now() * 0.001;
+                for (const p of boss._emberParticles.children) {
+                    p.position.y = 0.8 + Math.sin(time * 2 + p._phase) * 0.5 + Math.abs(Math.sin(time * 1.5 + p._phase * 3)) * 0.3;
+                    p.position.x = Math.sin(time * 1.2 + p._phase) * 0.6;
+                    p.position.z = Math.cos(time * 1.2 + p._phase) * 0.6;
+                    p.material.opacity = 0.4 + Math.sin(time * 3 + p._phase) * 0.3;
+                }
+                if (boss._emberGlow) boss._emberGlow.intensity = 1.5 + Math.sin(time * 2) * 0.8;
+                // Occasional rest — every 8-12 seconds, pause for 2s
+                boss._restTimer = (boss._restTimer || 8 + Math.random() * 4) - dt;
+                if (boss._restTimer <= 0 && !boss._pauseTimer) {
+                    boss._pauseTimer = 2.0;
+                    boss.speed = 0; boss.walking = false; boss._smashTimer = -1;
+                    boss._restTimer = 8 + Math.random() * 4;
+                }
+                // Fire projectile every 4 seconds when in range
+                boss._fireTimer = (boss._fireTimer || 0) + dt;
+                if (boss._fireTimer > 4 && bDist < 15 && bDist > 3 && !boss._pauseTimer) {
+                    boss._fireTimer = 0;
+                    const dx = player.position.x - boss.x, dz = player.position.z - boss.z;
+                    const dy = (player.position.y + 0.8) - (boss.group.position.y + 2);
+                    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
+                    const spd = 14;
+                    const mat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.9 });
+                    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 4), mat);
+                    mesh.position.set(boss.x, boss.group.position.y + 2, boss.z);
+                    scene.add(mesh);
+                    const light = new THREE.PointLight(0xff4400, 2, 8);
+                    light.position.copy(mesh.position); scene.add(light);
+                    projectiles.push({ mesh, light, x: boss.x, y: boss.group.position.y + 2, z: boss.z,
+                        vx: (dx/dist)*spd, vy: (dy/dist)*spd - 2, vz: (dz/dist)*spd,
+                        life: 3, age: 0, damage: 6, staffType: 'fire_staff', _isEnemyProjectile: true });
+                }
+            }
         }
     }
 
@@ -8797,7 +9218,7 @@ function animate() {
         }
 
         if (nearestBoss && nearestBossDist < 35) {
-            const track = nearestBoss._isDarkKnight ? 'darkKnight' : nearestBoss._isHobgoblin ? 'hobgoblin' : nearestBoss._isGateBoss ? 'gateBoss' : 'boss';
+            const track = nearestBoss._isEmberLord ? 'emberLord' : nearestBoss._isNecromancer ? 'necromancer' : nearestBoss._isDarkKnight ? 'darkKnight' : nearestBoss._isHobgoblin ? 'hobgoblin' : nearestBoss._isGateBoss ? 'gateBoss' : 'boss';
             if (cur !== track && musicSystem.tracks[track]) musicSystem.play(track);
         } else if (cur === 'boss' || cur === 'gateBoss') {
             musicSystem.play(fortDist < 70 ? 'fortress' : 'calm');

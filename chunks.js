@@ -2,10 +2,10 @@
 
 import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS } from './world.js';
 
-let RENDER_DIST = 12; // default, updated by settings
-const LOD0_DIST = 8;    // full detail — every block, all faces
-const LOD1_DIST = 25;   // surface only — skip underground
-const LOD2_DIST = 60;   // surface only + skip every 2nd XZ
+let RENDER_DIST = 10; // default, updated by settings
+const LOD0_DIST = 6;    // full detail — every block, all faces
+const LOD1_DIST = 20;   // surface only — skip underground
+const LOD2_DIST = 50;   // surface only + skip every 2nd XZ
 // beyond LOD2: surface only + skip every 4th XZ
 let UNLOAD_DIST = RENDER_DIST + 3;
 const BS = BLOCK_SIZE;
@@ -249,7 +249,7 @@ export class ChunkManager {
                             const face = FACES[fi];
                             const nbx = bx + face.dir[0] * S, nby = y + face.dir[1] * S, nbz = bz + face.dir[2] * S;
                             const neighbor = this.world.getBlockAt(nbx, nby, nbz);
-                            if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER) continue;
+                            if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL) continue;
                             const ch = colorHash(bx, y, bz);
                             const ch2 = colorHash(bx + 100, y + 50, bz + 200);
                             tmpColor.copy(LEAVES_DARK).lerp(LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
@@ -274,7 +274,7 @@ export class ChunkManager {
                         const nby = y + face.dir[1] * S;
                         const nbz = bz + face.dir[2] * S;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
-                        if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER) continue;
+                        if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES) continue;
 
                         // Per-block noise for color variation
                         const ch = colorHash(bx, y, bz);
@@ -495,6 +495,42 @@ export class ChunkManager {
                             if (fi === 2) tmpColor.setHex(0x9a7540); // top = lighter lid
                             else if (fi === 3) tmpColor.setHex(0x5a3a18); // bottom = dark
                             else tmpColor.setHex(0x6b4a20); // sides = medium brown
+                        } else if (block === BLOCK.FLOWER_RED || block === BLOCK.FLOWER_YELLOW || block === BLOCK.FLOWER_BLUE || block === BLOCK.FLOWER_WHITE) {
+                            // Flowers: render as small crossed planes, skip normal face rendering
+                            if (fi === 0) { // only on first face to avoid duplicates
+                                const fx = (lx + 0.5 * S) * BS;
+                                const fz = (lz + 0.5 * S) * BS;
+                                const fBot = (y - Y_OFF) * BS;
+                                const stemH = BS * S * 0.5;
+                                const headH = BS * S * 0.35;
+                                const headW = BS * S * 0.35;
+                                const fTop = fBot + stemH + headH;
+                                const stemW = BS * S * 0.06;
+                                const flowerCol = new THREE.Color(BLOCK_COLORS[block]);
+                                const stemCol = new THREE.Color(0x2a7a1a);
+                                flowerCol.multiplyScalar(0.93 + ch * 0.14);
+                                stemCol.multiplyScalar(0.93 + ch * 0.14);
+                                // Two crossed planes for stem
+                                for (const [dx, dz] of [[1,0],[0,1]]) {
+                                    // Stem quad
+                                    lPos.push(fx-stemW*dx, fBot, fz-stemW*dz);
+                                    lPos.push(fx+stemW*dx, fBot, fz+stemW*dz);
+                                    lPos.push(fx+stemW*dx, fBot+stemH, fz+stemW*dz);
+                                    lPos.push(fx-stemW*dx, fBot+stemH, fz-stemW*dz);
+                                    for (let v=0;v<4;v++){lNrm.push(dz,0,-dx);lCol.push(stemCol.r,stemCol.g,stemCol.b);}
+                                    lIdx.push(lVert,lVert+1,lVert+2,lVert+2,lVert+3,lVert);
+                                    lVert+=4;
+                                    // Flower head quad (wider)
+                                    lPos.push(fx-headW*dx, fBot+stemH, fz-headW*dz);
+                                    lPos.push(fx+headW*dx, fBot+stemH, fz+headW*dz);
+                                    lPos.push(fx+headW*dx, fTop, fz+headW*dz);
+                                    lPos.push(fx-headW*dx, fTop, fz-headW*dz);
+                                    for (let v=0;v<4;v++){lNrm.push(dz,0,-dx);lCol.push(flowerCol.r,flowerCol.g,flowerCol.b);}
+                                    lIdx.push(lVert,lVert+1,lVert+2,lVert+2,lVert+3,lVert);
+                                    lVert+=4;
+                                }
+                            }
+                            continue; // skip normal block face
                         } else if (block === BLOCK.CAMPFIRE) {
                             // Render as grass so ground shows beneath campfire model
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.GRASS]);

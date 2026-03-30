@@ -9,14 +9,14 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -622,6 +622,52 @@ export class World {
                 }
             }
         }
+
+        // Flowers — spawn on grass surfaces, some in bunches
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+            for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+                const bx = ox + lx, bz = oz + lz;
+                const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+                const biome = this._getBiome(wx, wz);
+                if (biome !== 'grass') continue;
+                const h = getTerrainHeight(wx, wz);
+                if (h < 1 || h > 30) continue;
+                // ~1% chance per block for flower patches (but bunches make them dense locally)
+                const fHash = this._hash(bx * 0.61 + 4444, bz * 0.47 + 5555);
+                if (fHash > 0.01) continue;
+                // Pick flower color — bunches share a color
+                const colorHash = this._hash(bx * 1.3 + 111, bz * 1.7 + 222);
+                let flower;
+                if (colorHash < 0.3) flower = BLOCK.FLOWER_RED;
+                else if (colorHash < 0.55) flower = BLOCK.FLOWER_YELLOW;
+                else if (colorHash < 0.8) flower = BLOCK.FLOWER_BLUE;
+                else flower = BLOCK.FLOWER_WHITE;
+                // Place this flower
+                const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
+                const flowerY = surfaceBlock + 1;
+                if (flowerY >= WORLD_HEIGHT) continue;
+                const idx = (flowerY * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
+                if (data[idx] !== BLOCK.AIR) continue;
+                data[idx] = flower;
+                // 70% chance to spawn a bunch (3-6 extra nearby)
+                if (this._hash(bx * 0.83 + 6666, bz * 0.71 + 7777) < 0.7) {
+                    const bunchSize = 3 + Math.floor(this._hash(bx * 2.1, bz * 3.3) * 4);
+                    for (let bi = 0; bi < bunchSize; bi++) {
+                        const bdx = Math.floor(this._hash(bi*17+bx, bi*31+bz) * 3) - 1;
+                        const bdz = Math.floor(this._hash(bi*23+bx, bi*43+bz) * 3) - 1;
+                        const nlx = lx + bdx, nlz = lz + bdz;
+                        if (nlx < 0 || nlx >= CHUNK_SIZE || nlz < 0 || nlz >= CHUNK_SIZE) continue;
+                        const nbx = ox + nlx, nbz = oz + nlz;
+                        const nh = getTerrainHeight(nbx * BLOCK_SIZE, nbz * BLOCK_SIZE);
+                        const nsb = Math.floor(nh / BLOCK_SIZE) + yOff;
+                        const nfy = nsb + 1;
+                        if (nfy >= WORLD_HEIGHT) continue;
+                        const nIdx = (nfy * CHUNK_SIZE + nlz) * CHUNK_SIZE + nlx;
+                        if (data[nIdx] === BLOCK.AIR) data[nIdx] = flower; // same color as parent
+                    }
+                }
+            }
+        }
     }
 
     _carveCaves(cx, cz, data, ox, oz) {
@@ -710,6 +756,6 @@ export class World {
         const by = Math.floor(wy / BLOCK_SIZE) + 128;
         const bz = Math.floor(wz / BLOCK_SIZE);
         const b = this.getBlockAt(bx, by, bz);
-        return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES;
+        return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE;
     }
 }

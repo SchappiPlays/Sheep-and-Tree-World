@@ -132,6 +132,11 @@ export class Player {
         this.sheathedSword.position.set(0.25, 0.2, -0.05); // right hip
         this.spine.add(this.sheathedSword);
 
+        // Sheathed staff (on back when not held)
+        this.sheathedStaff = this._makeSheathedStaff();
+        this.sheathedStaff.visible = false;
+        this.spine.add(this.sheathedStaff);
+
         // Shield mesh on right arm
         this._shieldMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5, roughness: 0.3 });
         this._shieldMesh = new THREE.Group();
@@ -787,6 +792,16 @@ export class Player {
         return g;
     }
 
+    _makeSheathedStaff() {
+        // Full staff model — exact same as held staff with all extras
+        const g = this._makeStaff();
+        g.visible = false;
+        // Position on back: vertical, flat against spine
+        g.position.set(0.08, -0.15, -0.16);
+        g.rotation.set(0, 0, -0.1);
+        return g;
+    }
+
     setHairStyle(style, tipColor) {
         const g = this._hairGroup;
         while (g.children.length) g.remove(g.children[0]);
@@ -938,12 +953,25 @@ export class Player {
             const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.006, 4, 12), hMat);
             ring2.position.y = 1.30; ring2.rotation.x = Math.PI/2; cg.add(ring2);
         } else if (style === 'coil') {
-            for (let i = 0; i < 10; i++) {
-                const a = (i / 10) * Math.PI * 2 * 2.5;
-                const coil = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.012), hMat);
-                coil.position.set(Math.cos(a)*0.05, 1.10 + i*0.02, Math.sin(a)*0.05);
-                cg.add(coil);
+            // Spiral coil wrapping up around the staff to cradle the gem
+            const coilSegs = 24;
+            const coilTurns = 3;
+            const coilR = 0.045;
+            const coilStart = 1.08;
+            const coilHeight = 0.22;
+            for (let i = 0; i < coilSegs; i++) {
+                const t = i / coilSegs;
+                const a = t * Math.PI * 2 * coilTurns;
+                const r = coilR + t * 0.015; // widen slightly toward top
+                const seg = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, 0.015), hMat);
+                seg.position.set(Math.cos(a) * r, coilStart + t * coilHeight, Math.sin(a) * r);
+                cg.add(seg);
             }
+            // Top ring to hold the gem
+            const topRing = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 4, 12), hMat);
+            topRing.position.set(0, 1.30, 0);
+            topRing.rotation.x = Math.PI / 2;
+            cg.add(topRing);
         } else if (style === 'claws') {
             for (let i = 0; i < 3; i++) {
                 const a = (i / 3) * Math.PI * 2;

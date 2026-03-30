@@ -600,6 +600,7 @@ export class CreatureManager {
                 if (sh._isBoss) {
                     if (sh._bossName && window._killedBosses) window._killedBosses.add(sh._bossName);
                     if (sh._isDarkKnight && this._onDarkKnightDeath) this._onDarkKnightDeath(sh);
+                    else if (sh._isEmberLord && this._onEmberLordDeath) this._onEmberLordDeath(sh);
                     else if (sh._isNecromancer && this._onNecromancerDeath) this._onNecromancerDeath(sh);
                     else if (sh._isHobgoblin && this._onHobgoblinDeath) this._onHobgoblinDeath(sh);
                     else if (sh._isGateBoss && this._onGateBossDeath) this._onGateBossDeath(sh);
