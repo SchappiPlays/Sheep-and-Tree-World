@@ -906,31 +906,62 @@ function buildFarTerrain(centerX, centerZ) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colArr.subarray(0, vi * 3), 3));
     geo.setIndex(new THREE.BufferAttribute(idxArr.subarray(0, ii), 1));
     geo.computeVertexNormals();
-    farTerrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    // Shader hack: discard fragments within a radius of the player (dynamic cutout)
+    farMat.onBeforeCompile = (shader) => {
+        shader.uniforms._playerPos = { value: new THREE.Vector3() };
+        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.fragmentShader = 'uniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            float _dx = vWorldPosition.x - _playerPos.x;
+            float _dz = vWorldPosition.z - _playerPos.z;
+            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+        );
+        // Need world position in fragment shader
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvWorldPosition = worldPosition.xyz;'
+        );
+        if (!shader.vertexShader.includes('varying vec3 vWorldPosition')) {
+            shader.vertexShader = 'varying vec3 vWorldPosition;\n' + shader.vertexShader;
+            shader.fragmentShader = 'varying vec3 vWorldPosition;\n' + shader.fragmentShader;
+        }
+        farMat._shader = shader;
+    };
+    farTerrain = new THREE.Mesh(geo, farMat);
     farTerrain.position.y = 0;
-    farTerrain.renderOrder = -1; // render before chunks so chunks cover it
+    farTerrain.renderOrder = -1;
     scene.add(farTerrain);
 
-    // Water plane with center hole centered on player
-    const holeR = skipRange + 10;
-    const hcx = _farCenterX, hcz = _farCenterZ;
+    // Water plane — simple flat plane, shader-based cutout near player
     const outerR = range * 1.5;
-    const waterShape = new THREE.Shape();
-    waterShape.moveTo(-outerR, -outerR);
-    waterShape.lineTo(outerR, -outerR);
-    waterShape.lineTo(outerR, outerR);
-    waterShape.lineTo(-outerR, outerR);
-    waterShape.lineTo(-outerR, -outerR);
-    const hole = new THREE.Path();
-    hole.moveTo(hcx - holeR, hcz - holeR);
-    hole.lineTo(hcx - holeR, hcz + holeR);
-    hole.lineTo(hcx + holeR, hcz + holeR);
-    hole.lineTo(hcx + holeR, hcz - holeR);
-    hole.lineTo(hcx - holeR, hcz - holeR);
-    waterShape.holes.push(hole);
-    const farWaterGeo = new THREE.ShapeGeometry(waterShape);
+    const farWaterGeo = new THREE.PlaneGeometry(outerR * 2, outerR * 2);
     farWaterGeo.rotateX(-Math.PI / 2);
-    farWater = new THREE.Mesh(farWaterGeo, new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 }));
+    const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
+    waterMat.onBeforeCompile = (shader) => {
+        shader.uniforms._playerPos = { value: new THREE.Vector3() };
+        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.fragmentShader = 'uniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            float _dx = vWorldPosition.x - _playerPos.x;
+            float _dz = vWorldPosition.z - _playerPos.z;
+            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvWorldPosition = worldPosition.xyz;'
+        );
+        if (!shader.vertexShader.includes('varying vec3 vWorldPosition')) {
+            shader.vertexShader = 'varying vec3 vWorldPosition;\n' + shader.vertexShader;
+            shader.fragmentShader = 'varying vec3 vWorldPosition;\n' + shader.fragmentShader;
+        }
+        waterMat._shader = shader;
+    };
+    farWater = new THREE.Mesh(farWaterGeo, waterMat);
     farWater.position.y = -0.3;
     farWater.renderOrder = -2;
     scene.add(farWater);
@@ -9293,8 +9324,12 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    if (optFarTerrain && farDx * farDx + farDz * farDz > 50 * 50) {
-        buildFarTerrain(player.position.x, player.position.z);
+    // Update far terrain + water cutout position (shader-based, follows player every frame)
+    if (farTerrain && farTerrain.material._shader) {
+        farTerrain.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
+    }
+    if (farWater && farWater.material._shader) {
+        farWater.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
     }
 
     // Attack cooldown
