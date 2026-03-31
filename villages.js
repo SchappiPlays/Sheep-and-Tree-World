@@ -602,31 +602,44 @@ export class VillageManager {
                 this.villagers.push(v);
             }
 
-            // Build shop stall helper — small open-front structure
-            const buildShopStall = (sx, sz, angle, wallBlock, roofBlock) => {
+            // Build shop building — proper building with walls, door, windows, peaked roof
+            const buildShopBuilding = (sx, sz, wallBlock, roofBlock, floorBlock) => {
                 const BS2 = BLOCK_SIZE;
                 const bx = Math.round(sx / BS2), bz = Math.round(sz / BS2);
                 const by = Math.floor(this.world.getHeight(sx, sz) / BS2) + 128;
-                const sin = Math.round(Math.sin(angle)), cos = Math.round(Math.cos(angle));
-                const W = wallBlock, R = roofBlock;
+                const W = wallBlock, R = roofBlock, F = floorBlock || BLOCK.PLANKS;
                 const _set = (dx, dy, dz, b) => this.world.setBlock(bx+dx, by+dy, bz+dz, b);
-                // Floor (5x4)
-                for (let dx = -2; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) _set(dx, 0, dz, W);
-                // Back wall
-                for (let dx = -2; dx <= 2; dx++) for (let dy = 1; dy <= 4; dy++) _set(dx, dy, -1, W);
-                // Side walls (partial — lower half)
-                for (let dz = 0; dz <= 2; dz++) for (let dy = 1; dy <= 3; dy++) { _set(-2, dy, dz, W); _set(2, dy, dz, W); }
-                // Counter at front
-                for (let dx = -2; dx <= 2; dx++) _set(dx, 1, 2, W);
-                // Roof (flat)
-                for (let dx = -2; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) _set(dx, 4, dz, R);
-                // Overhang
-                for (let dx = -2; dx <= 2; dx++) _set(dx, 4, 3, R);
-                // Support posts
-                _set(-2, 2, 2, W); _set(-2, 3, 2, W);
-                _set(2, 2, 2, W); _set(2, 3, 2, W);
+                const hw = 5, hd = 4, wallH = 7, roofH = 4;
+                // Clear area above
+                for (let dx = -hw-1; dx <= hw+1; dx++) for (let dz = -hd-1; dz <= hd+1; dz++)
+                    for (let dy = 0; dy <= wallH+roofH+1; dy++) _set(dx, dy, dz, 0);
+                // Floor
+                for (let dx = -hw; dx <= hw; dx++) for (let dz = -hd; dz <= hd; dz++) _set(dx, 0, dz, F);
+                // Walls
+                for (let dy = 1; dy <= wallH; dy++) {
+                    for (let dx = -hw; dx <= hw; dx++) { _set(dx, dy, -hd, W); _set(dx, dy, hd, W); }
+                    for (let dz = -hd; dz <= hd; dz++) { _set(-hw, dy, dz, W); _set(hw, dy, dz, W); }
+                }
                 // Clear interior
-                for (let dx = -1; dx <= 1; dx++) for (let dz = 0; dz <= 1; dz++) for (let dy = 1; dy <= 3; dy++) _set(dx, dy, dz, 0);
+                for (let dx = -hw+1; dx < hw; dx++) for (let dz = -hd+1; dz < hd; dz++)
+                    for (let dy = 1; dy <= wallH; dy++) _set(dx, dy, dz, 0);
+                // Door (front, 3 wide × 5 tall)
+                for (let dx = -1; dx <= 1; dx++) for (let dy = 1; dy <= 5; dy++) _set(dx, dy, hd, 0);
+                // Windows (2 on each side wall, 1 on back)
+                for (const dz of [-2, 2]) { _set(-hw, 3, dz, 0); _set(-hw, 4, dz, 0); _set(hw, 3, dz, 0); _set(hw, 4, dz, 0); }
+                _set(3, 3, -hd, 0); _set(3, 4, -hd, 0); _set(-3, 3, -hd, 0); _set(-3, 4, -hd, 0);
+                // Peaked roof
+                for (let ry = 0; ry < roofH; ry++) {
+                    const rw = hw + 1 - ry;
+                    if (rw < 1) break;
+                    for (let dx = -rw; dx <= rw; dx++) for (let dz = -hd-1; dz <= hd+1; dz++)
+                        _set(dx, wallH + ry + 1, dz, R);
+                }
+                // Counter/table inside
+                for (let dx = -2; dx <= 2; dx++) _set(dx, 1, 0, W);
+                // Corner posts (wood)
+                for (const cx of [-hw, hw]) for (const cz of [-hd, hd])
+                    for (let dy = 1; dy <= wallH; dy++) _set(cx, dy, cz, BLOCK.WOOD);
             };
 
             // Spawn blacksmith shopkeeper (fixed position near village)
@@ -641,7 +654,7 @@ export class VillageManager {
             // Make blacksmith visually distinct — dark apron
             bsV._shirtMat.color.setHex(0x3a2a1a);
             this.villagers.push(bsV);
-            buildShopStall(bsX, bsZ, bsAngle, BLOCK.STONE, BLOCK.PLANKS);
+            buildShopBuilding(bsX, bsZ, BLOCK.STONE, BLOCK.STONE, BLOCK.STONE);
 
             // Add blacksmith label
             const bsCanvas = document.createElement('canvas');
@@ -666,7 +679,7 @@ export class VillageManager {
             // Make magic shop visually distinct — purple robes
             msV._shirtMat.color.setHex(0x5522aa);
             this.villagers.push(msV);
-            buildShopStall(msX, msZ, msAngle + Math.PI, BLOCK.PLANKS, BLOCK.LEAVES);
+            buildShopBuilding(msX, msZ, BLOCK.PLANKS, BLOCK.LEAVES, BLOCK.PLANKS);
 
             // Add magic shop label
             const msCanvas = document.createElement('canvas');
@@ -691,7 +704,7 @@ export class VillageManager {
             // Red/brown leather look
             asV._shirtMat.color.setHex(0x8b4513);
             this.villagers.push(asV);
-            buildShopStall(asX, asZ, asAngle + Math.PI * 0.5, BLOCK.PLANKS, BLOCK.PLANKS);
+            buildShopBuilding(asX, asZ, BLOCK.PLANKS, BLOCK.PLANKS, BLOCK.PLANKS);
 
             const asCanvas = document.createElement('canvas');
             asCanvas.width = 128; asCanvas.height = 32;

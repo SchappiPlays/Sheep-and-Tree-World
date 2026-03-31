@@ -8237,6 +8237,29 @@ function updateShopUI() {
         html += '</div>';
     }
 
+    // Salvage section (blacksmith only) — break down weapons/armor into materials
+    if (shopType === 'blacksmith') {
+        html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-top:10px;margin-bottom:4px;">Salvage (break down items → materials, costs 5c)</div>';
+        const salvageable = Object.keys(inventory).filter(k => {
+            if (inventory[k] <= 0) return false;
+            if (k.startsWith('csword_') && window._customSwords && window._customSwords[k]) return true;
+            if (k.startsWith('cstaff_') && window._customStaffs && window._customStaffs[k]) return true;
+            const n = (getItemInfo(k)?.name || '').toLowerCase();
+            return n.includes('sword') || n.includes('pickaxe') || n.includes('axe') || n.includes('helmet') || n.includes('chestplate') || n.includes('legging') || n.includes('boot') || n.includes('shield');
+        });
+        if (salvageable.length === 0) {
+            html += '<div style="color:rgba(120,110,90,0.5);font:10px monospace;padding:4px;">No items to salvage</div>';
+        }
+        for (const k of salvageable) {
+            const info = getItemInfo(k);
+            html += `<div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid rgba(80,60,30,0.3);cursor:pointer;opacity:${getTotalCopper()>=5?1:0.4};" onclick="window._shopSalvage('${k}')">`;
+            if (info) html += blockIconHTML(info);
+            html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:11px monospace;">${info?.name || k}</span>`;
+            html += `<span style="color:rgba(200,160,100,0.7);font:10px monospace;">→ materials</span>`;
+            html += '</div>';
+        }
+    }
+
     html += '<div style="text-align:center;margin-top:10px;"><button onclick="window._closeShop()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
     shopEl.innerHTML = html;
 }
@@ -8253,6 +8276,69 @@ window._shopSell = (item) => {
     inventory[item]--;
     if (inventory[item] <= 0) { delete inventory[item]; for (let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]===item) hotbarSlots[i]=0; }
     addCopper(price);
+    refreshUI(); updateShopUI();
+};
+window._shopSalvage = (item) => {
+    if (!inventory[item] || inventory[item] <= 0) return;
+    if (!spendCopper(5)) return; // 5 copper fee
+
+    // Determine what materials to return
+    const mats = {};
+    const addMat = (m, n) => { if (m) mats[m] = (mats[m] || 0) + n; };
+
+    if (item.startsWith('csword_') && window._customSwords && window._customSwords[item]) {
+        // Custom sword — return blade, guard, handle, pommel materials
+        const cs = window._customSwords[item];
+        const bladeCost = Math.ceil((cs.bladeLength || 2) + (cs.bladeThickness || 1));
+        addMat(cs.bladeMat, Math.max(1, Math.floor(bladeCost * 0.6)));
+        addMat(cs.guardMat, 1);
+        addMat(cs.handleMat, 1);
+        addMat(cs.pommelMat, 1);
+        if (cs.trimMat) addMat(cs.trimMat, 1);
+        delete window._customSwords[item];
+    } else if (item.startsWith('cstaff_') && window._customStaffs && window._customStaffs[item]) {
+        // Custom staff — return shaft, holder, gem materials
+        const cs = window._customStaffs[item];
+        addMat(cs.shaftMat, 1);
+        addMat(cs.holderMat, 1);
+        addMat(cs.gem, 1);
+        delete window._customStaffs[item];
+    } else {
+        // Standard items — return tier material
+        const tierMap = {
+            'wood': 'stick', 'stone': BLOCK.STONE, 'copper': 'copper_ingot', 'iron': 'iron_ingot',
+            'gold': 'gold_ingot', 'steel': 'steel_ingot', 'diamond': 'diamond',
+            'dragonsteel': 'dragonsteel_ingot', 'ember': 'ruby',
+        };
+        const n = (getItemInfo(item)?.name || '').toLowerCase();
+        let tier = null;
+        for (const [t, mat] of Object.entries(tierMap)) {
+            if (n.includes(t)) { tier = mat; break; }
+        }
+        if (tier) {
+            if (n.includes('chestplate')) addMat(tier, 4);
+            else if (n.includes('legging')) addMat(tier, 3);
+            else if (n.includes('helmet')) addMat(tier, 2);
+            else if (n.includes('boot')) addMat(tier, 2);
+            else if (n.includes('shield')) addMat(tier, 2);
+            else if (n.includes('sword')) addMat(tier, 2);
+            else if (n.includes('pickaxe') || n.includes('axe')) addMat(tier, 2);
+            else addMat(tier, 1);
+            addMat('stick', 1); // handle
+        }
+    }
+
+    // Remove item
+    inventory[item]--;
+    if (inventory[item] <= 0) { delete inventory[item]; for (let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]===item) hotbarSlots[i]=0; }
+    // Add salvaged materials
+    let salvageMsg = 'Salvaged: ';
+    for (const [mat, count] of Object.entries(mats)) {
+        inventory[mat] = (inventory[mat] || 0) + count;
+        const info = getItemInfo(typeof mat === 'string' ? mat : Number(mat));
+        salvageMsg += `${count}× ${info?.name || mat}, `;
+    }
+    addChatMessage(salvageMsg.slice(0, -2), 'rgba(200,180,100,0.9)');
     refreshUI(); updateShopUI();
 };
 window._closeShop = () => { shopOpen = false; shopEl.style.display = 'none'; };
