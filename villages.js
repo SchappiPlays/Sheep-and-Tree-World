@@ -1,6 +1,6 @@
 // villages.js — Villages with block-built houses and villagers using player model
 
-import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT } from './world.js';
+import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath } from './world.js';
 
 // Village definitions — deterministic positions on the main island
 const VILLAGE_DEFS = [
@@ -715,6 +715,48 @@ export class VillageManager {
             const asLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: asTex, transparent: true, depthWrite: false }));
             asLabel.position.y = 2.2; asLabel.scale.set(1.0, 0.25, 1);
             asV.group.add(asLabel);
+        }
+
+        // Spawn wandering merchants on paths near player
+        if (!this._merchantTimer) this._merchantTimer = 0;
+        this._merchantTimer -= dt;
+        if (this._merchantTimer <= 0) {
+            this._merchantTimer = 10 + Math.random() * 15; // check every 10-25s
+            const merchantCount = this.villagers.filter(v => v._isMerchant).length;
+            if (merchantCount < 3) {
+                // Try to spawn a merchant on a path near the player
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 20 + Math.random() * 30;
+                const mx = playerX + Math.cos(angle) * dist;
+                const mz = playerZ + Math.sin(angle) * dist;
+                if (isOnPath(mx, mz)) {
+                    const my = this.world.getHeight(mx, mz);
+                    if (my > 0) {
+                        const seed = Math.random();
+                        const mv = makeVillager(this.scene, mx, mz, my, seed);
+                        mv._isMerchant = true;
+                        mv.homeX = mx; mv.homeZ = mz;
+                        // Distinct look — travelling cloak
+                        mv._shirtMat.color.setHex(0x556644);
+                        mv._pantsMat.color.setHex(0x3a3a2a);
+                        // Random shop type
+                        const shopTypes = ['blacksmith', 'magic', 'armor'];
+                        mv._shopType = shopTypes[Math.floor(Math.random() * 3)];
+                        const typeNames = { blacksmith: 'Trader (Weapons)', magic: 'Trader (Magic)', armor: 'Trader (Armour)' };
+                        // Label
+                        const mCanvas = document.createElement('canvas');
+                        mCanvas.width = 128; mCanvas.height = 32;
+                        const mCtx = mCanvas.getContext('2d');
+                        mCtx.fillStyle = '#aabb88'; mCtx.font = 'bold 12px monospace'; mCtx.textAlign = 'center';
+                        mCtx.fillText(typeNames[mv._shopType], 64, 20);
+                        const mTex = new THREE.CanvasTexture(mCanvas);
+                        const mLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: mTex, transparent: true, depthWrite: false }));
+                        mLabel.position.y = 2.2; mLabel.scale.set(1.0, 0.25, 1);
+                        mv.group.add(mLabel);
+                        this.villagers.push(mv);
+                    }
+                }
+            }
         }
 
         // Despawn far villagers

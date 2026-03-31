@@ -9,14 +9,14 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32, PATH: 33,
 };
 
 export const BLOCK_COLORS = {
     [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
-    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
+    [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.PATH]: 0x8a7a5a, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -173,9 +173,57 @@ const pondLocs = [
     {x:-250,z:100,radius:14},{x:-150,z:-650,radius:18},{x:150,z:600,radius:12},
 ];
 
+// ── Path system — connects villages, fortress, castle ──
+const PATH_HALF_WIDTH = 3; // 6 blocks wide (3 each side)
+// Path routes: arrays of [x, z] waypoints in world coords
+// Paths wind using intermediate waypoints offset from straight lines
+const PATH_ROUTES = [
+    // Meadow Village (80,16) → Hillside Town (200,60)
+    [[80,16],[110,25],[140,30],[170,45],[200,60]],
+    // Meadow Village → Forest Edge (-100,-50)
+    [[80,16],[50,10],[20,0],[-10,-10],[-40,-20],[-70,-35],[-100,-50]],
+    // Meadow Village → Northwatch (50,-150)
+    [[80,16],[75,-10],[70,-40],[65,-70],[58,-100],[52,-130],[50,-150]],
+    // Forest Edge (-100,-50) → Western Hamlet (-200,100)
+    [[-100,-50],[-120,-30],[-140,-10],[-160,20],[-175,50],[-190,75],[-200,100]],
+    // Forest Edge → Northwatch (50,-150)
+    [[-100,-50],[-80,-70],[-55,-90],[-30,-110],[-5,-130],[20,-140],[50,-150]],
+    // Western Hamlet (-200,100) → Southmoor (-150,200)
+    [[-200,100],[-195,120],[-185,140],[-175,160],[-165,180],[-150,200]],
+    // Southmoor → Meadow Village (loop back via south)
+    [[-150,200],[-110,190],[-70,170],[-30,140],[10,110],[40,80],[60,50],[80,16]],
+    // Branch: Forest Edge → Castle (-400,20)
+    [[-100,-50],[-150,-45],[-200,-40],[-260,-30],[-320,-15],[-370,0],[-400,20]],
+    // Branch: Castle → Ruined Fortress (-505,-175)
+    [[-400,20],[-420,-10],[-440,-40],[-460,-70],[-475,-100],[-490,-140],[-505,-175]],
+    // Branch: Hillside Town → east
+    [[200,60],[230,50],[260,70],[280,90]],
+    // Branch: Northwatch → north toward ancient forest
+    [[50,-150],[40,-170],[30,-190],[20,-210]],
+];
+
+function isOnPath(wx, wz) {
+    const pw = PATH_HALF_WIDTH * BLOCK_SIZE;
+    for (const route of PATH_ROUTES) {
+        for (let i = 0; i < route.length - 1; i++) {
+            const [ax, az] = route[i], [bx, bz] = route[i+1];
+            // Distance from point to line segment
+            const dx = bx - ax, dz = bz - az;
+            const len2 = dx*dx + dz*dz;
+            if (len2 < 0.01) continue;
+            let t = ((wx - ax)*dx + (wz - az)*dz) / len2;
+            t = Math.max(0, Math.min(1, t));
+            const px = ax + t * dx, pz = az + t * dz;
+            const dist2 = (wx-px)*(wx-px) + (wz-pz)*(wz-pz);
+            if (dist2 < pw * pw) return true;
+        }
+    }
+    return false;
+}
+
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend };
+export { getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath };
 
 function getTerrainHeight(x, z) {
     const distFromCenter = Math.sqrt(x * x + z * z);
@@ -499,6 +547,7 @@ export class World {
                         else if (biome === 'mountain' && h > 50) block = BLOCK.SNOW;
                         else if (biome === 'mountain' && h > 35) block = BLOCK.STONE;
                         else if (isCoastal && h < 1.5) block = BLOCK.SAND;
+                        else if (isOnPath(wx, wz)) block = BLOCK.PATH;
                         else block = BLOCK.GRASS;
                     } else if (inPond && y > surfaceBlock && y <= pondWaterLevel) {
                         block = BLOCK.WATER;
@@ -592,6 +641,7 @@ export class World {
                 const biome = this._getBiome(wx, wz);
                 if (biome !== 'grass' && biome !== 'desert_transition') continue;
                 if (h < 1 || h > 35) continue;
+                if (isOnPath(wx, wz)) continue; // no trees on paths
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
                 const trunkH = 4 + Math.floor(this._hash(jx*1.7, jz*2.3) * 4);
@@ -632,6 +682,7 @@ export class World {
                 if (biome !== 'grass') continue;
                 const h = getTerrainHeight(wx, wz);
                 if (h < 1 || h > 30) continue;
+                if (isOnPath(wx, wz)) continue; // no flowers on paths
                 // ~1% chance per block for flower patches (but bunches make them dense locally)
                 const fHash = this._hash(bx * 0.61 + 4444, bz * 0.47 + 5555);
                 if (fHash > 0.01) continue;
