@@ -130,20 +130,29 @@ export class HorseManager {
 
     spawnNear(px, pz) {
         // Spawn horses in nearby grassy areas
-        const gridX = Math.floor(px / 60), gridZ = Math.floor(pz / 60);
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dz = -1; dz <= 1; dz++) {
+        const gridX = Math.floor(px / 40), gridZ = Math.floor(pz / 40);
+        for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
                 const key = (gridX+dx) + ',' + (gridZ+dz);
                 if (this._spawnedAreas.has(key)) continue;
                 this._spawnedAreas.add(key);
-                const cx = (gridX+dx) * 60 + 30, cz = (gridZ+dz) * 60 + 30;
-                // Hash to decide if horses spawn here (~15% of areas)
+                const cx = (gridX+dx) * 40 + 20, cz = (gridZ+dz) * 40 + 20;
+                // Hash to decide if horses spawn here (~30% of areas)
                 const h = Math.sin(cx * 127.1 + cz * 311.7) * 43758.5453;
-                if ((h - Math.floor(h)) > 0.15) continue;
+                if ((h - Math.floor(h)) > 0.30) continue;
                 const hy = this.world.getHeight(cx, cz);
                 if (hy < 1 || hy > 30) continue;
                 const horse = makeHorse(this.scene, cx, cz, hy);
                 this.horses.push(horse);
+                // 40% chance for a second horse nearby
+                if ((h * 7 - Math.floor(h * 7)) < 0.4) {
+                    const ox = cx + (Math.sin(h * 99) * 6);
+                    const oz = cz + (Math.cos(h * 77) * 6);
+                    const ohy = this.world.getHeight(ox, oz);
+                    if (ohy > 1 && ohy < 30) {
+                        this.horses.push(makeHorse(this.scene, ox, oz, ohy));
+                    }
+                }
             }
         }
         // Despawn far horses (not ridden, not stabled)

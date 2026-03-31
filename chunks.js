@@ -80,7 +80,7 @@ export class ChunkManager {
         const faceDZ = Math.cos(facingAngle || 0);
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
-            this._processQueue(4);
+            this._processQueue(3);
             return;
         }
         this._lastPCX = pcx;
@@ -141,7 +141,7 @@ export class ChunkManager {
             this.loaded.delete(key);
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(4);
+        this._processQueue(3);
     }
 
     rebuildChunkAt(bx, bz) {
@@ -215,8 +215,8 @@ export class ChunkManager {
                     yStart = Math.max(0, surfY - 20);
                     yEnd = Math.min(scanMaxY, surfY + 1);
                 } else {
-                    // Scan from bedrock to just above surface — covers caves and dug-out areas
-                    yStart = 0;
+                    // Scan around surface + deep enough for caves (50 blocks down)
+                    yStart = Math.max(0, surfY - 50);
                     yEnd = Math.min(scanMaxY, surfY + 2);
                 }
                 for (let y = yStart; y < yEnd; y++) {

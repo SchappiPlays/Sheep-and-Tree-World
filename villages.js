@@ -608,7 +608,10 @@ export class VillageManager {
                 const bx = Math.round(sx / BS2), bz = Math.round(sz / BS2);
                 const by = Math.floor(this.world.getHeight(sx, sz) / BS2) + 128;
                 const W = wallBlock, R = roofBlock, F = floorBlock || BLOCK.PLANKS;
-                const _set = (dx, dy, dz, b) => this.world.setBlock(bx+dx, by+dy, bz+dz, b);
+                const _set = (dx, dy, dz, b) => {
+                    this.world.setBlock(bx+dx, by+dy, bz+dz, b);
+                };
+                const _rebuildChunks = new Set();
                 const hw = 5, hd = 4, wallH = 7, roofH = 4;
                 // Clear area above
                 for (let dx = -hw-1; dx <= hw+1; dx++) for (let dz = -hd-1; dz <= hd+1; dz++)
@@ -640,6 +643,19 @@ export class VillageManager {
                 // Corner posts (wood)
                 for (const cx of [-hw, hw]) for (const cz of [-hd, hd])
                     for (let dy = 1; dy <= wallH; dy++) _set(cx, dy, cz, BLOCK.WOOD);
+                // Rebuild affected chunks
+                for (let dx = -hw-1; dx <= hw+1; dx += 8) {
+                    for (let dz = -hd-1; dz <= hd+1; dz += 8) {
+                        const ck = Math.floor((bx+dx)/16) + ',' + Math.floor((bz+dz)/16);
+                        _rebuildChunks.add(ck);
+                    }
+                }
+                if (this._chunkRebuild) {
+                    for (const ck of _rebuildChunks) {
+                        const [cx2, cz2] = ck.split(',').map(Number);
+                        this._chunkRebuild(cx2 * 16, cz2 * 16);
+                    }
+                }
             };
 
             // Spawn blacksmith shopkeeper (fixed position near village)

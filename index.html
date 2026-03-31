@@ -1196,6 +1196,7 @@ function startGame(loadSlotName) {
         playerTakeDamage(applyArmorDamage(dmg));
     };
     villageMgr = new VillageManager(scene, world);
+    villageMgr._chunkRebuild = (bx, bz) => { if (chunkManager) chunkManager.rebuildChunkAt(bx, bz); };
     horseMgr = new HorseManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
