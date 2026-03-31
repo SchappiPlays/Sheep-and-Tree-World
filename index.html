@@ -379,7 +379,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -5154,6 +5154,7 @@ function drawWorldMap() {
                 else if (mtn > 0.3) biomeData[idx] = 5;
                 else if (snow > 0.3) biomeData[idx] = 3;
                 else if (desert > 0.3) biomeData[idx] = 4;
+                else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
                 else if (th > 1 && th < 35 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
                 else biomeData[idx] = 0;
             }
@@ -5185,6 +5186,8 @@ function drawWorldMap() {
                     tintR = 30; tintG = 20; tintB = 15; tintA = 0.4;
                 } else if (biome === 7) { // enchanted — purple wash
                     tintR = 90; tintG = 50; tintB = 130; tintA = 0.25;
+                } else if (biome === 9) { // path — sandy brown line
+                    tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
                 } else if (biome === 8) { // forest — deep green
                     tintR = 45; tintG = 85; tintB = 35; tintA = 0.2;
                 } else { // grass — light green
