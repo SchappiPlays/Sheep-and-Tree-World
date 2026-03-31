@@ -35,10 +35,10 @@ export function makeHorse(scene, x, z, terrainHeight) {
     const neck = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.22), hMat);
     neck.position.set(0, 0.2, 0.08); neck.rotation.x = -0.35; neckGrp.add(neck);
 
-    // Mane — hangs to the side of the neck
+    // Mane — exact from game.html
     for (let i = 0; i < 5; i++) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.08), hManeMat);
-        m.position.set(0.1, 0.1 + i * 0.1, 0.05 - i * 0.01); m.rotation.z = 0.3;
+        m.position.set(0, 0.1 + i * 0.1, 0.05 - i * 0.01); m.rotation.x = -0.3;
         neckGrp.add(m);
     }
     g.add(neckGrp);
@@ -89,13 +89,12 @@ export function makeHorse(scene, x, z, terrainHeight) {
         legs.push({ hip, knee });
     }
 
-    // Tail — hangs down and away from body
+    // Tail — exact from game.html
     const tailGrp = new THREE.Group();
     tailGrp.position.set(0, 0.8, -0.55);
-    tailGrp.rotation.x = 0.3; // tilt outward away from body
     for (let i = 0; i < 4; i++) {
         const t = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.04), hManeMat);
-        t.position.set(0, -i * 0.12, 0); tailGrp.add(t);
+        t.position.set(0, -i * 0.12, -i * 0.03); tailGrp.add(t);
     }
     g.add(tailGrp);
 
