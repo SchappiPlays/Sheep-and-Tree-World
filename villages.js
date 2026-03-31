@@ -754,6 +754,7 @@ export class VillageManager {
             stLabel.position.y = 2.2; stLabel.scale.set(1.0, 0.25, 1);
             stV.group.add(stLabel);
             buildShopBuilding(stX, stZ, BLOCK.WOOD, BLOCK.PLANKS, BLOCK.DIRT);
+        }
 
         // Spawn wandering merchants on paths near player
         if (!this._merchantTimer) this._merchantTimer = 0;
