@@ -715,6 +715,28 @@ export class VillageManager {
             const asLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: asTex, transparent: true, depthWrite: false }));
             asLabel.position.y = 2.2; asLabel.scale.set(1.0, 0.25, 1);
             asV.group.add(asLabel);
+
+            // Spawn stablemaster
+            const stAngle = bsAngle + Math.PI * 1.5;
+            const stX = vd.x + Math.cos(stAngle) * 8;
+            const stZ = vd.z + Math.sin(stAngle) * 8;
+            const stY = this.world.getHeight(stX, stZ);
+            const stV = makeVillager(this.scene, stX, stZ, stY, 0.15);
+            stV._shopType = 'stable';
+            stV._stayHome = true;
+            stV.homeX = stX; stV.homeZ = stZ;
+            stV._shirtMat.color.setHex(0x886644);
+            stV._pantsMat.color.setHex(0x554422);
+            this.villagers.push(stV);
+            const stCanvas = document.createElement('canvas');
+            stCanvas.width = 128; stCanvas.height = 32;
+            const stCtx = stCanvas.getContext('2d');
+            stCtx.fillStyle = '#bb9966'; stCtx.font = 'bold 14px monospace'; stCtx.textAlign = 'center';
+            stCtx.fillText('Stable', 64, 20);
+            const stTex = new THREE.CanvasTexture(stCanvas);
+            const stLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: stTex, transparent: true, depthWrite: false }));
+            stLabel.position.y = 2.2; stLabel.scale.set(1.0, 0.25, 1);
+            stV.group.add(stLabel);
         }
 
         // Spawn wandering merchants on paths near player

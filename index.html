@@ -384,6 +384,7 @@ import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
 import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
+import { HorseManager } from './horses.js';
 import { Multiplayer } from './multiplayer.js';
 import { VillageManager, placeVillageInChunk } from './villages.js';
 
@@ -1005,6 +1006,7 @@ function collectSaveData() {
         equippedShield,
         playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
         killedBosses: [...killedBosses],
+        horses: horseMgr ? horseMgr.getSaveData() : [],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
         customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
         eggItems: JSON.parse(JSON.stringify(eggItems)),
@@ -1088,7 +1090,7 @@ document.getElementById('joinBtn').addEventListener('click', () => {
 });
 
 // ── World (created once, reset on new game) ──
-let world, chunkManager, creatures, dragonMgr, player, villageMgr;
+let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr;
 const mp = new Multiplayer(scene);
 
 function startGame(loadSlotName) {
@@ -1167,6 +1169,7 @@ function startGame(loadSlotName) {
         playerTakeDamage(applyArmorDamage(dmg));
     };
     villageMgr = new VillageManager(scene, world);
+    horseMgr = new HorseManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
     // ── Giant Ruined Fortress at (-505, -175) ──
@@ -3383,6 +3386,7 @@ function startGame(loadSlotName) {
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
+            if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
             // Re-register custom staff props
@@ -5041,6 +5045,11 @@ document.addEventListener('mouseup', e => { if (e.button === 0) { _leftMouseDown
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
+    // Horse gear control while riding
+    if (horseMgr && horseMgr.ridingHorse && !e.repeat) {
+        if (e.code === keybinds.forward || e.code === 'ArrowUp') { horseMgr.gearUp(); e.preventDefault(); return; }
+        if (e.code === keybinds.back || e.code === 'ArrowDown') { horseMgr.gearDown(); e.preventDefault(); return; }
+    }
     // Spell slot switching: Shift+1-6
     if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit6') {
         const slot = parseInt(e.code.replace('Digit', ''));
@@ -6322,6 +6331,9 @@ document.addEventListener('keydown', e => {
     } else if (e.code === 'Escape' && blastFurnaceOpen) {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && stableOpen) {
+        stableOpen = false; stableEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && shopOpen) {
         shopOpen = false; shopEl.style.display = 'none';
@@ -8347,6 +8359,89 @@ window._shopSalvage = (item) => {
 };
 window._closeShop = () => { shopOpen = false; shopEl.style.display = 'none'; };
 
+// Stable UI
+let stableOpen = false;
+const stableEl = document.createElement('div');
+stableEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(40,30,15,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:16px;min-width:320px;max-height:80vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(stableEl);
+
+function openStableUI() {
+    stableOpen = true;
+    stableEl.style.display = 'block';
+    if (pointerLocked) document.exitPointerLock();
+    updateStableUI();
+}
+
+function updateStableUI() {
+    if (!horseMgr) return;
+    let html = '<div style="color:rgba(220,200,160,0.9);font:bold 16px Georgia,serif;text-align:center;margin-bottom:10px;">Stable</div>';
+
+    // Register nearby horse
+    if (horseMgr.nearHorse && !horseMgr.nearHorse._registered) {
+        html += '<div style="margin-bottom:10px;padding:8px;border:1px solid rgba(140,120,60,0.4);border-radius:4px;">';
+        html += '<div style="color:rgba(200,180,140,0.8);font:12px monospace;margin-bottom:4px;">Register nearby horse:</div>';
+        html += `<input type="text" id="horseNameInput" placeholder="Name your horse" maxlength="20" style="width:100%;padding:6px;font:12px monospace;background:rgba(20,15,5,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,100,60,0.4);border-radius:3px;margin-bottom:6px;">`;
+        html += `<button onclick="window._registerHorse()" style="width:100%;padding:6px;background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);border-radius:4px;cursor:pointer;font:12px monospace;">Register (free)</button>`;
+        html += '</div>';
+    }
+
+    // Stable current mount
+    if (horseMgr.ridingHorse && horseMgr.ridingHorseRef && horseMgr.ridingHorseRef._registered) {
+        html += `<div style="margin-bottom:8px;"><button onclick="window._stableCurrentHorse()" style="width:100%;padding:6px;background:rgba(60,50,25,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);border-radius:4px;cursor:pointer;font:12px monospace;">Stable current mount (${horseMgr.ridingHorseRef._name})</button></div>`;
+    }
+
+    // Registered horses list
+    html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Your Horses</div>';
+    if (horseMgr.registeredHorses.length === 0) {
+        html += '<div style="color:rgba(120,110,90,0.5);font:10px monospace;padding:4px;">No registered horses</div>';
+    }
+    for (let i = 0; i < horseMgr.registeredHorses.length; i++) {
+        const r = horseMgr.registeredHorses[i];
+        const status = r.stabled ? 'Stabled' : (horseMgr.ridingHorseRef === r.horseRef ? 'Riding' : 'Free');
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid rgba(80,60,30,0.3);">`;
+        html += `<div style="width:16px;height:16px;border-radius:50%;background:#${r.coat.body.toString(16).padStart(6,'0')};border:1px solid rgba(0,0,0,0.3);"></div>`;
+        html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:12px monospace;">${r.name} — ${r.coat.name || ''}</span>`;
+        html += `<span style="color:rgba(150,140,110,0.6);font:10px monospace;">${status}</span>`;
+        if (r.stabled) html += `<button onclick="window._retrieveHorse(${i})" style="padding:3px 8px;background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);border-radius:3px;cursor:pointer;font:10px monospace;">Retrieve</button>`;
+        html += '</div>';
+    }
+
+    html += '<div style="text-align:center;margin-top:10px;"><button onclick="window._closeStable()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
+    stableEl.innerHTML = html;
+    // Stop key propagation on input
+    const inp = document.getElementById('horseNameInput');
+    if (inp) { inp.addEventListener('keydown', e => e.stopPropagation()); inp.addEventListener('mousedown', e => e.stopPropagation()); }
+}
+
+window._registerHorse = () => {
+    const inp = document.getElementById('horseNameInput');
+    const name = inp ? inp.value.trim() : '';
+    if (!name) return;
+    if (!horseMgr.nearHorse || horseMgr.nearHorse._registered) return;
+    horseMgr.registerHorse(horseMgr.nearHorse, name);
+    addChatMessage(`Registered horse: ${name}`, 'rgba(180,160,100,0.9)');
+    updateStableUI();
+};
+window._stableCurrentHorse = () => {
+    if (!horseMgr.ridingHorse || !horseMgr.ridingHorseRef) return;
+    const h = horseMgr.ridingHorseRef;
+    horseMgr.dismount();
+    horseMgr.stableHorse(h);
+    player.leftLeg.hip.rotation.z = 0; player.rightLeg.hip.rotation.z = 0;
+    player.leftLeg.hip.rotation.x = 0; player.rightLeg.hip.rotation.x = 0;
+    player.spine.rotation.x = 0;
+    addChatMessage(`${h._name} has been stabled.`, 'rgba(180,160,100,0.9)');
+    updateStableUI();
+};
+window._retrieveHorse = (idx) => {
+    const r = horseMgr.registeredHorses[idx];
+    if (!r || !r.stabled) return;
+    horseMgr.retrieveHorse(r, player.position.x, player.position.z);
+    addChatMessage(`${r.name} has been retrieved!`, 'rgba(180,160,100,0.9)');
+    updateStableUI();
+};
+window._closeStable = () => { stableOpen = false; stableEl.style.display = 'none'; };
+
 let villagerDialogOpen = false;
 const villagerDialogEl = document.createElement('div');
 villagerDialogEl.style.cssText = 'display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:110;background:rgba(40,30,15,0.9);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:12px 20px;max-width:400px;user-select:none;';
@@ -8361,8 +8456,36 @@ function showVillagerDialog(line) {
 }
 
 function doPlace(e) {
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen) return false;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen || stableOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
+
+    // Check for horse interaction (right-click while looking at horse)
+    if (horseMgr && placeHoldTime < 0.05) {
+        if (horseMgr.ridingHorse) {
+            // Dismount
+            horseMgr.dismount();
+            player.leftLeg.hip.rotation.z = 0;
+            player.rightLeg.hip.rotation.z = 0;
+            player.leftLeg.hip.rotation.x = 0;
+            player.rightLeg.hip.rotation.x = 0;
+            player.spine.rotation.x = 0;
+            return false;
+        }
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+        for (const h of horseMgr.horses) {
+            if (h._stabled) continue;
+            const dx = h.x - player.position.x, dz = h.z - player.position.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+            if (dist > 5) continue;
+            const hPos = new THREE.Vector3(h.x, h.group.position.y + 1, h.z);
+            const dir = hPos.clone().sub(rc.ray.origin).normalize();
+            if (dir.dot(rc.ray.direction) > 0.9) {
+                horseMgr.mount(h);
+                return false;
+            }
+        }
+    }
 
     // Check for villager interaction (right-click while looking at villager)
     if (villageMgr && placeHoldTime < 0.05) {
@@ -8385,6 +8508,7 @@ function doPlace(e) {
                 if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
                 if (v._shopType === 'magic') { openShop('magic'); return false; }
                 if (v._shopType === 'armor') { openShop('armor'); return false; }
+                if (v._shopType === 'stable') { openStableUI(); return false; }
                 // Regular villager dialogue
                 const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
                 showVillagerDialog(line);
@@ -9268,6 +9392,25 @@ function animate() {
 
     // Creatures
     creatures.skipAI = mp.active && !mp.isHost;
+    // Horses
+    if (horseMgr) {
+        horseMgr.spawnNear(player.position.x, player.position.z);
+        const hKeys = { a: keys[keybinds.left], d: keys[keybinds.right], ArrowLeft: keys['ArrowLeft'], ArrowRight: keys['ArrowRight'] };
+        horseMgr.update(dt, player.position.x, player.position.z, player.group.rotation.y, hKeys);
+        if (horseMgr.ridingHorse && horseMgr.ridingHorseRef) {
+            const h = horseMgr.ridingHorseRef;
+            player.position.set(h.x, h.group.position.y + 1.4, h.z);
+            player.group.position.copy(player.position);
+            player.group.rotation.y = h.angle;
+            // Riding pose — legs apart, leaning forward at speed
+            player.leftLeg.hip.rotation.z = 0.3;
+            player.rightLeg.hip.rotation.z = -0.3;
+            player.leftLeg.hip.rotation.x = -0.4;
+            player.rightLeg.hip.rotation.x = -0.4;
+            player.spine.rotation.x = Math.min(0.15, h.speed * 0.01);
+        }
+    }
+
     creatures.update(dt, player.position.x, player.position.z);
 
     // Villagers
@@ -9924,7 +10067,16 @@ function animate() {
         }
     }
 
-    const promptText = colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player);
+    let horsePrompt = '';
+    if (horseMgr) {
+        if (horseMgr.ridingHorse) {
+            const gearNames = ['Stopped', 'Walk', 'Trot', 'Canter', 'Gallop'];
+            horsePrompt = `Right-click to dismount | W/S to change gear: ${gearNames[horseMgr.horseGear]}`;
+        } else if (horseMgr.nearHorse) {
+            horsePrompt = 'Right-click to mount horse' + (horseMgr.nearHorse._name ? ` (${horseMgr.nearHorse._name})` : '');
+        }
+    }
+    const promptText = horsePrompt || colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player);
     if (promptText) { promptEl.textContent = promptText; promptEl.style.display = 'block'; }
     else { promptEl.style.display = 'none'; }
 
