@@ -8968,9 +8968,15 @@ function animate() {
     const heldForChannel = hotbarSlots[selectedSlot];
     const isChanneling = (placingHeld || shieldRaised) && !staffShielding && heldForChannel && typeof heldForChannel === 'string' && heldForChannel.includes('staff') && STAFF_PROPS[heldForChannel] && player.staffHeld.visible;
     if (isChanneling) {
-        // Arm raised — staff held up while channeling mana
-        player.leftArm.shoulder.rotation.x = -1.2;
-        player.leftArm.elbow.rotation.x = -0.3;
+        // Arm out to the side and raised, staff held straight up
+        player.leftArm.shoulder.rotation.x = -0.8;
+        player.leftArm.shoulder.rotation.z = -0.6;
+        player.leftArm.elbow.rotation.x = -1.2;
+        // Straighten staff by countering arm tilt
+        if (player.staffHeld.visible) {
+            player.staffHeld.rotation.x = 0.8;
+            player.staffHeld.rotation.z = 0.3;
+        }
     }
 
     // Update shield visual
