@@ -6235,9 +6235,15 @@ function updateInventoryUI() {
         slot.addEventListener('click', () => {
             const slotName = slot.dataset.slot;
             if (heldItem) {
-                // Try to equip held item
+                // Try to equip held item — derive slot from item name
                 const info = getItemInfo(heldItem);
-                if (info && info.isArmor && info.armorSlot === slotName) {
+                const itemSlot = typeof heldItem === 'string' && (
+                    heldItem.includes('helmet') || heldItem.includes('hat') ? 'helmet' :
+                    heldItem.includes('chestplate') || (heldItem.includes('wizard_') && heldItem.split('_')[1] === 'chestplate') ? 'chestplate' :
+                    heldItem.includes('legging') || heldItem.includes('trousers') ? 'leggings' :
+                    heldItem.includes('boot') ? 'boots' : null
+                );
+                if (info && (info.isArmor || itemSlot) && itemSlot === slotName) {
                     const old = armorSlots[slotName];
                     armorSlots[slotName] = heldItem;
                     heldItem = old || null;
