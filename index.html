@@ -9435,10 +9435,20 @@ function animate() {
     if (horseMgr) {
         horseMgr.spawnNear(player.position.x, player.position.z);
         const hKeys = { a: keys[keybinds.left], d: keys[keybinds.right], ArrowLeft: keys['ArrowLeft'], ArrowRight: keys['ArrowRight'] };
+        // Mouse look steering: when riding + moving, horse turns toward camera direction
+        if (horseMgr.ridingHorse && horseMgr.horseGear > 0 && useMouseLook && pointerLocked) {
+            const h = horseMgr.ridingHorseRef;
+            if (h) {
+                let da = fpYaw - h.angle;
+                while (da > Math.PI) da -= Math.PI * 2;
+                while (da < -Math.PI) da += Math.PI * 2;
+                h.angle += da * 4 * dt; // smooth turn toward camera
+            }
+        }
         horseMgr.update(dt, player.position.x, player.position.z, player.group.rotation.y, hKeys);
         if (horseMgr.ridingHorse && horseMgr.ridingHorseRef) {
             const h = horseMgr.ridingHorseRef;
-            player.position.set(h.x, h.group.position.y + 1.4, h.z);
+            player.position.set(h.x, h.group.position.y + 0.85, h.z);
             player.group.position.copy(player.position);
             player.group.rotation.y = h.angle;
             // Riding pose — exact from game.html
