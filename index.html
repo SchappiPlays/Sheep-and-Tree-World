@@ -1170,6 +1170,7 @@ function startGame(loadSlotName) {
     world._placeVillages = placeVillageInChunk;
 
     // ── Giant Ruined Fortress at (-505, -175) ──
+    _initMagicShopStaffs();
     buildFarTerrain(0, 0);
     buildRuinedFortress(world);
     buildForestGate(world, -140, -190, 'z', false);   // west gate (intact)
@@ -8101,12 +8102,47 @@ const BLACKSMITH_SHOP = [
     { item: 'wood_shield', price: 10 }, { item: 'iron_shield', price: 30 },
     { item: 'hp_potion', price: 15 },
 ];
-const MAGIC_SHOP = [
-    { item: 'basic_staff', price: 20 }, { item: 'fire_staff', price: 60 },
-    { item: 'ice_staff', price: 55 }, { item: 'lightning_staff', price: 75 },
-    { item: 'star_fragment', price: 40 }, { item: 'mana_crystal', price: 200 },
+// Magic shop staffs — generated as proper custom staffs
+const MAGIC_SHOP_BASE = [
+    { item: 'basic_staff', price: 20 },
+    { item: 'fire_staff', price: 60 },
+    { item: 'ice_staff', price: 55 },
+    { item: 'lightning_staff', price: 75 },
+    { item: 'star_fragment', price: 40 },
+    { item: 'mana_crystal', price: 200 },
     { item: 'hp_potion', price: 12 },
 ];
+// Custom staffs added to shop dynamically
+const MAGIC_SHOP_CUSTOM = [
+    { name: 'Ruby Prong Staff', shaft: 'iron_ingot', holder: 'prongs', holderMat: 'gold_ingot', gem: 'ruby', price: 80 },
+    { name: 'Sapphire Cage Staff', shaft: 'steel_ingot', holder: 'cage', holderMat: 'iron_ingot', gem: 'sapphire', price: 85 },
+    { name: 'Emerald Coil Staff', shaft: 'copper_ingot', holder: 'coil', holderMat: 'copper_ingot', gem: 'emerald', price: 70 },
+    { name: 'Topaz Crown Staff', shaft: 'gold_ingot', holder: 'crown', holderMat: 'gold_ingot', gem: 'topaz', price: 90 },
+    { name: 'Diamond Claw Staff', shaft: 'iron_ingot', holder: 'claws', holderMat: 'steel_ingot', gem: 'diamond', price: 120 },
+];
+let MAGIC_SHOP = [...MAGIC_SHOP_BASE];
+
+function _initMagicShopStaffs() {
+    for (const def of MAGIC_SHOP_CUSTOM) {
+        const id = 'cstaff_shop_' + def.gem + '_' + Date.now() + Math.floor(Math.random()*1000);
+        if (!window._customStaffs) window._customStaffs = {};
+        const baseType = STAFF_GEM_TYPE[def.gem] || 'basic_staff';
+        const gemBolt = STAFF_GEM_BOLT[def.gem];
+        window._customStaffs[id] = {
+            baseType, shaftMat: def.shaft, holderStyle: def.holder, holderMat: def.holderMat,
+            gem: def.gem, name: def.name,
+            customBolt: gemBolt ? { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: 0.1, trail: gemBolt.color, life: 2.0 } : null,
+        };
+        if (gemBolt) {
+            STAFF_PROPS[id] = { color: gemBolt.color, speed: gemBolt.speed, damage: gemBolt.damage, size: 0.1, trail: gemBolt.color, life: 2.0 };
+        } else {
+            STAFF_PROPS[id] = { ...STAFF_PROPS[baseType] };
+        }
+        const gemSpellKey = 'gem_' + def.gem;
+        STAFF_SPELLS[id] = STAFF_SPELLS[gemSpellKey] || STAFF_SPELLS[baseType] || STAFF_SPELLS['basic_staff'];
+        MAGIC_SHOP.push({ item: id, price: def.price });
+    }
+}
 const ARMOR_SHOP = [
     { item: 'wood_helmet', price: 8 }, { item: 'wood_chestplate', price: 14 },
     { item: 'wood_leggings', price: 12 }, { item: 'wood_boots', price: 6 },
