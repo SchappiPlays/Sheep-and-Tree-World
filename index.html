@@ -8492,7 +8492,30 @@ function doPlace(e) {
     // Check for horse interaction (right-click while looking at horse)
     if (horseMgr && placeHoldTime < 0.05) {
         if (horseMgr.ridingHorse) {
-            // Dismount
+            // Check if looking at a villager first — interact instead of dismount
+            if (villageMgr && placeHoldTime < 0.05) {
+                const rc2 = new THREE.Raycaster();
+                rc2.setFromCamera(new THREE.Vector2(0, 0), camera);
+                for (const v of villageMgr.villagers) {
+                    const dx = v.x - player.position.x, dz = v.z - player.position.z;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist > 6) continue;
+                    const vPos = new THREE.Vector3(v.x, v.group.position.y + 1, v.z);
+                    const dir = vPos.clone().sub(rc2.ray.origin).normalize();
+                    if (dir.dot(rc2.ray.direction) > 0.9) {
+                        v.angle = Math.atan2(-dx, -dz);
+                        v.group.rotation.y = v.angle;
+                        v.walking = false; v.wanderTimer = 5;
+                        if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
+                        if (v._shopType === 'magic') { openShop('magic'); return false; }
+                        if (v._shopType === 'armor') { openShop('armor'); return false; }
+                        if (v._shopType === 'stable') { openStableUI(); return false; }
+                        showVillagerDialog(VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)]);
+                        return false;
+                    }
+                }
+            }
+            // No villager targeted — dismount
             horseMgr.dismount();
             player.leftLeg.hip.rotation.set(0,0,0);
             player.rightLeg.hip.rotation.set(0,0,0);
