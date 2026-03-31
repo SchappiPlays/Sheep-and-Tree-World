@@ -562,11 +562,12 @@ function makeVillager(scene, x, z, terrainY, seed) {
 
     return {
         group: g, body, spine, headGroup, leftArm, rightArm, leftLeg, rightLeg,
+        _skinMat: skinMat, _shirtMat: shirtMat, _pantsMat: pantsMat, _shoeMat: shoeMat, _hairMat: hairMat,
         x, z, angle: g.rotation.y, speed: 0,
         walkPhase: seed * Math.PI * 2,
         wanderTimer: 1 + seed * 3,
         walking: false,
-        homeX: x, homeZ: z, // stays near home
+        homeX: x, homeZ: z,
         idleTimer: 0,
     };
 }

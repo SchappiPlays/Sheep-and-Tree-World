@@ -778,7 +778,7 @@ function buildFarTerrain(centerX, centerZ) {
     const step = 6;
     const S = BS * step;
     const halfS = S * 0.5;
-    const skipRange = 100;
+    const skipRange = 140; // larger than max chunk render range to prevent overlap
     const gridSize = Math.ceil(range / S);
     // Skip grid is relative to the center position
     const skipCGX = Math.round(_farCenterX / S);
@@ -9039,7 +9039,7 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    if (optFarTerrain && farDx * farDx + farDz * farDz > 80 * 80) {
+    if (optFarTerrain && farDx * farDx + farDz * farDz > 50 * 50) {
         buildFarTerrain(player.position.x, player.position.z);
     }
 
