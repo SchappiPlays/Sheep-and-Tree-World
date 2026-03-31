@@ -1132,6 +1132,8 @@ function startGame(loadSlotName) {
     creatures = new CreatureManager(scene, world);
     creatures._onCreatureDrop = (item, count) => {
         for (let i = 0; i < count; i++) addToInventory(item);
+        // Random coin drops from hostile creatures
+        if (Math.random() < 0.4) addCopper(1 + Math.floor(Math.random() * 3));
         refreshUI();
     };
     creatures._onPlayerHit = (dmg, type, srcX, srcZ) => {
@@ -3494,6 +3496,7 @@ function startGame(loadSlotName) {
         inventory['copper_pickaxe'] = 1;
         inventory['guide_book'] = 1;
         inventory['hp_potion'] = 5;
+        inventory['silver_coin'] = 5; // starting money: 50 copper worth
 
         // Random copper staff with random gem
         const startGems = ['ruby', 'sapphire', 'emerald', 'topaz', 'diamond'];
@@ -5693,6 +5696,9 @@ function getItemInfo(key) {
     if (key === 'void_staff') return { name: 'Void Staff', top: '#8833cc', front: '#551a99', isTool: true, toolType: 'staff' };
     if (key === 'hp_potion') return { name: 'Health Potion', top: '#ff4444', front: '#cc2222' };
     if (key === 'guide_book') return { name: 'Guide Book', top: '#8b6b3d', front: '#5a3a1e' };
+    if (key === 'gold_coin') return { name: 'Gold Coin', top: '#ffd700', front: '#daa520' };
+    if (key === 'silver_coin') return { name: 'Silver Coin', top: '#c0c0c0', front: '#909090' };
+    if (key === 'copper_coin') return { name: 'Copper Coin', top: '#cc8844', front: '#996630' };
     if (key === 'star_fragment') return { name: 'Star Fragment', top: '#ffffaa', front: '#ccaa44' };
     if (key === 'mana_crystal') return { name: 'Mana Crystal', top: '#4488ff', front: '#2255cc' };
     if (key === 'copper_ingot') return { name: 'Copper Ingot', top: '#cc8844', front: '#aa6630' };
@@ -5866,6 +5872,14 @@ function blockIconHTML(info) {
         </svg>`;
         return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
     }
+    if (n.includes('coin')) {
+        const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" fill="${info.top}" stroke="${info.front}" stroke-width="1.5"/>
+            <circle cx="12" cy="12" r="6" fill="none" stroke="${info.front}" stroke-width="0.5" opacity="0.4"/>
+            <text x="12" y="16" text-anchor="middle" fill="${info.front}" font-size="10" font-weight="bold" font-family="serif">${n.includes('gold') ? 'G' : n.includes('silver') ? 'S' : 'C'}</text>
+        </svg>`;
+        return `<div class="block-icon" style="display:flex;align-items:center;justify-content:center;">${svg}</div>`;
+    }
     if (n.includes('flower')) {
         const svg = `<svg width="24" height="24" viewBox="0 0 24 24">
             <rect x="11" y="12" width="2" height="10" fill="#2a6a1a"/>
@@ -6021,11 +6035,13 @@ function updateInventoryUI() {
     const equippedKeys = new Set();
     for (const item of Object.values(armorSlots)) { if (item) equippedKeys.add(item); }
     if (equippedShield) equippedKeys.add(equippedShield);
+    const coinKeys = new Set(['gold_coin', 'silver_coin', 'copper_coin']);
     const allItems = Object.keys(inventory).filter(k => {
         const key = isNaN(k) ? k : Number(k);
         if (inventory[k] <= 0) return false;
         if (hotbarKeys.has(key)) return false;
-        if (equippedKeys.has(key)) return false; // hide equipped armor/shield
+        if (equippedKeys.has(key)) return false;
+        if (coinKeys.has(key)) return false; // coins shown in money slots
         if (heldItem === key) return false;
         return true;
     }).map(k => isNaN(k) ? k : Number(k));
@@ -6086,6 +6102,21 @@ function updateInventoryUI() {
     let shieldInner = '<span class="slot-label" style="font-size:8px;">Shield</span>';
     if (shieldInfo) { shieldInner += blockIconHTML(shieldInfo); shieldInner += `<span class="block-name">${shieldInfo.name}</span>`; }
     html += `<div class="inv-slot" data-area="shield" data-bt="${equippedShield || ''}">${shieldInner}</div>`;
+    html += '</div>';
+
+    // Money slots
+    html += '<div class="inv-section-label">Money</div>';
+    html += '<div class="inv-grid" style="grid-template-columns: repeat(3, 44px);">';
+    for (const coinType of ['gold_coin', 'silver_coin', 'copper_coin']) {
+        const count = inventory[coinType] || 0;
+        const info = getItemInfo(coinType);
+        let inner = `<span class="slot-label" style="font-size:8px;">${info.name.replace(' Coin','')}</span>`;
+        if (count > 0) {
+            inner += blockIconHTML(info);
+            inner += `<span class="count">${count}</span>`;
+        }
+        html += `<div class="inv-slot" data-area="money" data-bt="${coinType}">${inner}</div>`;
+    }
     html += '</div>';
 
     // Brush controls
@@ -6282,6 +6313,9 @@ document.addEventListener('keydown', e => {
     } else if (e.code === 'Escape' && blastFurnaceOpen) {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && shopOpen) {
+        shopOpen = false; shopEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && guideBookOpen) {
         guideBookOpen = false;
@@ -8032,6 +8066,137 @@ const VILLAGER_LINES = [
     "Some say a great mage once built the gates to protect the forest.",
     "My grandmother told me stories about dragons... I never believed her.",
 ];
+// Item sell prices (in copper coins). 10 copper = 1 silver, 10 silver = 1 gold
+const ITEM_PRICES = {
+    [BLOCK.WOOD]: 1, [BLOCK.STONE]: 1, [BLOCK.SAND]: 1, [BLOCK.DIRT]: 1,
+    [BLOCK.PLANKS]: 2, [BLOCK.LEAVES]: 1, [BLOCK.GRAVEL]: 1, [BLOCK.CLAY]: 2,
+    [BLOCK.SNOW]: 1, [BLOCK.IRON_ORE]: 5, [BLOCK.COAL_ORE]: 3, [BLOCK.COPPER_ORE]: 4,
+    [BLOCK.GOLD_ORE]: 15, [BLOCK.DIAMOND_ORE]: 50, [BLOCK.RUBY_ORE]: 30,
+    [BLOCK.SAPPHIRE_ORE]: 30, [BLOCK.EMERALD_ORE]: 30, [BLOCK.TOPAZ_ORE]: 25,
+    'stick': 1, 'coal': 3, 'copper_ingot': 8, 'iron_ingot': 12, 'gold_ingot': 25,
+    'steel_ingot': 20, 'diamond': 60, 'dragonsteel_ingot': 100,
+    'ruby': 40, 'sapphire': 40, 'emerald': 40, 'topaz': 35,
+    'star_fragment': 30, 'mana_crystal': 150,
+    'hp_potion': 10,
+    'wood_sword': 8, 'stone_sword': 12, 'copper_sword': 16, 'iron_sword': 25,
+    'gold_sword': 30, 'steel_sword': 40, 'diamond_sword': 80,
+    'pickaxe': 6, 'stone_pickaxe': 10, 'copper_pickaxe': 14, 'iron_pickaxe': 22,
+    'basic_staff': 15, 'fire_staff': 40, 'ice_staff': 35, 'lightning_staff': 50, 'void_staff': 200,
+};
+
+// Shop inventories
+const BLACKSMITH_SHOP = [
+    { item: 'copper_pickaxe', price: 20 }, { item: 'copper_sword', price: 22 },
+    { item: 'copper_axe', price: 20 }, { item: 'iron_pickaxe', price: 35 },
+    { item: 'iron_sword', price: 40 }, { item: 'iron_axe', price: 35 },
+    { item: 'stone_pickaxe', price: 12 }, { item: 'stone_sword', price: 15 },
+    { item: 'wood_shield', price: 10 }, { item: 'iron_shield', price: 30 },
+    { item: 'hp_potion', price: 15 },
+];
+const MAGIC_SHOP = [
+    { item: 'basic_staff', price: 20 }, { item: 'fire_staff', price: 60 },
+    { item: 'ice_staff', price: 55 }, { item: 'lightning_staff', price: 75 },
+    { item: 'star_fragment', price: 40 }, { item: 'mana_crystal', price: 200 },
+    { item: 'hp_potion', price: 12 },
+];
+
+// Currency helpers
+function getTotalCopper() {
+    return (inventory['copper_coin'] || 0) + (inventory['silver_coin'] || 0) * 10 + (inventory['gold_coin'] || 0) * 100;
+}
+function spendCopper(amount) {
+    // Convert all to copper, subtract, convert back
+    let total = getTotalCopper();
+    if (total < amount) return false;
+    total -= amount;
+    inventory['gold_coin'] = Math.floor(total / 100); total %= 100;
+    inventory['silver_coin'] = Math.floor(total / 10); total %= 10;
+    inventory['copper_coin'] = total;
+    for (const c of ['gold_coin','silver_coin','copper_coin']) if (inventory[c] <= 0) delete inventory[c];
+    return true;
+}
+function addCopper(amount) {
+    let total = getTotalCopper() + amount;
+    inventory['gold_coin'] = Math.floor(total / 100); total %= 100;
+    inventory['silver_coin'] = Math.floor(total / 10); total %= 10;
+    inventory['copper_coin'] = total;
+    for (const c of ['gold_coin','silver_coin','copper_coin']) if (inventory[c] <= 0) delete inventory[c];
+}
+function formatPrice(copper) {
+    if (copper >= 100) return Math.floor(copper/100) + 'g ' + Math.floor((copper%100)/10) + 's ' + (copper%10) + 'c';
+    if (copper >= 10) return Math.floor(copper/10) + 's ' + (copper%10) + 'c';
+    return copper + 'c';
+}
+
+// Shop UI
+let shopOpen = false;
+let shopType = null; // 'blacksmith' or 'magic'
+const shopEl = document.createElement('div');
+shopEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(30,25,15,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:16px;min-width:380px;max-height:80vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(shopEl);
+
+function openShop(type) {
+    shopOpen = true; shopType = type;
+    shopEl.style.display = 'block';
+    if (pointerLocked) document.exitPointerLock();
+    updateShopUI();
+}
+
+function updateShopUI() {
+    const items = shopType === 'blacksmith' ? BLACKSMITH_SHOP : MAGIC_SHOP;
+    const title = shopType === 'blacksmith' ? 'Blacksmith' : 'Magic Supply';
+    const totalMoney = getTotalCopper();
+    let html = `<div style="color:rgba(220,200,160,0.9);font:bold 16px Georgia,serif;text-align:center;margin-bottom:4px;">${title}</div>`;
+    html += `<div style="color:rgba(200,180,120,0.7);font:12px monospace;text-align:center;margin-bottom:10px;">Your money: ${formatPrice(totalMoney)}</div>`;
+
+    // Buy section
+    html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Buy</div>';
+    for (const s of items) {
+        const info = getItemInfo(s.item);
+        const canBuy = totalMoney >= s.price;
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid rgba(80,60,30,0.3);opacity:${canBuy ? 1 : 0.4};cursor:${canBuy ? 'pointer' : 'default'};" onclick="window._shopBuy('${s.item}',${s.price})">`;
+        if (info) html += blockIconHTML(info);
+        html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:11px monospace;">${info?.name || s.item}</span>`;
+        html += `<span style="color:rgba(220,200,100,0.8);font:11px monospace;">${formatPrice(s.price)}</span>`;
+        html += '</div>';
+    }
+
+    // Sell section
+    html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-top:10px;margin-bottom:4px;">Sell</div>';
+    const sellable = Object.keys(inventory).filter(k => ITEM_PRICES[k] && inventory[k] > 0 && !['gold_coin','silver_coin','copper_coin'].includes(k));
+    if (sellable.length === 0) {
+        html += '<div style="color:rgba(120,110,90,0.5);font:10px monospace;padding:4px;">Nothing to sell</div>';
+    }
+    for (const k of sellable) {
+        const info = getItemInfo(isNaN(k) ? k : Number(k));
+        const price = ITEM_PRICES[k];
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid rgba(80,60,30,0.3);cursor:pointer;" onclick="window._shopSell('${k}')">`;
+        if (info) html += blockIconHTML(info);
+        html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:11px monospace;">${info?.name || k} ×${inventory[k]}</span>`;
+        html += `<span style="color:rgba(180,220,100,0.8);font:11px monospace;">+${formatPrice(price)}</span>`;
+        html += '</div>';
+    }
+
+    html += '<div style="text-align:center;margin-top:10px;"><button onclick="window._closeShop()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
+    shopEl.innerHTML = html;
+}
+
+window._shopBuy = (item, price) => {
+    if (!spendCopper(price)) return;
+    inventory[item] = (inventory[item] || 0) + 1;
+    refreshUI(); updateShopUI();
+};
+window._shopSell = (item) => {
+    if (!inventory[item] || inventory[item] <= 0) return;
+    const price = ITEM_PRICES[item];
+    if (!price) return;
+    inventory[item]--;
+    if (inventory[item] <= 0) { delete inventory[item]; for (let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]===item) hotbarSlots[i]=0; }
+    addCopper(price);
+    refreshUI(); updateShopUI();
+};
+window._closeShop = () => { shopOpen = false; shopEl.style.display = 'none'; };
+
 let villagerDialogOpen = false;
 const villagerDialogEl = document.createElement('div');
 villagerDialogEl.style.cssText = 'display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:110;background:rgba(40,30,15,0.9);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:12px 20px;max-width:400px;user-select:none;';
@@ -8046,7 +8211,7 @@ function showVillagerDialog(line) {
 }
 
 function doPlace(e) {
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen) return false;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
 
     // Check for villager interaction (right-click while looking at villager)
@@ -8062,13 +8227,16 @@ function doPlace(e) {
             const dir = vPos.clone().sub(rc.ray.origin);
             const dot = dir.normalize().dot(rc.ray.direction);
             if (dot > 0.95) { // looking roughly at them
-                const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
-                showVillagerDialog(line);
-                // Make villager face player
                 v.angle = Math.atan2(-dx, -dz);
                 v.group.rotation.y = v.angle;
                 v.walking = false;
-                v.wanderTimer = 5; // pause wandering
+                v.wanderTimer = 5;
+                // Shop villagers open shop instead of dialogue
+                if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
+                if (v._shopType === 'magic') { openShop('magic'); return false; }
+                // Regular villager dialogue
+                const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
+                showVillagerDialog(line);
                 return false;
             }
         }

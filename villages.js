@@ -600,6 +600,54 @@ export class VillageManager {
                 const v = makeVillager(this.scene, vx, vz, vy, seed);
                 this.villagers.push(v);
             }
+
+            // Spawn blacksmith shopkeeper (fixed position near village)
+            const bsAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
+            const bsX = vd.x + Math.cos(bsAngle) * 6;
+            const bsZ = vd.z + Math.sin(bsAngle) * 6;
+            const bsY = this.world.getHeight(bsX, bsZ);
+            const bsV = makeVillager(this.scene, bsX, bsZ, bsY, 0.8);
+            bsV._shopType = 'blacksmith';
+            bsV._stayHome = true; // don't wander
+            bsV.homeX = bsX; bsV.homeZ = bsZ;
+            // Make blacksmith visually distinct — dark apron
+            bsV._shirtMat.color.setHex(0x3a2a1a);
+            this.villagers.push(bsV);
+
+            // Add blacksmith label
+            const bsCanvas = document.createElement('canvas');
+            bsCanvas.width = 128; bsCanvas.height = 32;
+            const bsCtx = bsCanvas.getContext('2d');
+            bsCtx.fillStyle = '#ccaa66'; bsCtx.font = 'bold 14px monospace'; bsCtx.textAlign = 'center';
+            bsCtx.fillText('Blacksmith', 64, 20);
+            const bsTex = new THREE.CanvasTexture(bsCanvas);
+            const bsLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: bsTex, transparent: true, depthWrite: false }));
+            bsLabel.position.y = 2.2; bsLabel.scale.set(1.0, 0.25, 1);
+            bsV.group.add(bsLabel);
+
+            // Spawn magic shop keeper
+            const msAngle = bsAngle + Math.PI; // opposite side of village
+            const msX = vd.x + Math.cos(msAngle) * 6;
+            const msZ = vd.z + Math.sin(msAngle) * 6;
+            const msY = this.world.getHeight(msX, msZ);
+            const msV = makeVillager(this.scene, msX, msZ, msY, 0.3);
+            msV._shopType = 'magic';
+            msV._stayHome = true;
+            msV.homeX = msX; msV.homeZ = msZ;
+            // Make magic shop visually distinct — purple robes
+            msV._shirtMat.color.setHex(0x5522aa);
+            this.villagers.push(msV);
+
+            // Add magic shop label
+            const msCanvas = document.createElement('canvas');
+            msCanvas.width = 128; msCanvas.height = 32;
+            const msCtx = msCanvas.getContext('2d');
+            msCtx.fillStyle = '#aa88ff'; msCtx.font = 'bold 14px monospace'; msCtx.textAlign = 'center';
+            msCtx.fillText('Magic Shop', 64, 20);
+            const msTex = new THREE.CanvasTexture(msCanvas);
+            const msLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: msTex, transparent: true, depthWrite: false }));
+            msLabel.position.y = 2.2; msLabel.scale.set(1.0, 0.25, 1);
+            msV.group.add(msLabel);
         }
 
         // Despawn far villagers
@@ -623,6 +671,14 @@ export class VillageManager {
         for (const v of this.villagers) {
             const dx = v.x - playerX, dz = v.z - playerZ;
             if (dx * dx + dz * dz > 40 * 40) continue;
+
+            // Shop keepers stay put
+            if (v._stayHome) {
+                v.walking = false; v.speed = 0;
+                v.x = v.homeX; v.z = v.homeZ;
+                v.group.position.set(v.x, this.world.getHeight(v.x, v.z), v.z);
+                continue;
+            }
 
             // Wander AI — stay near home
             v.wanderTimer -= dt;
