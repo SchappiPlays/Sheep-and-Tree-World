@@ -4258,7 +4258,17 @@ const ARMOR_TIERS = {
     diamond:     { helmet: 1.5, chestplate: 3.0, leggings: 2.5, boots: 1.2, total: 8.2 },
     dragonsteel: { helmet: 2.0, chestplate: 4.0, leggings: 3.0, boots: 1.5, total: 10.5 },
     ember:       { helmet: 2.2, chestplate: 4.5, leggings: 3.5, boots: 1.8, total: 12.0 },
+    wizard:      { helmet: 1.0, chestplate: 2.0, leggings: 1.5, boots: 0.8, total: 5.3 }, // iron-level protection
 };
+
+function isWearingWizardRobes() {
+    // Check if at least chestplate is wizard
+    const chest = armorSlots.chestplate;
+    return chest && chest.startsWith('wizard_');
+}
+function getStaffDamageMultiplier() {
+    return isWearingWizardRobes() ? 1.25 : 1.0;
+}
 
 function getArmorReduction() {
     let total = 0;
@@ -4392,7 +4402,7 @@ function fireProjectile(staffType) {
         mesh, light, x: sx, y: sy, z: sz,
         vx, vy, vz,
         life: props.life, age: 0,
-        damage: props.damage, staffType,
+        damage: Math.round(props.damage * getStaffDamageMultiplier()), staffType,
         trailColor: props.trail,
         _isDragon: isDragon,
     });
@@ -4401,6 +4411,7 @@ function fireProjectile(staffType) {
 // Helper: deal spell damage to a creature, triggering boss death handlers if killed
 function spellDamage(c, dmg) {
     if (c.dead || c._shielded) return;
+    dmg = Math.round(dmg * getStaffDamageMultiplier());
     c.hp -= dmg;
     staffDamageDealt += dmg;
     if (c.hp <= 0) {
@@ -5751,6 +5762,19 @@ function getItemInfo(key) {
     if (key === 'ember_chestplate') return { name: 'Ember Chestplate', top: '#ff4400', front: '#2a1008', isArmor: true };
     if (key === 'ember_leggings') return { name: 'Ember Leggings', top: '#ff4400', front: '#2a1008', isArmor: true };
     if (key === 'ember_boots') return { name: 'Ember Boots', top: '#ff4400', front: '#2a1008', isArmor: true };
+    // Wizard robes — key format: wizard_[slot]_[color]_[pattern]
+    if (typeof key === 'string' && key.startsWith('wizard_')) {
+        const parts = key.split('_');
+        const slot = parts[1]; // helmet, chestplate, leggings, boots
+        const color = parts[2] || 'blue';
+        const pattern = parts[3] || 'plain';
+        const ROBE_COLORS = { blue: '#3355bb', purple: '#7733aa', red: '#aa3333', green: '#338844', black: '#222233', white: '#ddddee', gold: '#bb9933' };
+        const col = ROBE_COLORS[color] || '#3355bb';
+        const darker = ROBE_COLORS[color] ? col.replace(/[0-9a-f]{2}/gi, (m) => Math.max(0, parseInt(m,16)-40).toString(16).padStart(2,'0')) : '#2244aa';
+        const slotName = { helmet: 'Wizard Hat', chestplate: 'Wizard Robe', leggings: 'Wizard Trousers', boots: 'Wizard Boots' }[slot] || 'Wizard Robe';
+        const patternName = pattern === 'plain' ? '' : ' (' + pattern.charAt(0).toUpperCase() + pattern.slice(1) + ')';
+        return { name: `${color.charAt(0).toUpperCase()+color.slice(1)} ${slotName}${patternName}`, top: col, front: darker, isArmor: true };
+    }
     if (key === 'steel_ingot') return { name: 'Steel Ingot', top: '#d0d8e0', front: '#a0a8b8' };
     if (key === 'steel_sword') return { name: 'Steel Sword', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'sword' };
     if (key === 'steel_pickaxe') return { name: 'Steel Pickaxe', top: '#d0d8e0', front: '#a0a8b8', isTool: true, toolType: 'pickaxe' };
@@ -8267,7 +8291,13 @@ function updateShopUI() {
 
     // Sell section
     html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-top:10px;margin-bottom:4px;">Sell</div>';
-    const sellable = Object.keys(inventory).filter(k => ITEM_PRICES[k] && inventory[k] > 0 && !['gold_coin','silver_coin','copper_coin'].includes(k));
+    const sellable = Object.keys(inventory).filter(k => {
+        if (inventory[k] <= 0) return false;
+        if (['gold_coin','silver_coin','copper_coin'].includes(k)) return false;
+        if (ITEM_PRICES[k]) return true;
+        if (typeof k === 'string' && k.startsWith('wizard_')) return true; // dynamic price
+        return false;
+    });
     if (sellable.length === 0) {
         html += '<div style="color:rgba(120,110,90,0.5);font:10px monospace;padding:4px;">Nothing to sell</div>';
     }
@@ -8278,6 +8308,44 @@ function updateShopUI() {
         if (info) html += blockIconHTML(info);
         html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:11px monospace;">${info?.name || k} ×${inventory[k]}</span>`;
         html += `<span style="color:rgba(180,220,100,0.8);font:11px monospace;">+${formatPrice(price)}</span>`;
+        html += '</div>';
+    }
+
+    // Wizard Robe customization (magic shop only)
+    if (shopType === 'magic') {
+        html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-top:10px;margin-bottom:4px;">Wizard Robes (+25% staff damage)</div>';
+        html += '<div style="padding:6px;border:1px solid rgba(100,80,140,0.3);border-radius:4px;margin-bottom:6px;">';
+        // Color picker
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="color:rgba(180,170,140,0.6);font:10px monospace;width:50px;">Colour</span>';
+        const robeColors = ['blue','purple','red','green','black','white','gold'];
+        const robeColorHex = { blue:'#3355bb', purple:'#7733aa', red:'#aa3333', green:'#338844', black:'#222233', white:'#ddddee', gold:'#bb9933' };
+        for (const c of robeColors) {
+            html += `<div onclick="window._robeColor='${c}';updateShopUI();" style="width:18px;height:18px;border-radius:3px;background:${robeColorHex[c]};border:2px solid ${window._robeColor===c?'#fff':'rgba(80,80,80,0.4)'};cursor:pointer;" title="${c}"></div>`;
+        }
+        html += '</div>';
+        // Pattern picker
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><span style="color:rgba(180,170,140,0.6);font:10px monospace;width:50px;">Pattern</span>';
+        const patterns = ['plain','stars','runes','stripes','moons'];
+        for (const p of patterns) {
+            html += `<button onclick="window._robePattern='${p}';updateShopUI();" style="padding:2px 6px;font:9px monospace;background:${window._robePattern===p?'rgba(100,80,140,0.5)':'rgba(40,40,40,0.4)'};color:${window._robePattern===p?'#fff':'#999'};border:1px solid ${window._robePattern===p?'rgba(150,120,200,0.6)':'rgba(80,80,80,0.3)'};border-radius:3px;cursor:pointer;">${p}</button>`;
+        }
+        html += '</div>';
+        // Buy buttons for each piece
+        const robePrices = { helmet: 30, chestplate: 60, leggings: 45, boots: 25 };
+        const robeSlotNames = { helmet: 'Wizard Hat', chestplate: 'Wizard Robe', leggings: 'Wizard Trousers', boots: 'Wizard Boots' };
+        const rc = window._robeColor || 'blue';
+        const rp = window._robePattern || 'plain';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+        for (const [slot, price] of Object.entries(robePrices)) {
+            const canBuy = totalMoney >= price;
+            const itemKey = `wizard_${slot}_${rc}_${rp}`;
+            html += `<button onclick="window._buyRobe('${itemKey}',${price})" style="flex:1;min-width:70px;padding:4px;font:10px monospace;background:${robeColorHex[rc]};color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:3px;cursor:${canBuy?'pointer':'default'};opacity:${canBuy?1:0.4};">${robeSlotNames[slot]}<br>${formatPrice(price)}</button>`;
+        }
+        html += '</div>';
+        // Full set button
+        const fullPrice = 160;
+        const canBuyFull = totalMoney >= fullPrice;
+        html += `<button onclick="window._buyRobeSet('${rc}','${rp}')" style="width:100%;margin-top:4px;padding:6px;font:11px monospace;background:rgba(80,60,120,0.5);color:#ddd;border:1px solid rgba(150,120,200,0.4);border-radius:3px;cursor:${canBuyFull?'pointer':'default'};opacity:${canBuyFull?1:0.4};">Buy Full Set — ${formatPrice(fullPrice)}</button>`;
         html += '</div>';
     }
 
@@ -8315,7 +8383,12 @@ window._shopBuy = (item, price) => {
 };
 window._shopSell = (item) => {
     if (!inventory[item] || inventory[item] <= 0) return;
-    const price = ITEM_PRICES[item];
+    let price = ITEM_PRICES[item];
+    // Dynamic pricing for wizard robes
+    if (!price && typeof item === 'string' && item.startsWith('wizard_')) {
+        const slot = item.split('_')[1];
+        price = { helmet: 20, chestplate: 40, leggings: 30, boots: 15 }[slot] || 20;
+    }
     if (!price) return;
     inventory[item]--;
     if (inventory[item] <= 0) { delete inventory[item]; for (let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]===item) hotbarSlots[i]=0; }
@@ -8383,6 +8456,21 @@ window._shopSalvage = (item) => {
         salvageMsg += `${count}× ${info?.name || mat}, `;
     }
     addChatMessage(salvageMsg.slice(0, -2), 'rgba(200,180,100,0.9)');
+    refreshUI(); updateShopUI();
+};
+window._robeColor = 'blue';
+window._robePattern = 'plain';
+window._buyRobe = (itemKey, price) => {
+    if (!spendCopper(price)) return;
+    inventory[itemKey] = (inventory[itemKey] || 0) + 1;
+    refreshUI(); updateShopUI();
+};
+window._buyRobeSet = (color, pattern) => {
+    if (!spendCopper(160)) return;
+    for (const slot of ['helmet','chestplate','leggings','boots']) {
+        const key = `wizard_${slot}_${color}_${pattern}`;
+        inventory[key] = (inventory[key] || 0) + 1;
+    }
     refreshUI(); updateShopUI();
 };
 window._closeShop = () => { shopOpen = false; shopEl.style.display = 'none'; };
@@ -8874,9 +8962,9 @@ function animate() {
     const heldForChannel = hotbarSlots[selectedSlot];
     const isChanneling = (placingHeld || shieldRaised) && !staffShielding && heldForChannel && typeof heldForChannel === 'string' && heldForChannel.includes('staff') && STAFF_PROPS[heldForChannel] && player.staffHeld.visible;
     if (isChanneling) {
-        // Arm slightly raised — staff held off the ground
-        player.leftArm.shoulder.rotation.x = -0.6;
-        player.leftArm.elbow.rotation.x = -0.2;
+        // Arm raised — staff held up while channeling mana
+        player.leftArm.shoulder.rotation.x = -1.2;
+        player.leftArm.elbow.rotation.x = -0.3;
     }
 
     // Update shield visual
