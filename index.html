@@ -8982,7 +8982,7 @@ function animate() {
             const handWorld = new THREE.Quaternion();
             player.leftArm.handGrp.getWorldQuaternion(handWorld);
             const inv = handWorld.clone().invert();
-            const upQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0));
+            const upQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0));
             const localQ = inv.multiply(upQ);
             player.staffHeld.quaternion.copy(localQ);
         }
@@ -9019,7 +9019,6 @@ function animate() {
     player.axeHeld.visible = false;
     player.staffHeld.visible = false;
     player.staffHeld.rotation.set(0, 0, 0);
-    player.staffHeld.quaternion.identity();
     player.sheathedSword.visible = false;
     player.sheathedStaff.visible = false;
 
