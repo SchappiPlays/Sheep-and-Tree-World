@@ -6015,14 +6015,18 @@ function updateInventoryUI() {
     }
     html += '</div>';
 
-    // Inventory section — show items not on hotbar and not currently held
+    // Inventory section — show items not on hotbar, armor slots, or shield
     const hotbarKeys = new Set();
     for (const s of hotbarSlots) { if (s) hotbarKeys.add(typeof s === 'number' ? s : s); }
+    const equippedKeys = new Set();
+    for (const item of Object.values(armorSlots)) { if (item) equippedKeys.add(item); }
+    if (equippedShield) equippedKeys.add(equippedShield);
     const allItems = Object.keys(inventory).filter(k => {
         const key = isNaN(k) ? k : Number(k);
         if (inventory[k] <= 0) return false;
         if (hotbarKeys.has(key)) return false;
-        if (heldItem === key) return false; // hide held item from grid
+        if (equippedKeys.has(key)) return false; // hide equipped armor/shield
+        if (heldItem === key) return false;
         return true;
     }).map(k => isNaN(k) ? k : Number(k));
     html += '<div class="inv-section-label">Inventory</div><div class="inv-grid">';
@@ -8369,11 +8373,9 @@ function animate() {
     const heldForChannel = hotbarSlots[selectedSlot];
     const isChanneling = (placingHeld || shieldRaised) && !staffShielding && heldForChannel && typeof heldForChannel === 'string' && heldForChannel.includes('staff') && STAFF_PROPS[heldForChannel] && player.staffHeld.visible;
     if (isChanneling) {
-        // Staff raised overhead, arm up
-        player.leftArm.shoulder.rotation.x = -2.2;
-        player.leftArm.shoulder.rotation.z = 0.1;
-        player.leftArm.elbow.rotation.x = -0.3;
-        player.spine.rotation.x = -0.05;
+        // Arm slightly raised — staff held off the ground
+        player.leftArm.shoulder.rotation.x = -0.6;
+        player.leftArm.elbow.rotation.x = -0.2;
     }
 
     // Update shield visual
@@ -8848,7 +8850,7 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    if (farDx * farDx + farDz * farDz > 120 * 120) {
+    if (optFarTerrain && farDx * farDx + farDz * farDz > 80 * 80) {
         buildFarTerrain(player.position.x, player.position.z);
     }
 
