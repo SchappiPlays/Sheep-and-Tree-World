@@ -8975,17 +8975,6 @@ function animate() {
         player.rightArm.shoulder.rotation.x = -0.7;
         player.rightArm.shoulder.rotation.z = 0.8;
         player.rightArm.elbow.rotation.x = -0.5;
-        // Force staff rotation to point straight up regardless of arm angle
-        if (player.staffHeld.visible) {
-            player.staffHeld.rotation.set(0, 0, 0);
-            // Get the world quaternion of the hand, invert it, then apply straight up
-            const handWorld = new THREE.Quaternion();
-            player.leftArm.handGrp.getWorldQuaternion(handWorld);
-            const inv = handWorld.clone().invert();
-            const upQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0));
-            const localQ = inv.multiply(upQ);
-            player.staffHeld.quaternion.copy(localQ);
-        }
     }
 
     // Update shield visual
@@ -9018,7 +9007,6 @@ function animate() {
     player.swordHeld.visible = false;
     player.axeHeld.visible = false;
     player.staffHeld.visible = false;
-    player.staffHeld.rotation.set(0, 0, 0);
     player.sheathedSword.visible = false;
     player.sheathedStaff.visible = false;
 
