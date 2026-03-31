@@ -8455,9 +8455,11 @@ window._stableCurrentHorse = () => {
     const h = horseMgr.ridingHorseRef;
     horseMgr.dismount();
     horseMgr.stableHorse(h);
-    player.leftLeg.hip.rotation.z = 0; player.rightLeg.hip.rotation.z = 0;
-    player.leftLeg.hip.rotation.x = 0; player.rightLeg.hip.rotation.x = 0;
-    player.spine.rotation.x = 0;
+    player.leftLeg.hip.rotation.set(0,0,0); player.rightLeg.hip.rotation.set(0,0,0);
+    player.leftLeg.knee.rotation.x = 0; player.rightLeg.knee.rotation.x = 0;
+    player.leftArm.shoulder.rotation.set(0,0,0); player.rightArm.shoulder.rotation.set(0,0,0);
+    player.leftArm.elbow.rotation.x = 0; player.rightArm.elbow.rotation.x = 0;
+    player.spine.rotation.x = 0; player.headGroup.rotation.x = 0;
     addChatMessage(`${h._name} has been stabled.`, 'rgba(180,160,100,0.9)');
     updateStableUI();
 };
@@ -8492,11 +8494,16 @@ function doPlace(e) {
         if (horseMgr.ridingHorse) {
             // Dismount
             horseMgr.dismount();
-            player.leftLeg.hip.rotation.z = 0;
-            player.rightLeg.hip.rotation.z = 0;
-            player.leftLeg.hip.rotation.x = 0;
-            player.rightLeg.hip.rotation.x = 0;
+            player.leftLeg.hip.rotation.set(0,0,0);
+            player.rightLeg.hip.rotation.set(0,0,0);
+            player.leftLeg.knee.rotation.x = 0;
+            player.rightLeg.knee.rotation.x = 0;
+            player.leftArm.shoulder.rotation.set(0,0,0);
+            player.rightArm.shoulder.rotation.set(0,0,0);
+            player.leftArm.elbow.rotation.x = 0;
+            player.rightArm.elbow.rotation.x = 0;
             player.spine.rotation.x = 0;
+            player.headGroup.rotation.x = 0;
             return false;
         }
         const rc = new THREE.Raycaster();
@@ -9434,12 +9441,23 @@ function animate() {
             player.position.set(h.x, h.group.position.y + 1.4, h.z);
             player.group.position.copy(player.position);
             player.group.rotation.y = h.angle;
-            // Riding pose — legs apart, leaning forward at speed
-            player.leftLeg.hip.rotation.z = 0.3;
-            player.rightLeg.hip.rotation.z = -0.3;
-            player.leftLeg.hip.rotation.x = -0.4;
-            player.rightLeg.hip.rotation.x = -0.4;
-            player.spine.rotation.x = Math.min(0.15, h.speed * 0.01);
+            // Riding pose — exact from game.html
+            // Thighs flat/horizontal, wider apart, knees bent down
+            player.leftLeg.hip.rotation.x = -1.55;
+            player.leftLeg.knee.rotation.x = 1.3;
+            player.leftLeg.hip.rotation.z = -0.55;
+            player.rightLeg.hip.rotation.x = -1.55;
+            player.rightLeg.knee.rotation.x = 1.3;
+            player.rightLeg.hip.rotation.z = 0.55;
+            // Arms holding reins
+            player.leftArm.shoulder.rotation.x = -0.3;
+            player.leftArm.shoulder.rotation.z = 0.2;
+            player.leftArm.elbow.rotation.x = -0.6;
+            player.rightArm.shoulder.rotation.x = -0.3;
+            player.rightArm.shoulder.rotation.z = -0.2;
+            player.rightArm.elbow.rotation.x = -0.6;
+            player.spine.rotation.x = 0.1;
+            player.headGroup.rotation.x = -0.05;
         }
     }
 
