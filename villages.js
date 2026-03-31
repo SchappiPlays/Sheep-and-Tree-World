@@ -602,6 +602,33 @@ export class VillageManager {
                 this.villagers.push(v);
             }
 
+            // Build shop stall helper — small open-front structure
+            const buildShopStall = (sx, sz, angle, wallBlock, roofBlock) => {
+                const BS2 = BLOCK_SIZE;
+                const bx = Math.round(sx / BS2), bz = Math.round(sz / BS2);
+                const by = Math.floor(this.world.getHeight(sx, sz) / BS2) + 128;
+                const sin = Math.round(Math.sin(angle)), cos = Math.round(Math.cos(angle));
+                const W = wallBlock, R = roofBlock;
+                const _set = (dx, dy, dz, b) => this.world.setBlock(bx+dx, by+dy, bz+dz, b);
+                // Floor (5x4)
+                for (let dx = -2; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) _set(dx, 0, dz, W);
+                // Back wall
+                for (let dx = -2; dx <= 2; dx++) for (let dy = 1; dy <= 4; dy++) _set(dx, dy, -1, W);
+                // Side walls (partial — lower half)
+                for (let dz = 0; dz <= 2; dz++) for (let dy = 1; dy <= 3; dy++) { _set(-2, dy, dz, W); _set(2, dy, dz, W); }
+                // Counter at front
+                for (let dx = -2; dx <= 2; dx++) _set(dx, 1, 2, W);
+                // Roof (flat)
+                for (let dx = -2; dx <= 2; dx++) for (let dz = -1; dz <= 2; dz++) _set(dx, 4, dz, R);
+                // Overhang
+                for (let dx = -2; dx <= 2; dx++) _set(dx, 4, 3, R);
+                // Support posts
+                _set(-2, 2, 2, W); _set(-2, 3, 2, W);
+                _set(2, 2, 2, W); _set(2, 3, 2, W);
+                // Clear interior
+                for (let dx = -1; dx <= 1; dx++) for (let dz = 0; dz <= 1; dz++) for (let dy = 1; dy <= 3; dy++) _set(dx, dy, dz, 0);
+            };
+
             // Spawn blacksmith shopkeeper (fixed position near village)
             const bsAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
             const bsX = vd.x + Math.cos(bsAngle) * 6;
@@ -614,6 +641,7 @@ export class VillageManager {
             // Make blacksmith visually distinct — dark apron
             bsV._shirtMat.color.setHex(0x3a2a1a);
             this.villagers.push(bsV);
+            buildShopStall(bsX, bsZ, bsAngle, BLOCK.STONE, BLOCK.PLANKS);
 
             // Add blacksmith label
             const bsCanvas = document.createElement('canvas');
@@ -638,6 +666,7 @@ export class VillageManager {
             // Make magic shop visually distinct — purple robes
             msV._shirtMat.color.setHex(0x5522aa);
             this.villagers.push(msV);
+            buildShopStall(msX, msZ, msAngle + Math.PI, BLOCK.PLANKS, BLOCK.LEAVES);
 
             // Add magic shop label
             const msCanvas = document.createElement('canvas');
@@ -662,6 +691,7 @@ export class VillageManager {
             // Red/brown leather look
             asV._shirtMat.color.setHex(0x8b4513);
             this.villagers.push(asV);
+            buildShopStall(asX, asZ, asAngle + Math.PI * 0.5, BLOCK.PLANKS, BLOCK.PLANKS);
 
             const asCanvas = document.createElement('canvas');
             asCanvas.width = 128; asCanvas.height = 32;

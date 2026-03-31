@@ -778,7 +778,7 @@ function buildFarTerrain(centerX, centerZ) {
     const step = 6;
     const S = BS * step;
     const halfS = S * 0.5;
-    const skipRange = 140; // larger than max chunk render range to prevent overlap
+    const skipRange = 90;
     const gridSize = Math.ceil(range / S);
     // Skip grid is relative to the center position
     const skipCGX = Math.round(_farCenterX / S);
@@ -6230,13 +6230,17 @@ function onInvSlotClick(e) {
                 heldItem = item;
                 hotbarSlots[idx] = 0;
             }
-        } else {
-            // Get item key from the filtered inventory list (excluding hotbar items)
+        } else if (area === 'inv') {
+            // Get item key from the filtered inventory list (same filter as display)
             const hbKeys = new Set();
             for (const s of hotbarSlots) { if (s) hbKeys.add(typeof s === 'number' ? s : s); }
+            const eqKeys = new Set();
+            for (const item of Object.values(armorSlots)) { if (item) eqKeys.add(item); }
+            if (equippedShield) eqKeys.add(equippedShield);
+            const coinKeys2 = new Set(['gold_coin', 'silver_coin', 'copper_coin']);
             const allItems = Object.keys(inventory).filter(k => {
                 const key = isNaN(k) ? k : Number(k);
-                return inventory[k] > 0 && !hbKeys.has(key);
+                return inventory[k] > 0 && !hbKeys.has(key) && !eqKeys.has(key) && !coinKeys2.has(key);
             }).map(k => isNaN(k) ? k : Number(k));
             const item = idx < allItems.length ? allItems[idx] : null;
             if (item && inventory[item] > 0) {
@@ -8114,11 +8118,11 @@ const MAGIC_SHOP_BASE = [
 ];
 // Custom staffs added to shop dynamically
 const MAGIC_SHOP_CUSTOM = [
-    { name: 'Ruby Prong Staff', shaft: 'iron_ingot', holder: 'prongs', holderMat: 'gold_ingot', gem: 'ruby', price: 80 },
-    { name: 'Sapphire Cage Staff', shaft: 'steel_ingot', holder: 'cage', holderMat: 'iron_ingot', gem: 'sapphire', price: 85 },
-    { name: 'Emerald Coil Staff', shaft: 'copper_ingot', holder: 'coil', holderMat: 'copper_ingot', gem: 'emerald', price: 70 },
-    { name: 'Topaz Crown Staff', shaft: 'gold_ingot', holder: 'crown', holderMat: 'gold_ingot', gem: 'topaz', price: 90 },
-    { name: 'Diamond Claw Staff', shaft: 'iron_ingot', holder: 'claws', holderMat: 'steel_ingot', gem: 'diamond', price: 120 },
+    { name: 'Ruby Iron Staff', shaft: 'iron_ingot', holder: 'prongs', holderMat: 'iron_ingot', gem: 'ruby', price: 80 },
+    { name: 'Sapphire Steel Staff', shaft: 'steel_ingot', holder: 'cage', holderMat: 'steel_ingot', gem: 'sapphire', price: 85 },
+    { name: 'Emerald Copper Staff', shaft: 'copper_ingot', holder: 'coil', holderMat: 'copper_ingot', gem: 'emerald', price: 70 },
+    { name: 'Topaz Gold Staff', shaft: 'gold_ingot', holder: 'crown', holderMat: 'gold_ingot', gem: 'topaz', price: 90 },
+    { name: 'Diamond Steel Staff', shaft: 'steel_ingot', holder: 'claws', holderMat: 'steel_ingot', gem: 'diamond', price: 120 },
 ];
 let MAGIC_SHOP = [...MAGIC_SHOP_BASE];
 
