@@ -648,6 +648,29 @@ export class VillageManager {
             const msLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: msTex, transparent: true, depthWrite: false }));
             msLabel.position.y = 2.2; msLabel.scale.set(1.0, 0.25, 1);
             msV.group.add(msLabel);
+
+            // Spawn armor shopkeeper
+            const asAngle = bsAngle + Math.PI * 0.5; // 90 degrees from blacksmith
+            const asX = vd.x + Math.cos(asAngle) * 7;
+            const asZ = vd.z + Math.sin(asAngle) * 7;
+            const asY = this.world.getHeight(asX, asZ);
+            const asV = makeVillager(this.scene, asX, asZ, asY, 0.55);
+            asV._shopType = 'armor';
+            asV._stayHome = true;
+            asV.homeX = asX; asV.homeZ = asZ;
+            // Red/brown leather look
+            asV._shirtMat.color.setHex(0x8b4513);
+            this.villagers.push(asV);
+
+            const asCanvas = document.createElement('canvas');
+            asCanvas.width = 128; asCanvas.height = 32;
+            const asCtx = asCanvas.getContext('2d');
+            asCtx.fillStyle = '#cc9966'; asCtx.font = 'bold 14px monospace'; asCtx.textAlign = 'center';
+            asCtx.fillText('Armour Shop', 64, 20);
+            const asTex = new THREE.CanvasTexture(asCanvas);
+            const asLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: asTex, transparent: true, depthWrite: false }));
+            asLabel.position.y = 2.2; asLabel.scale.set(1.0, 0.25, 1);
+            asV.group.add(asLabel);
         }
 
         // Despawn far villagers

@@ -8081,6 +8081,14 @@ const ITEM_PRICES = {
     'wood_sword': 8, 'stone_sword': 12, 'copper_sword': 16, 'iron_sword': 25,
     'gold_sword': 30, 'steel_sword': 40, 'diamond_sword': 80,
     'pickaxe': 6, 'stone_pickaxe': 10, 'copper_pickaxe': 14, 'iron_pickaxe': 22,
+    'wood_helmet': 5, 'wood_chestplate': 9, 'wood_leggings': 7, 'wood_boots': 4,
+    'stone_helmet': 10, 'stone_chestplate': 16, 'stone_leggings': 13, 'stone_boots': 8,
+    'iron_helmet': 20, 'iron_chestplate': 35, 'iron_leggings': 28, 'iron_boots': 16,
+    'gold_helmet': 24, 'gold_chestplate': 38, 'gold_leggings': 30, 'gold_boots': 18,
+    'steel_helmet': 30, 'steel_chestplate': 50, 'steel_leggings': 40, 'steel_boots': 25,
+    'diamond_helmet': 50, 'diamond_chestplate': 80, 'diamond_leggings': 65, 'diamond_boots': 40,
+    'wood_shield': 6, 'stone_shield': 12, 'iron_shield': 20, 'gold_shield': 25,
+    'steel_shield': 30, 'diamond_shield': 50,
     'basic_staff': 15, 'fire_staff': 40, 'ice_staff': 35, 'lightning_staff': 50, 'void_staff': 200,
 };
 
@@ -8098,6 +8106,18 @@ const MAGIC_SHOP = [
     { item: 'ice_staff', price: 55 }, { item: 'lightning_staff', price: 75 },
     { item: 'star_fragment', price: 40 }, { item: 'mana_crystal', price: 200 },
     { item: 'hp_potion', price: 12 },
+];
+const ARMOR_SHOP = [
+    { item: 'wood_helmet', price: 8 }, { item: 'wood_chestplate', price: 14 },
+    { item: 'wood_leggings', price: 12 }, { item: 'wood_boots', price: 6 },
+    { item: 'stone_helmet', price: 15 }, { item: 'stone_chestplate', price: 25 },
+    { item: 'stone_leggings', price: 20 }, { item: 'stone_boots', price: 12 },
+    { item: 'iron_helmet', price: 30 }, { item: 'iron_chestplate', price: 50 },
+    { item: 'iron_leggings', price: 40 }, { item: 'iron_boots', price: 25 },
+    { item: 'gold_helmet', price: 35 }, { item: 'gold_chestplate', price: 55 },
+    { item: 'gold_leggings', price: 45 }, { item: 'gold_boots', price: 28 },
+    { item: 'wood_shield', price: 10 }, { item: 'stone_shield', price: 18 },
+    { item: 'iron_shield', price: 30 }, { item: 'gold_shield', price: 40 },
 ];
 
 // Currency helpers
@@ -8143,8 +8163,8 @@ function openShop(type) {
 }
 
 function updateShopUI() {
-    const items = shopType === 'blacksmith' ? BLACKSMITH_SHOP : MAGIC_SHOP;
-    const title = shopType === 'blacksmith' ? 'Blacksmith' : 'Magic Supply';
+    const items = shopType === 'blacksmith' ? BLACKSMITH_SHOP : shopType === 'armor' ? ARMOR_SHOP : MAGIC_SHOP;
+    const title = shopType === 'blacksmith' ? 'Blacksmith' : shopType === 'armor' ? 'Armour Shop' : 'Magic Supply';
     const totalMoney = getTotalCopper();
     let html = `<div style="color:rgba(220,200,160,0.9);font:bold 16px Georgia,serif;text-align:center;margin-bottom:4px;">${title}</div>`;
     html += `<div style="color:rgba(200,180,120,0.7);font:12px monospace;text-align:center;margin-bottom:10px;">Your money: ${formatPrice(totalMoney)}</div>`;
@@ -8234,6 +8254,7 @@ function doPlace(e) {
                 // Shop villagers open shop instead of dialogue
                 if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
                 if (v._shopType === 'magic') { openShop('magic'); return false; }
+                if (v._shopType === 'armor') { openShop('armor'); return false; }
                 // Regular villager dialogue
                 const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
                 showVillagerDialog(line);
