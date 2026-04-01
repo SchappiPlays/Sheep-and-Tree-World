@@ -8595,17 +8595,208 @@ window._retrieveHorse = (idx) => {
 window._closeStable = () => { stableOpen = false; stableEl.style.display = 'none'; };
 
 let villagerDialogOpen = false;
+let _dialogNode = null; // current conversation node
+let _dialogSelection = 0; // which option is highlighted
+let _dialogVillager = null; // who we're talking to
 const villagerDialogEl = document.createElement('div');
-villagerDialogEl.style.cssText = 'display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:110;background:rgba(40,30,15,0.9);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:12px 20px;max-width:400px;user-select:none;';
+villagerDialogEl.style.cssText = 'display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:110;background:rgba(30,22,10,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:16px 24px;min-width:340px;max-width:440px;user-select:none;';
 document.body.appendChild(villagerDialogEl);
 
+// Conversation trees — each node has text + options that lead to other nodes
+const CONVERSATIONS = [
+    { // 0: generic greeting
+        text: () => "Hello there, traveller. What brings you to our village?",
+        options: [
+            { label: "Tell me about this place.", next: 1 },
+            { label: "Any advice for an adventurer?", next: 2 },
+            { label: "Have you heard any rumours?", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 1: about the village
+        text: () => "This is a peaceful settlement. We have a blacksmith, a magic shop, and an armour shop. Feel free to browse!",
+        options: [
+            { label: "What about the Ancient Forest?", next: 4 },
+            { label: "Where can I find good gear?", next: 5 },
+            { label: "Thanks. Anything else?", next: 2 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 2: adventurer advice
+        text: () => {
+            const tips = [
+                "Copper ore is easy to find near the surface. Great for starting out.",
+                "If you find star fragments at night, collect five and craft a mana crystal!",
+                "The blacksmith can salvage old weapons into raw materials.",
+                "Wizard robes from the magic shop boost your staff damage by 25%.",
+                "Watch out for goblins to the west. They're not friendly.",
+                "Horses roam the grasslands. Right-click one to ride it!",
+                "The paths between villages are the safest routes for travelling.",
+            ];
+            return tips[Math.floor(Math.random() * tips.length)];
+        },
+        options: [
+            { label: "Any more tips?", next: 2 },
+            { label: "Tell me about this place.", next: 1 },
+            { label: "Heard any rumours?", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 3: rumours
+        text: () => {
+            const rumours = [
+                "They say four ancient guardians protect the forest gates. Each one guards a terrible power within.",
+                "I heard a necromancer lurks in the ruins at the heart of the ancient forest... protected by a magic barrier.",
+                "There's a fortress in the scorched lands. Some say a creature of pure fire rules it.",
+                "Shooting stars fall at night. The fragments they leave behind contain pure mana.",
+                "A ruined fortress lies to the west. Treasure hunters say there are legendary swords inside.",
+                "The old castle has seen better days, but the blacksmith there still works the forge.",
+                "My cousin swears he saw a dragon egg near the stone altar...",
+            ];
+            return rumours[Math.floor(Math.random() * rumours.length)];
+        },
+        options: [
+            { label: "Tell me more.", next: 3 },
+            { label: "Interesting. Any advice?", next: 2 },
+            { label: "Thanks. Goodbye.", next: -1 },
+        ]
+    },
+    { // 4: ancient forest
+        text: () => "The Ancient Forest is surrounded by a hill ring with four gates. Each gate is guarded by a powerful boss. Defeat all four, and they say the barrier around the central ruins will shatter.",
+        options: [
+            { label: "Who are the gate bosses?", next: 6 },
+            { label: "What's in the central ruins?", next: 7 },
+            { label: "Thanks. Goodbye.", next: -1 },
+        ]
+    },
+    { // 5: gear advice
+        text: () => "The blacksmith sells copper and iron tools. For magic, visit the magic shop — they have staffs with different gems, each with unique abilities. And don't forget to check the armour shop!",
+        options: [
+            { label: "What about wizard robes?", next: 8 },
+            { label: "Where do I get better materials?", next: 9 },
+            { label: "Thanks. Goodbye.", next: -1 },
+        ]
+    },
+    { // 6: gate bosses
+        text: () => "There's a giant skeleton at the east gate, a stone colossus at the west, a dark knight to the north, and a hobgoblin warchief to the south. Each drops powerful loot when defeated.",
+        options: [
+            { label: "What's in the central ruins?", next: 7 },
+            { label: "Any advice for fighting them?", next: 10 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 7: central ruins
+        text: () => "The Necromancer waits there. A being of dark magic, protected by a purple barrier. Only when all four gate guardians fall will the barrier shatter. He drops the legendary Void Staff.",
+        options: [
+            { label: "What's the Void Staff?", next: 11 },
+            { label: "How do I prepare?", next: 10 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 8: wizard robes
+        text: () => "The magic shop sells wizard robes in many colours and patterns. They give iron-level protection AND boost your staff damage by 25%. A must-have for any mage!",
+        options: [
+            { label: "Good to know. Anything else?", next: 2 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 9: better materials
+        text: () => "Mine deeper for rarer ores — iron, gold, and eventually diamond. You can smelt ores in a furnace. For dragonsteel, you'll need to defeat bosses and salvage their weapons at the blacksmith.",
+        options: [
+            { label: "What about star fragments?", next: 12 },
+            { label: "Thanks. Goodbye.", next: -1 },
+        ]
+    },
+    { // 10: boss fight advice
+        text: () => "Bring health potions and a good shield. The colossus can only be damaged by mining it with a pickaxe. The dark knight uses sword combos — block three hits to stagger him. The hobgoblin has minions, kill them first.",
+        options: [
+            { label: "Thanks for the advice!", next: 2 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 11: void staff
+        text: () => "The most powerful staff in the game. It fires devastating purple bolts, and its special ability lets you raise skeleton minions from the dead. It consumes all your mana but summons one skeleton per mana star!",
+        options: [
+            { label: "Amazing. How do I prepare?", next: 10 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 12: star fragments
+        text: () => "Watch the sky at night. Shooting stars fall about once a minute and land near you. Walk over the glowing fragment to pick it up. Five fragments craft into a mana crystal — permanent extra mana!",
+        options: [
+            { label: "Great tip! Anything else?", next: 2 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+];
+
 function showVillagerDialog(line) {
+    // Start a conversation instead of one-line dialogue
+    _dialogNode = CONVERSATIONS[0];
+    _dialogSelection = 0;
+    _dialogVillager = null;
     villagerDialogOpen = true;
     villagerDialogEl.style.display = 'block';
-    villagerDialogEl.innerHTML = `<div style="color:rgba(220,200,160,0.9);font:14px Georgia,serif;text-align:center;">"${line}"</div>`;
-    // Auto-close after 3 seconds
-    setTimeout(() => { villagerDialogOpen = false; villagerDialogEl.style.display = 'none'; }, 3000);
+    if (pointerLocked) document.exitPointerLock();
+    _renderDialog();
 }
+
+function _renderDialog() {
+    if (!_dialogNode) return;
+    const text = typeof _dialogNode.text === 'function' ? _dialogNode.text() : _dialogNode.text;
+    let html = `<div style="color:rgba(220,200,160,0.9);font:14px Georgia,serif;margin-bottom:12px;line-height:1.5;">"${text}"</div>`;
+    html += '<div style="border-top:1px solid rgba(120,100,60,0.3);padding-top:8px;">';
+    for (let i = 0; i < _dialogNode.options.length; i++) {
+        const opt = _dialogNode.options[i];
+        const selected = i === _dialogSelection;
+        html += `<div style="padding:4px 8px;margin:2px 0;border-radius:4px;font:13px Georgia,serif;cursor:pointer;${selected ? 'background:rgba(120,100,60,0.4);color:rgba(255,240,200,1);' : 'color:rgba(180,170,140,0.7);'}" onmouseenter="window._dialogHover(${i})" onclick="window._dialogPick(${i})">`;
+        html += `${selected ? '▸ ' : '  '}${opt.label}`;
+        html += '</div>';
+    }
+    html += '</div>';
+    html += '<div style="color:rgba(100,90,70,0.4);font:9px monospace;text-align:center;margin-top:6px;">↑↓ select  Enter confirm  Esc close</div>';
+    villagerDialogEl.innerHTML = html;
+}
+
+window._dialogHover = (idx) => { _dialogSelection = idx; _renderDialog(); };
+window._dialogPick = (idx) => {
+    if (!_dialogNode) return;
+    const opt = _dialogNode.options[idx];
+    if (!opt || opt.next === -1) {
+        // Close conversation
+        villagerDialogOpen = false;
+        villagerDialogEl.style.display = 'none';
+        _dialogNode = null;
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+        return;
+    }
+    _dialogNode = CONVERSATIONS[opt.next];
+    _dialogSelection = 0;
+    _renderDialog();
+};
+
+// Arrow key + Enter handling for dialog
+document.addEventListener('keydown', (e) => {
+    if (!villagerDialogOpen || !_dialogNode) return;
+    if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        _dialogSelection = (_dialogSelection - 1 + _dialogNode.options.length) % _dialogNode.options.length;
+        _renderDialog();
+    } else if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        _dialogSelection = (_dialogSelection + 1) % _dialogNode.options.length;
+        _renderDialog();
+    } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        window._dialogPick(_dialogSelection);
+    } else if (e.code === 'Escape') {
+        e.preventDefault();
+        villagerDialogOpen = false;
+        villagerDialogEl.style.display = 'none';
+        _dialogNode = null;
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    }
+});
 
 function doPlace(e) {
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen || stableOpen) return false;
