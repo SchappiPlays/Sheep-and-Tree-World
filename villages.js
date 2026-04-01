@@ -862,10 +862,12 @@ export class VillageManager {
                 v.fleeTimer -= dt;
                 if (v.fleeTimer <= 0) { v.fleeing = false; v.walking = false; }
                 else {
-                    // Run directly away from player (dx/dz already point away: villager - player)
-                    v.angle = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.3;
+                    // Run directly away from player every frame
+                    const fleeAngle = Math.atan2(dx, dz);
+                    v.angle = fleeAngle;
+                    v.group.rotation.y = fleeAngle; // snap rotation instantly
                     v.walking = true;
-                    v.speed += (4.0 - v.speed) * 5 * dt; // run fast
+                    v.speed += (4.0 - v.speed) * 5 * dt;
                 }
             }
             // Normal wander AI
