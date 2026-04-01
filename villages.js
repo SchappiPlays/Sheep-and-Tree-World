@@ -826,11 +826,12 @@ export class VillageManager {
             // Dead villagers — fall backward animation then stay on ground
             if (v.dead) {
                 v.deathTimer += dt;
+                const terrainY = this.world.getHeight(v.x, v.z);
                 if (v.deathTimer < 0.6) {
                     // Falling backward
                     const t = v.deathTimer / 0.6;
-                    v.group.rotation.x = t * (Math.PI / 2); // tilt backward
-                    v.group.position.y -= dt * 1.5; // sink slightly
+                    v.group.rotation.x = t * (Math.PI / 2);
+                    v.group.position.y = terrainY + 0.3; // stay above ground
                     // Arms and legs splay out
                     v.leftArm.shoulder.rotation.x = -t * 1.5;
                     v.leftArm.shoulder.rotation.z = -t * 0.8;
@@ -861,8 +862,8 @@ export class VillageManager {
                 v.fleeTimer -= dt;
                 if (v.fleeTimer <= 0) { v.fleeing = false; v.walking = false; }
                 else {
-                    // Run directly away from player
-                    v.angle = Math.atan2(-dx, -dz) + (Math.random() - 0.5) * 0.3;
+                    // Run directly away from player (dx/dz already point away: villager - player)
+                    v.angle = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.3;
                     v.walking = true;
                     v.speed += (4.0 - v.speed) * 5 * dt; // run fast
                 }

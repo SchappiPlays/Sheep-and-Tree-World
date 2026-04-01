@@ -5003,6 +5003,33 @@ function updateProjectiles(dt) {
                 }
             }
         }
+
+        // Hit villagers with projectiles
+        if (!p._isEnemyProjectile && villageMgr) {
+            for (const v of villageMgr.villagers) {
+                if (v.dead) continue;
+                const vdx = v.x - p.x, vdz = v.z - p.z;
+                const vdy = (world.getHeight(v.x, v.z) + 0.8) - p.y;
+                if (vdx*vdx + vdy*vdy + vdz*vdz < 2) {
+                    v.hp -= p.damage;
+                    v.x += vdx * 0.1; v.z += vdz * 0.1;
+                    if (v.hp <= 0) {
+                        v.hp = 0; v.dead = true; v.deathTimer = 0; v.walking = false; v.speed = 0;
+                    } else {
+                        v.fleeing = true; v.fleeTimer = 5 + Math.random() * 3;
+                    }
+                    for (const other of villageMgr.villagers) {
+                        if (other === v || other.dead || other.fleeing) continue;
+                        const odx = other.x - v.x, odz = other.z - v.z;
+                        if (odx*odx + odz*odz < 225) { other.fleeing = true; other.fleeTimer = 4 + Math.random() * 3; }
+                    }
+                    scene.remove(p.mesh); scene.remove(p.light);
+                    if (p.mesh.geometry) { p.mesh.geometry.dispose(); p.mesh.material.dispose(); }
+                    projectiles.splice(i, 1);
+                    break;
+                }
+            }
+        }
     }
 }
 
