@@ -6739,6 +6739,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             player.triggerSwing();
             attackCooldown = 0.6;
             if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
+            if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
             if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         } else {
             // Buffer combo swing even during cooldown

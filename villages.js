@@ -569,6 +569,8 @@ function makeVillager(scene, x, z, terrainY, seed) {
         walking: false,
         homeX: x, homeZ: z,
         idleTimer: 0,
+        hp: 8, dead: false, deathTimer: 0,
+        fleeing: false, fleeTimer: 0,
     };
 }
 
@@ -818,38 +820,76 @@ export class VillageManager {
         // Update villager AI and animation
         for (const v of this.villagers) {
             const dx = v.x - playerX, dz = v.z - playerZ;
-            if (dx * dx + dz * dz > 40 * 40) continue;
+            const distToPlayer = Math.sqrt(dx * dx + dz * dz);
+            if (distToPlayer > 40) continue;
 
-            // Shop keepers stay put
-            if (v._stayHome) {
-                v.walking = false; v.speed = 0;
-                v.x = v.homeX; v.z = v.homeZ;
-                v.group.position.set(v.x, this.world.getHeight(v.x, v.z), v.z);
+            // Dead villagers — fall backward animation then stay on ground
+            if (v.dead) {
+                v.deathTimer += dt;
+                if (v.deathTimer < 0.6) {
+                    // Falling backward
+                    const t = v.deathTimer / 0.6;
+                    v.group.rotation.x = t * (Math.PI / 2); // tilt backward
+                    v.group.position.y -= dt * 1.5; // sink slightly
+                    // Arms and legs splay out
+                    v.leftArm.shoulder.rotation.x = -t * 1.5;
+                    v.leftArm.shoulder.rotation.z = -t * 0.8;
+                    v.rightArm.shoulder.rotation.x = -t * 1.5;
+                    v.rightArm.shoulder.rotation.z = t * 0.8;
+                    v.leftLeg.hip.rotation.x = t * 0.3;
+                    v.leftLeg.hip.rotation.z = -t * 0.3;
+                    v.rightLeg.hip.rotation.x = t * 0.3;
+                    v.rightLeg.hip.rotation.z = t * 0.3;
+                }
+                // Despawn after 30 seconds
+                if (v.deathTimer > 30) {
+                    v._despawn = true;
+                }
                 continue;
             }
 
-            // Wander AI — stay near home
-            v.wanderTimer -= dt;
-            if (v.wanderTimer <= 0) {
-                if (!v.walking) {
+            // Shop keepers stay put (but can still be killed)
+            if (v._stayHome && !v.fleeing) {
+                v.walking = false; v.speed = 0;
+                v.x = v.homeX; v.z = v.homeZ;
+                v.group.position.set(v.x, this.world.getHeight(v.x, v.z), v.z);
+                // Idle animation still runs below
+            }
+
+            // Flee AI — run away from player
+            if (v.fleeing) {
+                v.fleeTimer -= dt;
+                if (v.fleeTimer <= 0) { v.fleeing = false; v.walking = false; }
+                else {
+                    // Run directly away from player
+                    v.angle = Math.atan2(-dx, -dz) + (Math.random() - 0.5) * 0.3;
                     v.walking = true;
-                    // Walk toward home if too far
-                    const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
-                    const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
-                    if (homeDist > 10) {
-                        v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
+                    v.speed += (4.0 - v.speed) * 5 * dt; // run fast
+                }
+            }
+            // Normal wander AI
+            else if (!v._stayHome) {
+                v.wanderTimer -= dt;
+                if (v.wanderTimer <= 0) {
+                    if (!v.walking) {
+                        v.walking = true;
+                        const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
+                        const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
+                        if (homeDist > 10) {
+                            v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
+                        } else {
+                            v.angle += (Math.random() - 0.5) * 2.2;
+                        }
+                        v.wanderTimer = 2 + Math.random() * 4;
                     } else {
-                        v.angle += (Math.random() - 0.5) * 2.2;
+                        v.walking = false;
+                        v.wanderTimer = 1.5 + Math.random() * 3;
                     }
-                    v.wanderTimer = 2 + Math.random() * 4;
-                } else {
-                    v.walking = false;
-                    v.wanderTimer = 1.5 + Math.random() * 3;
                 }
             }
 
             // Movement
-            const tgtSpd = v.walking ? 1.2 : 0;
+            const tgtSpd = v.fleeing ? 4.0 : (v.walking ? 1.2 : 0);
             v.speed += (tgtSpd - v.speed) * 4 * dt;
 
             let da = v.angle - v.group.rotation.y;
@@ -900,5 +940,53 @@ export class VillageManager {
                 v.headGroup.rotation.y *= 0.9;
             }
         }
+
+        // Clean up despawned dead villagers
+        for (let i = this.villagers.length - 1; i >= 0; i--) {
+            if (this.villagers[i]._despawn) {
+                this.scene.remove(this.villagers[i].group);
+                this.villagers.splice(i, 1);
+            }
+        }
+    }
+
+    // Damage a villager — called from player attack system
+    damageVillagerAt(px, pz, angle, damage, range) {
+        const sinA = Math.sin(angle), cosA = Math.cos(angle);
+        for (const v of this.villagers) {
+            if (v.dead) continue;
+            const dx = v.x - px, dz = v.z - pz;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > range || dist < 0.1) continue;
+            // Check facing
+            const dot = (dx * sinA + dz * cosA) / dist;
+            if (dot < 0.2) continue;
+            v.hp -= damage;
+            // Knockback
+            v.x += (dx / dist) * 0.5;
+            v.z += (dz / dist) * 0.5;
+            if (v.hp <= 0) {
+                v.hp = 0;
+                v.dead = true;
+                v.deathTimer = 0;
+                v.walking = false;
+                v.speed = 0;
+            } else {
+                // Flee!
+                v.fleeing = true;
+                v.fleeTimer = 5 + Math.random() * 3;
+            }
+            // Make nearby villagers flee too
+            for (const other of this.villagers) {
+                if (other === v || other.dead || other.fleeing) continue;
+                const odx = other.x - v.x, odz = other.z - v.z;
+                if (odx * odx + odz * odz < 15 * 15) {
+                    other.fleeing = true;
+                    other.fleeTimer = 4 + Math.random() * 3;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }
