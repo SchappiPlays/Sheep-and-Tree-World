@@ -8621,7 +8621,7 @@ function doPlace(e) {
                 for (const v of villageMgr.villagers) {
                     const dx = v.x - player.position.x, dz = v.z - player.position.z;
                     const dist = Math.sqrt(dx*dx + dz*dz);
-                    if (dist > 6) continue;
+                    if (dist > 6 || v.dead) continue;
                     const vPos = new THREE.Vector3(v.x, v.group.position.y + 1, v.z);
                     const dir = vPos.clone().sub(rc2.ray.origin).normalize();
                     if (dir.dot(rc2.ray.direction) > 0.9) {
@@ -8674,7 +8674,7 @@ function doPlace(e) {
         for (const v of villageMgr.villagers) {
             const dx = v.x - player.position.x, dz = v.z - player.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist > 5) continue; // must be close
+            if (dist > 5 || v.dead) continue; // must be close and alive
             // Check if looking at them — project villager to screen and check angle
             const vPos = new THREE.Vector3(v.x, v.group.position.y + 1, v.z);
             const dir = vPos.clone().sub(rc.ray.origin);
