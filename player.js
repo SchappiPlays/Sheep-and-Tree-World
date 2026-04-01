@@ -1085,19 +1085,19 @@ export class Player {
 
         let wantDir = 0;
         let strafeDir = 0;
-        if (keys[kf] || keys['ArrowUp']) wantDir += 1;
-        if (keys[kk] || keys['ArrowDown']) wantDir -= 1;
+        if (keys[kf]) wantDir += 1;
+        if (keys[kk]) wantDir -= 1;
 
         if (fpMode) {
-            if (keys[kl] || keys['ArrowLeft']) strafeDir += 1;
-            if (keys[kr] || keys['ArrowRight']) strafeDir -= 1;
+            if (keys[kl]) strafeDir += 1;
+            if (keys[kr]) strafeDir -= 1;
             // Only turn player model when moving
             const isMoving = wantDir !== 0 || strafeDir !== 0;
             if (isMoving) this.group.rotation.y = fpYaw;
         } else {
             // Third person: A/D rotate
-            if (keys[kl] || keys['ArrowLeft']) this.group.rotation.y += this.turnRate * dt;
-            if (keys[kr] || keys['ArrowRight']) this.group.rotation.y -= this.turnRate * dt;
+            if (keys[kl]) this.group.rotation.y += this.turnRate * dt;
+            if (keys[kr]) this.group.rotation.y -= this.turnRate * dt;
         }
 
         const wantSprint = !!(keys[ks] && (wantDir > 0 || strafeDir !== 0));

@@ -5113,8 +5113,8 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
     // Horse gear control while riding
     if (horseMgr && horseMgr.ridingHorse && !e.repeat) {
-        if (e.code === keybinds.forward || e.code === 'ArrowUp') { horseMgr.gearUp(); e.preventDefault(); return; }
-        if (e.code === keybinds.back || e.code === 'ArrowDown') { horseMgr.gearDown(); e.preventDefault(); return; }
+        if (e.code === keybinds.forward) { horseMgr.gearUp(); e.preventDefault(); return; }
+        if (e.code === keybinds.back) { horseMgr.gearDown(); e.preventDefault(); return; }
     }
     // Spell slot switching: Shift+1-6
     if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit6') {
@@ -9122,25 +9122,25 @@ function animate() {
             const nx = placeLock.nx, ny = placeLock.ny, nz = placeLock.nz;
             const kf = keybinds.forward, kk = keybinds.back, kl = keybinds.left, kr = keybinds.right;
             if (ny !== 0) {
-                moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
-                moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                moveKeys[kf] = false;
+                moveKeys[kk] = false;
                 moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
                 moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
             } else if (nx !== 0) {
                 if (Math.abs(Math.sin(fpYaw)) > Math.abs(Math.cos(fpYaw))) {
-                    moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
-                    moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
+                    moveKeys[kl] = false;
+                    moveKeys[kr] = false;
                 } else {
-                    moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
-                    moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                    moveKeys[kf] = false;
+                    moveKeys[kk] = false;
                 }
             } else {
                 if (Math.abs(Math.cos(fpYaw)) > Math.abs(Math.sin(fpYaw))) {
-                    moveKeys[kl] = false; moveKeys['ArrowLeft'] = false;
-                    moveKeys[kr] = false; moveKeys['ArrowRight'] = false;
+                    moveKeys[kl] = false;
+                    moveKeys[kr] = false;
                 } else {
-                    moveKeys[kf] = false; moveKeys['ArrowUp'] = false;
-                    moveKeys[kk] = false; moveKeys['ArrowDown'] = false;
+                    moveKeys[kf] = false;
+                    moveKeys[kk] = false;
                 }
             }
         }
@@ -9774,7 +9774,7 @@ function animate() {
     // Horses
     if (horseMgr) {
         horseMgr.spawnNear(player.position.x, player.position.z);
-        const hKeys = { a: keys[keybinds.left], d: keys[keybinds.right], ArrowLeft: keys['ArrowLeft'], ArrowRight: keys['ArrowRight'] };
+        const hKeys = { a: keys[keybinds.left], d: keys[keybinds.right] };
         // Mouse look steering: when riding + moving, horse turns toward camera direction
         if (horseMgr.ridingHorse && horseMgr.horseGear > 0 && useMouseLook && pointerLocked) {
             const h = horseMgr.ridingHorseRef;
