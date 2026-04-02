@@ -586,6 +586,11 @@ export class CreatureManager {
             if (dot < 0.2) continue;
             if (sh._mineOnly) continue; // can only be damaged by mining
             if (sh._shielded) continue; // necromancer shield active
+            // Provoke passive necromancer on first hit
+            if (sh._isNecromancer && !sh._necProvoked) {
+                sh._necProvoked = true;
+                sh.hostile = true;
+            }
             sh.hp -= damage;
             // Knockback
             sh.x += (dx / dist) * 0.5;

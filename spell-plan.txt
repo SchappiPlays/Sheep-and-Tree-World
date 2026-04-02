@@ -1,0 +1,63 @@
+SPELL SLOT SYSTEM REDESIGN
+==========================
+
+- Player has 9 spell slots (Shift+1 through Shift+9)
+- Slot 1 (Bolt) and Slot 2 (Shield) are always locked in
+- Slots 3-9 can be customized from unlocked spells
+- Spells are unlocked via the wizard skill tree branches
+- Each branch has a theme with 4-5 spells
+
+WIZARD TREE BRANCHES
+====================
+
+CORE (always available):
+  Slot 1: Bolt (projectile) — always equipped
+  Slot 2: Shield (barrier) — always equipped
+
+ELEMENTAL BRANCH:
+  - Inferno (fire ring, 6 DMG AOE) [start of branch]
+  - Frost Nova (freeze enemies 4s)
+  - Chain Lightning (3 targets, 10 DMG each)
+  - Meteor (massive sky AOE, 20 DMG)
+  - Elemental Storm (random fire/ice/lightning rains for 8s)
+
+ARCANE BRANCH:
+  - Arcane Barrage (5 homing bolts)
+  - Teleport (blink 15 units forward)
+  - Crystal Storm (8 piercing shards)
+  - Arcane Shield+ (shield reflects damage back)
+  - Time Warp (slow all enemies 50% for 8s)
+
+NECROMANCY BRANCH:
+  - Raise Dead (summon skeletons, all mana)
+  - Soul Drain (beam that damages enemy + heals you)
+  - Curse (target takes 2x damage for 10s)
+  - Wraith Form (become invulnerable + pass through blocks for 5s)
+  - Army of the Dead (summon 8 skeletons regardless of mana)
+
+NATURE BRANCH:
+  - Heal (restore 4 HP)
+  - Regrowth (heal 6 HP + regen)
+  - Earthen Wall (block wall for 10s)
+  - Entangle (roots hold enemies in place 5s)
+  - Nature's Wrath (thorns + healing aura for 10s)
+
+STORM BRANCH:
+  - Storm Call (lightning rain 5s)
+  - Tornado (pulls enemies in, 4 DMG/s for 6s)
+  - Thunder Clap (knockback + stun all nearby 3s)
+  - Avatar (10s double damage, no mana drain)
+  - Tempest (massive storm: lightning + wind + rain for 12s)
+
+WIZARD TREE LAYOUT:
+  - Mana Well → Quick Cast → branches split:
+    - → Spell Power → ELEMENTAL BRANCH
+    - → Mana Flow → ARCANE BRANCH
+    - → Efficient Casting → NECROMANCY BRANCH
+    - → Arcane Shield → NATURE BRANCH
+    - → Chain Reaction → STORM BRANCH
+  - Mana Surge requires any 2 branches started
+  - Archmage requires Mana Surge + any branch completed
+
+TOTAL: 25 unlockable spells + 2 core = 27 spells
+Player can equip any 7 into slots 3-9

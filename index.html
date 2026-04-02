@@ -2931,9 +2931,10 @@ function startGame(loadSlotName) {
             headGrp: necro.headGroup,
             x: necX, z: necZ, angle: 0, speed: 0,
             walkPhase: 0, wanderTimer: 3, idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
-            type: 'skeleton', hostile: true, aggroRange: 25, attackRange: 12, attackDmg: 5, attackCD: 3.0, attackTimer: 0,
+            type: 'skeleton', hostile: false, aggroRange: 25, attackRange: 12, attackDmg: 5, attackCD: 3.0, attackTimer: 0,
             hp: 250, maxHP: 250, dead: false, chaseSpeed: 2.0, _turnSpeed: 4,
             _isBoss: true, _bossName: 'The Necromancer', _isNecromancer: true,
+            _necProvoked: false, // becomes hostile when attacked
             _smashTimer: -1, _necSummonTimer: 0, _necProjectileTimer: 0,
             _necParticles: necParticles,
             _arms: [
@@ -4531,6 +4532,7 @@ function fireProjectile(staffType) {
 // Helper: deal spell damage to a creature, triggering boss death handlers if killed
 function spellDamage(c, dmg) {
     if (c.dead || c._shielded) return;
+    if (c._isNecromancer && !c._necProvoked) { c._necProvoked = true; c.hostile = true; }
     dmg = Math.round(dmg * getStaffDamageMultiplier());
     c.hp -= dmg;
     staffDamageDealt += dmg;
@@ -5163,6 +5165,7 @@ function updateProjectiles(dt) {
                 const dx = sh.x - p.x, dz = sh.z - p.z;
                 const dy = (world.getHeight(sh.x, sh.z) + 0.5) - p.y;
                 if (dx * dx + dy * dy + dz * dz < 2) {
+                    if (sh._isNecromancer && !sh._necProvoked) { sh._necProvoked = true; sh.hostile = true; }
                     sh.hp -= p.damage;
                     staffDamageDealt += p.damage;
                     const prevMax = getMaxSpellSlot();
@@ -9031,20 +9034,156 @@ window._dialogPick = (idx) => {
     _renderDialog();
 };
 
+// Necromancer conversation
+const NECRO_CONVERSATIONS = [
+    { // 0: greeting
+        text: () => "You dare approach me, mortal? ...Interesting. You have courage. Or perhaps foolishness. What do you want?",
+        options: [
+            { label: "Who are you?", next: 1 },
+            { label: "What is this place?", next: 2 },
+            { label: "Teach me dark magic.", next: 3 },
+            { label: "I'm going to destroy you.", next: 5 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 1: who are you
+        text: () => "I am the last keeper of the old ways. The gate guardians were my brothers once. We were charged with protecting the forest's power. But power... changes those who wield it.",
+        options: [
+            { label: "What happened to you?", next: 6 },
+            { label: "Teach me your magic.", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 2: this place
+        text: () => "This was once a great hall of learning. Mages came from across the land to study here. Now it lies in ruins. The gate guardians have gone mad, and I... I simply wait.",
+        options: [
+            { label: "Wait for what?", next: 7 },
+            { label: "Can the guardians be saved?", next: 8 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 3: teach dark magic
+        text: () => "You wish to learn necromancy? The art of binding souls, of commanding the dead? It is not evil — it is merely... misunderstood. I can sense potential in you.",
+        options: [
+            { label: "Yes, teach me!", next: 4 },
+            { label: "Actually, never mind.", next: -1 },
+        ]
+    },
+    { // 4: agreement
+        text: () => "Very well. The knowledge is already within you — you simply need to... unlock it. Focus your will, and the dead shall answer. Go now, and practice. We shall speak again.",
+        options: [
+            { label: "Thank you.", next: -1 },
+        ]
+    },
+    { // 5: threaten
+        text: () => "Ha! Many have tried. The gate guardians. The old mages. Even the one who built this place. They all fell or fled. But I do not wish to fight you. Not yet. Come back when you have made your choice.",
+        options: [
+            { label: "...fine.", next: 0 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 6: what happened
+        text: () => "I sought to protect this forest by any means necessary. The others thought my methods were too... extreme. They turned the guardians against me. Now I am trapped behind their barrier, and they are trapped in their madness.",
+        options: [
+            { label: "That's tragic.", next: 2 },
+            { label: "Teach me your magic.", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 7: wait for what
+        text: () => "For someone worthy. Someone who can either free me... or end me. The barrier holds, but it weakens each time a guardian falls. Perhaps you are the one.",
+        options: [
+            { label: "I'll defeat the guardians.", next: 8 },
+            { label: "Teach me necromancy first.", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+    { // 8: guardians
+        text: () => "The guardians cannot be saved. They are hollow — their minds consumed by the barrier's magic long ago. Defeating them is a mercy. But be warned: when the barrier falls, you will have to face me. And I may not be in a talking mood.",
+        options: [
+            { label: "I understand.", next: -1 },
+            { label: "Why would you fight me?", next: 9 },
+        ]
+    },
+    { // 9: why fight
+        text: () => "Because power must be tested. If you cannot defeat me, you are not worthy of what lies beneath this altar. And if you can... then perhaps the forest will finally have a true guardian.",
+        options: [
+            { label: "What lies beneath?", next: 10 },
+            { label: "I'll be ready.", next: -1 },
+        ]
+    },
+    { // 10: beneath
+        text: () => "That... you will discover for yourself. If you survive. Now go. The guardians await.",
+        options: [
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
+];
+
+function _showNecromancerDialog() {
+    _dialogNode = NECRO_CONVERSATIONS[0];
+    _dialogSelection = 0;
+    villagerDialogOpen = true;
+    villagerDialogEl.style.display = 'block';
+    if (pointerLocked) document.exitPointerLock();
+    // Override the render to use necro conversations
+    _dialogNode._isNecro = true;
+    _renderNecroDialog();
+}
+
+function _renderNecroDialog() {
+    if (!_dialogNode) return;
+    const text = typeof _dialogNode.text === 'function' ? _dialogNode.text() : _dialogNode.text;
+    let html = `<div style="color:rgba(170,120,255,0.6);font:bold 11px monospace;margin-bottom:4px;">The Necromancer</div>`;
+    html += `<div style="color:rgba(200,180,220,0.9);font:14px Georgia,serif;margin-bottom:12px;line-height:1.5;">"${text}"</div>`;
+    html += '<div style="border-top:1px solid rgba(100,60,140,0.3);padding-top:8px;">';
+    for (let i = 0; i < _dialogNode.options.length; i++) {
+        const opt = _dialogNode.options[i];
+        const selected = i === _dialogSelection;
+        html += `<div style="padding:4px 8px;margin:2px 0;border-radius:4px;font:13px Georgia,serif;cursor:pointer;${selected ? 'background:rgba(80,40,120,0.4);color:rgba(220,200,255,1);' : 'color:rgba(150,130,170,0.7);'}" onmouseenter="window._necDialogHover(${i})" onclick="window._necDialogPick(${i})">`;
+        html += `${selected ? '▸ ' : '  '}${opt.label}`;
+        html += '</div>';
+    }
+    html += '</div>';
+    html += '<div style="color:rgba(80,60,100,0.4);font:9px monospace;text-align:center;margin-top:6px;">↑↓ select  Enter confirm  Esc close</div>';
+    villagerDialogEl.innerHTML = html;
+}
+
+window._necDialogHover = (idx) => { _dialogSelection = idx; _renderNecroDialog(); };
+window._necDialogPick = (idx) => {
+    if (!_dialogNode) return;
+    const opt = _dialogNode.options[idx];
+    if (!opt || opt.next === -1) {
+        villagerDialogOpen = false;
+        villagerDialogEl.style.display = 'none';
+        _dialogNode = null;
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+        return;
+    }
+    _dialogNode = NECRO_CONVERSATIONS[opt.next];
+    _dialogNode._isNecro = true;
+    _dialogSelection = 0;
+    _renderNecroDialog();
+};
+
+// Override arrow key dialog handler to work with both villager and necro dialogs
 // Arrow key + Enter handling for dialog
 document.addEventListener('keydown', (e) => {
     if (!villagerDialogOpen || !_dialogNode) return;
+    const isNecro = _dialogNode._isNecro;
+    const render = isNecro ? _renderNecroDialog : _renderDialog;
+    const pick = isNecro ? window._necDialogPick : window._dialogPick;
     if (e.code === 'ArrowUp') {
         e.preventDefault();
         _dialogSelection = (_dialogSelection - 1 + _dialogNode.options.length) % _dialogNode.options.length;
-        _renderDialog();
+        render();
     } else if (e.code === 'ArrowDown') {
         e.preventDefault();
         _dialogSelection = (_dialogSelection + 1) % _dialogNode.options.length;
-        _renderDialog();
+        render();
     } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
         e.preventDefault();
-        window._dialogPick(_dialogSelection);
+        pick(_dialogSelection);
     } else if (e.code === 'Escape') {
         e.preventDefault();
         villagerDialogOpen = false;
@@ -9057,6 +9196,25 @@ document.addEventListener('keydown', (e) => {
 function doPlace(e) {
     if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen || stableOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
+
+    // Check for Necromancer conversation (right-click while looking at passive necromancer)
+    if (placeHoldTime < 0.05) {
+        const nec = creatures.creatures.find(c => c._isNecromancer && !c.dead && !c._necProvoked);
+        if (nec) {
+            const ndx = nec.x - player.position.x, ndz = nec.z - player.position.z;
+            const ndist = Math.sqrt(ndx*ndx + ndz*ndz);
+            if (ndist < 8) {
+                const rc = new THREE.Raycaster();
+                rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+                const nPos = new THREE.Vector3(nec.x, nec.group.position.y + 1.5, nec.z);
+                const dir = nPos.clone().sub(rc.ray.origin).normalize();
+                if (dir.dot(rc.ray.direction) > 0.9) {
+                    _showNecromancerDialog();
+                    return false;
+                }
+            }
+        }
+    }
 
     // Check for horse interaction (right-click while looking at horse)
     if (horseMgr && placeHoldTime < 0.05) {
@@ -10339,8 +10497,17 @@ function animate() {
                     if (boss._smashTimer >= 1) boss._smashTimer = -1;
                 }
             }
-            // Necromancer: always animate floating particles + staff effects
+            // Necromancer: channeling pose when passive, particles always
             if (boss._isNecromancer) {
+                if (!boss._necProvoked && !boss.hostile) {
+                    // Channeling mana pose — both arms raised out
+                    boss._arms[0].shoulder.rotation.x = -0.7;
+                    boss._arms[0].shoulder.rotation.z = -0.8;
+                    boss._arms[0].elbow.rotation.x = -0.5;
+                    boss._arms[1].shoulder.rotation.x = -0.7;
+                    boss._arms[1].shoulder.rotation.z = 0.8;
+                    boss._arms[1].elbow.rotation.x = -0.5;
+                }
                 const time = performance.now() * 0.001;
                 if (boss._necParticles) {
                     for (const p of boss._necParticles.children) {
