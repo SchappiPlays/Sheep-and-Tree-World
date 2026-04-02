@@ -1207,7 +1207,7 @@ function startGame(loadSlotName) {
 
     // ── Giant Ruined Fortress at (-505, -175) ──
     _initMagicShopStaffs();
-    buildFarTerrain(0, 0);
+    // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
     buildForestGate(world, -140, -190, 'z', false);   // west gate (intact)
     buildForestGate(world, 80, -190, 'z', true);       // east gate (half shattered)
@@ -3644,11 +3644,21 @@ function startGame(loadSlotName) {
         loadText.textContent = loadMessages[Math.min(Math.floor(pct / 25), loadMessages.length - 1)];
 
         if (pct >= 100 || loadCheckCount > 300) {
-            loadingEl.style.display = 'none';
-            gamePaused = false;
-            if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+            // Stage 2: Build far terrain
+            loadText.textContent = 'Building distant terrain...';
+            loadBar.style.width = '0%';
+            setTimeout(() => {
+                buildFarTerrain(player.position.x, player.position.z);
+                loadBar.style.width = '100%';
+                loadText.textContent = 'Ready!';
+                setTimeout(() => {
+                    loadingEl.style.display = 'none';
+                    gamePaused = false;
+                    if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                }, 200);
+            }, 50);
         } else {
-            setTimeout(checkLoaded, 16); // ~60fps during loading
+            setTimeout(checkLoaded, 16);
         }
     };
     setTimeout(checkLoaded, 50);
