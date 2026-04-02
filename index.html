@@ -6875,7 +6875,8 @@ function fellTree(bx, by, bz, rebuildSet) {
             for (let dy = -2; dy <= VR; dy++) {
                 const lx = bx + dx, ly = topY + dy, lz = bz + dz;
                 if (world.getBlockAt(lx, ly, lz) === BLOCK.LEAVES) {
-                    addToInventory(getBlockDrop(BLOCK.LEAVES));
+                    // Only 20% of leaves drop as items
+                    if (Math.random() < 0.2) addToInventory(getBlockDrop(BLOCK.LEAVES));
                     world.setBlock(lx, ly, lz, BLOCK.AIR);
                     rebuildSet.add(lx + ',' + lz);
                 }
@@ -9080,7 +9081,7 @@ const NECRO_CONVERSATIONS = [
         ]
     },
     { // 1: who are you
-        text: () => "I am the last keeper of the old ways. The gate guardians were my brothers once. We were charged with protecting the forest's power. But power... changes those who wield it.",
+        text: () => "I am the Necromancer. The gate guardians? They are my creations — bound to my will, set to guard the four entrances to this forest. Though I confess... their obedience has become rather... aggressive over the centuries.",
         options: [
             { label: "What happened to you?", next: 6 },
             { label: "Teach me your magic.", next: 3 },
@@ -9096,16 +9097,25 @@ const NECRO_CONVERSATIONS = [
         ]
     },
     { // 3: teach dark magic
-        text: () => "You wish to learn necromancy? The art of binding souls, of commanding the dead? It is not evil — it is merely... misunderstood. I can sense potential in you.",
+        text: () => {
+            const allGatesDead = killedBosses.has('The Ancient One') && killedBosses.has('Colossus of the Gate') && killedBosses.has('The Dark Knight') && killedBosses.has('Grokthak the Warchief');
+            if (allGatesDead) return "You wish to learn necromancy? You have proven your strength by defeating my guardians. Very well — I shall teach you the art of binding souls, commanding the dead, and draining the life force of your enemies. The power is yours.";
+            return "You wish to learn necromancy? The power to raise the dead, drain souls, curse your enemies, even become a wraith yourself? Oh, I could teach you such things... but first, you must prove your strength. Defeat my four gate guardians. Only then will I know you are worthy.";
+        },
         options: [
-            { label: "Yes, teach me!", next: 4 },
+            { label: () => { const done = killedBosses.has('The Ancient One') && killedBosses.has('Colossus of the Gate') && killedBosses.has('The Dark Knight') && killedBosses.has('Grokthak the Warchief'); return done ? "Grant me your power!" : "I'll prove myself."; }, next: 4 },
+            { label: "What exactly could you teach me?", next: 11 },
             { label: "Actually, never mind.", next: -1 },
         ]
     },
-    { // 4: agreement
-        text: () => "Very well. The knowledge is already within you — you simply need to... unlock it. Focus your will, and the dead shall answer. Go now, and practice. We shall speak again.",
+    { // 4: agreement / rejection based on progress
+        text: () => {
+            const allGatesDead = killedBosses.has('The Ancient One') && killedBosses.has('Colossus of the Gate') && killedBosses.has('The Dark Knight') && killedBosses.has('Grokthak the Warchief');
+            if (allGatesDead) return "The knowledge flows into you now. You can feel it — the cold whisper of death, the pull of souls. Open your skill menu and walk the path of necromancy. Use it wisely... or don't. I care not.";
+            return "Come back when all four guardians lie defeated. The Ancient One, the Colossus, the Dark Knight, and the Warchief. Only then will I share my secrets. Now go — prove yourself worthy.";
+        },
         options: [
-            { label: "Thank you.", next: -1 },
+            { label: "I will.", next: -1 },
         ]
     },
     { // 5: threaten
@@ -9151,6 +9161,14 @@ const NECRO_CONVERSATIONS = [
             { label: "Goodbye.", next: -1 },
         ]
     },
+    { // 11: what could you teach
+        text: () => "Raise Dead — summon skeletal warriors to fight for you. Soul Drain — steal the life force from your enemies. Curse — mark a foe to take double damage. Wraith Form — become incorporeal, untouchable. And for the truly worthy... Army of the Dead. But these gifts require proof of strength first.",
+        options: [
+            { label: "I'll defeat the guardians.", next: 4 },
+            { label: "That sounds incredible.", next: 3 },
+            { label: "Goodbye.", next: -1 },
+        ]
+    },
 ];
 
 function _showNecromancerDialog() {
@@ -9174,7 +9192,8 @@ function _renderNecroDialog() {
         const opt = _dialogNode.options[i];
         const selected = i === _dialogSelection;
         html += `<div style="padding:4px 8px;margin:2px 0;border-radius:4px;font:13px Georgia,serif;cursor:pointer;${selected ? 'background:rgba(80,40,120,0.4);color:rgba(220,200,255,1);' : 'color:rgba(150,130,170,0.7);'}" onmouseenter="window._necDialogHover(${i})" onclick="window._necDialogPick(${i})">`;
-        html += `${selected ? '▸ ' : '  '}${opt.label}`;
+        const lbl = typeof opt.label === 'function' ? opt.label() : opt.label;
+        html += `${selected ? '▸ ' : '  '}${lbl}`;
         html += '</div>';
     }
     html += '</div>';
@@ -9597,11 +9616,14 @@ function animate() {
 
     // Staff magic shield visual
     if (staffShielding && player.staffHeld.visible) {
-        // Mid-cast pose — staff arm raised, body leaning forward
-        player.leftArm.shoulder.rotation.x = -1.8;
-        player.leftArm.shoulder.rotation.z = -0.2;
-        player.leftArm.elbow.rotation.x = -0.4;
-        player.spine.rotation.x = 0.1;
+        // Shield pose — staff arm forward, other arm bracing
+        player.leftArm.shoulder.rotation.x = -1.2;
+        player.leftArm.shoulder.rotation.z = 0;
+        player.leftArm.elbow.rotation.x = -0.3;
+        player.rightArm.shoulder.rotation.x = -0.8;
+        player.rightArm.shoulder.rotation.z = 0;
+        player.rightArm.elbow.rotation.x = -0.5;
+        player.spine.rotation.x = 0.05;
         // Position magic shield disc in front of player
         if (!magicShieldMesh.parent) scene.add(magicShieldMesh);
         magicShieldMesh.visible = true;
