@@ -5138,6 +5138,16 @@ document.addEventListener('keydown', e => {
         document.getElementById('prompt').style.display = vis;
         document.getElementById('saveToast').style.display = vis;
     }
+    if (e.code === 'KeyL' && gameStarted && !gamePaused) {
+        levelMenuOpen = !levelMenuOpen;
+        levelMenuEl.style.display = levelMenuOpen ? 'block' : 'none';
+        if (levelMenuOpen) {
+            if (pointerLocked) document.exitPointerLock();
+            updateLevelMenuUI();
+        } else {
+            if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+        }
+    }
     if (e.code === keybinds.map) {
         mapOpen = !mapOpen;
         worldMapEl.style.display = mapOpen ? 'block' : 'none';
@@ -6416,6 +6426,9 @@ document.addEventListener('keydown', e => {
     } else if (e.code === 'Escape' && blastFurnaceOpen) {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && levelMenuOpen) {
+        levelMenuOpen = false; levelMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && stableOpen) {
         stableOpen = false; stableEl.style.display = 'none';
@@ -8593,6 +8606,21 @@ window._retrieveHorse = (idx) => {
     updateStableUI();
 };
 window._closeStable = () => { stableOpen = false; stableEl.style.display = 'none'; };
+
+// Level menu
+let levelMenuOpen = false;
+const levelMenuEl = document.createElement('div');
+levelMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(20,18,12,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:20px;min-width:300px;max-height:80vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(levelMenuEl);
+
+function updateLevelMenuUI() {
+    let html = '<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;margin-bottom:12px;">Level</div>';
+    html += '<div style="color:rgba(150,140,110,0.6);font:11px monospace;text-align:center;margin-bottom:16px;">Coming soon...</div>';
+    html += '<div style="text-align:center;"><button onclick="window._closeLevelMenu()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:6px 20px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
+    levelMenuEl.innerHTML = html;
+}
+
+window._closeLevelMenu = () => { levelMenuOpen = false; levelMenuEl.style.display = 'none'; if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100); };
 
 let villagerDialogOpen = false;
 let _dialogNode = null; // current conversation node
