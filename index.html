@@ -8851,7 +8851,7 @@ window._closeStable = () => { stableOpen = false; stableEl.style.display = 'none
 // Level menu
 let levelMenuOpen = false;
 const levelMenuEl = document.createElement('div');
-levelMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(20,18,12,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:20px;min-width:300px;max-height:80vh;overflow-y:auto;user-select:none;';
+levelMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(20,18,12,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:20px;min-width:600px;max-height:85vh;overflow-y:auto;user-select:none;';
 document.body.appendChild(levelMenuEl);
 
 function updateLevelMenuUI() {
@@ -8861,25 +8861,76 @@ function updateLevelMenuUI() {
     // XP bar
     html += `<div style="width:100%;height:8px;background:rgba(40,40,40,0.6);border-radius:4px;margin-bottom:12px;"><div style="width:${xpPct}%;height:100%;background:rgba(180,160,60,0.8);border-radius:4px;"></div></div>`;
 
-    // Two columns: Warrior and Wizard
-    html += '<div style="display:flex;gap:12px;">';
+    // Branching skill tree layout
+    // Each node has: grid column, grid row position
+    const TREE_LAYOUT = {
+        warrior: [
+            { idx: 0, col: 1, row: 0, label: 'ROOT' },         // Tough Skin
+            { idx: 1, col: 0, row: 1 },                         // Sharp Edge (left branch)
+            { idx: 3, col: 2, row: 1 },                         // Shield Mastery (right branch)
+            { idx: 2, col: 0, row: 2 },                         // Quick Strike
+            { idx: 4, col: 1, row: 2 },                         // Berserker
+            { idx: 6, col: 2, row: 2 },                         // Iron Stomach
+            { idx: 5, col: 0, row: 3 },                         // Heavy Blow
+            { idx: 7, col: 1, row: 3 },                         // Warrior's Endurance
+            { idx: 8, col: 0, row: 4 },                         // Dual Threat
+            { idx: 9, col: 1, row: 5, label: 'CAPSTONE' },      // Warlord
+        ],
+        wizard: [
+            { idx: 0, col: 1, row: 0, label: 'ROOT' },         // Mana Well
+            { idx: 1, col: 0, row: 1 },                         // Quick Cast (left)
+            { idx: 2, col: 2, row: 1 },                         // Mana Flow (right)
+            { idx: 3, col: 0, row: 2 },                         // Spell Power
+            { idx: 4, col: 2, row: 2 },                         // Efficient Casting
+            { idx: 5, col: 0, row: 3 },                         // Chain Reaction
+            { idx: 6, col: 2, row: 3 },                         // Arcane Shield
+            { idx: 7, col: 0, row: 4 },                         // Spell Leech
+            { idx: 8, col: 2, row: 4 },                         // Mana Surge
+            { idx: 9, col: 1, row: 5, label: 'CAPSTONE' },      // Archmage
+        ],
+    };
+
+    const renderNode = (tree, idx, treeColor) => {
+        const sk = SKILL_TREE[tree][idx];
+        const unlocked = skills[tree][idx];
+        const canU = canUnlockSkill(tree, idx);
+        const locked = !unlocked && !canU;
+        let bg, border, col;
+        if (unlocked) { bg = tree === 'warrior' ? 'rgba(160,80,60,0.5)' : 'rgba(60,80,180,0.5)'; border = treeColor; col = '#fff'; }
+        else if (canU) { bg = 'rgba(80,70,40,0.5)'; border = 'rgba(200,180,80,0.7)'; col = '#ffe0a0'; }
+        else { bg = 'rgba(30,30,30,0.3)'; border = 'rgba(60,60,60,0.3)'; col = '#555'; }
+        return `<div onclick="window._unlockSkill('${tree}',${idx})" style="padding:4px 6px;border-radius:4px;border:1px solid ${border};background:${bg};cursor:${canU?'pointer':'default'};${locked?'opacity:0.4;':''}text-align:center;min-width:80px;">
+            <div style="color:${col};font:bold 10px monospace;">${unlocked ? '✓ ' : ''}${sk.name}</div>
+            <div style="color:${col};font:8px monospace;opacity:0.6;">${sk.desc}</div></div>`;
+    };
+
+    html += '<div style="display:flex;gap:16px;">';
     for (const tree of ['warrior', 'wizard']) {
         const treeColor = tree === 'warrior' ? 'rgba(200,100,80,0.9)' : 'rgba(100,120,220,0.9)';
         const treeBg = tree === 'warrior' ? 'rgba(80,30,20,0.3)' : 'rgba(20,30,80,0.3)';
-        html += `<div style="flex:1;background:${treeBg};border-radius:6px;padding:8px;">`;
-        html += `<div style="color:${treeColor};font:bold 13px Georgia,serif;text-align:center;margin-bottom:8px;">${tree === 'warrior' ? '⚔ Warrior' : '✦ Wizard'}</div>`;
-        for (let i = 0; i < 10; i++) {
-            const sk = SKILL_TREE[tree][i];
-            const unlocked = skills[tree][i];
-            const canUnlock2 = canUnlockSkill(tree, i);
-            const locked = !unlocked && !canUnlock2;
-            let bg, border, col;
-            if (unlocked) { bg = tree === 'warrior' ? 'rgba(160,80,60,0.4)' : 'rgba(60,80,180,0.4)'; border = treeColor; col = '#fff'; }
-            else if (canUnlock2) { bg = 'rgba(80,70,40,0.4)'; border = 'rgba(200,180,80,0.6)'; col = '#ffe0a0'; }
-            else { bg = 'rgba(30,30,30,0.3)'; border = 'rgba(60,60,60,0.3)'; col = '#555'; }
-            html += `<div onclick="window._unlockSkill('${tree}',${i})" style="padding:5px 7px;margin:3px 0;border-radius:4px;border:1px solid ${border};background:${bg};cursor:${canUnlock2?'pointer':'default'};${locked?'opacity:0.5;':''}">`;
-            html += `<div style="color:${col};font:bold 11px monospace;">${unlocked ? '✓ ' : ''}${sk.name}</div>`;
-            html += `<div style="color:${col};font:9px monospace;opacity:0.7;">${sk.desc}</div>`;
+        const lineColor = tree === 'warrior' ? 'rgba(200,100,80,0.3)' : 'rgba(100,120,220,0.3)';
+        html += `<div style="flex:1;background:${treeBg};border-radius:6px;padding:10px;">`;
+        html += `<div style="color:${treeColor};font:bold 14px Georgia,serif;text-align:center;margin-bottom:10px;">${tree === 'warrior' ? '⚔ Warrior' : '✦ Wizard'}</div>`;
+
+        const layout = TREE_LAYOUT[tree];
+        // Render as grid rows
+        const maxRow = Math.max(...layout.map(n => n.row));
+        for (let r = 0; r <= maxRow; r++) {
+            const rowNodes = layout.filter(n => n.row === r);
+            // Connection lines from previous row
+            if (r > 0) {
+                html += `<div style="text-align:center;color:${lineColor};font:14px monospace;line-height:12px;">`;
+                if (r === 1) html += '┬<br>┼───┤';
+                else if (r === 5) html += '└───┤<br>┴';
+                else html += '│ &nbsp; │';
+                html += '</div>';
+            }
+            html += '<div style="display:flex;gap:4px;justify-content:center;">';
+            // Sort by column
+            rowNodes.sort((a, b) => a.col - b.col);
+            for (const node of rowNodes) {
+                html += renderNode(tree, node.idx, treeColor);
+            }
             html += '</div>';
         }
         html += '</div>';
