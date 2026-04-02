@@ -483,25 +483,16 @@ export class World {
                         block = this._hash(bx + y * 37, bz + y * 71) < 0.5 ? BLOCK.BEDROCK : BLOCK.STONE;
                     } else if (y < surfaceBlock - dirtDepth) {
                         // Ore clusters — hash-based, no infinite veins
-                        // Each ore type uses a grid of potential cluster centers
-                        // A block is ore if it's close to a cluster center AND passes a local density check
+                        // Only check the cell this block is in (no neighbor search = much faster)
                         const _oreCheck = (bx, y, bz, gridSize, clusterR, density, seed) => {
-                            // Snap to grid cell
                             const gx = Math.floor(bx / gridSize), gy = Math.floor(y / gridSize), gz = Math.floor(bz / gridSize);
-                            // Check this cell and neighbors for cluster centers
-                            for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-                                const cx = gx+dx, cy = gy+dy, cz = gz+dz;
-                                // Hash to decide if this cell has a cluster
-                                const cellHash = this._hash(cx * 73.1 + cy * 37.9 + seed, cz * 51.3 + cy * 19.7 + seed);
-                                if (cellHash > density) continue;
-                                // Cluster center within the cell
-                                const ccx = (cx + this._hash(cx*17+seed, cz*31+seed)) * gridSize;
-                                const ccy = (cy + this._hash(cy*23+seed, cx*41+seed)) * gridSize;
-                                const ccz = (cz + this._hash(cz*29+seed, cy*47+seed)) * gridSize;
-                                const ddx = bx-ccx, ddy = y-ccy, ddz = bz-ccz;
-                                if (ddx*ddx + ddy*ddy + ddz*ddz < clusterR*clusterR) return true;
-                            }
-                            return false;
+                            const cellHash = this._hash(gx * 73.1 + gy * 37.9 + seed, gz * 51.3 + seed);
+                            if (cellHash > density) return false;
+                            const ccx = (gx + this._hash(gx*17+seed, gz*31+seed)) * gridSize;
+                            const ccy = (gy + this._hash(gy*23+seed, gx*41+seed)) * gridSize;
+                            const ccz = (gz + this._hash(gz*29+seed, gy*47+seed)) * gridSize;
+                            const ddx = bx-ccx, ddy = y-ccy, ddz = bz-ccz;
+                            return ddx*ddx + ddy*ddy + ddz*ddz < clusterR*clusterR;
                         };
                         const depthBelow = surfaceBlock - y;
                         // gridSize = spacing between potential clusters

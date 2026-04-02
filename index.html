@@ -9460,6 +9460,23 @@ function doPlace(e) {
                 rebuildNear(px + dx, pz + dz);
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
+    } else if (snapGrid) {
+        // 2x2x2 snap placement — matches snap grid breaking
+        const snap = v => Math.floor(v / 2) * 2;
+        const sx = snap(px), sy = snap(py), sz = snap(pz);
+        // Need 8 blocks
+        if ((inventory[bt] || 0) < 8) return false;
+        // Check not overlapping player
+        for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++) {
+            const wx = (sx+dx) * BS, wy = ((sy+dy) - 128) * BS, wz = (sz+dz) * BS;
+            const pdx2 = wx - player.position.x, pdz2 = wz - player.position.z, pdy2 = wy - player.position.y;
+            if (Math.abs(pdx2) < 0.5 && Math.abs(pdz2) < 0.5 && pdy2 >= -0.5 && pdy2 < player.HEIGHT) return false;
+        }
+        // Already removed 1 from inventory above, remove 7 more
+        for (let i = 0; i < 7; i++) { if (!removeFromInventory(bt)) break; }
+        for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++)
+            world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
+        for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) rebuildNear(sx+dx, sz+dz);
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
         // Determine horizontal axis for brush

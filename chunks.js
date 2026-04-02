@@ -551,10 +551,7 @@ export class ChunkManager {
                                 (lz + verts[vi][2] * S) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
-                            // Per-vertex color noise — creates subtle texture within each face
-                            const vHash = colorHash(bx + vi * 7 + fi * 13, y + vi * 11, bz + vi * 3 + fi * 5);
-                            const vNoise = 0.94 + vHash * 0.12; // ±6% variation per vertex
-                            tCol.push(tmpColor.r * vNoise, tmpColor.g * vNoise, tmpColor.b * vNoise);
+                            tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                         }
                         tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
                         tVert += 4;
