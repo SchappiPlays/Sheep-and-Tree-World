@@ -10389,8 +10389,8 @@ function animate() {
         for (const boss of allBosses) {
             const bdx = player.position.x - boss.x, bdz = player.position.z - boss.z;
             const bDist = Math.sqrt(bdx*bdx + bdz*bdz);
-            // Trigger attack when in range and attack ready
-            if (bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
+            // Trigger attack when in range and attack ready (only if hostile)
+            if (boss.hostile && bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
                 boss._smashTimer = 0;
                 if (boss._isDarkKnight || boss._isEmberLord) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
             }
