@@ -317,11 +317,7 @@ function getTerrainHeight(x, z) {
         h += mh;
     }
 
-    // Valleys
-    const cvBlend = getCentralValleyBlend(x, z);
-    if (cvBlend > 0) { h -= cvBlend * 4; h += cvBlend * (Math.sin(x*0.1+z*0.07)*0.8 + Math.cos(x*0.08-z*0.09+1)*0.6); }
-    const wvBlend = getWesternValleyBlend(x, z);
-    if (wvBlend > 0) { h -= wvBlend * 3; h += wvBlend * (Math.sin(x*0.09+z*0.11)*0.7 + Math.cos(x*0.07-z*0.08+0.5)*0.5); }
+    // Valleys (removed)
     const enchBlend = getEnchantedBlend(x, z);
     if (enchBlend > 0) { h -= enchBlend * 6; h += enchBlend * (Math.sin(x*0.12+z*0.08)*1.2 + Math.cos(x*0.09-z*0.11+1.5)*0.8); }
     const afHill = getAncientForestHillBlend(x, z);
