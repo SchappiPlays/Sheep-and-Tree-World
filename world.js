@@ -482,54 +482,40 @@ export class World {
                     } else if (y < 3) {
                         block = this._hash(bx + y * 37, bz + y * 71) < 0.5 ? BLOCK.BEDROCK : BLOCK.STONE;
                     } else if (y < surfaceBlock - dirtDepth) {
-                        // Ore veins — low-frequency noise creates cluster centers,
-                        // high-frequency decides which blocks near centers become ore
-                        // Iron: rarer, smaller veins
-                        const ironVein = Math.sin(bx * 0.15 + y * 0.13 + bz * 0.17 + 3.7) *
-                                         Math.cos(bx * 0.11 - y * 0.19 + bz * 0.14 + 1.2);
-                        const ironLocal = this._hash(bx * 0.31 + y * 0.17, bz * 0.23 + y * 0.41);
-                        // Coal: more common, larger veins
-                        const coalVein = Math.sin(bx * 0.12 + y * 0.1 + bz * 0.14 + 7.3) *
-                                         Math.cos(bx * 0.09 - y * 0.15 + bz * 0.11 + 4.1);
-                        const coalLocal = this._hash(bx * 0.47 + y * 0.29, bz * 0.37 + y * 0.53);
-                        // Diamond: very deep only (y < 20), rare small veins
-                        const diamondVein = Math.sin(bx * 0.23 + y * 0.31 + bz * 0.19 + 11.3) *
-                                            Math.cos(bx * 0.17 - y * 0.27 + bz * 0.21 + 5.7);
-                        const diamondLocal = this._hash(bx * 0.61 + y * 0.43, bz * 0.53 + y * 0.37);
-                        // Gold: mid-deep (y < 35), uncommon
-                        const goldVein = Math.sin(bx * 0.18 + y * 0.22 + bz * 0.16 + 9.1) *
-                                         Math.cos(bx * 0.14 - y * 0.24 + bz * 0.13 + 6.8);
-                        const goldLocal = this._hash(bx * 0.53 + y * 0.31, bz * 0.41 + y * 0.47);
-                        // Gems: deep, rare — each with unique noise
-                        const rubyVein = Math.sin(bx * 0.19 + y * 0.29 + bz * 0.23 + 14.7) *
-                                         Math.cos(bx * 0.21 - y * 0.17 + bz * 0.25 + 8.3);
-                        const rubyLocal = this._hash(bx * 0.57 + y * 0.39, bz * 0.49 + y * 0.33);
-                        const sapphireVein = Math.sin(bx * 0.21 + y * 0.27 + bz * 0.19 + 17.3) *
-                                             Math.cos(bx * 0.25 - y * 0.21 + bz * 0.17 + 10.1);
-                        const sapphireLocal = this._hash(bx * 0.43 + y * 0.51, bz * 0.59 + y * 0.29);
-                        const emeraldVein = Math.sin(bx * 0.17 + y * 0.23 + bz * 0.21 + 19.9) *
-                                            Math.cos(bx * 0.19 - y * 0.25 + bz * 0.23 + 12.7);
-                        const emeraldLocal = this._hash(bx * 0.63 + y * 0.41, bz * 0.47 + y * 0.37);
-                        const topazVein = Math.sin(bx * 0.22 + y * 0.18 + bz * 0.26 + 22.1) *
-                                          Math.cos(bx * 0.16 - y * 0.22 + bz * 0.2 + 15.3);
-                        const topazLocal = this._hash(bx * 0.51 + y * 0.47, bz * 0.43 + y * 0.31);
-                        const depthBelow = surfaceBlock - y; // how far below surface
-                        if (depthBelow > 35 && diamondVein > 0.82 && diamondLocal > 0.65) block = BLOCK.DIAMOND_ORE;
-                        else if (depthBelow > 25 && rubyVein > 0.78 && rubyLocal > 0.6) block = BLOCK.RUBY_ORE;
-                        else if (depthBelow > 25 && sapphireVein > 0.78 && sapphireLocal > 0.6) block = BLOCK.SAPPHIRE_ORE;
-                        else if (depthBelow > 20 && emeraldVein > 0.76 && emeraldLocal > 0.58) block = BLOCK.EMERALD_ORE;
-                        else if (depthBelow > 20 && topazVein > 0.76 && topazLocal > 0.58) block = BLOCK.TOPAZ_ORE;
-                        else if (depthBelow > 15 && goldVein > 0.6 && goldLocal > 0.45) block = BLOCK.GOLD_ORE;
-                        else if (ironVein > 0.7 && ironLocal > 0.5) block = BLOCK.IRON_ORE;
-                        else if (depthBelow > 3 && depthBelow < 25) {
-                            const copperVein = Math.sin(bx * 0.19 + y * 0.23 + bz * 0.17 + 8.5) *
-                                               Math.cos(bx * 0.21 - y * 0.15 + bz * 0.24 + 5.2);
-                            const copperLocal = this._hash(bx * 0.43 + y * 0.37, bz * 0.51 + y * 0.29);
-                            if (copperVein > 0.6 && copperLocal > 0.45) block = BLOCK.COPPER_ORE;
-                            else if (coalVein > 0.5 && coalLocal > 0.3) block = BLOCK.COAL_ORE;
-                            else block = BLOCK.STONE;
-                        }
-                        else if (coalVein > 0.5 && coalLocal > 0.3) block = BLOCK.COAL_ORE;
+                        // Ore clusters — hash-based, no infinite veins
+                        // Each ore type uses a grid of potential cluster centers
+                        // A block is ore if it's close to a cluster center AND passes a local density check
+                        const _oreCheck = (bx, y, bz, gridSize, clusterR, density, seed) => {
+                            // Snap to grid cell
+                            const gx = Math.floor(bx / gridSize), gy = Math.floor(y / gridSize), gz = Math.floor(bz / gridSize);
+                            // Check this cell and neighbors for cluster centers
+                            for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+                                const cx = gx+dx, cy = gy+dy, cz = gz+dz;
+                                // Hash to decide if this cell has a cluster
+                                const cellHash = this._hash(cx * 73.1 + cy * 37.9 + seed, cz * 51.3 + cy * 19.7 + seed);
+                                if (cellHash > density) continue;
+                                // Cluster center within the cell
+                                const ccx = (cx + this._hash(cx*17+seed, cz*31+seed)) * gridSize;
+                                const ccy = (cy + this._hash(cy*23+seed, cx*41+seed)) * gridSize;
+                                const ccz = (cz + this._hash(cz*29+seed, cy*47+seed)) * gridSize;
+                                const ddx = bx-ccx, ddy = y-ccy, ddz = bz-ccz;
+                                if (ddx*ddx + ddy*ddy + ddz*ddz < clusterR*clusterR) return true;
+                            }
+                            return false;
+                        };
+                        const depthBelow = surfaceBlock - y;
+                        // gridSize = spacing between potential clusters
+                        // clusterR = radius of each cluster
+                        // density = chance each grid cell has a cluster (lower = rarer)
+                        if (depthBelow > 35 && _oreCheck(bx,y,bz, 16, 2.5, 0.08, 111)) block = BLOCK.DIAMOND_ORE;
+                        else if (depthBelow > 25 && _oreCheck(bx,y,bz, 18, 2, 0.06, 222)) block = BLOCK.RUBY_ORE;
+                        else if (depthBelow > 25 && _oreCheck(bx,y,bz, 18, 2, 0.06, 333)) block = BLOCK.SAPPHIRE_ORE;
+                        else if (depthBelow > 20 && _oreCheck(bx,y,bz, 16, 2.5, 0.07, 444)) block = BLOCK.EMERALD_ORE;
+                        else if (depthBelow > 20 && _oreCheck(bx,y,bz, 16, 2.5, 0.07, 555)) block = BLOCK.TOPAZ_ORE;
+                        else if (depthBelow > 15 && _oreCheck(bx,y,bz, 12, 3, 0.1, 666)) block = BLOCK.GOLD_ORE;
+                        else if (_oreCheck(bx,y,bz, 10, 3.5, 0.15, 777)) block = BLOCK.IRON_ORE;
+                        else if (depthBelow > 3 && depthBelow < 25 && _oreCheck(bx,y,bz, 8, 3.5, 0.18, 888)) block = BLOCK.COPPER_ORE;
+                        else if (_oreCheck(bx,y,bz, 8, 4, 0.2, 999)) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;
                     } else if (y < surfaceBlock) {
                         if (inPond) block = BLOCK.CLAY;
