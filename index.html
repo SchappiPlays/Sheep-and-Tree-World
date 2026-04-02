@@ -9203,7 +9203,7 @@ function doPlace(e) {
         if (nec) {
             const ndx = nec.x - player.position.x, ndz = nec.z - player.position.z;
             const ndist = Math.sqrt(ndx*ndx + ndz*ndz);
-            if (ndist < 8) {
+            if (ndist < 12) {
                 const rc = new THREE.Raycaster();
                 rc.setFromCamera(new THREE.Vector2(0, 0), camera);
                 const nPos = new THREE.Vector3(nec.x, nec.group.position.y + 1.5, nec.z);
