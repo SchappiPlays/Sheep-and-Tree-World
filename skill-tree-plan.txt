@@ -1,0 +1,155 @@
+SKILL TREE PLAN
+===============
+
+XP Sources:
+- Kill goblin: 5 XP
+- Kill skeleton: 8 XP
+- Kill elite creature: 15 XP
+- Kill boss: full level up (100 XP)
+- Mine copper ore: 2 XP
+- Mine iron ore: 3 XP
+- Mine gold ore: 5 XP
+- Mine diamond ore: 10 XP
+- Mine gem ore (ruby/sapphire/emerald/topaz): 8 XP
+- Buy from shop: 1 XP per 10 coins spent
+- Sell to shop: 1 XP per 10 coins earned
+
+Leveling:
+- XP needed per level: 100 XP (flat)
+- Each level grants 1 skill point
+- Max level: 20 (20 skill points total)
+
+===========================
+WARRIOR TREE (10 upgrades)
+===========================
+
+1. Tough Skin
+   - +10% damage reduction (flat)
+   - Cost: 1 point
+   - Requires: nothing
+
+2. Sharp Edge
+   - +15% sword damage
+   - Cost: 1 point
+   - Requires: Tough Skin
+
+3. Quick Strike
+   - 20% faster sword attack cooldown
+   - Cost: 1 point
+   - Requires: Sharp Edge
+
+4. Shield Mastery
+   - Shields block 50% more damage, stagger bosses in 2 hits instead of 3
+   - Cost: 1 point
+   - Requires: Tough Skin
+
+5. Berserker
+   - Below 30% HP: +40% damage with all weapons
+   - Cost: 1 point
+   - Requires: Sharp Edge
+
+6. Heavy Blow
+   - 10% chance per sword hit to stun enemy for 1 second
+   - Cost: 1 point
+   - Requires: Quick Strike
+
+7. Iron Stomach
+   - Health potions heal 2 hearts instead of 1
+   - Cost: 1 point
+   - Requires: Shield Mastery
+
+8. Warrior's Endurance
+   - +2 max hearts (permanent)
+   - Cost: 1 point
+   - Requires: Berserker
+
+9. Dual Threat
+   - Sword attacks also deal damage behind you (360 degree)
+   - Cost: 1 point
+   - Requires: Heavy Blow
+
+10. Warlord
+    - +30% damage with all weapons, +20% damage reduction
+    - Cost: 1 point
+    - Requires: Warrior's Endurance + Dual Threat (both)
+
+===========================
+WIZARD TREE (10 upgrades)
+===========================
+
+1. Mana Well
+   - +2 max mana (1 extra star)
+   - Cost: 1 point
+   - Requires: nothing
+
+2. Quick Cast
+   - 25% faster staff attack cooldown
+   - Cost: 1 point
+   - Requires: Mana Well
+
+3. Mana Flow
+   - Passive mana regen doubled (0.5 → 1.0 per second)
+   - Cost: 1 point
+   - Requires: Mana Well
+
+4. Spell Power
+   - +20% staff/spell damage
+   - Cost: 1 point
+   - Requires: Quick Cast
+
+5. Efficient Casting
+   - Spells cost 1 less mana (minimum 1)
+   - Cost: 1 point
+   - Requires: Mana Flow
+
+6. Chain Reaction
+   - Bolt projectiles explode on hit, dealing 30% damage to nearby enemies
+   - Cost: 1 point
+   - Requires: Spell Power
+
+7. Arcane Shield
+   - Magic shield drains 50% less mana
+   - Cost: 1 point
+   - Requires: Efficient Casting
+
+8. Spell Leech
+   - Staff kills restore 2 mana
+   - Cost: 1 point
+   - Requires: Chain Reaction
+
+9. Mana Surge
+   - +4 max mana (2 extra stars)
+   - Cost: 1 point
+   - Requires: Arcane Shield
+
+10. Archmage
+    - All spells +40% damage, unlock spell slot 4/5/6 immediately
+    - Cost: 1 point
+    - Requires: Spell Leech + Mana Surge (both)
+
+===========================
+VISUAL LAYOUT
+===========================
+
+Each tree is a vertical column of 10 nodes.
+Lines connect prerequisites.
+Unlocked nodes glow.
+Locked nodes are grey.
+The final node (10) requires both branches at level 8+9.
+
+WARRIOR                    WIZARD
+   1 Tough Skin               1 Mana Well
+   |\_                        |\_
+   2  4 Shield Mastery        2  3 Mana Flow
+   |    |                     |    |
+   3  | 7 Iron Stomach        4  | 5 Efficient Cast
+   |  |                       |  |
+   5 Berserker                6 Chain Reaction  7 Arcane Shield
+   |                          |                 |
+   6 Heavy Blow               8 Spell Leech    9 Mana Surge
+   |                          |                 |
+   8 Warrior's Endurance      \_______ ________/
+   |                                  |
+   9 Dual Threat              10 Archmage
+   |
+  10 Warlord

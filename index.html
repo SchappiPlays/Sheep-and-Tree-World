@@ -1033,6 +1033,8 @@ function collectSaveData() {
         equippedShield,
         playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
         killedBosses: [...killedBosses],
+        playerXP, playerLevel, skillPoints,
+        skills: { warrior: [...skills.warrior], wizard: [...skills.wizard] },
         horses: horseMgr ? horseMgr.getSaveData() : [],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
         customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
@@ -1159,10 +1161,13 @@ function startGame(loadSlotName) {
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
     creatures = new CreatureManager(scene, world);
-    creatures._onCreatureDrop = (item, count) => {
+    creatures._onCreatureDrop = (item, count, creatureType) => {
         for (let i = 0; i < count; i++) addToInventory(item);
-        // Random coin drops from hostile creatures
         if (Math.random() < 0.4) addCopper(1 + Math.floor(Math.random() * 3));
+        // XP from kills
+        if (creatureType === 'goblin') addXP(5);
+        else if (creatureType === 'skeleton') addXP(8);
+        else addXP(6);
         refreshUI();
     };
     creatures._onPlayerHit = (dmg, type, srcX, srcZ) => {
@@ -2396,6 +2401,7 @@ function startGame(loadSlotName) {
         playerMaxHP += 2;
         playerHP = Math.min(playerHP + 2, playerMaxHP);
         updateHeartsUI();
+        addXP(XP_PER_LEVEL); // boss kill = full level
         addChatMessage(bossDisplayName + ' (+1 heart)', 'rgba(255,220,100,0.95)');
 
         // Sword drop
@@ -3414,6 +3420,8 @@ function startGame(loadSlotName) {
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
+            if (s.playerXP !== undefined) { playerXP = s.playerXP; playerLevel = s.playerLevel; skillPoints = s.skillPoints; }
+            if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
@@ -3520,6 +3528,8 @@ function startGame(loadSlotName) {
         killedBosses.clear();
         armorSlots.helmet = null; armorSlots.chestplate = null; armorSlots.leggings = null; armorSlots.boots = null;
         equippedShield = null;
+        playerXP = 0; playerLevel = 0; skillPoints = 0;
+        skills.warrior.fill(false); skills.wizard.fill(false);
         world.getOrCreateChunk(0, 0);
         const spawnY = world.getHeight(0, 0);
         player.position.set(0, spawnY, 0);
@@ -4159,6 +4169,7 @@ document.body.appendChild(deathScreen);
 
 function playerTakeDamage(dmg) {
     if (playerDead) return;
+    dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
     playerHP = Math.max(0, playerHP - dmg);
     updateHeartsUI();
     // Red flash
@@ -4267,7 +4278,10 @@ function isWearingWizardRobes() {
     return chest && chest.startsWith('wizard_');
 }
 function getStaffDamageMultiplier() {
-    return isWearingWizardRobes() ? 1.25 : 1.0;
+    let mult = isWearingWizardRobes() ? 1.25 : 1.0;
+    mult *= getWizardDamageBonus();
+    if (window._avatarActive) mult *= 2.0;
+    return mult;
 }
 
 function getArmorReduction() {
@@ -4296,16 +4310,119 @@ const STAFF_PROPS = {
 };
 
 // Spell slots: 1=projectile, 2=shield, 3=unique
-let activeSpellSlot = 1; // 1-6
-let staffDamageDealt = 0; // total damage dealt with staffs, persisted
-// Spell unlock thresholds: slot 4 at 50 dmg, slot 5 at 150 (50+100), slot 6 at 350 (150+200)
-const SPELL_UNLOCK_THRESHOLDS = { 4: 50, 5: 150, 6: 350 };
+let activeSpellSlot = 1; // 1-9
+let staffDamageDealt = 0;
 function getMaxSpellSlot() {
-    if (staffDamageDealt >= 350) return 6;
-    if (staffDamageDealt >= 150) return 5;
-    if (staffDamageDealt >= 50) return 4;
+    // Archmage skill auto-unlocks 4/5/6
+    const hasArchmage = skills.wizard[9];
+    if (staffDamageDealt >= 1000 || hasArchmage) { if (staffDamageDealt >= 1000) return 9; if (staffDamageDealt >= 700) return 8; if (staffDamageDealt >= 500) return 7; return 6; }
+    if (staffDamageDealt >= 700) return 8;
+    if (staffDamageDealt >= 500) return 7;
+    if (staffDamageDealt >= 350 || hasArchmage) return 6;
+    if (staffDamageDealt >= 150 || hasArchmage) return 5;
+    if (staffDamageDealt >= 50 || hasArchmage) return 4;
     return 3;
 }
+
+// ── Leveling & Skill System ──
+let playerXP = 0;
+let playerLevel = 0;
+let skillPoints = 0;
+const XP_PER_LEVEL = 100;
+const MAX_LEVEL = 20;
+
+const skills = {
+    warrior: Array(10).fill(false),
+    wizard: Array(10).fill(false),
+};
+
+const SKILL_TREE = {
+    warrior: [
+        { name: 'Tough Skin', desc: '+10% damage reduction', requires: [] },
+        { name: 'Sharp Edge', desc: '+15% sword damage', requires: [0] },
+        { name: 'Quick Strike', desc: '20% faster sword cooldown', requires: [1] },
+        { name: 'Shield Mastery', desc: 'Shields block more, stagger in 2 hits', requires: [0] },
+        { name: 'Berserker', desc: '+40% damage when below 30% HP', requires: [1] },
+        { name: 'Heavy Blow', desc: '10% stun chance on sword hit', requires: [2] },
+        { name: 'Iron Stomach', desc: 'Potions heal 2 hearts instead of 1', requires: [3] },
+        { name: "Warrior's Endurance", desc: '+2 max hearts', requires: [4] },
+        { name: 'Dual Threat', desc: 'Sword hits in 360 degrees', requires: [5] },
+        { name: 'Warlord', desc: '+30% all damage, +20% reduction', requires: [7, 8] },
+    ],
+    wizard: [
+        { name: 'Mana Well', desc: '+1 mana star', requires: [] },
+        { name: 'Quick Cast', desc: '25% faster staff cooldown', requires: [0] },
+        { name: 'Mana Flow', desc: 'Double passive mana regen', requires: [0] },
+        { name: 'Spell Power', desc: '+20% staff/spell damage', requires: [1] },
+        { name: 'Efficient Casting', desc: 'Spells cost 1 less mana (min 1)', requires: [2] },
+        { name: 'Chain Reaction', desc: 'Bolts explode on hit for 30% AOE', requires: [3] },
+        { name: 'Arcane Shield', desc: 'Magic shield drains 50% less mana', requires: [4] },
+        { name: 'Spell Leech', desc: 'Staff kills restore 2 mana', requires: [5] },
+        { name: 'Mana Surge', desc: '+2 mana stars', requires: [6] },
+        { name: 'Archmage', desc: '+40% spell damage, unlock slots 4-6', requires: [7, 8] },
+    ],
+};
+
+function addXP(amount) {
+    if (playerLevel >= MAX_LEVEL) return;
+    playerXP += amount;
+    while (playerXP >= XP_PER_LEVEL && playerLevel < MAX_LEVEL) {
+        playerXP -= XP_PER_LEVEL;
+        playerLevel++;
+        skillPoints++;
+        addChatMessage(`Level up! You are now level ${playerLevel}. +1 skill point.`, 'rgba(255,220,100,0.95)');
+    }
+}
+
+function canUnlockSkill(tree, idx) {
+    if (skills[tree][idx]) return false;
+    if (skillPoints <= 0) return false;
+    const req = SKILL_TREE[tree][idx].requires;
+    return req.every(r => skills[tree][r]);
+}
+
+function unlockSkill(tree, idx) {
+    if (!canUnlockSkill(tree, idx)) return;
+    skills[tree][idx] = true;
+    skillPoints--;
+    // Apply immediate effects
+    if (tree === 'wizard' && idx === 0) { playerMaxMana += 2; playerMana = Math.min(playerMana + 2, playerMaxMana); updateManaUI(); }
+    if (tree === 'wizard' && idx === 8) { playerMaxMana += 4; playerMana = Math.min(playerMana + 4, playerMaxMana); updateManaUI(); }
+    if (tree === 'warrior' && idx === 7) { playerMaxHP += 4; playerHP = Math.min(playerHP + 4, playerMaxHP); updateHeartsUI(); }
+    addChatMessage(`Unlocked: ${SKILL_TREE[tree][idx].name}!`, 'rgba(200,180,255,0.95)');
+}
+
+// Skill query helpers
+function getWarriorDamageBonus() {
+    let mult = 1.0;
+    if (skills.warrior[1]) mult += 0.15; // Sharp Edge
+    if (skills.warrior[4] && playerHP / playerMaxHP < 0.3) mult += 0.40; // Berserker
+    if (skills.warrior[9]) mult += 0.30; // Warlord
+    return mult;
+}
+function getWizardDamageBonus() {
+    let mult = 1.0;
+    if (skills.wizard[3]) mult += 0.20; // Spell Power
+    if (skills.wizard[9]) mult += 0.40; // Archmage
+    return mult;
+}
+function getDamageReduction() {
+    let red = 0;
+    if (skills.warrior[0]) red += 0.10;
+    if (skills.warrior[9]) red += 0.20;
+    return red;
+}
+function getSwordCooldownMult() { return skills.warrior[2] ? 0.8 : 1.0; }
+function getStaffCooldownMult() { return skills.wizard[1] ? 0.75 : 1.0; }
+function getManaRegenMult() { return skills.wizard[2] ? 2.0 : 1.0; }
+function getShieldDrainMult() { return skills.wizard[6] ? 0.5 : 1.0; }
+function getManaCostReduction() { return skills.wizard[4] ? 1 : 0; }
+function getPotionHealAmount() { return skills.warrior[6] ? 4 : 2; }
+function has360Sword() { return skills.warrior[8]; }
+function hasStunChance() { return skills.warrior[5]; }
+function hasChainReaction() { return skills.wizard[5]; }
+function hasSpellLeech() { return skills.wizard[7]; }
+function getShieldStaggerHits() { return skills.warrior[3] ? 2 : 3; }
 
 const STAFF_SPELLS = {
     basic_staff:      { name3: 'Heal',         desc3: 'Restore 4 HP',                mana3: 6,  color3: 0x44ff44 },
@@ -4317,6 +4434,9 @@ const STAFF_SPELLS = {
     _slot4:           { name3: 'Arcane Barrage', desc3: '5 homing bolts',           mana3: 5,  color3: 0xcc88ff },
     _slot5:           { name3: 'Teleport',       desc3: 'Blink forward 15 units',   mana3: 4,  color3: 0x44ddff },
     _slot6:           { name3: 'Meteor',         desc3: 'Massive AOE from the sky', mana3: 10, color3: 0xff4400 },
+    _slot7:           { name3: 'Earthen Wall',   desc3: 'Block wall for 10s',       mana3: 4,  color3: 0x888855 },
+    _slot8:           { name3: 'Storm Call',     desc3: 'Lightning rain for 5s',    mana3: 8,  color3: 0xffee44 },
+    _slot9:           { name3: 'Avatar',         desc3: '2x damage, no mana drain 10s', mana3: 0, color3: 0xffffff },
     // Gem-specific unique spells
     gem_diamond:      { name3: 'Crystal Storm',desc3: 'Shard burst, 8 shards fan out', mana3: 6, color3: 0x88ffff },
     gem_emerald:      { name3: 'Poison Cloud', desc3: 'Poison AOE, 3 DMG/s for 5s',   mana3: 5, color3: 0x22cc44 },
@@ -4342,12 +4462,12 @@ function updateSpellSlotUI() {
     const sp = STAFF_SPELLS[held] || {};
     const maxSlot = getMaxSpellSlot();
     const names = ['Bolt', 'Shield', sp.name3 || '???',
-        STAFF_SPELLS._slot4.name3, STAFF_SPELLS._slot5.name3, STAFF_SPELLS._slot6.name3];
+        STAFF_SPELLS._slot4.name3, STAFF_SPELLS._slot5.name3, STAFF_SPELLS._slot6.name3,
+        STAFF_SPELLS._slot7.name3, STAFF_SPELLS._slot8.name3, STAFF_SPELLS._slot9.name3];
     let html = '';
-    // Show damage progress
-    const nextUnlock = staffDamageDealt < 50 ? 50 : staffDamageDealt < 150 ? 150 : staffDamageDealt < 350 ? 350 : null;
+    const nextUnlock = staffDamageDealt < 50 ? 50 : staffDamageDealt < 150 ? 150 : staffDamageDealt < 350 ? 350 : staffDamageDealt < 500 ? 500 : staffDamageDealt < 700 ? 700 : staffDamageDealt < 1000 ? 1000 : null;
     if (nextUnlock) html += `<div style="color:#666;font:9px monospace;margin-bottom:3px;">DMG: ${Math.floor(staffDamageDealt)}/${nextUnlock}</div>`;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 9; i++) {
         const slot = i + 1;
         const locked = slot > maxSlot;
         const active = activeSpellSlot === slot;
@@ -4542,6 +4662,74 @@ function castUniversalSpell(slot, staffType) {
             }
         };
         requestAnimationFrame(animMeteor);
+    } else if (slot === 7) {
+        // Earthen Wall: spawn 5-wide, 3-tall block wall in front of player for 10s
+        const facing = player.group.rotation.y;
+        const bx = Math.round((px + Math.sin(facing)*3) / BLOCK_SIZE);
+        const bz = Math.round((pz + Math.cos(facing)*3) / BLOCK_SIZE);
+        const by = Math.floor(py / BLOCK_SIZE) + 128;
+        const wallBlocks = [];
+        for (let i = -2; i <= 2; i++) {
+            const wx = bx + Math.round(Math.cos(facing)*i), wz = bz - Math.round(Math.sin(facing)*i);
+            for (let dy = 0; dy < 3; dy++) {
+                world.setBlock(wx, by+dy, wz, BLOCK.STONE);
+                wallBlocks.push([wx, by+dy, wz]);
+            }
+            chunkManager.rebuildChunkAt(wx, wz);
+        }
+        setTimeout(() => { for (const [wx,wy,wz] of wallBlocks) { world.setBlock(wx,wy,wz,BLOCK.AIR); chunkManager.rebuildChunkAt(wx,wz); } }, 10000);
+    } else if (slot === 8) {
+        // Storm Call: lightning strikes rain down in 10-unit radius for 5 seconds
+        let strikes = 0;
+        const stormX = px, stormZ = pz;
+        const doStrike = () => {
+            if (strikes >= 12) return;
+            strikes++;
+            const sx = stormX + (Math.random()-0.5)*20, sz = stormZ + (Math.random()-0.5)*20;
+            const sy = getTerrainHeight(sx, sz);
+            // Damage
+            for (const c of creatures.creatures) {
+                if (c.dead) continue;
+                const ddx = c.x-sx, ddz = c.z-sz;
+                if (ddx*ddx+ddz*ddz < 9) spellDamage(c, 8);
+            }
+            // Visual: lightning line
+            const geo = new THREE.BufferGeometry();
+            const pts = [];
+            for (let s=0;s<=6;s++) { const t=s/6; pts.push(sx+(Math.random()-0.5)*0.5, sy+40*(1-t)+Math.random()*2, sz+(Math.random()-0.5)*0.5); }
+            geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xffee44,linewidth:2}));
+            scene.add(line);
+            const flash = new THREE.PointLight(0xffee44, 5, 15);
+            flash.position.set(sx, sy+1, sz); scene.add(flash);
+            setTimeout(()=>{scene.remove(line);scene.remove(flash);geo.dispose();},200);
+            setTimeout(doStrike, 350 + Math.random()*200);
+        };
+        doStrike();
+    } else if (slot === 9) {
+        // Avatar: 10s of double damage + no mana drain + glow
+        const allMana = playerMana;
+        if (allMana < 2) return;
+        playerMana = 0; updateManaUI();
+        window._avatarActive = true;
+        window._avatarTimer = 10;
+        // Glow effect
+        const avatarLight = new THREE.PointLight(0xffffff, 3, 10);
+        avatarLight.position.y = 1.5;
+        player.group.add(avatarLight);
+        addChatMessage('AVATAR MODE — 10 seconds of power!', 'rgba(255,255,200,1)');
+        const avatarTick = () => {
+            window._avatarTimer -= 0.016;
+            if (window._avatarTimer <= 0) {
+                window._avatarActive = false;
+                player.group.remove(avatarLight);
+                addChatMessage('Avatar mode ended.', 'rgba(200,200,150,0.8)');
+                return;
+            }
+            avatarLight.intensity = 2 + Math.sin(window._avatarTimer * 5) * 1;
+            requestAnimationFrame(avatarTick);
+        };
+        requestAnimationFrame(avatarTick);
     }
 }
 
@@ -5117,7 +5305,7 @@ document.addEventListener('keydown', e => {
         if (e.code === keybinds.back) { horseMgr.gearDown(); e.preventDefault(); return; }
     }
     // Spell slot switching: Shift+1-6
-    if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit6') {
+    if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit9') {
         const slot = parseInt(e.code.replace('Digit', ''));
         if (slot <= getMaxSpellSlot()) {
             activeSpellSlot = slot;
@@ -6757,7 +6945,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 
     // Use HP potion
     if (held === 'hp_potion' && inventory['hp_potion'] > 0 && playerHP < playerMaxHP) {
-        playerHP = Math.min(playerMaxHP, playerHP + 2);
+        playerHP = Math.min(playerMaxHP, playerHP + getPotionHealAmount());
         inventory['hp_potion']--;
         if (inventory['hp_potion'] <= 0) { delete inventory['hp_potion']; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === 'hp_potion') hotbarSlots[i] = 0; }
         updateHeartsUI();
@@ -6777,9 +6965,10 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (swordDmg && inventory[held] > 0) {
         if (attackCooldown <= 0) {
             player.triggerSwing();
-            attackCooldown = 0.6;
-            if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
-            if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, swordDmg, 3);
+            attackCooldown = 0.6 * getSwordCooldownMult();
+            const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * (window._avatarActive ? 2 : 1));
+            if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
+            if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
             if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         } else {
             // Buffer combo swing even during cooldown
@@ -6820,7 +7009,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
                 castUniqueSpell(held, manaSpent);
                 return;
             }
-        } else if (activeSpellSlot >= 4 && activeSpellSlot <= 6) {
+        } else if (activeSpellSlot >= 4 && activeSpellSlot <= 9) {
             // Universal unlockable spells
             const slotKey = '_slot' + activeSpellSlot;
             const sp = STAFF_SPELLS[slotKey];
@@ -6917,6 +7106,9 @@ renderer.domElement.addEventListener('mouseup', (e) => {
 });
 
 function getBlockDrop(blockType) {
+    // XP from mining ores
+    const oreXP = { [BLOCK.COAL_ORE]: 1, [BLOCK.COPPER_ORE]: 2, [BLOCK.IRON_ORE]: 3, [BLOCK.GOLD_ORE]: 5, [BLOCK.DIAMOND_ORE]: 10, [BLOCK.RUBY_ORE]: 8, [BLOCK.SAPPHIRE_ORE]: 8, [BLOCK.EMERALD_ORE]: 8, [BLOCK.TOPAZ_ORE]: 8 };
+    if (oreXP[blockType]) addXP(oreXP[blockType]);
     if (blockType === BLOCK.COAL_ORE) return 'coal';
     if (blockType === BLOCK.DIAMOND_ORE) return 'diamond';
     if (blockType === BLOCK.RUBY_ORE) return 'ruby';
@@ -8426,6 +8618,7 @@ function updateShopUI() {
 window._shopBuy = (item, price) => {
     if (!spendCopper(price)) return;
     inventory[item] = (inventory[item] || 0) + 1;
+    addXP(Math.max(1, Math.floor(price / 10)));
     refreshUI(); updateShopUI();
 };
 window._shopSell = (item) => {
@@ -8440,6 +8633,7 @@ window._shopSell = (item) => {
     inventory[item]--;
     if (inventory[item] <= 0) { delete inventory[item]; for (let i=0;i<hotbarSlots.length;i++) if(hotbarSlots[i]===item) hotbarSlots[i]=0; }
     addCopper(price);
+    addXP(Math.max(1, Math.floor(price / 10)));
     refreshUI(); updateShopUI();
 };
 window._shopSalvage = (item) => {
@@ -8614,11 +8808,45 @@ levelMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transf
 document.body.appendChild(levelMenuEl);
 
 function updateLevelMenuUI() {
-    let html = '<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;margin-bottom:12px;">Level</div>';
-    html += '<div style="color:rgba(150,140,110,0.6);font:11px monospace;text-align:center;margin-bottom:16px;">Coming soon...</div>';
-    html += '<div style="text-align:center;"><button onclick="window._closeLevelMenu()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:6px 20px;border-radius:4px;cursor:pointer;font:12px monospace;">Close</button></div>';
+    const xpPct = playerLevel >= MAX_LEVEL ? 100 : Math.floor((playerXP / XP_PER_LEVEL) * 100);
+    let html = `<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;">Level ${playerLevel}</div>`;
+    html += `<div style="color:rgba(180,170,140,0.6);font:11px monospace;text-align:center;margin-bottom:4px;">XP: ${playerXP}/${XP_PER_LEVEL} (${xpPct}%) | Skill Points: <span style="color:#ffdd66;">${skillPoints}</span></div>`;
+    // XP bar
+    html += `<div style="width:100%;height:8px;background:rgba(40,40,40,0.6);border-radius:4px;margin-bottom:12px;"><div style="width:${xpPct}%;height:100%;background:rgba(180,160,60,0.8);border-radius:4px;"></div></div>`;
+
+    // Two columns: Warrior and Wizard
+    html += '<div style="display:flex;gap:12px;">';
+    for (const tree of ['warrior', 'wizard']) {
+        const treeColor = tree === 'warrior' ? 'rgba(200,100,80,0.9)' : 'rgba(100,120,220,0.9)';
+        const treeBg = tree === 'warrior' ? 'rgba(80,30,20,0.3)' : 'rgba(20,30,80,0.3)';
+        html += `<div style="flex:1;background:${treeBg};border-radius:6px;padding:8px;">`;
+        html += `<div style="color:${treeColor};font:bold 13px Georgia,serif;text-align:center;margin-bottom:8px;">${tree === 'warrior' ? '⚔ Warrior' : '✦ Wizard'}</div>`;
+        for (let i = 0; i < 10; i++) {
+            const sk = SKILL_TREE[tree][i];
+            const unlocked = skills[tree][i];
+            const canUnlock2 = canUnlockSkill(tree, i);
+            const locked = !unlocked && !canUnlock2;
+            let bg, border, col;
+            if (unlocked) { bg = tree === 'warrior' ? 'rgba(160,80,60,0.4)' : 'rgba(60,80,180,0.4)'; border = treeColor; col = '#fff'; }
+            else if (canUnlock2) { bg = 'rgba(80,70,40,0.4)'; border = 'rgba(200,180,80,0.6)'; col = '#ffe0a0'; }
+            else { bg = 'rgba(30,30,30,0.3)'; border = 'rgba(60,60,60,0.3)'; col = '#555'; }
+            html += `<div onclick="window._unlockSkill('${tree}',${i})" style="padding:5px 7px;margin:3px 0;border-radius:4px;border:1px solid ${border};background:${bg};cursor:${canUnlock2?'pointer':'default'};${locked?'opacity:0.5;':''}">`;
+            html += `<div style="color:${col};font:bold 11px monospace;">${unlocked ? '✓ ' : ''}${sk.name}</div>`;
+            html += `<div style="color:${col};font:9px monospace;opacity:0.7;">${sk.desc}</div>`;
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+
+    html += '<div style="text-align:center;margin-top:10px;"><button onclick="window._closeLevelMenu()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:6px 20px;border-radius:4px;cursor:pointer;font:12px monospace;">Close (L)</button></div>';
     levelMenuEl.innerHTML = html;
 }
+
+window._unlockSkill = (tree, idx) => {
+    unlockSkill(tree, idx);
+    updateLevelMenuUI();
+};
 
 window._closeLevelMenu = () => { levelMenuOpen = false; levelMenuEl.style.display = 'none'; if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100); };
 
@@ -9716,7 +9944,7 @@ function animate() {
 
     // Mana regeneration — passive 0.5/s + active channel (hold right-click) 2/s
     if (!staffShielding && playerMana < playerMaxMana) {
-        playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5);
+        playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5 * getManaRegenMult());
         updateManaUI();
     }
     // Hold right-click to channel mana (2/s extra regen)
@@ -9727,7 +9955,7 @@ function animate() {
     }
     // Staff shield drains mana (3 mana per second)
     if (staffShielding) {
-        playerMana -= dt * 3.0;
+        playerMana -= dt * 3.0 * getShieldDrainMult() * (window._avatarActive ? 0 : 1);
         if (playerMana <= 0) {
             playerMana = 0;
             staffShielding = false;
