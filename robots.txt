@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://schappiplays.github.io/Sheep-and-Tree-World/sitemap.xml
