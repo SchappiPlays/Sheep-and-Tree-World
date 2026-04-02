@@ -423,6 +423,8 @@ export class CreatureManager {
                     }
                     }
                 } else {
+                    // Passive necromancer stands still
+                    if (sh._isNecromancer && !sh._necProvoked) { sh.speed = 0; sh.walking = false; continue; }
                     // Wander when not aggro'd
                     sh.wanderTimer -= dt;
                     if (sh.wanderTimer <= 0) {

@@ -2819,12 +2819,45 @@ function startGame(loadSlotName) {
         necro.group.position.set(necX, necY, necZ);
         necro.position.set(necX, necY, necZ);
 
-        // Dark robes appearance
-        necro._skinMat.color.setHex(0x2a2a30);
-        necro._shirtMat.color.setHex(0x15101a);
-        necro._pantsMat.color.setHex(0x100a14);
-        necro._shoeMat.color.setHex(0x0a0810);
-        necro._hairMat.color.setHex(0x1a0a2a);
+        // Skeletal white skin, dark robes
+        necro._skinMat.color.setHex(0xd0c8b8); // bone white
+        necro._skinMat.roughness = 0.8;
+        necro._shirtMat.color.setHex(0x0a0810); // very dark purple-black robe
+        necro._pantsMat.color.setHex(0x080610);
+        necro._shoeMat.color.setHex(0x060408);
+        necro._hairMat.color.setHex(0x0a0a0a); // hood
+
+        // Make arms thinner/skeletal
+        if (necro.leftArm && necro.leftArm.shoulder) {
+            necro.leftArm.shoulder.scale.set(0.6, 1, 0.6);
+            necro.rightArm.shoulder.scale.set(0.6, 1, 0.6);
+        }
+        // Make head slightly gaunt
+        if (necro.headGroup) necro.headGroup.scale.set(0.9, 1.05, 0.9);
+
+        // Dark cloak — large draped mesh over shoulders and back
+        const cloakMat = new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 0.9, side: THREE.DoubleSide });
+        // Shoulder cape
+        const cloakTop = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.3), cloakMat);
+        cloakTop.position.set(0, 0.42, -0.02); necro.spine.add(cloakTop);
+        // Back drape — long flowing piece
+        const cloakBack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.06), cloakMat);
+        cloakBack.position.set(0, 0.05, -0.15); necro.spine.add(cloakBack);
+        // Lower cloak extending below waist
+        const cloakLower = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.5, 0.06), cloakMat);
+        cloakLower.position.set(0, -0.35, -0.13); necro.spine.add(cloakLower);
+        // Side drapes
+        for (const s of [-1, 1]) {
+            const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.2), cloakMat);
+            side.position.set(s * 0.2, 0.1, -0.05); necro.spine.add(side);
+        }
+        // Hood
+        const hoodMat = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.85 });
+        const hood = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.25), hoodMat);
+        hood.position.set(0, 0.15, -0.02); necro.headGroup.add(hood);
+        // Hood peak
+        const hoodPeak = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.2), hoodMat);
+        hoodPeak.position.set(0, 0.22, 0.04); necro.headGroup.add(hoodPeak);
 
         // Custom necromancer staff — dark twisted shaft with skull headpiece and floating orb
         necro.staffHeld.visible = false;
