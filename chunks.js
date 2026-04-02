@@ -201,7 +201,7 @@ export class ChunkManager {
 
         const tmpColor = new THREE.Color();
 
-        const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 200);
+        const scanMaxY = Math.min(WORLD_HEIGHT, Y_OFF + 300);
         for (let lx = 0; lx < CHUNK_SIZE; lx += xzStep) {
             for (let lz = 0; lz < CHUNK_SIZE; lz += xzStep) {
                 const bx = ox + lx, bz = oz + lz;

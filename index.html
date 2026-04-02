@@ -436,18 +436,20 @@ scene.add(sun.target);
 
 // ── Sun Sphere in Sky ──
 const sunSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(40, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false })
+    new THREE.SphereGeometry(200, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false })
 );
 sunSphere.position.set(400, 600, -300);
+sunSphere.renderOrder = -10;
 scene.add(sunSphere);
 
 // Sun glow (larger transparent sphere)
 const sunGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(80, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false })
+    new THREE.SphereGeometry(350, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false })
 );
 sunGlow.position.copy(sunSphere.position);
+sunGlow.renderOrder = -10;
 scene.add(sunGlow);
 
 // ── Clouds ──
@@ -10096,7 +10098,7 @@ function animate() {
     sun.target.updateMatrixWorld();
 
     // Sun sphere follows at sky distance
-    sunSphere.position.set(player.position.x + sunX, sunY, player.position.z - 300);
+    sunSphere.position.set(player.position.x + sunX * 5, sunY * 5, player.position.z - 2000);
     sunGlow.position.copy(sunSphere.position);
 
     // ── Shooting Stars (nighttime only) ──
