@@ -662,8 +662,9 @@ export class VillageManager {
 
             // Spawn blacksmith shopkeeper (fixed position near village)
             const bsAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
-            const bsX = vd.x + Math.cos(bsAngle) * 6;
-            const bsZ = vd.z + Math.sin(bsAngle) * 6;
+            const shopDist = 14; // far enough to not overlap each other or houses
+            const bsX = vd.x + Math.cos(bsAngle) * shopDist;
+            const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
             const bsY = this.world.getHeight(bsX, bsZ);
             const bsV = makeVillager(this.scene, bsX, bsZ, bsY, 0.8);
             bsV._shopType = 'blacksmith';
@@ -687,8 +688,8 @@ export class VillageManager {
 
             // Spawn magic shop keeper
             const msAngle = bsAngle + Math.PI; // opposite side of village
-            const msX = vd.x + Math.cos(msAngle) * 6;
-            const msZ = vd.z + Math.sin(msAngle) * 6;
+            const msX = vd.x + Math.cos(msAngle) * shopDist;
+            const msZ = vd.z + Math.sin(msAngle) * shopDist;
             const msY = this.world.getHeight(msX, msZ);
             const msV = makeVillager(this.scene, msX, msZ, msY, 0.3);
             msV._shopType = 'magic';
@@ -712,8 +713,8 @@ export class VillageManager {
 
             // Spawn armor shopkeeper
             const asAngle = bsAngle + Math.PI * 0.5; // 90 degrees from blacksmith
-            const asX = vd.x + Math.cos(asAngle) * 7;
-            const asZ = vd.z + Math.sin(asAngle) * 7;
+            const asX = vd.x + Math.cos(asAngle) * shopDist;
+            const asZ = vd.z + Math.sin(asAngle) * shopDist;
             const asY = this.world.getHeight(asX, asZ);
             const asV = makeVillager(this.scene, asX, asZ, asY, 0.55);
             asV._shopType = 'armor';
@@ -735,9 +736,9 @@ export class VillageManager {
             asV.group.add(asLabel);
 
             // Spawn stablemaster
-            const stAngle = bsAngle + Math.PI * 1.5;
-            const stX = vd.x + Math.cos(stAngle) * 8;
-            const stZ = vd.z + Math.sin(stAngle) * 8;
+            const stAngle = bsAngle + Math.PI * 1.5; // 270 degrees from blacksmith
+            const stX = vd.x + Math.cos(stAngle) * shopDist;
+            const stZ = vd.z + Math.sin(stAngle) * shopDist;
             const stY = this.world.getHeight(stX, stZ);
             const stV = makeVillager(this.scene, stX, stZ, stY, 0.15);
             stV._shopType = 'stable';
