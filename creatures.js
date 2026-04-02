@@ -544,11 +544,14 @@ export class CreatureManager {
             const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
             let creature;
             if (biome === 'mountain' || biome === 'scorched') {
-                // Hostile territory — goblins
-                if (typeHash < 0.5) {
+                // Goblins only spawn on NW peaks (510,-130) and SW peaks (510,80)
+                const nwDx = sx - 510, nwDz = sz - (-130);
+                const swDx = sx - 510, swDz = sz - 80;
+                const onGoblinMtn = (nwDx*nwDx/(45*45) + nwDz*nwDz/(55*55) < 1) || (swDx*swDx/(40*40) + swDz*swDz/(50*50) < 1);
+                if (onGoblinMtn && typeHash < 0.5) {
                     creature = makeGoblin(sx, sz, terrainY);
                 } else {
-                    continue; // sparser spawns in hostile areas
+                    continue;
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
                 // Frozen lands — skeletons and occasional animals
