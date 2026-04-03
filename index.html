@@ -294,6 +294,7 @@ canvas { display: block; }
 <div id="pauseMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
     <h2 style="color:rgba(220,200,160,0.9);font:bold 24px monospace;margin-bottom:10px;">Paused</h2>
     <button class="menu-btn" id="resumeBtn">Resume</button>
+    <button class="menu-btn" id="multiplayerBtn">Multiplayer</button>
     <button class="menu-btn" id="settingsBtn">Settings</button>
     <button class="menu-btn" id="saveQuitBtn" style="background:rgba(80,40,30,0.7);border-color:rgba(160,80,60,0.5);">Save & Quit</button>
 </div>
@@ -3975,6 +3976,72 @@ document.getElementById('resumeBtn').addEventListener('click', () => {
     pauseMenuEl.style.display = 'none';
     if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
 });
+// Multiplayer panel
+let mpPanelOpen = false;
+const mpPanelEl = document.createElement('div');
+mpPanelEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:420;background:rgba(20,18,12,0.95);border:2px solid rgba(160,130,80,0.5);border-radius:8px;padding:20px;min-width:320px;user-select:none;';
+document.body.appendChild(mpPanelEl);
+
+function updateMpPanel() {
+    let html = '<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;margin-bottom:12px;">Multiplayer</div>';
+    if (mp.active) {
+        html += `<div style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">${mp.isHost ? 'Hosting' : 'Connected'} | Players: ${mp.playerCount || 1}</div>`;
+        html += `<div style="color:rgba(200,180,100,0.9);font:14px monospace;text-align:center;padding:8px;background:rgba(80,60,30,0.4);border-radius:4px;margin-bottom:8px;">Room: ${mp.myId}</div>`;
+        html += `<div style="color:rgba(150,140,110,0.5);font:10px monospace;text-align:center;margin-bottom:10px;">Share this code with friends to join</div>`;
+        html += `<button onclick="window._mpDisconnect()" class="menu-btn" style="width:100%;background:rgba(80,40,30,0.7);border-color:rgba(160,80,60,0.5);">Disconnect</button>`;
+    } else {
+        html += `<button onclick="window._mpHost()" class="menu-btn" style="width:100%;margin-bottom:8px;">Host Game</button>`;
+        html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+        html += `<input type="text" id="mpJoinInput" placeholder="Room code" style="flex:1;padding:8px;font:12px monospace;background:rgba(30,25,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,100,60,0.4);border-radius:4px;">`;
+        html += `<button onclick="window._mpJoin()" class="menu-btn" style="width:70px;">Join</button>`;
+        html += '</div>';
+        html += '<div id="mpPanelStatus" style="color:rgba(150,140,110,0.5);font:11px monospace;text-align:center;min-height:16px;"></div>';
+    }
+    html += `<button onclick="window._closeMpPanel()" class="menu-btn" style="width:100%;margin-top:8px;">Back</button>`;
+    mpPanelEl.innerHTML = html;
+    const inp = document.getElementById('mpJoinInput');
+    if (inp) { inp.addEventListener('keydown', e => e.stopPropagation()); }
+}
+
+window._mpHost = () => {
+    const statusEl = document.getElementById('mpPanelStatus');
+    if (statusEl) statusEl.textContent = 'Creating room...';
+    mp.host(code => {
+        if (statusEl) statusEl.textContent = '';
+        updateMpPanel();
+    });
+};
+window._mpJoin = () => {
+    const inp = document.getElementById('mpJoinInput');
+    const code = inp ? inp.value.trim() : '';
+    if (!code) return;
+    const statusEl = document.getElementById('mpPanelStatus');
+    if (statusEl) statusEl.textContent = 'Joining...';
+    mp.join(code, id => {
+        if (id) {
+            updateMpPanel();
+        } else {
+            if (statusEl) statusEl.textContent = 'Failed to connect';
+        }
+    });
+};
+window._mpDisconnect = () => {
+    mp.disconnect();
+    updateMpPanel();
+};
+window._closeMpPanel = () => {
+    mpPanelOpen = false;
+    mpPanelEl.style.display = 'none';
+    pauseMenuEl.style.display = 'flex';
+};
+
+document.getElementById('multiplayerBtn').addEventListener('click', () => {
+    pauseMenuEl.style.display = 'none';
+    mpPanelOpen = true;
+    mpPanelEl.style.display = 'block';
+    updateMpPanel();
+});
+
 document.getElementById('settingsBtn').addEventListener('click', () => {
     pauseMenuEl.style.display = 'none';
     settingsOpen = true;
@@ -6675,6 +6742,8 @@ document.addEventListener('keydown', e => {
     } else if (e.code === 'Escape' && levelMenuOpen) {
         levelMenuOpen = false; levelMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && mpPanelOpen) {
+        window._closeMpPanel();
     } else if (e.code === 'Escape' && stableOpen) {
         stableOpen = false; stableEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
