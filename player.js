@@ -15,6 +15,10 @@ export class Player {
         this.walkPhase = 0;
         this.walkBlend = 0;
         this.sprintBlend = 0;
+        this.stamina = 100;
+        this.maxStamina = 100;
+        this.staminaDrain = 20; // per second while sprinting
+        this.staminaRegen = 15; // per second while not sprinting
 
         // Movement constants — exact from game.html
         this.walkSpeed = 3.0;
@@ -1100,7 +1104,12 @@ export class Player {
             if (keys[kr]) this.group.rotation.y -= this.turnRate * dt;
         }
 
-        const wantSprint = !!(keys[ks] && (wantDir > 0 || strafeDir !== 0));
+        const wantSprint = !!(keys[ks] && (wantDir > 0 || strafeDir !== 0) && this.stamina > 0);
+        if (wantSprint) {
+            this.stamina = Math.max(0, this.stamina - this.staminaDrain * dt);
+        } else {
+            this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegen * dt);
+        }
         const maxSpeed = wantSprint ? this.sprintSpeed : this.walkSpeed;
 
         // Speed — combine forward and strafe
