@@ -454,6 +454,25 @@ sunGlow.position.copy(sunSphere.position);
 sunGlow.renderOrder = -10;
 scene.add(sunGlow);
 
+// ── Moon ──
+const moonSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(150, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false })
+);
+moonSphere.position.set(-400, 600, 300);
+moonSphere.renderOrder = -10;
+moonSphere.visible = false;
+scene.add(moonSphere);
+
+const moonGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(250, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false })
+);
+moonGlow.position.copy(moonSphere.position);
+moonGlow.renderOrder = -10;
+moonGlow.visible = false;
+scene.add(moonGlow);
+
 // ── Clouds ──
 const clouds = [];
 const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, fog: false });
@@ -10170,6 +10189,15 @@ function animate() {
     // Sun sphere follows at sky distance
     sunSphere.position.set(player.position.x + sunX * 5, sunY * 5, player.position.z - 2000);
     sunGlow.position.copy(sunSphere.position);
+
+    // Moon — opposite side of sky from sun, visible at night
+    moonSphere.visible = isNight || isDusk || isDawn;
+    moonGlow.visible = moonSphere.visible;
+    const moonAngle = sunAngle + Math.PI; // opposite to sun
+    const moonX = Math.cos(moonAngle) * 400 * 0.5;
+    const moonY = Math.sin(moonAngle) * 400;
+    moonSphere.position.set(player.position.x + moonX * 5, moonY * 5, player.position.z + 2000);
+    moonGlow.position.copy(moonSphere.position);
 
     // ── Shooting Stars (nighttime only) ──
     if (isNight) {
