@@ -47,12 +47,11 @@ export class Multiplayer {
             callback(id);
         });
         this.peer.on('connection', conn => {
-            console.log('Player connecting:', conn.peer);
             if (this.connections.size >= 4) { conn.close(); return; }
-            conn.on('open', () => {
-                console.log('Player connected:', conn.peer);
-                this._setupConnection(conn);
-            });
+            // Connection may already be open or open later
+            const doSetup = () => this._setupConnection(conn);
+            if (conn.open) doSetup();
+            else conn.on('open', doSetup);
         });
         this.peer.on('error', err => console.error('Peer error:', err));
         this.peer.on('disconnected', () => console.warn('Peer disconnected from server'));
