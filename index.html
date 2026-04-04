@@ -1137,7 +1137,7 @@ document.getElementById('hostBtn').addEventListener('click', () => {
     });
 });
 document.getElementById('joinBtn').addEventListener('click', () => {
-    const code = document.getElementById('joinCode').value.trim();
+    const code = document.getElementById('joinCode').value.trim().toUpperCase();
     if (!code) return;
     document.getElementById('mpStatus').textContent = 'Joining...';
     mp.join(code, id => {
@@ -4033,7 +4033,7 @@ window._mpHost = () => {
 };
 window._mpJoin = () => {
     const inp = document.getElementById('mpJoinInput');
-    const code = inp ? inp.value.trim() : '';
+    const code = inp ? inp.value.trim().toUpperCase() : '';
     if (!code) return;
     const statusEl = document.getElementById('mpPanelStatus');
     if (statusEl) statusEl.textContent = 'Joining...';

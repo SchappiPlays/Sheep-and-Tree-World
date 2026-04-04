@@ -24,9 +24,11 @@ export class Multiplayer {
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun.relay.metered.ca:80' },
-                    { urls: 'turn:global.relay.metered.ca:80', username: 'e8dd65e92de6e2e6c6c01e02', credential: 'uVeyPsBbL2p+vJK1' },
-                    { urls: 'turn:global.relay.metered.ca:443', username: 'e8dd65e92de6e2e6c6c01e02', credential: 'uVeyPsBbL2p+vJK1' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
                 ]
             }
         };
