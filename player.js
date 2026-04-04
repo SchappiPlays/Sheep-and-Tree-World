@@ -261,9 +261,24 @@ export class Player {
             steel: { c: 0xe8eef5, m: 0.6, r: 0.15 },
             diamond: { c: 0x88ffff, m: 0.3, r: 0.15 },
             dragonsteel: { c: 0x1a1a28, m: 0.85, r: 0.05 },
+            ember: { c: 0xff4400, m: 0.7, r: 0.3 },
+        };
+        const WIZARD_COLORS = {
+            blue: 0x3355bb, purple: 0x7733aa, red: 0xaa3333, green: 0x338844,
+            black: 0x222233, white: 0xddddee, gold: 0xbb9933,
         };
         const _setGrp = (grp, item) => {
             if (!item) { grp.visible = false; return; }
+            // Handle wizard robes — extract color from item key
+            if (typeof item === 'string' && item.startsWith('wizard_')) {
+                const parts = item.split('_');
+                const wizColor = WIZARD_COLORS[parts[2]] || 0x3355bb;
+                grp.visible = true;
+                if (grp._mats) for (const m of grp._mats) {
+                    m.color.setHex(wizColor); m.metalness = 0.0; m.roughness = 0.85;
+                }
+                return;
+            }
             const tier = item.replace(/_helmet|_chestplate|_leggings|_boots/, '');
             const col = ARMOR_COLORS[tier] || ARMOR_COLORS.iron;
             grp.visible = true;
