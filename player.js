@@ -284,29 +284,28 @@ export class Player {
         };
         const _setGrp = (grp, item) => {
             if (!item) { grp.visible = false; return; }
+            // Always reset wizard hat first
+            if (this._wizHat) this._wizHat.visible = false;
+            if (grp._normalParts) for (const p of grp._normalParts) p.visible = true;
+
             // Handle wizard robes — extract color from item key
             if (typeof item === 'string' && item.startsWith('wizard_')) {
                 const parts = item.split('_');
                 const wizColor = WIZARD_COLORS[parts[2]] || 0x3355bb;
-                grp.visible = true;
                 // For helmet slot — show wizard hat instead of normal helmet
-                if (item.includes('helmet') && grp._normalParts && this._wizHat) {
-                    for (const p of grp._normalParts) p.visible = false;
+                if (parts[1] === 'helmet' && this._wizHat) {
+                    grp.visible = false; // hide normal helmet entirely
                     this._wizHat.visible = true;
                     if (this._wizHat._mats) for (const m of this._wizHat._mats) {
                         m.color.setHex(wizColor); m.metalness = 0.0; m.roughness = 0.85;
                     }
                     return;
                 }
+                grp.visible = true;
                 if (grp._mats) for (const m of grp._mats) {
                     m.color.setHex(wizColor); m.metalness = 0.0; m.roughness = 0.85;
                 }
                 return;
-            }
-            // Reset wizard hat if switching away
-            if (grp._normalParts && this._wizHat) {
-                for (const p of grp._normalParts) p.visible = true;
-                this._wizHat.visible = false;
             }
             const tier = item.replace(/_helmet|_chestplate|_leggings|_boots/, '');
             const col = ARMOR_COLORS[tier] || ARMOR_COLORS.iron;

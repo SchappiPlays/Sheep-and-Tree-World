@@ -8581,8 +8581,10 @@ const MAGIC_SHOP_CUSTOM = [
 let MAGIC_SHOP = [...MAGIC_SHOP_BASE];
 
 function _initMagicShopStaffs() {
+    if (window._magicShopInited) return;
+    window._magicShopInited = true;
     for (const def of MAGIC_SHOP_CUSTOM) {
-        const id = 'cstaff_shop_' + def.gem + '_' + Date.now() + Math.floor(Math.random()*1000);
+        const id = 'cstaff_shop_' + def.gem;
         if (!window._customStaffs) window._customStaffs = {};
         const baseType = STAFF_GEM_TYPE[def.gem] || 'basic_staff';
         const gemBolt = STAFF_GEM_BOLT[def.gem];
