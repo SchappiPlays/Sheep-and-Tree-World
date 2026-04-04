@@ -8691,7 +8691,11 @@ function updateShopUI() {
     }
     for (const k of sellable) {
         const info = getItemInfo(isNaN(k) ? k : Number(k));
-        const price = ITEM_PRICES[k];
+        let price = ITEM_PRICES[k];
+        if (!price && typeof k === 'string' && k.startsWith('wizard_')) {
+            const slot = k.split('_')[1];
+            price = { helmet: 20, chestplate: 40, leggings: 30, boots: 15 }[slot] || 20;
+        }
         html += `<div style="display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid rgba(80,60,30,0.3);cursor:pointer;" onclick="window._shopSell('${k}')">`;
         if (info) html += blockIconHTML(info);
         html += `<span style="flex:1;color:rgba(200,190,160,0.8);font:11px monospace;">${info?.name || k} ×${inventory[k]}</span>`;

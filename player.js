@@ -282,11 +282,13 @@ export class Player {
             blue: 0x3355bb, purple: 0x7733aa, red: 0xaa3333, green: 0x338844,
             black: 0x222233, white: 0xddddee, gold: 0xbb9933,
         };
-        const _setGrp = (grp, item) => {
-            if (!item) { grp.visible = false; return; }
-            // Always reset wizard hat first
-            if (this._wizHat) this._wizHat.visible = false;
-            if (grp._normalParts) for (const p of grp._normalParts) p.visible = true;
+        const _setGrp = (grp, item, isHelmetSlot) => {
+            if (!item) { grp.visible = false; if (isHelmetSlot && this._wizHat) this._wizHat.visible = false; return; }
+            // Reset wizard hat only when processing helmet slot
+            if (isHelmetSlot) {
+                if (this._wizHat) this._wizHat.visible = false;
+                if (grp._normalParts) for (const p of grp._normalParts) p.visible = true;
+            }
 
             // Handle wizard robes — extract color from item key
             if (typeof item === 'string' && item.startsWith('wizard_')) {
@@ -314,12 +316,12 @@ export class Player {
                 m.color.setHex(col.c); m.metalness = col.m; m.roughness = col.r;
             }
         };
-        _setGrp(this._armorHelmetGrp, slots.helmet);
-        _setGrp(this._armorChestGrp, slots.chestplate);
-        _setGrp(this._armorLegL, slots.leggings);
-        _setGrp(this._armorLegR, slots.leggings);
-        _setGrp(this._armorBootL, slots.boots);
-        _setGrp(this._armorBootR, slots.boots);
+        _setGrp(this._armorHelmetGrp, slots.helmet, true);
+        _setGrp(this._armorChestGrp, slots.chestplate, false);
+        _setGrp(this._armorLegL, slots.leggings, false);
+        _setGrp(this._armorLegR, slots.leggings, false);
+        _setGrp(this._armorBootL, slots.boots, false);
+        _setGrp(this._armorBootR, slots.boots, false);
     }
 
     _makePickaxe() {
