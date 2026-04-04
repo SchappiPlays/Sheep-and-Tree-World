@@ -185,12 +185,12 @@ export class Player {
 
         // Wizard hat — pointy cone + wide brim, hidden by default
         const wizHatMat = _aMat();
-        const wizCone = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), wizHatMat);
-        wizCone.position.y = 0.25;
-        const wizBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 8), wizHatMat);
-        wizBrim.position.y = 0.05;
-        const wizBrimTip = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.06, 4), wizHatMat);
-        wizBrimTip.position.set(0, 0.42, 0); // tip of hat
+        const wizCone = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.45, 6), wizHatMat);
+        wizCone.position.y = 0.35;
+        const wizBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.03, 8), wizHatMat);
+        wizBrim.position.y = 0.15;
+        const wizBrimTip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.08, 4), wizHatMat);
+        wizBrimTip.position.set(0, 0.58, 0);
         this._wizHat = new THREE.Group();
         this._wizHat.add(wizCone); this._wizHat.add(wizBrim); this._wizHat.add(wizBrimTip);
         this._wizHat._mats = [wizHatMat];
