@@ -179,8 +179,23 @@ export class Player {
         const helmetSides = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.22), _aMat());
         helmetSides.position.y = -0.03; this._armorHelmetGrp.add(helmetSides);
         this._armorHelmetGrp._mats = [helmetTop.material, helmetBrim.material, helmetNose.material, helmetSides.material];
+        this._armorHelmetGrp._normalParts = [helmetTop, helmetBrim, helmetNose, helmetSides];
         this._armorHelmetGrp.scale.setScalar(1.15);
         this.headGroup.add(this._armorHelmetGrp);
+
+        // Wizard hat — pointy cone + wide brim, hidden by default
+        const wizHatMat = _aMat();
+        const wizCone = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), wizHatMat);
+        wizCone.position.y = 0.25;
+        const wizBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 8), wizHatMat);
+        wizBrim.position.y = 0.05;
+        const wizBrimTip = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.06, 4), wizHatMat);
+        wizBrimTip.position.set(0, 0.42, 0); // tip of hat
+        this._wizHat = new THREE.Group();
+        this._wizHat.add(wizCone); this._wizHat.add(wizBrim); this._wizHat.add(wizBrimTip);
+        this._wizHat._mats = [wizHatMat];
+        this._wizHat.visible = false;
+        this.headGroup.add(this._wizHat);
 
         // Chestplate — torso plate + shoulder pauldrons
         this._armorChestGrp = new THREE.Group();
@@ -274,10 +289,24 @@ export class Player {
                 const parts = item.split('_');
                 const wizColor = WIZARD_COLORS[parts[2]] || 0x3355bb;
                 grp.visible = true;
+                // For helmet slot — show wizard hat instead of normal helmet
+                if (item.includes('helmet') && grp._normalParts && this._wizHat) {
+                    for (const p of grp._normalParts) p.visible = false;
+                    this._wizHat.visible = true;
+                    if (this._wizHat._mats) for (const m of this._wizHat._mats) {
+                        m.color.setHex(wizColor); m.metalness = 0.0; m.roughness = 0.85;
+                    }
+                    return;
+                }
                 if (grp._mats) for (const m of grp._mats) {
                     m.color.setHex(wizColor); m.metalness = 0.0; m.roughness = 0.85;
                 }
                 return;
+            }
+            // Reset wizard hat if switching away
+            if (grp._normalParts && this._wizHat) {
+                for (const p of grp._normalParts) p.visible = true;
+                this._wizHat.visible = false;
             }
             const tier = item.replace(/_helmet|_chestplate|_leggings|_boots/, '');
             const col = ARMOR_COLORS[tier] || ARMOR_COLORS.iron;
