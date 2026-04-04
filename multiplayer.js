@@ -29,6 +29,8 @@ export class Multiplayer {
                     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
                     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' },
+                    { urls: 'turn:relay.backups.cz', username: 'webrtc', credential: 'webrtc' },
                 ]
             }
         };
@@ -45,10 +47,15 @@ export class Multiplayer {
             callback(id);
         });
         this.peer.on('connection', conn => {
-            if (this.connections.size >= 4) { conn.close(); return; } // max 5 total
-            this._setupConnection(conn);
+            console.log('Player connecting:', conn.peer);
+            if (this.connections.size >= 4) { conn.close(); return; }
+            conn.on('open', () => {
+                console.log('Player connected:', conn.peer);
+                this._setupConnection(conn);
+            });
         });
         this.peer.on('error', err => console.error('Peer error:', err));
+        this.peer.on('disconnected', () => console.warn('Peer disconnected from server'));
     }
 
     // Join a game by room code
