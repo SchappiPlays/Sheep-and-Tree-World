@@ -35,11 +35,10 @@ export function makeHorse(scene, x, z, terrainHeight) {
     const neck = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.22), hMat);
     neck.position.set(0, 0.2, 0.08); neck.rotation.x = -0.35; neckGrp.add(neck);
 
-    // Mane — thin flat pieces along top of neck, falling to one side
+    // Mane — runs along the top/back of the neck, hanging down behind
     for (let i = 0; i < 6; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.02), hManeMat);
-        m.position.set(0, 0.32 + i * 0.06, -0.08 + i * 0.01);
-        m.rotation.x = 0.6;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.03), hManeMat);
+        m.position.set(0, 0.1 + i * 0.09, -0.08);
         neckGrp.add(m);
     }
     g.add(neckGrp);
