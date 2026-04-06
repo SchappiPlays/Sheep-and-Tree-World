@@ -80,7 +80,7 @@ export class ChunkManager {
         const faceDZ = Math.cos(facingAngle || 0);
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
-            this._processQueue(1);
+            this._processQueue(2);
             return;
         }
         this._lastPCX = pcx;
@@ -141,7 +141,7 @@ export class ChunkManager {
             this.loaded.delete(key);
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(1);
+        this._processQueue(2);
     }
 
     rebuildChunkAt(bx, bz) {

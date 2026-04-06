@@ -858,7 +858,7 @@ function buildFarTerrain(centerX, centerZ) {
 
     for (let gx = -gridSize; gx <= gridSize; gx++) {
         for (let gz = -gridSize; gz <= gridSize; gz++) {
-            if (Math.abs(gx - skipCGX) <= skipGrid && Math.abs(gz - skipCGZ) <= skipGrid) continue;
+            // Shader handles the cutout dynamically — no mesh skip needed
             const wx = gx * S, wz = gz * S;
             const snapH = gH(gx, gz);
             const top = snapH + BS;
