@@ -15,10 +15,10 @@ export class Player {
         this.walkPhase = 0;
         this.walkBlend = 0;
         this.sprintBlend = 0;
-        this.stamina = 100;
-        this.maxStamina = 100;
+        this.stamina = 200;
+        this.maxStamina = 200;
         this.staminaDrain = 20; // per second while sprinting
-        this.staminaRegen = 15; // per second while not sprinting
+        this.staminaRegen = 18; // per second while not sprinting
 
         // Movement constants — exact from game.html
         this.walkSpeed = 3.0;
