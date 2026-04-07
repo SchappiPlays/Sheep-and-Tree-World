@@ -203,6 +203,124 @@ function makePig(x, z, terrainY) {
     };
 }
 
+// Deer materials
+const deerBodyMat = new THREE.MeshStandardMaterial({ color: 0x8B6B4A });
+const deerBellyMat = new THREE.MeshStandardMaterial({ color: 0xC4A882 });
+const deerSpotMat = new THREE.MeshStandardMaterial({ color: 0xC8B090 });
+const deerAntlerMat = new THREE.MeshStandardMaterial({ color: 0x6B5A3A });
+
+function makeDeer(x, z, terrainY) {
+    const g = new THREE.Group();
+    const isMale = Math.random() < 0.4;
+
+    // Body — slim and elegant
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.3, 0.75), deerBodyMat);
+    body.position.y = 0.72; body.castShadow = true; g.add(body);
+
+    // Belly underside
+    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.5), deerBellyMat);
+    belly.position.y = 0.56; g.add(belly);
+
+    // Fawn spots (subtle)
+    const spot1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.08), deerSpotMat);
+    spot1.position.set(-0.12, 0.8, 0.1); g.add(spot1);
+    const spot2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), deerSpotMat);
+    spot2.position.set(0.1, 0.78, -0.15); g.add(spot2);
+    const spot3 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.07), deerSpotMat);
+    spot3.position.set(-0.08, 0.76, -0.08); g.add(spot3);
+
+    // Neck — long and elegant, angled forward
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.35, 0.14), deerBodyMat);
+    neck.position.set(0, 0.98, 0.32); neck.rotation.x = -0.25; g.add(neck);
+
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 1.12, 0.42); g.add(headGrp);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.22), deerBodyMat);
+    headGrp.add(head);
+
+    // Muzzle — narrow
+    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), deerBellyMat);
+    muzzle.position.set(0, -0.04, 0.14); headGrp.add(muzzle);
+
+    // Nose
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.03), new THREE.MeshStandardMaterial({ color: 0x2a2020 }));
+    nose.position.set(0, -0.03, 0.2); headGrp.add(nose);
+
+    // Eyes — large, gentle
+    const deerEyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
+    const lEye = new THREE.Mesh(deerEyeGeo, new THREE.MeshStandardMaterial({ color: 0x1a1008 }));
+    lEye.position.set(-0.07, 0.02, 0.06); headGrp.add(lEye);
+    const rEye = lEye.clone(); rEye.position.x = 0.07; headGrp.add(rEye);
+
+    // Ears — large, pointed, angled outward
+    const earGeo = new THREE.BoxGeometry(0.05, 0.12, 0.08);
+    const lEar = new THREE.Mesh(earGeo, deerBodyMat);
+    lEar.position.set(-0.08, 0.1, -0.02); lEar.rotation.set(-0.2, 0, -0.5); headGrp.add(lEar);
+    const rEar = new THREE.Mesh(earGeo, deerBodyMat);
+    rEar.position.set(0.08, 0.1, -0.02); rEar.rotation.set(-0.2, 0, 0.5); headGrp.add(rEar);
+
+    // Inner ears
+    const innerEarGeo = new THREE.BoxGeometry(0.03, 0.08, 0.05);
+    const innerEarMat = new THREE.MeshStandardMaterial({ color: 0xD4A08A });
+    const lInner = new THREE.Mesh(innerEarGeo, innerEarMat);
+    lInner.position.set(-0.08, 0.1, -0.01); lInner.rotation.set(-0.2, 0, -0.5); headGrp.add(lInner);
+    const rInner = new THREE.Mesh(innerEarGeo, innerEarMat);
+    rInner.position.set(0.08, 0.1, -0.01); rInner.rotation.set(-0.2, 0, 0.5); headGrp.add(rInner);
+
+    // Antlers (males only)
+    if (isMale) {
+        const antlerBranchGeo = new THREE.CylinderGeometry(0.012, 0.018, 0.2, 5);
+        const tineGeo = new THREE.CylinderGeometry(0.008, 0.012, 0.12, 4);
+        for (const side of [-1, 1]) {
+            // Main beam
+            const beam = new THREE.Mesh(antlerBranchGeo, deerAntlerMat);
+            beam.position.set(side * 0.06, 0.16, -0.02);
+            beam.rotation.z = side * -0.4;
+            headGrp.add(beam);
+            // Forward tine
+            const tine1 = new THREE.Mesh(tineGeo, deerAntlerMat);
+            tine1.position.set(side * 0.1, 0.24, 0.03);
+            tine1.rotation.set(-0.4, 0, side * -0.3);
+            headGrp.add(tine1);
+            // Back tine
+            const tine2 = new THREE.Mesh(tineGeo, deerAntlerMat);
+            tine2.position.set(side * 0.12, 0.22, -0.05);
+            tine2.rotation.set(0.3, 0, side * -0.5);
+            headGrp.add(tine2);
+        }
+    }
+
+    // Legs — long, thin, elegant
+    const legs = [];
+    for (const [lx, ly, lz] of [[-0.1, 0.55, 0.25], [0.1, 0.55, 0.25], [-0.1, 0.55, -0.25], [0.1, 0.55, -0.25]]) {
+        const hip = new THREE.Group(); hip.position.set(lx, ly, lz); g.add(hip);
+        // Upper leg
+        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.07), deerBodyMat);
+        upper.position.y = -0.15; hip.add(upper);
+        // Lower leg (thinner)
+        const lower = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.28, 0.05), deerBellyMat);
+        lower.position.y = -0.42; hip.add(lower);
+        // Hoof
+        const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.07), hoofMat);
+        hoof.position.set(0, -0.57, 0.01); hip.add(hoof);
+        legs.push(hip);
+    }
+
+    // Tail — small white
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.04), deerBellyMat);
+    tail.position.set(0, 0.72, -0.4); g.add(tail);
+
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 5 + 2,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'deer',
+        hp: 8, maxHP: 8, dead: false, _fleeOnHit: true,
+    };
+}
+
 // ── Enemy materials ──
 const goblinSkinMat = new THREE.MeshStandardMaterial({ color: 0x4a6a2a });
 const goblinEyeMat = new THREE.MeshStandardMaterial({ color: 0xcc2200, emissive: 0x661100, emissiveIntensity: 0.3 });
@@ -459,6 +577,31 @@ export class CreatureManager {
                 continue;
             }
 
+            // ── Flee AI (deer etc.) ──
+            if (sh._fleeing) {
+                sh._fleeTimer -= dt;
+                if (sh._fleeTimer <= 0) { sh._fleeing = false; }
+                else {
+                    sh.walking = true;
+                    sh.speed += (2.5 - sh.speed) * 4 * dt; // sprint away
+                    // Rotation + movement
+                    let da = sh.angle - sh.group.rotation.y;
+                    while (da > Math.PI) da -= Math.PI * 2;
+                    while (da < -Math.PI) da += Math.PI * 2;
+                    sh.group.rotation.y += da * 6 * dt;
+                    sh.x += Math.sin(sh.group.rotation.y) * sh.speed * dt;
+                    sh.z += Math.cos(sh.group.rotation.y) * sh.speed * dt;
+                    const fTerrainY = this.world.getHeight(sh.x, sh.z);
+                    sh.group.position.set(sh.x, fTerrainY, sh.z);
+                    const fwb = clamp01(sh.speed / 0.5);
+                    sh.walkPhase += sh.speed * dt * 14;
+                    for (let li = 0; li < sh.legs.length; li++)
+                        sh.legs[li].rotation.x = ((li % 2 === 0) ? 1 : -1) * Math.sin(sh.walkPhase) * 0.6 * fwb;
+                    sh.headGrp.rotation.x = 0.15; // head up while fleeing
+                    continue;
+                }
+            }
+
             // ── Wandering AI — exact from game.html ──
             sh.wanderTimer -= dt;
             if (sh.wanderTimer <= 0) {
@@ -563,13 +706,24 @@ export class CreatureManager {
                     continue;
                 }
             } else {
-                // Peaceful grasslands
-                if (typeHash < 0.45) {
+                // Check if in a forested area (same hash as tree placement)
+                const bx = Math.floor(sx / BLOCK_SIZE), bz = Math.floor(sz / BLOCK_SIZE);
+                const treeHash = this.world._hash(bx * 0.37 + 7777, bz * 0.53 + 3333);
+                const isForested = treeHash <= 0.12; // generous check — near trees
+
+                if (isForested && typeHash < 0.5) {
+                    // Forest — deer
+                    creature = makeDeer(sx, sz, terrainY);
+                } else if (typeHash < 0.35) {
                     creature = makeSheep(sx, sz, terrainY);
-                } else if (typeHash < 0.75) {
+                } else if (typeHash < 0.6) {
                     creature = makeCow(sx, sz, terrainY);
-                } else {
+                } else if (typeHash < 0.8) {
                     creature = makePig(sx, sz, terrainY);
+                } else if (!isForested) {
+                    creature = makeSheep(sx, sz, terrainY);
+                } else {
+                    creature = makeDeer(sx, sz, terrainY);
                 }
             }
             creature.cid = this._nextId++;
@@ -600,6 +754,13 @@ export class CreatureManager {
             // Knockback
             sh.x += (dx / dist) * 0.5;
             sh.z += (dz / dist) * 0.5;
+            // Flee on hit (deer, etc.)
+            if (sh._fleeOnHit && sh.hp > 0) {
+                sh._fleeing = true;
+                sh._fleeTimer = 4 + Math.random() * 2;
+                sh.angle = Math.atan2(dx, dz); // run away from player
+                sh.walking = true;
+            }
             if (sh.hp <= 0) {
                 sh.hp = 0;
                 sh.dead = true;
