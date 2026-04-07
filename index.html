@@ -5703,9 +5703,12 @@ function updateHeartsUI() {
             html += '<span style="font-size:38px;color:#444;">❤</span>'; // empty
         }
     }
-    // Broken hearts — shown as cracked/grey with X
+    // Broken hearts — split in half, grey, cracked
     for (let i = 0; i < brokenHearts; i++) {
-        html += '<span style="font-size:38px;color:#555;position:relative;display:inline-block;">❤<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:16px;color:#222;font-weight:bold;">✕</span></span>';
+        html += '<span style="display:inline-block;position:relative;width:38px;height:38px;font-size:38px;line-height:38px;">'
+            + '<span style="position:absolute;left:0;top:0;width:19px;height:38px;overflow:hidden;color:#444;transform:translateX(-1px) rotate(-8deg);transform-origin:right center;">❤</span>'
+            + '<span style="position:absolute;left:19px;top:0;width:19px;height:38px;overflow:hidden;color:#444;transform:translateX(1px) rotate(8deg) translateY(2px);transform-origin:left center;"><span style="margin-left:-19px;">❤</span></span>'
+            + '</span>';
     }
     el.innerHTML = html;
 }
