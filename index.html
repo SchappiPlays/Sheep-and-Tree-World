@@ -423,7 +423,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.85;
+renderer.toneMappingExposure = 0.9;
 renderer.setClearColor(SKY_COLOR);
 document.body.appendChild(renderer.domElement);
 
@@ -435,9 +435,9 @@ scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0008); // lighter fog so far terrain 
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 5000);
 
 // ── Lighting — same as game.html ──
-const ambient = new THREE.AmbientLight(0x556677, 0.35);
+const ambient = new THREE.AmbientLight(0x556677, 0.42);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x6688aa, 0x3a4422, 0.45);
+const hemi = new THREE.HemisphereLight(0x6688aa, 0x3a4422, 0.5);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd8b0, 0.9);
 sun.position.set(5, 12, 8);
@@ -10529,9 +10529,9 @@ function animate() {
     if (isNight) dayBright = 0.08;
     else if (isDusk || isDawn) dayBright = 0.15 + dayBright * 0.5;
 
-    sun.intensity = 0.15 + dayBright * 0.7;
-    ambient.intensity = 0.08 + dayBright * 0.25;
-    hemi.intensity = 0.08 + dayBright * 0.32;
+    sun.intensity = 0.2 + dayBright * 0.85;
+    ambient.intensity = 0.1 + dayBright * 0.32;
+    hemi.intensity = 0.1 + dayBright * 0.4;
 
     // Sky color shifts
     const daySky = new THREE.Color(0x87CEEB);
