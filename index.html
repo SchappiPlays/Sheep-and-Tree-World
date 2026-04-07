@@ -298,6 +298,7 @@ canvas { display: block; }
         <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
     </div>
 </div>
+<div id="itemTooltip" style="display:none;position:fixed;z-index:300;background:rgba(15,20,15,0.92);border:1px solid rgba(120,160,80,0.4);border-radius:5px;padding:8px 12px;pointer-events:none;max-width:220px;font:11px monospace;color:rgba(200,190,160,0.9);"></div>
 <div id="saveToast">Saved</div>
 <div id="pauseMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
     <h2 style="color:rgba(220,200,160,0.9);font:bold 24px monospace;margin-bottom:10px;">Paused</h2>
@@ -1095,6 +1096,8 @@ function collectSaveData() {
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
         waypoints: JSON.parse(JSON.stringify(waypoints)),
+        brokenHearts,
+        lifeCrystals: lifeCrystals.map(lc => ({ x: lc.x, z: lc.z })),
     };
 }
 
@@ -3579,6 +3582,18 @@ function startGame(loadSlotName) {
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             if (s.waypoints) { waypoints = s.waypoints; _rebuildWaypointBeams(); }
+            if (s.brokenHearts) brokenHearts = s.brokenHearts;
+            if (s.lifeCrystals) {
+                for (const lc of s.lifeCrystals) {
+                    const lcGroup = new THREE.Group();
+                    const lcMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshStandardMaterial({ color: 0xff2255, emissive: 0xff1144, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 }));
+                    lcGroup.add(lcMesh);
+                    lcGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff4466, transparent: true, opacity: 0.2 })));
+                    lcGroup.position.set(lc.x, getTerrainHeight(lc.x, lc.z) + 0.5, lc.z);
+                    scene.add(lcGroup);
+                    lifeCrystals.push({ x: lc.x, z: lc.z, group: lcGroup });
+                }
+            }
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
             // Re-register custom staff props
@@ -3689,6 +3704,9 @@ function startGame(loadSlotName) {
         playerXP = 0; playerLevel = 0; skillPoints = 0;
         skills.warrior.fill(false); skills.wizard.fill(false);
         waypoints = []; _rebuildWaypointBeams();
+        brokenHearts = 0;
+        for (const lc of lifeCrystals) scene.remove(lc.group);
+        lifeCrystals = [];
         world.getOrCreateChunk(0, 0);
         const spawnY = world.getHeight(0, 0);
         player.position.set(0, spawnY, 0);
@@ -4572,6 +4590,8 @@ const shootingStars = []; // { mesh, trail, x, y, z, landed, item }
 
 let playerDead = false;
 let deathScreenTimer = 0;
+let brokenHearts = 0; // hearts lost permanently until life crystal recovered
+let lifeCrystals = []; // { x, z, mesh } — dropped on death
 
 // Death screen overlay
 const deathScreen = document.createElement('div');
@@ -4592,15 +4612,32 @@ function playerTakeDamage(dmg) {
     // Check death
     if (playerHP <= 0) {
         playerDead = true;
-        deathScreenTimer = 3; // 3 second death screen
+        deathScreenTimer = 3;
         deathScreen.style.display = 'flex';
+        // Break a heart and drop life crystal
+        brokenHearts++;
+        playerMaxHP = Math.max(2, playerMaxHP - 2);
+        // Drop life crystal at death location
+        const lcGroup = new THREE.Group();
+        const lcGeo = new THREE.OctahedronGeometry(0.3, 0);
+        const lcMat = new THREE.MeshStandardMaterial({ color: 0xff2255, emissive: 0xff1144, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 });
+        const lcMesh = new THREE.Mesh(lcGeo, lcMat);
+        lcGroup.add(lcMesh);
+        // Glow
+        const lcGlow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff4466, transparent: true, opacity: 0.2 }));
+        lcGroup.add(lcGlow);
+        const lcX = player.position.x, lcZ = player.position.z;
+        const lcY = getTerrainHeight(lcX, lcZ);
+        lcGroup.position.set(lcX, lcY + 0.5, lcZ);
+        scene.add(lcGroup);
+        lifeCrystals.push({ x: lcX, z: lcZ, group: lcGroup });
     }
 }
 
 function respawnPlayer() {
     playerDead = false;
     deathScreen.style.display = 'none';
-    // Restore HP to full
+    // Restore HP to current max (which is reduced by broken hearts)
     playerHP = playerMaxHP;
     playerMana = playerMaxMana;
     updateHeartsUI();
@@ -4616,7 +4653,11 @@ function respawnPlayer() {
         if (ei >= 0) hotbarSlots[ei] = 'hp_potion';
     }
     refreshUI();
-    addChatMessage('You have respawned with 5 health potions.', 'rgba(255,150,150,0.9)');
+    if (brokenHearts > 0) {
+        addChatMessage(`You have respawned. ${brokenHearts} broken heart${brokenHearts > 1 ? 's' : ''} — find your life crystal${brokenHearts > 1 ? 's' : ''} to restore them!`, 'rgba(255,150,150,0.9)');
+    } else {
+        addChatMessage('You have respawned with 5 health potions.', 'rgba(255,150,150,0.9)');
+    }
 }
 let attackCooldown = 0;
 
@@ -5661,6 +5702,10 @@ function updateHeartsUI() {
         } else {
             html += '<span style="font-size:38px;color:#444;">❤</span>'; // empty
         }
+    }
+    // Broken hearts — shown as cracked/grey with X
+    for (let i = 0; i < brokenHearts; i++) {
+        html += '<span style="font-size:38px;color:#555;position:relative;display:inline-block;">❤<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:16px;color:#222;font-weight:bold;">✕</span></span>';
     }
     el.innerHTML = html;
 }
@@ -6812,6 +6857,64 @@ function refreshUI() {
     if (inventoryOpen) updateInventoryUI();
 }
 
+// ── Item Tooltip ──
+const _tooltipEl = document.getElementById('itemTooltip');
+function _getItemTooltip(key) {
+    if (!key || key === 0) return null;
+    const info = getItemInfo(key);
+    if (!info) return null;
+    let html = `<div style="color:${info.top || '#ccc'};font:bold 13px monospace;margin-bottom:4px;">${info.name}</div>`;
+    // Sword damage
+    const sdmg = _getSwordDamage(key);
+    if (sdmg) html += `<div style="color:#e88;">Damage: ${sdmg}</div>`;
+    // Staff info
+    if (typeof key === 'string' && STAFF_PROPS[key]) {
+        const sp = STAFF_PROPS[key];
+        html += `<div style="color:#88e;">Bolt damage: ${sp.damage || '?'}</div>`;
+    }
+    // Armor
+    if (info.isArmor) html += `<div style="color:#8ae;">Armor piece</div>`;
+    if (info.isShield) html += `<div style="color:#8ae;">Shield — blocks attacks</div>`;
+    // Pickaxe tier
+    if (info.toolType === 'pickaxe') {
+        const tier = key.includes('diamond') ? 'Diamond' : key.includes('steel') ? 'Steel' : key.includes('gold') ? 'Gold' : key.includes('iron') ? 'Iron' : key.includes('copper') ? 'Copper' : key.includes('stone') ? 'Stone' : 'Wood';
+        html += `<div style="color:#aaa;">Tier: ${tier}</div>`;
+    }
+    // Consumables
+    if (key === 'hp_potion') html += `<div style="color:#e88;">Restores 6 HP</div>`;
+    if (key === 'mana_crystal') html += `<div style="color:#88e;">Permanently +1 mana star</div>`;
+    if (key === 'guide_book') html += `<div style="color:#aa8;">Right-click to read</div>`;
+    // Eggs
+    if (info.isEgg) html += `<div style="color:#da8;">Hatch at a stone altar</div>`;
+    // Stack count
+    const count = inventory[key] || 0;
+    if (count > 1) html += `<div style="color:#888;margin-top:3px;">Quantity: ${count}</div>`;
+    return html;
+}
+
+document.addEventListener('mouseover', e => {
+    const slot = e.target.closest('.inv-slot, .hotbar-slot');
+    if (!slot) { _tooltipEl.style.display = 'none'; return; }
+    const bt = slot.dataset.bt;
+    if (!bt || bt === '0' || bt === 'undefined') { _tooltipEl.style.display = 'none'; return; }
+    const key = isNaN(bt) ? bt : Number(bt);
+    const html = _getItemTooltip(key);
+    if (!html) { _tooltipEl.style.display = 'none'; return; }
+    _tooltipEl.innerHTML = html;
+    _tooltipEl.style.display = 'block';
+    const rect = slot.getBoundingClientRect();
+    _tooltipEl.style.left = (rect.right + 8) + 'px';
+    _tooltipEl.style.top = rect.top + 'px';
+    // Keep on screen
+    const tr = _tooltipEl.getBoundingClientRect();
+    if (tr.right > window.innerWidth - 10) _tooltipEl.style.left = (rect.left - tr.width - 8) + 'px';
+    if (tr.bottom > window.innerHeight - 10) _tooltipEl.style.top = (window.innerHeight - tr.height - 10) + 'px';
+});
+document.addEventListener('mouseout', e => {
+    const slot = e.target.closest('.inv-slot, .hotbar-slot');
+    if (slot) _tooltipEl.style.display = 'none';
+});
+
 function updateHotbarUI() {
     let html = '';
     for (let i = 0; i < 9; i++) {
@@ -6823,7 +6926,7 @@ function updateHotbarUI() {
             inner += blockIconHTML(info);
             inner += `<span class="count">${inventory[bt]}</span>`;
         }
-        html += `<div class="hotbar-slot${sel}">${inner}</div>`;
+        html += `<div class="hotbar-slot${sel}" data-bt="${bt}">${inner}</div>`;
     }
     hotbarEl.innerHTML = html;
 }
@@ -10897,6 +11000,25 @@ function animate() {
                 placeTimer = 0;
                 doPlace(null);
             }
+        }
+    }
+
+    // Life crystal pickup + animation
+    for (let i = lifeCrystals.length - 1; i >= 0; i--) {
+        const lc = lifeCrystals[i];
+        lc.group.children[0].rotation.y += dt * 2;
+        lc.group.children[0].rotation.x = Math.sin(Date.now() * 0.002) * 0.3;
+        lc.group.position.y = getTerrainHeight(lc.x, lc.z) + 0.5 + Math.sin(Date.now() * 0.003) * 0.15;
+        const dx = player.position.x - lc.x, dz = player.position.z - lc.z;
+        if (dx * dx + dz * dz < 4) {
+            // Pick up — restore broken heart
+            brokenHearts = Math.max(0, brokenHearts - 1);
+            playerMaxHP += 2;
+            playerHP = Math.min(playerHP + 2, playerMaxHP);
+            updateHeartsUI();
+            scene.remove(lc.group);
+            lifeCrystals.splice(i, 1);
+            addChatMessage('Life crystal recovered! A broken heart has been restored.', 'rgba(255,100,150,0.9)');
         }
     }
 
