@@ -7427,7 +7427,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
         for (let dy = 0; dy < 2; dy++) {
             for (let dz = 0; dz < 2; dz++) {
                 for (let dx = 0; dx < 2; dx++) {
-                    if (!snapShape[dy][dz][dx]) continue; // skip disabled blocks
+                    if (!getSnapBlock(dy, dz, dx)) continue; // skip disabled blocks
                     const bx = bx0 + dx, by = by0 + dy, bz = bz0 + dz;
                     const block = world.getBlockAt(bx, by, bz);
                     if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
@@ -8599,6 +8599,18 @@ const snapShape = [
     [[true, true], [true, true]], // y=0: [z0][x0,x1], [z1][x0,x1]
     [[true, true], [true, true]], // y=1
 ];
+// Get rotated snap shape block based on player facing
+function getSnapBlock(dy, dz, dx) {
+    // Snap player yaw to 4 directions: 0=north, 1=east, 2=south, 3=west
+    const yaw = player ? player.group.rotation.y : (typeof fpYaw !== 'undefined' ? fpYaw : 0);
+    let dir = Math.round(((yaw % (Math.PI*2)) + Math.PI*2) % (Math.PI*2) / (Math.PI/2)) % 4;
+    let rx = dx, rz = dz;
+    // Rotate dx,dz based on facing
+    if (dir === 1) { rx = 1-dz; rz = dx; }       // east: 90 CW
+    else if (dir === 2) { rx = 1-dx; rz = 1-dz; } // south: 180
+    else if (dir === 3) { rx = dz; rz = 1-dx; }   // west: 90 CCW
+    return snapShape[dy][rz][rx];
+}
 function updateBrushUI() {
     document.getElementById('brushW').value = brushW;
     document.getElementById('brushH').value = brushH;
@@ -9757,11 +9769,11 @@ function doPlace(e) {
         const sx = snap(px), sy = snap(py), sz = snap(pz);
         // Count active blocks in shape
         let activeCount = 0;
-        for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++) if (snapShape[dy][dz][dx]) activeCount++;
+        for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++) if (getSnapBlock(dy,dz,dx)) activeCount++;
         if ((inventory[bt] || 0) < activeCount) return false;
         // Check not overlapping player
         for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++) {
-            if (!snapShape[dy][dz][dx]) continue;
+            if (!getSnapBlock(dy,dz,dx)) continue;
             const wx = (sx+dx) * BS, wy = ((sy+dy) - 128) * BS, wz = (sz+dz) * BS;
             const pdx2 = wx - player.position.x, pdz2 = wz - player.position.z, pdy2 = wy - player.position.y;
             if (Math.abs(pdx2) < 0.5 && Math.abs(pdz2) < 0.5 && pdy2 >= -0.5 && pdy2 < player.HEIGHT) return false;
@@ -9769,7 +9781,7 @@ function doPlace(e) {
         // Remove blocks from inventory (already removed 1 above)
         for (let i = 0; i < activeCount - 1; i++) { if (!removeFromInventory(bt)) break; }
         for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++)
-            if (snapShape[dy][dz][dx]) world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
+            if (getSnapBlock(dy,dz,dx)) world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
         for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) rebuildNear(sx+dx, sz+dz);
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
