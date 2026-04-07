@@ -328,8 +328,8 @@ canvas { display: block; }
     </div>
     <div style="width:300px;">
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Snap Grid Shape (G key)</div>
-        <div id="snapGridEditor" style="display:flex;gap:8px;justify-content:center;"></div>
-        <div style="color:rgba(120,110,90,0.4);font:9px monospace;text-align:center;margin-top:4px;">Click blocks to toggle. Pink face = faces player.</div>
+        <canvas id="snapGridCanvas" width="200" height="200" style="display:block;margin:0 auto;border:1px solid rgba(120,100,60,0.3);border-radius:4px;cursor:grab;background:rgba(10,10,10,0.5);"></canvas>
+        <div style="color:rgba(120,110,90,0.4);font:9px monospace;text-align:center;margin-top:4px;">Drag to rotate. Click block to toggle.</div>
     </div>
     <div style="width:300px;">
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:6px;">Performance</div>
@@ -4116,35 +4116,107 @@ function updateSettingsUI() {
     document.getElementById('optClouds').checked = optClouds;
     document.getElementById('optParticles').checked = optParticles;
     renderKeybindList();
-    // Snap grid shape editor
-    const sgEl = document.getElementById('snapGridEditor');
-    if (sgEl) {
-        let sgHtml = '';
-        // Show 2 layers side by side (y=0 left, y=1 right) — each is 2x2 grid
-        for (let y = 0; y < 2; y++) {
-            sgHtml += `<div style="text-align:center;"><div style="color:rgba(150,140,110,0.5);font:8px monospace;margin-bottom:2px;">${y===0?'Bottom':'Top'}</div><div style="display:grid;grid-template-columns:28px 28px;gap:2px;">`;
-            for (let z = 0; z < 2; z++) {
-                for (let x = 0; x < 2; x++) {
-                    const active = snapShape[y][z][x];
-                    const isFrontFace = z === 1; // z=1 faces player
-                    let bg;
-                    if (!active) bg = 'rgba(120,40,40,0.6)'; // red = disabled
-                    else if (isFrontFace) bg = 'rgba(200,100,160,0.6)'; // pink = front face
-                    else bg = 'rgba(60,180,80,0.6)'; // green = active
-                    const border = active ? 'rgba(100,255,120,0.5)' : 'rgba(200,80,80,0.4)';
-                    sgHtml += `<div onclick="window._toggleSnapBlock(${y},${z},${x})" style="width:28px;height:28px;background:${bg};border:2px solid ${border};border-radius:3px;cursor:pointer;"></div>`;
-                }
-            }
-            sgHtml += '</div></div>';
-        }
-        sgEl.innerHTML = sgHtml;
-    }
+    _initSnapGridCanvas();
 }
 
-window._toggleSnapBlock = (y, z, x) => {
-    snapShape[y][z][x] = !snapShape[y][z][x];
-    updateSettingsUI();
-};
+// 3D snap grid editor
+let _sgScene, _sgCamera, _sgRenderer, _sgBlocks, _sgRotX = 0.5, _sgRotY = 0.6, _sgDragging = false, _sgLastX = 0, _sgLastY = 0, _sgInited = false;
+
+function _initSnapGridCanvas() {
+    const canvas = document.getElementById('snapGridCanvas');
+    if (!canvas) return;
+    if (!_sgInited) {
+        _sgInited = true;
+        _sgScene = new THREE.Scene();
+        _sgCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        _sgCamera.position.set(0, 0, 5);
+        _sgRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        _sgRenderer.setSize(200, 200);
+        _sgRenderer.setClearColor(0x000000, 0);
+
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(2, 3, 4);
+        _sgScene.add(light);
+        _sgScene.add(new THREE.AmbientLight(0x444444));
+
+        _sgBlocks = new THREE.Group();
+        _sgScene.add(_sgBlocks);
+
+        // Drag to rotate
+        canvas.addEventListener('mousedown', (e) => {
+            _sgDragging = true; _sgLastX = e.clientX; _sgLastY = e.clientY;
+            canvas.style.cursor = 'grabbing';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!_sgDragging) return;
+            _sgRotY += (e.clientX - _sgLastX) * 0.01;
+            _sgRotX += (e.clientY - _sgLastY) * 0.01;
+            _sgRotX = Math.max(-1.2, Math.min(1.2, _sgRotX));
+            _sgLastX = e.clientX; _sgLastY = e.clientY;
+            _renderSnapGrid();
+        });
+        document.addEventListener('mouseup', () => { _sgDragging = false; canvas.style.cursor = 'grab'; });
+
+        // Click to toggle block
+        canvas.addEventListener('click', (e) => {
+            if (Math.abs(e.clientX - _sgLastX) > 3 || Math.abs(e.clientY - _sgLastY) > 3) return; // was a drag
+            const rect = canvas.getBoundingClientRect();
+            const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            const my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            const rc = new THREE.Raycaster();
+            rc.setFromCamera(new THREE.Vector2(mx, my), _sgCamera);
+            const hits = rc.intersectObjects(_sgBlocks.children, false);
+            if (hits.length > 0) {
+                const h = hits[0].object;
+                if (h._snapY !== undefined) {
+                    snapShape[h._snapY][h._snapZ][h._snapX] = !snapShape[h._snapY][h._snapZ][h._snapX];
+                    _renderSnapGrid();
+                }
+            }
+        });
+    }
+    _renderSnapGrid();
+}
+
+function _renderSnapGrid() {
+    if (!_sgScene) return;
+    // Rebuild block meshes
+    while (_sgBlocks.children.length) _sgBlocks.remove(_sgBlocks.children[0]);
+
+    for (let y = 0; y < 2; y++) {
+        for (let z = 0; z < 2; z++) {
+            for (let x = 0; x < 2; x++) {
+                const active = snapShape[y][z][x];
+                const isFront = z === 1;
+                let color;
+                if (!active) color = 0xaa3333; // red
+                else if (isFront) color = 0xdd66aa; // pink
+                else color = 0x44bb55; // green
+
+                const geo = new THREE.BoxGeometry(0.85, 0.85, 0.85);
+                const mat = new THREE.MeshStandardMaterial({
+                    color, transparent: true, opacity: active ? 0.7 : 0.3,
+                    roughness: 0.5, metalness: 0.1,
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x - 0.5, y - 0.5, z - 0.5);
+                mesh._snapX = x; mesh._snapY = y; mesh._snapZ = z;
+                _sgBlocks.add(mesh);
+
+                // Wireframe outline
+                const wire = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(geo),
+                    new THREE.LineBasicMaterial({ color: active ? 0x88ff88 : 0xff6666, linewidth: 1 })
+                );
+                wire.position.copy(mesh.position);
+                _sgBlocks.add(wire);
+            }
+        }
+    }
+
+    _sgBlocks.rotation.set(_sgRotX, _sgRotY, 0);
+    _sgRenderer.render(_sgScene, _sgCamera);
+}
 let _rebindingAction = null;
 function renderKeybindList() {
     const el = document.getElementById('keybindList');
