@@ -19,6 +19,7 @@ export class Player {
         this.maxStamina = 200;
         this.staminaDrain = 20; // per second while sprinting
         this.staminaRegen = 18; // per second while not sprinting
+        this._crouching = false;
 
         // Movement constants — exact from game.html
         this.walkSpeed = 3.0;
@@ -1149,13 +1150,15 @@ export class Player {
             if (keys[kr]) this.group.rotation.y -= this.turnRate * dt;
         }
 
-        const wantSprint = !!(keys[ks] && (wantDir > 0 || strafeDir !== 0) && this.stamina > 0);
+        // Crouch with Control
+        this._crouching = !!(keys['ControlLeft'] || keys['ControlRight']);
+        const wantSprint = !!(keys[ks] && !this._crouching && (wantDir > 0 || strafeDir !== 0) && this.stamina > 0);
         if (wantSprint) {
             this.stamina = Math.max(0, this.stamina - this.staminaDrain * dt);
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + this.staminaRegen * dt);
         }
-        const maxSpeed = wantSprint ? this.sprintSpeed : this.walkSpeed;
+        const maxSpeed = this._crouching ? this.walkSpeed * 0.4 : (wantSprint ? this.sprintSpeed : this.walkSpeed);
 
         // Speed — combine forward and strafe
         const hasInput = wantDir !== 0 || strafeDir !== 0;
@@ -1278,7 +1281,7 @@ export class Player {
         const speed = Math.abs(this.speed);
         const isMoving = speed > 0.15;
         const s = this.sprintBlend;
-        const cr = 0; // no crouch
+        const cr = this._crouching ? 1 : 0;
 
         // Walk blend (smooth)
         this.walkBlend += ((isMoving ? 1 : 0) - this.walkBlend) * this.blendRate * dt;
@@ -1296,7 +1299,8 @@ export class Player {
 
         // ── Body (hip) ──
         const bobAmp = mix(mix(0.025, 0.055, s), 0.012, cr);
-        const baseY = this.hipHeight;
+        const crouchLower = cr * 0.25;
+        const baseY = this.hipHeight - crouchLower;
         this.body.position.y = baseY + Math.cos(p * 2) * bobAmp * b;
 
         // Lateral sway

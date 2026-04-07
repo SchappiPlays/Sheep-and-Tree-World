@@ -327,6 +327,11 @@ canvas { display: block; }
         </div>
     </div>
     <div style="width:300px;">
+        <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:4px;">Snap Grid Shape (G key)</div>
+        <div id="snapGridEditor" style="display:flex;gap:8px;justify-content:center;"></div>
+        <div style="color:rgba(120,110,90,0.4);font:9px monospace;text-align:center;margin-top:4px;">Click blocks to toggle. Pink face = faces player.</div>
+    </div>
+    <div style="width:300px;">
         <div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-bottom:6px;">Performance</div>
         <div style="display:flex;flex-direction:column;gap:4px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -4111,7 +4116,35 @@ function updateSettingsUI() {
     document.getElementById('optClouds').checked = optClouds;
     document.getElementById('optParticles').checked = optParticles;
     renderKeybindList();
+    // Snap grid shape editor
+    const sgEl = document.getElementById('snapGridEditor');
+    if (sgEl) {
+        let sgHtml = '';
+        // Show 2 layers side by side (y=0 left, y=1 right) — each is 2x2 grid
+        for (let y = 0; y < 2; y++) {
+            sgHtml += `<div style="text-align:center;"><div style="color:rgba(150,140,110,0.5);font:8px monospace;margin-bottom:2px;">${y===0?'Bottom':'Top'}</div><div style="display:grid;grid-template-columns:28px 28px;gap:2px;">`;
+            for (let z = 0; z < 2; z++) {
+                for (let x = 0; x < 2; x++) {
+                    const active = snapShape[y][z][x];
+                    const isFrontFace = z === 1; // z=1 faces player
+                    let bg;
+                    if (!active) bg = 'rgba(120,40,40,0.6)'; // red = disabled
+                    else if (isFrontFace) bg = 'rgba(200,100,160,0.6)'; // pink = front face
+                    else bg = 'rgba(60,180,80,0.6)'; // green = active
+                    const border = active ? 'rgba(100,255,120,0.5)' : 'rgba(200,80,80,0.4)';
+                    sgHtml += `<div onclick="window._toggleSnapBlock(${y},${z},${x})" style="width:28px;height:28px;background:${bg};border:2px solid ${border};border-radius:3px;cursor:pointer;"></div>`;
+                }
+            }
+            sgHtml += '</div></div>';
+        }
+        sgEl.innerHTML = sgHtml;
+    }
 }
+
+window._toggleSnapBlock = (y, z, x) => {
+    snapShape[y][z][x] = !snapShape[y][z][x];
+    updateSettingsUI();
+};
 let _rebindingAction = null;
 function renderKeybindList() {
     const el = document.getElementById('keybindList');
@@ -5447,6 +5480,15 @@ document.addEventListener('keydown', e => {
     if (horseMgr && horseMgr.ridingHorse && !e.repeat) {
         if (e.code === keybinds.forward) { horseMgr.gearUp(); e.preventDefault(); return; }
         if (e.code === keybinds.back) { horseMgr.gearDown(); e.preventDefault(); return; }
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            horseMgr.dismount();
+            player.leftLeg.hip.rotation.set(0,0,0); player.rightLeg.hip.rotation.set(0,0,0);
+            player.leftLeg.knee.rotation.x = 0; player.rightLeg.knee.rotation.x = 0;
+            player.leftArm.shoulder.rotation.set(0,0,0); player.rightArm.shoulder.rotation.set(0,0,0);
+            player.leftArm.elbow.rotation.x = 0; player.rightArm.elbow.rotation.x = 0;
+            player.spine.rotation.x = 0; player.headGroup.rotation.x = 0;
+            e.preventDefault(); return;
+        }
     }
     // Spell slot switching: Shift+1-6
     if (e.shiftKey && e.code >= 'Digit1' && e.code <= 'Digit9') {
@@ -7307,9 +7349,10 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
         const snap = v => Math.floor(v / 2) * 2;
         const bx0 = snap(hit.x), by0 = snap(hit.y), bz0 = snap(hit.z);
         const rebuildSet = new Set();
-        for (let dx = 0; dx < 2; dx++) {
-            for (let dy = 0; dy < 2; dy++) {
-                for (let dz = 0; dz < 2; dz++) {
+        for (let dy = 0; dy < 2; dy++) {
+            for (let dz = 0; dz < 2; dz++) {
+                for (let dx = 0; dx < 2; dx++) {
+                    if (!snapShape[dy][dz][dx]) continue; // skip disabled blocks
                     const bx = bx0 + dx, by = by0 + dy, bz = bz0 + dz;
                     const block = world.getBlockAt(bx, by, bz);
                     if (block !== BLOCK.AIR && block !== BLOCK.WATER && block !== BLOCK.BEDROCK) {
@@ -8476,6 +8519,11 @@ function updateBlastFurnaceUI() {
 let brushW = 1, brushH = 1, brushD = 1;
 let brushRotated = false; // R to toggle horizontal axis
 let snapGrid = false; // G to toggle 2x2x2 snap grid for breaking
+// Snap grid shape: 2x2x2 array, true = active block
+const snapShape = [
+    [[true, true], [true, true]], // y=0: [z0][x0,x1], [z1][x0,x1]
+    [[true, true], [true, true]], // y=1
+];
 function updateBrushUI() {
     document.getElementById('brushW').value = brushW;
     document.getElementById('brushH').value = brushH;
@@ -9629,21 +9677,24 @@ function doPlace(e) {
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
     } else if (snapGrid) {
-        // 2x2x2 snap placement — matches snap grid breaking
+        // Snap placement — uses snapShape
         const snap = v => Math.floor(v / 2) * 2;
         const sx = snap(px), sy = snap(py), sz = snap(pz);
-        // Need 8 blocks
-        if ((inventory[bt] || 0) < 8) return false;
+        // Count active blocks in shape
+        let activeCount = 0;
+        for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++) if (snapShape[dy][dz][dx]) activeCount++;
+        if ((inventory[bt] || 0) < activeCount) return false;
         // Check not overlapping player
-        for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++) {
+        for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++) {
+            if (!snapShape[dy][dz][dx]) continue;
             const wx = (sx+dx) * BS, wy = ((sy+dy) - 128) * BS, wz = (sz+dz) * BS;
             const pdx2 = wx - player.position.x, pdz2 = wz - player.position.z, pdy2 = wy - player.position.y;
             if (Math.abs(pdx2) < 0.5 && Math.abs(pdz2) < 0.5 && pdy2 >= -0.5 && pdy2 < player.HEIGHT) return false;
         }
-        // Already removed 1 from inventory above, remove 7 more
-        for (let i = 0; i < 7; i++) { if (!removeFromInventory(bt)) break; }
-        for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) for (let dz = 0; dz < 2; dz++)
-            world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
+        // Remove blocks from inventory (already removed 1 above)
+        for (let i = 0; i < activeCount - 1; i++) { if (!removeFromInventory(bt)) break; }
+        for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++)
+            if (snapShape[dy][dz][dx]) world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
         for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) rebuildNear(sx+dx, sz+dz);
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
@@ -11152,7 +11203,7 @@ function animate() {
     if (horseMgr) {
         if (horseMgr.ridingHorse) {
             const gearNames = ['Stopped', 'Walk', 'Trot', 'Canter', 'Gallop'];
-            horsePrompt = `Right-click to dismount | W/S to change gear: ${gearNames[horseMgr.horseGear]}`;
+            horsePrompt = `Shift to dismount | W/S to change gear: ${gearNames[horseMgr.horseGear]}`;
         } else if (horseMgr.nearHorse) {
             horsePrompt = 'Right-click to mount horse' + (horseMgr.nearHorse._name ? ` (${horseMgr.nearHorse._name})` : '');
         }
