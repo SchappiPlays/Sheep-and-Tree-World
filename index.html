@@ -3677,7 +3677,7 @@ function startGame(loadSlotName) {
         // New game — spawn at center, reset progression
         staffDamageDealt = 0;
         activeSpellSlot = 1;
-        playerMaxHP = 10 + getStatHPBonus();
+        playerMaxHP = Math.max(2, 10 + getStatHPBonus());
         playerHP = playerMaxHP;
         playerMaxMana = Math.round(10 * getStatManaMult());
         playerMana = playerMaxMana;
@@ -3831,11 +3831,11 @@ function saveSettings() {
 
 // ── Player Stats ──
 const STAT_DEFS = [
-    { key: 'strength',  label: 'Strength',  desc: 'Attack damage', icon: '\u2694' },
-    { key: 'agility',   label: 'Agility',   desc: 'Move & sprint speed', icon: '\u27A4' },
-    { key: 'fortitude', label: 'Fortitude', desc: 'Max health', icon: '\u2665' },
-    { key: 'dexterity', label: 'Dexterity', desc: 'Mining & break speed', icon: '\u26CF' },
-    { key: 'wisdom',    label: 'Wisdom',    desc: 'Max mana & regen', icon: '\u2605' },
+    { key: 'strength',  label: 'Strength',  desc: 'Attack damage (0 = very weak)', icon: '\u2694' },
+    { key: 'agility',   label: 'Agility',   desc: 'Movement speed (0 = very slow)', icon: '\u27A4' },
+    { key: 'fortitude', label: 'Fortitude', desc: 'Max health (0 = 2 hearts)', icon: '\u2665' },
+    { key: 'dexterity', label: 'Dexterity', desc: 'Mining speed (0 = very slow)', icon: '\u26CF' },
+    { key: 'wisdom',    label: 'Wisdom',    desc: 'Mana pool (0 = no mana)', icon: '\u2605' },
 ];
 const STAT_MAX_POINTS = 20;
 const STAT_MAX_EACH = 10;
@@ -3846,11 +3846,11 @@ function getStatPointsUsed() {
     let t = 0; for (const k in playerStats) t += playerStats[k]; return t;
 }
 
-function getStatDmgMult()   { return 1.0 + playerStats.strength * 0.08; }  // +8% per point, up to +80%
-function getStatSpeedMult() { return 1.0 + playerStats.agility * 0.05; }   // +5% per point, up to +50%
-function getStatHPBonus()   { return playerStats.fortitude * 2; }           // +2 HP (1 heart) per point
-function getStatBreakMult() { return 1.0 - playerStats.dexterity * 0.06; } // -6% break time per point (0.4x at 10)
-function getStatManaMult()  { return 1.0 + playerStats.wisdom * 0.1; }     // +10% per point, up to +100%
+function getStatDmgMult()   { return 0.25 + playerStats.strength * 0.15; }  // 0pts=0.25x, 5pts=1.0x, 10pts=1.75x
+function getStatSpeedMult() { return 0.4 + playerStats.agility * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
+function getStatHPBonus()   { return -6 + playerStats.fortitude * 2; }     // 0pts=4HP(2hearts), 3pts=10HP(normal), 10pts=24HP
+function getStatBreakMult() { return Math.max(0.5, 3.0 - playerStats.dexterity * 0.25); } // 0pts=3.0x slower, 5pts=1.75x, 10pts=0.5x fast
+function getStatManaMult()  { return playerStats.wisdom * 0.2; }           // 0pts=0 mana, 5pts=1.0x, 10pts=2.0x
 
 function buildStatUI() {
     const container = document.getElementById('statRows');
