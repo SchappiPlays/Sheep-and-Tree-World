@@ -22,8 +22,8 @@ export class Player {
         this._crouching = false;
 
         // Movement constants — exact from game.html
-        this.walkSpeed = 3.0;
-        this.sprintSpeed = 7.0;
+        this.walkSpeed = 3.6;
+        this.sprintSpeed = 8.0;
         this.turnRate = 2.8;
         this.accel = 8.0;
         this.decel = 6.0;

@@ -2286,8 +2286,8 @@ function startGame(loadSlotName) {
     dragonMgr._world = world;
     player = new Player(scene, world);
     // Apply stat bonuses to player
-    player.walkSpeed = 3.0 * getStatSpeedMult();
-    player.sprintSpeed = 7.0 * getStatSpeedMult();
+    player.walkSpeed = 3.6 * getStatSpeedMult();
+    player.sprintSpeed = 8.0 * getStatSpeedMult();
     saveCharColors(); // read from inputs
     applyCharColors(player);
     // Name label above player
@@ -3572,8 +3572,8 @@ function startGame(loadSlotName) {
             if (s.playerXP !== undefined) { playerXP = s.playerXP; playerLevel = s.playerLevel; skillPoints = s.skillPoints; }
             if (s.playerStats) {
                 Object.assign(playerStats, s.playerStats);
-                player.walkSpeed = 3.0 * getStatSpeedMult();
-                player.sprintSpeed = 7.0 * getStatSpeedMult();
+                player.walkSpeed = 3.6 * getStatSpeedMult();
+                player.sprintSpeed = 8.0 * getStatSpeedMult();
             }
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
