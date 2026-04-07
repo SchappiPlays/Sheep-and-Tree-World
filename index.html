@@ -1094,6 +1094,7 @@ function collectSaveData() {
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
+        waypoints: JSON.parse(JSON.stringify(waypoints)),
     };
 }
 
@@ -3577,6 +3578,7 @@ function startGame(loadSlotName) {
             }
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
+            if (s.waypoints) { waypoints = s.waypoints; _rebuildWaypointBeams(); }
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
             // Re-register custom staff props
@@ -3686,6 +3688,7 @@ function startGame(loadSlotName) {
         equippedShield = null;
         playerXP = 0; playerLevel = 0; skillPoints = 0;
         skills.warrior.fill(false); skills.wizard.fill(false);
+        waypoints = []; _rebuildWaypointBeams();
         world.getOrCreateChunk(0, 0);
         const spawnY = world.getHeight(0, 0);
         player.position.set(0, spawnY, 0);
@@ -6262,6 +6265,9 @@ function drawWorldMap() {
         mapCtx.putImageData(mapCache, 0, 0);
     }
 
+    // Waypoint markers
+    _drawWaypointsOnMap(mapCtx, scale, mapViewX, mapViewZ, mapViewSize);
+
     // Player marker — ink style compass arrow
     const ppx = (player.position.x - mapViewX + mapViewSize) * scale;
     const ppy = (player.position.z - mapViewZ + mapViewSize) * scale;
@@ -6323,6 +6329,105 @@ mapCanvas.addEventListener('wheel', e => {
     mapViewSize = Math.max(50, Math.min(2500, mapViewSize * zf));
     drawWorldMap();
 }, { passive: false });
+
+// ── Waypoints ──
+const WAYPOINT_COLORS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6, 0x1abc9c, 0xe67e22, 0xecf0f1];
+const WAYPOINT_COLOR_NAMES = ['Red', 'Blue', 'Green', 'Gold', 'Purple', 'Teal', 'Orange', 'White'];
+let waypoints = []; // { x, z, name, color (index) }
+let _wpBeams = []; // 3D beam meshes
+
+function addWaypoint(wx, wz, name, colorIdx) {
+    if (waypoints.length >= 20) return;
+    waypoints.push({ x: wx, z: wz, name: name || `Marker ${waypoints.length + 1}`, color: colorIdx || 0 });
+    _rebuildWaypointBeams();
+    if (mapOpen) drawWorldMap();
+}
+
+function removeWaypoint(idx) {
+    waypoints.splice(idx, 1);
+    _rebuildWaypointBeams();
+    if (mapOpen) drawWorldMap();
+}
+
+function _rebuildWaypointBeams() {
+    for (const b of _wpBeams) scene.remove(b);
+    _wpBeams = [];
+    for (const wp of waypoints) {
+        const color = WAYPOINT_COLORS[wp.color % WAYPOINT_COLORS.length];
+        const beamGeo = new THREE.CylinderGeometry(0.08, 0.08, 60, 6);
+        const beamMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.set(wp.x, 30, wp.z);
+        scene.add(beam);
+        // Diamond marker at top
+        const diaGeo = new THREE.OctahedronGeometry(0.4, 0);
+        const diaMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 });
+        const dia = new THREE.Mesh(diaGeo, diaMat);
+        dia.position.y = 30;
+        beam.add(dia);
+        beam._wpDiamond = dia;
+        beam._wpColor = color;
+        _wpBeams.push(beam);
+    }
+}
+
+// Draw waypoints on map
+function _drawWaypointsOnMap(mapCtx, scale, mapViewX, mapViewZ, mapViewSize) {
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const wx = (wp.x - mapViewX + mapViewSize) * scale;
+        const wz = (wp.z - mapViewZ + mapViewSize) * scale;
+        if (wx < -10 || wx > mapCtx.canvas.width + 10 || wz < -10 || wz > mapCtx.canvas.height + 10) continue;
+        const hex = WAYPOINT_COLORS[wp.color % WAYPOINT_COLORS.length];
+        const r = (hex >> 16) & 0xff, g = (hex >> 8) & 0xff, b = hex & 0xff;
+        const col = `rgb(${r},${g},${b})`;
+        // Pin
+        mapCtx.fillStyle = col;
+        mapCtx.beginPath();
+        mapCtx.moveTo(wx, wz - 10);
+        mapCtx.lineTo(wx - 5, wz - 3);
+        mapCtx.lineTo(wx + 5, wz - 3);
+        mapCtx.closePath();
+        mapCtx.fill();
+        mapCtx.beginPath();
+        mapCtx.arc(wx, wz - 10, 4, 0, Math.PI * 2);
+        mapCtx.fill();
+        // Label
+        mapCtx.fillStyle = 'rgba(40,25,15,0.8)';
+        mapCtx.font = 'bold 10px Georgia, serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText(wp.name, wx, wz + 8);
+    }
+}
+
+// Right-click on map to place waypoint
+mapCanvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (!mapOpen || mapDidDrag) return;
+    const rect = mapCanvas.getBoundingClientRect();
+    const canvasScale = mapCanvas.width / rect.width;
+    const mx = (e.clientX - rect.left) * canvasScale;
+    const mz = (e.clientY - rect.top) * canvasScale;
+    const pixToWorld = (mapViewSize * 2) / mapCanvas.width;
+    const worldX = mapViewX - mapViewSize + mx * pixToWorld;
+    const worldZ = mapViewZ - mapViewSize + mz * pixToWorld;
+    // Check if clicking near an existing waypoint to remove it
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const wpx = (wp.x - mapViewX + mapViewSize) / pixToWorld;
+        const wpz = (wp.z - mapViewZ + mapViewSize) / pixToWorld;
+        if (Math.abs(mx - wpx) < 12 && Math.abs(mz - wpz) < 12) {
+            removeWaypoint(i);
+            return;
+        }
+    }
+    // Place new waypoint — prompt for name
+    const name = prompt('Waypoint name:', `Marker ${waypoints.length + 1}`);
+    if (name === null) return;
+    // Color picker — cycle through colors
+    const colorIdx = waypoints.length % WAYPOINT_COLORS.length;
+    addWaypoint(worldX, worldZ, name, colorIdx);
+});
 
 // ── Inventory & Hotbar ──
 const inventory = {}; // blockType → count
@@ -10793,6 +10898,11 @@ function animate() {
                 doPlace(null);
             }
         }
+    }
+
+    // Waypoint beam animation
+    for (const b of _wpBeams) {
+        if (b._wpDiamond) b._wpDiamond.rotation.y += dt * 1.5;
     }
 
     // Multiplayer sync
