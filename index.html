@@ -10587,25 +10587,26 @@ function animate() {
     sunGlow.material.color.lerpColors(_glowLow, _glowHigh, sunElevation);
 
     // Sun follows player at orbital position
+    // Sun light follows player, offset toward sun direction (east-west arc)
     sun.position.set(
-        player.position.x + sunX * 0.01,
+        player.position.x + Math.cos(sunAngle) * 8,
         player.position.y + Math.max(2, sunY * 0.03),
-        player.position.z + 8
+        player.position.z
     );
     sun.target.position.copy(player.position);
     sun.target.updateMatrixWorld();
 
-    // Sun sphere follows at sky distance
-    sunSphere.position.set(player.position.x + sunX * 5, sunY * 5, player.position.z - 2000);
+    // Sun sphere — rises in east (+X), sets in west (-X)
+    sunSphere.position.set(player.position.x + sunX * 5, sunY * 5, player.position.z);
     sunGlow.position.copy(sunSphere.position);
 
-    // Moon — opposite side of sky from sun, visible at night
+    // Moon — opposite side of sky from sun
     moonSphere.visible = isNight || isDusk || isDawn;
     moonGlow.visible = moonSphere.visible;
     const moonAngle = sunAngle + Math.PI; // opposite to sun
     const moonX = Math.cos(moonAngle) * 400 * 0.5;
     const moonY = Math.sin(moonAngle) * 400;
-    moonSphere.position.set(player.position.x + moonX * 5, moonY * 5, player.position.z + 2000);
+    moonSphere.position.set(player.position.x + moonX * 5, moonY * 5, player.position.z);
     moonGlow.position.copy(moonSphere.position);
 
     // ── Shooting Stars (nighttime only) ──
