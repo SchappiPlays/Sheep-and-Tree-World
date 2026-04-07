@@ -3846,10 +3846,10 @@ function getStatPointsUsed() {
     let t = 0; for (const k in playerStats) t += playerStats[k]; return t;
 }
 
-function getStatDmgMult()   { return 0.25 + playerStats.strength * 0.15; }  // 0pts=0.25x, 5pts=1.0x, 10pts=1.75x
-function getStatSpeedMult() { return 0.4 + playerStats.agility * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
-function getStatHPBonus()   { return -6 + playerStats.fortitude * 2; }     // 0pts=4HP(2hearts), 3pts=10HP(normal), 10pts=24HP
-function getStatBreakMult() { return Math.max(0.5, 3.0 - playerStats.dexterity * 0.25); } // 0pts=3.0x slower, 5pts=1.75x, 10pts=0.5x fast
+function getStatDmgMult()   { return 0.4 + playerStats.strength * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
+function getStatSpeedMult() { return 0.6 + playerStats.agility * 0.08; }   // 0pts=0.6x, 5pts=1.0x, 10pts=1.4x
+function getStatHPBonus()   { return -4 + playerStats.fortitude * 2; }     // 0pts=6HP(3hearts), 3pts=12HP, 10pts=26HP
+function getStatBreakMult() { return Math.max(0.5, 2.0 - playerStats.dexterity * 0.15); } // 0pts=2.0x slower, 5pts=1.25x, 10pts=0.5x fast
 function getStatManaMult()  { return playerStats.wisdom * 0.2; }           // 0pts=0 mana, 5pts=1.0x, 10pts=2.0x
 
 function buildStatUI() {
