@@ -290,6 +290,14 @@ canvas { display: block; }
         </div>
     </div>
 </div>
+<div id="statAllocationMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:500;flex-direction:column;align-items:center;justify-content:center;">
+    <div style="background:rgba(25,35,20,0.95);border:2px solid rgba(120,160,80,0.4);border-radius:10px;padding:24px 32px;min-width:340px;">
+        <h2 style="color:rgba(220,200,160,0.9);font:bold 20px monospace;margin:0 0 4px;text-align:center;">Allocate Stats</h2>
+        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 20</div>
+        <div id="statRows" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
+    </div>
+</div>
 <div id="saveToast">Saved</div>
 <div id="pauseMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:400;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
     <h2 style="color:rgba(220,200,160,0.9);font:bold 24px monospace;margin-bottom:10px;">Paused</h2>
@@ -415,7 +423,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.95;
+renderer.toneMappingExposure = 0.85;
 renderer.setClearColor(SKY_COLOR);
 document.body.appendChild(renderer.domElement);
 
@@ -427,11 +435,11 @@ scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0008); // lighter fog so far terrain 
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 5000);
 
 // ── Lighting — same as game.html ──
-const ambient = new THREE.AmbientLight(0x667788, 0.5);
+const ambient = new THREE.AmbientLight(0x556677, 0.35);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x6688aa, 0x3a4422, 0.6);
+const hemi = new THREE.HemisphereLight(0x6688aa, 0x3a4422, 0.45);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffeedd, 1.5);
+const sun = new THREE.DirectionalLight(0xffd8b0, 0.9);
 sun.position.set(5, 12, 8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -576,7 +584,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             else if (biome === 'desert') color = 0xd4c07a;
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
-            else color = 0x5b8c3e; // grass
+            else color = 0x008f30; // grass
             addBlock(wx, h, wz, color);
             // Two layers below surface
             const dirt = biome === 'desert' || biome === 'desert_transition' ? 0xd4c07a : 0x8b6b3d;
@@ -730,7 +738,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     colFig.position.set(colBX, colBY + 4.5, colBZ); titleScene.add(colFig);
     const colDirt = new THREE.Mesh(new THREE.BoxGeometry(3.6, 3, 3.6), new THREE.MeshStandardMaterial({ color: 0x8b6b3d }));
     colDirt.position.set(colBX, colBY + 7, colBZ); titleScene.add(colDirt);
-    const colGrass = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: 0x5b8c3e }));
+    const colGrass = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: 0x008f30 }));
     colGrass.position.set(colBX, colBY + 9, colBZ); titleScene.add(colGrass);
     const colHead = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshStandardMaterial({ color: 0x777777 }));
     colHead.position.set(colBX, colBY + 11, colBZ); titleScene.add(colHead);
@@ -878,8 +886,8 @@ function buildFarTerrain(centerX, centerZ) {
             else if (desert > 0.5) hex = 0xd4c07a;
             else if (desert > 0) hex = 0xa0a050;
             else if (mtn > 0.5) hex = 0x888888;
-            else if (mtn > 0.1) hex = 0x6a8a5a;
-            else hex = 0x5b8c3e;
+            else if (mtn > 0.1) hex = 0x1a7a3a;
+            else hex = 0x008f30;
 
             // Top face
             pushFace(
@@ -1069,6 +1077,7 @@ function collectSaveData() {
         armorSlots: JSON.parse(JSON.stringify(armorSlots)),
         equippedShield,
         playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
+        playerStats: { ...playerStats },
         killedBosses: [...killedBosses],
         playerXP, playerLevel, skillPoints,
         skills: { warrior: [...skills.warrior], wizard: [...skills.wizard] },
@@ -1132,7 +1141,10 @@ function updateMenuUI() {
 }
 // Load saves from IndexedDB then show menu
 _loadAllSaves().then(() => { updateMenuUI(); });
-document.getElementById('newGameBtn').addEventListener('click', () => startGame(null));
+document.getElementById('newGameBtn').addEventListener('click', async () => {
+    await showStatAllocation();
+    startGame(null);
+});
 document.getElementById('hostBtn').addEventListener('click', () => {
     document.getElementById('mpStatus').textContent = 'Creating room...';
     mp.host(code => {
@@ -2209,6 +2221,13 @@ function startGame(loadSlotName) {
     mp.onBlockChange = (bx, by, bz, block) => {
         origSetBlock(bx, by, bz, block);
         chunkManager.rebuildChunkAt(bx, bz);
+        // Rebuild adjacent chunks if block is on a chunk border
+        const lx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+        const lz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+        if (lx === 0) chunkManager.rebuildChunkAt(bx - 1, bz);
+        if (lx === CHUNK_SIZE - 1) chunkManager.rebuildChunkAt(bx + 1, bz);
+        if (lz === 0) chunkManager.rebuildChunkAt(bx, bz - 1);
+        if (lz === CHUNK_SIZE - 1) chunkManager.rebuildChunkAt(bx, bz + 1);
     };
 
     // Receive villager sync from host
@@ -2265,6 +2284,9 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     player = new Player(scene, world);
+    // Apply stat bonuses to player
+    player.walkSpeed = 3.0 * getStatSpeedMult();
+    player.sprintSpeed = 7.0 * getStatSpeedMult();
     saveCharColors(); // read from inputs
     applyCharColors(player);
     // Name label above player
@@ -2664,7 +2686,7 @@ function startGame(loadSlotName) {
         const g = colossus.group;
 
         // Use chunky block-textured materials instead of individual voxels (performance)
-        const _grassM = new THREE.MeshStandardMaterial({ color: 0x5b8c3e, roughness: 0.85, flatShading: true });
+        const _grassM = new THREE.MeshStandardMaterial({ color: 0x008f30, roughness: 0.85, flatShading: true });
         const _dirtM = new THREE.MeshStandardMaterial({ color: 0x8b6b3d, roughness: 0.9, flatShading: true });
         const _stoneM = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.8, flatShading: true });
         const _hash = (x,y,z) => { const d = Math.sin(x*127.1+y*311.7+z*271.3+42)*43758.5; return d - Math.floor(d); };
@@ -3547,6 +3569,11 @@ function startGame(loadSlotName) {
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
             if (s.playerXP !== undefined) { playerXP = s.playerXP; playerLevel = s.playerLevel; skillPoints = s.skillPoints; }
+            if (s.playerStats) {
+                Object.assign(playerStats, s.playerStats);
+                player.walkSpeed = 3.0 * getStatSpeedMult();
+                player.sprintSpeed = 7.0 * getStatSpeedMult();
+            }
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             window._customSwords = s.customSwords || {};
@@ -3649,8 +3676,10 @@ function startGame(loadSlotName) {
         // New game — spawn at center, reset progression
         staffDamageDealt = 0;
         activeSpellSlot = 1;
-        playerHP = 10; playerMaxHP = 10;
-        playerMana = 10; playerMaxMana = 10;
+        playerMaxHP = 10 + getStatHPBonus();
+        playerHP = playerMaxHP;
+        playerMaxMana = Math.round(10 * getStatManaMult());
+        playerMana = playerMaxMana;
         killedBosses.clear();
         armorSlots.helmet = null; armorSlots.chestplate = null; armorSlots.leggings = null; armorSlots.boots = null;
         equippedShield = null;
@@ -3797,6 +3826,80 @@ function saveSettings() {
     localStorage.setItem('satw_settings', JSON.stringify({
         useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist, optShadows, optFarTerrain, optClouds, optParticles
     }));
+}
+
+// ── Player Stats ──
+const STAT_DEFS = [
+    { key: 'strength',  label: 'Strength',  desc: 'Attack damage', icon: '\u2694' },
+    { key: 'agility',   label: 'Agility',   desc: 'Move & sprint speed', icon: '\u27A4' },
+    { key: 'fortitude', label: 'Fortitude', desc: 'Max health', icon: '\u2665' },
+    { key: 'dexterity', label: 'Dexterity', desc: 'Mining & break speed', icon: '\u26CF' },
+    { key: 'wisdom',    label: 'Wisdom',    desc: 'Max mana & regen', icon: '\u2605' },
+];
+const STAT_MAX_POINTS = 20;
+const STAT_MAX_EACH = 10;
+let playerStats = { strength: 0, agility: 0, fortitude: 0, dexterity: 0, wisdom: 0 };
+let _statPending = null; // resolve callback for stat allocation
+
+function getStatPointsUsed() {
+    let t = 0; for (const k in playerStats) t += playerStats[k]; return t;
+}
+
+function getStatDmgMult()   { return 1.0 + playerStats.strength * 0.08; }  // +8% per point, up to +80%
+function getStatSpeedMult() { return 1.0 + playerStats.agility * 0.05; }   // +5% per point, up to +50%
+function getStatHPBonus()   { return playerStats.fortitude * 2; }           // +2 HP (1 heart) per point
+function getStatBreakMult() { return 1.0 - playerStats.dexterity * 0.06; } // -6% break time per point (0.4x at 10)
+function getStatManaMult()  { return 1.0 + playerStats.wisdom * 0.1; }     // +10% per point, up to +100%
+
+function buildStatUI() {
+    const container = document.getElementById('statRows');
+    container.innerHTML = '';
+    const left = STAT_MAX_POINTS - getStatPointsUsed();
+    document.getElementById('statPointsLeft').textContent = 'Points remaining: ' + left;
+    for (const sd of STAT_DEFS) {
+        const val = playerStats[sd.key];
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        row.innerHTML = `
+            <span style="color:rgba(220,200,160,0.9);font:14px monospace;width:20px;text-align:center;">${sd.icon}</span>
+            <div style="flex:1;">
+                <div style="color:rgba(200,190,160,0.85);font:12px monospace;">${sd.label} <span style="color:rgba(150,140,120,0.5);font:10px monospace;">${sd.desc}</span></div>
+                <div style="display:flex;gap:2px;margin-top:2px;">
+                    ${Array.from({length: STAT_MAX_EACH}, (_,i) =>
+                        `<div style="width:18px;height:8px;border-radius:2px;${i < val ? 'background:rgba(120,180,80,0.8);' : 'background:rgba(60,60,50,0.4);border:1px solid rgba(100,100,80,0.2);'}"></div>`
+                    ).join('')}
+                </div>
+            </div>
+            <button onclick="window._statDec('${sd.key}')" style="width:26px;height:26px;font:bold 14px monospace;background:rgba(80,40,30,0.6);color:rgba(200,180,150,0.8);border:1px solid rgba(140,100,70,0.4);border-radius:4px;cursor:pointer;${val <= 0 ? 'opacity:0.3;' : ''}">\u2212</button>
+            <span style="color:rgba(220,200,160,0.9);font:bold 14px monospace;width:20px;text-align:center;">${val}</span>
+            <button onclick="window._statInc('${sd.key}')" style="width:26px;height:26px;font:bold 14px monospace;background:rgba(40,60,30,0.6);color:rgba(180,220,150,0.8);border:1px solid rgba(100,140,70,0.4);border-radius:4px;cursor:pointer;${val >= STAT_MAX_EACH || left <= 0 ? 'opacity:0.3;' : ''}">+</button>
+        `;
+        container.appendChild(row);
+    }
+}
+
+window._statInc = (key) => {
+    if (playerStats[key] >= STAT_MAX_EACH || getStatPointsUsed() >= STAT_MAX_POINTS) return;
+    playerStats[key]++;
+    buildStatUI();
+};
+window._statDec = (key) => {
+    if (playerStats[key] <= 0) return;
+    playerStats[key]--;
+    buildStatUI();
+};
+
+function showStatAllocation() {
+    return new Promise(resolve => {
+        playerStats = { strength: 0, agility: 0, fortitude: 0, dexterity: 0, wisdom: 0 };
+        buildStatUI();
+        const menu = document.getElementById('statAllocationMenu');
+        menu.style.display = 'flex';
+        document.getElementById('statConfirmBtn').onclick = () => {
+            menu.style.display = 'none';
+            resolve();
+        };
+    });
 }
 
 // ── Character colors ──
@@ -4585,6 +4688,7 @@ function isWearingWizardRobes() {
 function getStaffDamageMultiplier() {
     let mult = isWearingWizardRobes() ? 1.25 : 1.0;
     mult *= getWizardDamageBonus();
+    mult *= getStatDmgMult();
     if (window._avatarActive) mult *= 2.0;
     return mult;
 }
@@ -4719,7 +4823,7 @@ function getDamageReduction() {
 }
 function getSwordCooldownMult() { return skills.warrior[2] ? 0.8 : 1.0; }
 function getStaffCooldownMult() { return skills.wizard[1] ? 0.75 : 1.0; }
-function getManaRegenMult() { return skills.wizard[2] ? 2.0 : 1.0; }
+function getManaRegenMult() { return (skills.wizard[2] ? 2.0 : 1.0) * (1.0 + playerStats.wisdom * 0.08); }
 function getShieldDrainMult() { return skills.wizard[6] ? 0.5 : 1.0; }
 function getManaCostReduction() { return skills.wizard[4] ? 1 : 0; }
 function getPotionHealAmount() { return skills.warrior[6] ? 4 : 2; }
@@ -5779,8 +5883,8 @@ function drawWorldMap() {
                     tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
                 } else if (biome === 8) { // forest — deep green
                     tintR = 45; tintG = 85; tintB = 35; tintA = 0.2;
-                } else { // grass — light green
-                    tintR = 70; tintG = 110; tintB = 50; tintA = 0.12;
+                } else { // grass — rich green
+                    tintR = 40; tintG = 80; tintB = 30; tintA = 0.15;
                 }
 
                 if (tintA > 0) {
@@ -7287,7 +7391,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         if (attackCooldown <= 0) {
             player.triggerSwing();
             attackCooldown = 0.6 * getSwordCooldownMult();
-            const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * (window._avatarActive ? 2 : 1));
+            const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
             if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
             if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
             if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
@@ -7412,6 +7516,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     }
 
     if (breakTime === Infinity) return; // can't break without pickaxe
+    breakTime *= getStatBreakMult(); // Dexterity stat bonus
 
     player.triggerSwing();
     miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe, hasAxe };
@@ -10424,9 +10529,9 @@ function animate() {
     if (isNight) dayBright = 0.08;
     else if (isDusk || isDawn) dayBright = 0.15 + dayBright * 0.5;
 
-    sun.intensity = 0.3 + dayBright * 1.2;
-    ambient.intensity = 0.1 + dayBright * 0.4;
-    hemi.intensity = 0.1 + dayBright * 0.5;
+    sun.intensity = 0.15 + dayBright * 0.7;
+    ambient.intensity = 0.08 + dayBright * 0.25;
+    hemi.intensity = 0.08 + dayBright * 0.32;
 
     // Sky color shifts
     const daySky = new THREE.Color(0x87CEEB);
@@ -10654,6 +10759,9 @@ function animate() {
 
     // Multiplayer sync
     if (mp.active) {
+        // Interpolate remote players every frame for smooth movement
+        mp.updateRemotePlayers();
+
         mp._sendAccum += dt;
         if (mp._sendAccum >= 0.05) { // 20Hz position updates
             mp._sendAccum = 0;

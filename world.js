@@ -13,7 +13,7 @@ export const BLOCK = {
 };
 
 export const BLOCK_COLORS = {
-    [BLOCK.GRASS]: 0x5b8c3e, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
+    [BLOCK.GRASS]: 0x008f30, [BLOCK.DIRT]: 0x8b6b3d, [BLOCK.STONE]: 0x888888,
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
     [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x2d7d2d, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.PATH]: 0x8a7a5a, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
@@ -753,15 +753,15 @@ export class World {
         const cz = Math.floor(bz / CHUNK_SIZE);
         const lx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
         const lz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-        const data = this.chunks.get(this.getChunkKey(cx, cz));
-        if (!data) return;
-        data[(by * CHUNK_SIZE + lz) * CHUNK_SIZE + lx] = block;
-        // Track for saving
+        // Track for saving + deferred apply (even if chunk not loaded yet)
         this._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
-        // Index by chunk for fast apply on load
         const ck = cx + ',' + cz;
         if (!this._modsByChunk.has(ck)) this._modsByChunk.set(ck, []);
         this._modsByChunk.get(ck).push({ lx, y: by, lz, block });
+        // Apply to loaded chunk immediately
+        const data = this.chunks.get(this.getChunkKey(cx, cz));
+        if (!data) return;
+        data[(by * CHUNK_SIZE + lz) * CHUNK_SIZE + lx] = block;
     }
 
     getBlockAt(bx, by, bz) {

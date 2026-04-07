@@ -272,6 +272,20 @@ export class Multiplayer {
         const rp = this.remotePlayers.get(actualPid);
         if (!rp) return;
 
+        // Store target state for per-frame interpolation
+        rp._targetX = s.x; rp._targetY = s.y; rp._targetZ = s.z;
+        rp._targetRY = s.ry; rp._targetRX = s.rx || 0;
+        rp._wp = s.wp; rp._wb = s.wb; rp._sb = s.sb; rp._sw = s.sw;
+        rp._tool = s.tool || '';
+        rp._lastUpdate = performance.now();
+
+        // Snap on first receive so player doesn't lerp from (0,0,0)
+        if (!rp._hasReceived) {
+            rp._hasReceived = true;
+            rp.group.position.set(s.x, s.y, s.z);
+            rp.group.rotation.y = s.ry;
+        }
+
         // Apply character colors and name from remote player
         if (s.cc && !rp._colorsApplied) {
             rp._colorsApplied = true;
@@ -280,11 +294,8 @@ export class Multiplayer {
             if (s.cc.skin) rp._skinMat.color.set(s.cc.skin);
             if (s.cc.hair) rp._hairMat.color.set(s.cc.hair);
             if (s.cc.shoes) rp._shoeMat.color.set(s.cc.shoes);
-            // Body shape — full setBody if available, else simple height scale
-            if (s.cc.height && rp.setHeight) {
-                rp.setHeight(s.cc.height);
-            }
-            // Update hairstyle — rebuild hair group on remote player
+            if (s.cc.height && rp.setHeight) { rp.setHeight(s.cc.height); rp._heightScale = s.cc.height; }
+            // Update hairstyle
             if (s.cc.hairStyle && rp._hairGroup) {
                 const hg = rp._hairGroup;
                 while (hg.children.length) hg.remove(hg.children[0]);
@@ -305,70 +316,158 @@ export class Multiplayer {
                 rp._labelTex.needsUpdate = true;
             }
         }
+    }
 
-        // Position + rotation (smooth lerp)
-        rp.group.position.lerp(new THREE.Vector3(s.x, s.y, s.z), 0.3);
-        let da = s.ry - rp.group.rotation.y;
-        while (da > Math.PI) da -= Math.PI * 2;
-        while (da < -Math.PI) da += Math.PI * 2;
-        rp.group.rotation.y += da * 0.3;
-        rp.group.rotation.x = s.rx || 0;
+    // Call this every frame to smoothly interpolate remote players
+    updateRemotePlayers() {
+        for (const [pid, rp] of this.remotePlayers) {
+            if (!rp._hasReceived) continue;
 
-        // Animation
-        const p = s.wp, b = s.wb, sp = s.sb;
-        const mix = (a, b, t) => a + (b - a) * t;
+            // Smooth position interpolation
+            const tx = rp._targetX, ty = rp._targetY, tz = rp._targetZ;
+            rp.group.position.x += (tx - rp.group.position.x) * 0.15;
+            rp.group.position.y += (ty - rp.group.position.y) * 0.15;
+            rp.group.position.z += (tz - rp.group.position.z) * 0.15;
 
-        // Body bob
-        rp.body.position.y = 0.95 + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
-        rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
+            // Smooth rotation interpolation
+            let da = rp._targetRY - rp.group.rotation.y;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            rp.group.rotation.y += da * 0.15;
+            rp.group.rotation.x = rp._targetRX;
 
-        // Legs
-        const legAmp = mix(0.5, 0.85, sp);
-        const legSwing = Math.sin(p) * legAmp * b;
-        rp.leftLeg.hip.rotation.x = legSwing;
-        rp.rightLeg.hip.rotation.x = -legSwing;
-        const kneeAmp = mix(0.7, 1.25, sp);
-        rp.leftLeg.knee.rotation.x = Math.max(0, -Math.sin(p)) * kneeAmp * b;
-        rp.rightLeg.knee.rotation.x = Math.max(0, Math.sin(p)) * kneeAmp * b;
+            // Update tool visibility
+            this._updateRemoteTool(rp, rp._tool);
 
-        // Spine
-        rp.spine.rotation.x = mix(0.04, 0.16, sp) * b;
-        rp.spine.rotation.y = 0; rp.spine.rotation.z = 0;
-        rp.torso.rotation.y = Math.sin(p) * mix(0.04, 0.07, sp) * b;
-        rp.headGroup.rotation.x = -rp.spine.rotation.x * 0.45;
+            // Animation
+            const p = rp._wp, b = rp._wb, sp = rp._sb;
+            const mix = (a, bv, t) => a + (bv - a) * t;
 
-        // Arms
-        const armMul = mix(0.7, 1.1, sp);
-        rp.leftArm.shoulder.rotation.x = -legSwing * armMul;
-        rp.leftArm.shoulder.rotation.z = 0;
-        rp.rightArm.shoulder.rotation.x = legSwing * armMul;
-        rp.rightArm.shoulder.rotation.z = 0;
-        const elbBase = mix(-0.15, -1.4, sp);
-        const elbDyn = mix(0.3, 0.45, sp);
-        rp.leftArm.elbow.rotation.x = b * (elbBase - Math.max(0, Math.sin(p)) * elbDyn);
-        rp.rightArm.elbow.rotation.x = b * (elbBase - Math.max(0, -Math.sin(p)) * elbDyn);
+            // Body bob
+            rp.body.position.y = 0.95 * (rp._heightScale || 1) + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
+            rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
 
-        // Swing overlay
-        if (s.sw >= 0 && s.sw <= 1) {
-            const t = s.sw;
-            const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
-            let swShX, swShZ, swElX, swSpineX, swSpineY;
-            if (t < 0.2) {
-                const u = ss(0, 0.2, t);
-                swShX = u * -1.1; swShZ = u * 0.3; swElX = u * -0.25; swSpineY = u * -0.45; swSpineX = u * 0.03;
-            } else if (t < 0.45) {
-                const u = ss(0.2, 0.45, t);
-                swShX = -1.1; swShZ = 0.3 + (-0.15 - 0.3) * u; swElX = -0.25 + 0.15 * u; swSpineY = -0.45 + 1.0 * u; swSpineX = 0.03 + 0.03 * u;
-            } else {
-                const u = ss(0.45, 1.0, t);
-                swShX = -1.1 * (1 - u); swShZ = -0.15 * (1 - u); swElX = -0.1 * (1 - u); swSpineY = 0.55 * (1 - u); swSpineX = 0.06 * (1 - u);
+            // Legs
+            const legAmp = mix(0.5, 0.85, sp);
+            const legSwing = Math.sin(p) * legAmp * b;
+            rp.leftLeg.hip.rotation.x = legSwing;
+            rp.rightLeg.hip.rotation.x = -legSwing;
+            const kneeAmp = mix(0.7, 1.25, sp);
+            rp.leftLeg.knee.rotation.x = Math.max(0, -Math.sin(p)) * kneeAmp * b;
+            rp.rightLeg.knee.rotation.x = Math.max(0, Math.sin(p)) * kneeAmp * b;
+
+            // Spine
+            rp.spine.rotation.x = mix(0.04, 0.16, sp) * b;
+            rp.spine.rotation.y = 0; rp.spine.rotation.z = 0;
+            rp.torso.rotation.y = Math.sin(p) * mix(0.04, 0.07, sp) * b;
+            rp.headGroup.rotation.x = -rp.spine.rotation.x * 0.45;
+
+            // Arms
+            const armMul = mix(0.7, 1.1, sp);
+            rp.leftArm.shoulder.rotation.x = -legSwing * armMul;
+            rp.leftArm.shoulder.rotation.z = 0;
+            rp.rightArm.shoulder.rotation.x = legSwing * armMul;
+            rp.rightArm.shoulder.rotation.z = 0;
+            const elbBase = mix(-0.15, -1.4, sp);
+            const elbDyn = mix(0.3, 0.45, sp);
+            rp.leftArm.elbow.rotation.x = b * (elbBase - Math.max(0, Math.sin(p)) * elbDyn);
+            rp.rightArm.elbow.rotation.x = b * (elbBase - Math.max(0, -Math.sin(p)) * elbDyn);
+
+            // Swing overlay
+            const sw = rp._sw;
+            if (sw >= 0 && sw <= 1.5) {
+                const t = Math.min(sw, 1);
+                const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+                let swShX, swShZ, swElX, swSpineX, swSpineY;
+                if (t < 0.2) {
+                    const u = ss(0, 0.2, t);
+                    swShX = u * -1.1; swShZ = u * 0.3; swElX = u * -0.25; swSpineY = u * -0.45; swSpineX = u * 0.03;
+                } else if (t < 0.45) {
+                    const u = ss(0.2, 0.45, t);
+                    swShX = -1.1; swShZ = 0.3 + (-0.15 - 0.3) * u; swElX = -0.25 + 0.15 * u; swSpineY = -0.45 + 1.0 * u; swSpineX = 0.03 + 0.03 * u;
+                } else {
+                    const u = ss(0.45, 1.0, t);
+                    swShX = -1.1 * (1 - u); swShZ = -0.15 * (1 - u); swElX = -0.1 * (1 - u); swSpineY = 0.55 * (1 - u); swSpineX = 0.06 * (1 - u);
+                }
+                rp.leftArm.shoulder.rotation.x += swShX;
+                rp.leftArm.shoulder.rotation.z += swShZ;
+                rp.leftArm.elbow.rotation.x += swElX;
+                rp.spine.rotation.x += swSpineX;
+                rp.spine.rotation.y += swSpineY;
             }
-            rp.leftArm.shoulder.rotation.x += swShX;
-            rp.leftArm.shoulder.rotation.z += swShZ;
-            rp.leftArm.elbow.rotation.x += swElX;
-            rp.spine.rotation.x += swSpineX;
-            rp.spine.rotation.y += swSpineY;
+
+            // Hide remote player if no updates for 5 seconds (disconnected)
+            if (performance.now() - rp._lastUpdate > 5000) {
+                rp.group.visible = false;
+            } else {
+                rp.group.visible = true;
+            }
         }
+    }
+
+    // Update held tool mesh on remote player
+    _updateRemoteTool(rp, toolName) {
+        if (rp._currentTool === toolName) return;
+        rp._currentTool = toolName;
+
+        // Remove old tool
+        if (rp._toolMesh) {
+            rp.leftArm.handGrp.remove(rp._toolMesh);
+            rp._toolMesh = null;
+        }
+        if (!toolName) return;
+
+        const toolGroup = new THREE.Group();
+
+        if (toolName.includes('pickaxe')) {
+            // Pickaxe
+            const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('gold') ? 0xffd700 : toolName.includes('iron') ? 0xbbbbbb : toolName.includes('copper') ? 0xcc7744 : 0x888888;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
+            handle.position.y = -0.2;
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.06), new THREE.MeshStandardMaterial({ color }));
+            head.position.y = 0.05;
+            toolGroup.add(handle, head);
+            toolGroup.rotation.x = -0.3;
+        } else if (toolName.includes('sword') || toolName.includes('csword')) {
+            // Sword
+            const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('gold') ? 0xffd700 : toolName.includes('iron') ? 0xcccccc : toolName.includes('copper') ? 0xcc7744 : 0xaaaaaa;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
+            handle.position.y = -0.15;
+            const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.06), new THREE.MeshStandardMaterial({ color: 0x666666 }));
+            guard.position.y = -0.07;
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.02), new THREE.MeshStandardMaterial({ color }));
+            blade.position.y = 0.13;
+            toolGroup.add(handle, guard, blade);
+            toolGroup.rotation.x = Math.PI - 0.4;
+        } else if (toolName.includes('staff') || toolName.includes('cstaff')) {
+            // Staff
+            const isVoid = toolName.includes('void');
+            const isFire = toolName.includes('fire');
+            const isIce = toolName.includes('ice');
+            const isLightning = toolName.includes('lightning');
+            const handleColor = isVoid ? 0x2a0a3a : 0x6B3A1F;
+            const orbColor = isVoid ? 0x8800ff : isFire ? 0xff4400 : isIce ? 0x44ccff : isLightning ? 0xffee00 : 0x44aa44;
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.7, 6), new THREE.MeshStandardMaterial({ color: handleColor }));
+            pole.position.y = 0.0;
+            const orb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshStandardMaterial({ color: orbColor, emissive: orbColor, emissiveIntensity: 0.5 }));
+            orb.position.y = 0.38;
+            toolGroup.add(pole, orb);
+            toolGroup.rotation.x = -0.2;
+        } else if (toolName.includes('axe')) {
+            // Axe
+            const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('iron') ? 0xbbbbbb : 0xcc7744;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
+            handle.position.y = -0.2;
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.12), new THREE.MeshStandardMaterial({ color }));
+            head.position.set(0, 0.05, 0.06);
+            toolGroup.add(handle, head);
+            toolGroup.rotation.x = -0.3;
+        } else {
+            return; // Unknown tool, don't show anything
+        }
+
+        rp._toolMesh = toolGroup;
+        rp.leftArm.handGrp.add(toolGroup);
     }
 
     _removeRemotePlayer(pid) {
