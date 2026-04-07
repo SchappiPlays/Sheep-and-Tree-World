@@ -3870,7 +3870,7 @@ function getStatPointsUsed() {
 function getStatDmgMult()   { return 0.4 + playerStats.strength * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
 function getStatSpeedMult() { return 0.6 + playerStats.agility * 0.08; }   // 0pts=0.6x, 5pts=1.0x, 10pts=1.4x
 function getStatHPBonus()   { return -4 + playerStats.fortitude * 2; }     // 0pts=6HP(3hearts), 3pts=12HP, 10pts=26HP
-function getStatBreakMult() { return Math.max(0.5, 2.0 - playerStats.dexterity * 0.15); } // 0pts=2.0x slower, 5pts=1.25x, 10pts=0.5x fast
+function getStatBreakMult() { return Math.max(0.4, 3.5 - playerStats.dexterity * 0.31); } // 0pts=3.5x slower, 5pts=1.95x, 10pts=0.4x fast
 function getStatManaMult()  { return playerStats.wisdom * 0.2; }           // 0pts=0 mana, 5pts=1.0x, 10pts=2.0x
 
 function buildStatUI() {
