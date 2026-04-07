@@ -4159,21 +4159,22 @@ function _initSnapGridCanvas() {
         });
         document.addEventListener('mouseup', () => { _sgDragging = false; canvas.style.cursor = 'grab'; });
 
-        // Click to toggle block — only if mouse didn't move much (not a drag)
-        canvas.addEventListener('mouseup', (e) => {
-            if (Math.abs(e.clientX - _sgDownX) > 3 || Math.abs(e.clientY - _sgDownY) > 3) return;
+        // Click to toggle block
+        canvas.addEventListener('click', (e) => {
+            // Skip if was a drag
+            if (Math.abs(e.clientX - _sgDownX) > 4 || Math.abs(e.clientY - _sgDownY) > 4) return;
             const rect = canvas.getBoundingClientRect();
             const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             const my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
             const rc = new THREE.Raycaster();
             rc.setFromCamera(new THREE.Vector2(mx, my), _sgCamera);
-            const hits = rc.intersectObjects(_sgBlocks.children, false);
+            // Only raycast against block meshes (not wireframes)
+            const meshes = _sgBlocks.children.filter(c => c.isMesh && c._snapY !== undefined);
+            const hits = rc.intersectObjects(meshes, false);
             if (hits.length > 0) {
                 const h = hits[0].object;
-                if (h._snapY !== undefined) {
-                    snapShape[h._snapY][h._snapZ][h._snapX] = !snapShape[h._snapY][h._snapZ][h._snapX];
-                    _renderSnapGrid();
-                }
+                snapShape[h._snapY][h._snapZ][h._snapX] = !snapShape[h._snapY][h._snapZ][h._snapX];
+                _renderSnapGrid();
             }
         });
     }
