@@ -3078,7 +3078,7 @@ function startGame(loadSlotName) {
                 if (pointerLocked) document.exitPointerLock();
                 _dialogNode = {
                     _isNecro: true,
-                    text: () => "You... fool. You think you have won? I was not the threat. I was the SEAL. The power beneath this altar... I spent centuries keeping it contained. And now, with my death, the chains are broken. Something ancient stirs below — something that makes me look like a mere apprentice. You have not saved this world. You have doomed it.",
+                    text: () => "You... fool. You think you have won? I am not THE Necromancer — not the one the legends speak of. I am merely a necromancer, a student of the old ways, placed here as a SEAL. The power beneath this altar... I spent centuries keeping it contained. And now, with my death, the chains are broken. Something ancient stirs below — something that makes me look like a mere apprentice. You have not saved this world. You have doomed it.",
                     options: [
                         { label: "What have I done...?", next: -2 },
                         { label: "I'll face whatever comes.", next: -2 },
@@ -7237,6 +7237,8 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     const held = hotbarSlots[selectedSlot];
     if (held === 'guide_book' && inventory['guide_book'] > 0) {
         guideBookOpen = true;
+        guideBookSection = 'menu';
+        guideBookPage = 0;
         guideBookEl.style.display = 'block';
         updateGuideBookUI();
         if (pointerLocked) document.exitPointerLock();
@@ -8424,6 +8426,7 @@ const _getSwordDamage = (held) => {
 // ── Guide Book ──
 let guideBookOpen = false;
 let guideBookPage = 0;
+let guideBookSection = 'menu'; // 'menu', 'guide', 'knowledge', 'journal'
 const GUIDE_PAGES = [
     { title: 'Welcome, Adventurer', text: 'You have awoken on an island of mystery. Explore the land, mine resources, craft tools, and uncover the secrets of the Ancient Forest.\n\nUse WASD to move, Space to jump, Shift to sprint.\nLeft-click to mine blocks and attack.\nRight-click to place blocks.\nPress I to open your inventory.' },
     { title: 'Getting Started', text: 'Your copper tools will serve you well at first. Mine stone and coal, then build a Workbench (4 wood) to craft better equipment.\n\nSmelt ores in a Furnace (8 stone) — copper smelts fastest, then iron, then gold.\n\nCraft an Anvil (5 iron ingots) to forge advanced weapons and custom staffs.' },
@@ -8436,28 +8439,99 @@ const GUIDE_PAGES = [
     { title: 'Night Sky', text: 'The world has a day/night cycle. At night the sky darkens and the stars come out.\n\nWatch for shooting stars — they land near you once per minute at night. Walk over a fallen star to collect a Star Fragment.\n\nCraft 5 Star Fragments into a Mana Crystal at a workbench. Use the crystal to permanently gain +1 mana star!' },
 ];
 
+const KNOWLEDGE_ENTRIES = [
+    { title: 'The Sealed Evil', hint: 'The Ancient Forest', text: 'An ancient darkness lies sealed beneath the ruins of the forest. Four gate guardians protect its prison, and a lone necromancer maintains the seal. Should the seal break, something far older than any living creature would awaken. Seek out the ancient forest to the northwest and confront what waits within.' },
+    { title: 'The Dragon Legacy', hint: 'Dragon Eggs & the Fortress', text: 'Long ago, dragons filled the skies. When they vanished, they left behind eggs — scattered across the island, hidden in caves and ruins. The old fortress to the north holds stone altars that still resonate with draconic power. Place an egg upon one, and the ancient bond between dragon and rider may be reforged.' },
+    { title: 'The Scorched Prophecy', hint: 'The Scorched Lands', text: 'The land to the southwest was not always ash. A cataclysm burned it black in a single night — and the thing that caused it still lives. The Ember Lord guards what remains, but even he is merely a symptom. Beneath the scorched earth, the true flame waits to be rekindled. Slay the Ember Lord to learn more.' },
+    { title: 'The Goblin Uprising', hint: 'The Western Warcamp', text: 'The goblins of the mountains were once scattered and harmless. Something has united them — a warchief of unusual cunning has built a warcamp to the west and forged real weapons. Scouts say elite warriors patrol the camp, and the warchief himself carries a cleaver that burns with dark power. End the uprising before their army grows.' },
+    { title: 'Secrets of the Deep', hint: 'Caves & the Underground', text: 'The mountains to the east hide more than ore. A cave network stretches deep beneath the island — crystals that glow with unnatural light, pools of water that have never seen the sun. Old miners say the deepest tunnels connect to something vast, a hollow place where the island\'s true heart beats. Bring a torch and a strong nerve.' },
+];
+
+const JOURNAL_RUMOURS = [
+    { title: 'The Ancient Forest', text: 'Travellers speak of a vast, dark forest to the northwest — impossibly old, shrouded in mist. They say four gates bar entry, each guarded by a creature of terrible power. At the heart, something worse waits.' },
+    { title: 'The Necromancer', text: 'Villagers whisper of a robed figure dwelling in the ruins at the forest\'s centre. Some say it is THE Necromancer of legend — others claim it is merely a student of the old ways. Either way, none who seek it return unchanged.' },
+    { title: 'The Scorched Lands', text: 'To the southwest, the land is blackened and dead. A ruined fortress stands amid the ash — and within it, the Ember Lord burns eternal. They say the fire that scorched these lands was not natural, and that something far worse sleeps beneath the cinders.' },
+    { title: 'The Ruined Fortress', text: 'North of the ancient forest, the remains of a great fortress crumble into the earth. Old soldiers\' ghosts are said to walk the walls at night. Strange altars within still hum with power — some say dragon eggs placed upon them will hatch.' },
+    { title: 'The Goblin Warcamp', text: 'A warcamp of goblins festers to the west. Their warchief is said to wield a cleaver that glows with an unholy red light. Elite warriors guard the camp — better armed and far more dangerous than the mountain rabble.' },
+    { title: 'The Cave', text: 'An opening in the eastern mountains leads to a network of underground chambers. Miners who ventured inside speak of glowing crystals, underground pools, and veins of ore richer than anything on the surface.' },
+    { title: 'Dragons of Old', text: 'Once, dragons ruled the skies of this island. Their eggs can still be found, waiting. A stone altar with the right power might coax life from one. Raise it well, and it may carry you above the clouds.' },
+    { title: 'The Ice Castle', text: 'Far to the north, past the frozen wastes, a castle of ice rises against the grey sky. Its spires glow with an eerie blue light. No one knows who built it — or what still dwells inside.' },
+    { title: 'The Desert Palace', text: 'Deep in the southern sands, a palace of red sandstone shimmers in the heat. Onion domes crown its towers. Merchants speak of treasures within, but the desert itself is the first challenge.' },
+];
+
 const guideBookEl = document.createElement('div');
-guideBookEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(60,45,25,0.95);border:3px solid rgba(120,90,50,0.6);border-radius:6px;padding:20px;width:420px;max-height:80vh;overflow-y:auto;user-select:none;';
+guideBookEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background-image:url("parchment.png");background-size:cover;background-position:center;border:3px solid rgba(90,70,40,0.7);border-radius:6px;padding:28px 24px;width:440px;max-height:80vh;overflow-y:auto;user-select:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
 document.body.appendChild(guideBookEl);
 
+const _bookBtnStyle = 'background:rgba(80,60,30,0.5);color:#3a2a10;border:1px solid rgba(100,80,40,0.5);padding:4px 14px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;';
+const _bookBtnHover = 'onmouseover="this.style.background=\'rgba(100,80,40,0.6)\'" onmouseout="this.style.background=\'rgba(80,60,30,0.5)\'"';
+const _bookTabStyle = 'background:rgba(80,60,30,0.4);color:#3a2a10;border:1px solid rgba(100,80,40,0.4);padding:8px 20px;border-radius:4px;cursor:pointer;font:14px Georgia,serif;text-align:center;min-width:100px;';
+const _bookTabHover = 'onmouseover="this.style.background=\'rgba(100,80,40,0.55)\'" onmouseout="this.style.background=\'rgba(80,60,30,0.4)\'"';
+
 function updateGuideBookUI() {
-    const p = GUIDE_PAGES[guideBookPage];
-    let html = '<div style="text-align:center;margin-bottom:12px;">';
-    html += `<span style="color:rgba(200,180,140,0.9);font:bold 16px Georgia,serif;">${p.title}</span>`;
-    html += '</div>';
-    html += `<div style="color:rgba(190,175,145,0.85);font:13px Georgia,serif;white-space:pre-wrap;line-height:1.6;">${p.text}</div>`;
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
-    html += `<button onclick="window._guidePagePrev()" style="background:rgba(80,60,30,0.6);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 14px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;${guideBookPage <= 0 ? 'opacity:0.3;' : ''}">← Prev</button>`;
-    html += `<span style="color:rgba(150,130,100,0.6);font:11px Georgia,serif;">Page ${guideBookPage + 1} of ${GUIDE_PAGES.length}</span>`;
-    html += `<button onclick="window._guidePageNext()" style="background:rgba(80,60,30,0.6);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 14px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;${guideBookPage >= GUIDE_PAGES.length - 1 ? 'opacity:0.3;' : ''}">Next →</button>`;
-    html += '</div>';
-    html += '<div style="text-align:center;margin-top:8px;"><button onclick="window._closeGuideBook()" style="background:rgba(80,60,30,0.5);color:#c0b090;border:1px solid rgba(140,110,60,0.4);padding:4px 16px;border-radius:4px;cursor:pointer;font:12px Georgia,serif;">Close</button></div>';
+    let html = '';
+    if (guideBookSection === 'menu') {
+        html += '<div style="text-align:center;margin-bottom:20px;">';
+        html += '<span style="color:#3a2a10;font:bold 20px Georgia,serif;text-shadow:0 1px 2px rgba(0,0,0,0.1);">Adventurer\'s Tome</span>';
+        html += '</div>';
+        html += '<div style="display:flex;flex-direction:column;gap:10px;align-items:center;margin:24px 0;">';
+        html += `<button onclick="window._bookSection('guide')" style="${_bookTabStyle}" ${_bookTabHover}>Guide</button>`;
+        html += `<button onclick="window._bookSection('knowledge')" style="${_bookTabStyle}" ${_bookTabHover}>Knowledge</button>`;
+        html += `<button onclick="window._bookSection('journal')" style="${_bookTabStyle}" ${_bookTabHover}>Journal</button>`;
+        html += '</div>';
+        html += `<div style="text-align:center;margin-top:12px;"><button onclick="window._closeGuideBook()" style="${_bookBtnStyle}" ${_bookBtnHover}>Close</button></div>`;
+    } else if (guideBookSection === 'guide') {
+        const p = GUIDE_PAGES[guideBookPage];
+        html += '<div style="text-align:center;margin-bottom:12px;">';
+        html += `<span style="color:#3a2a10;font:bold 16px Georgia,serif;">${p.title}</span>`;
+        html += '</div>';
+        html += `<div style="color:#4a3a20;font:13px Georgia,serif;white-space:pre-wrap;line-height:1.6;">${p.text}</div>`;
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
+        html += `<button onclick="window._guidePagePrev()" style="${_bookBtnStyle}${guideBookPage <= 0 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>← Prev</button>`;
+        html += `<span style="color:rgba(60,45,20,0.5);font:11px Georgia,serif;">Page ${guideBookPage + 1} of ${GUIDE_PAGES.length}</span>`;
+        html += `<button onclick="window._guidePageNext()" style="${_bookBtnStyle}${guideBookPage >= GUIDE_PAGES.length - 1 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>Next →</button>`;
+        html += '</div>';
+        html += `<div style="text-align:center;margin-top:8px;"><button onclick="window._bookSection('menu')" style="${_bookBtnStyle}" ${_bookBtnHover}>Back</button></div>`;
+    } else if (guideBookSection === 'knowledge') {
+        const k = KNOWLEDGE_ENTRIES[guideBookPage];
+        html += '<div style="text-align:center;margin-bottom:4px;">';
+        html += '<span style="color:#3a2a10;font:bold 18px Georgia,serif;">Knowledge</span>';
+        html += '</div>';
+        html += `<div style="text-align:center;margin-bottom:10px;"><span style="color:rgba(80,60,30,0.5);font:11px Georgia,serif;">${k.hint}</span></div>`;
+        html += `<div style="text-align:center;margin-bottom:8px;"><span style="color:#3a2a10;font:bold 15px Georgia,serif;">${k.title}</span></div>`;
+        html += `<div style="color:#4a3a20;font:13px Georgia,serif;white-space:pre-wrap;line-height:1.7;">${k.text}</div>`;
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
+        html += `<button onclick="window._guidePagePrev()" style="${_bookBtnStyle}${guideBookPage <= 0 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>← Prev</button>`;
+        html += `<span style="color:rgba(60,45,20,0.5);font:11px Georgia,serif;">${guideBookPage + 1} of ${KNOWLEDGE_ENTRIES.length}</span>`;
+        html += `<button onclick="window._guidePageNext()" style="${_bookBtnStyle}${guideBookPage >= KNOWLEDGE_ENTRIES.length - 1 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>Next →</button>`;
+        html += '</div>';
+        html += `<div style="text-align:center;margin-top:8px;"><button onclick="window._bookSection('menu')" style="${_bookBtnStyle}" ${_bookBtnHover}>Back</button></div>`;
+    } else if (guideBookSection === 'journal') {
+        html += '<div style="text-align:center;margin-bottom:12px;">';
+        html += '<span style="color:#3a2a10;font:bold 18px Georgia,serif;">Journal — Rumours</span>';
+        html += '</div>';
+        const r = JOURNAL_RUMOURS[guideBookPage];
+        html += `<div style="text-align:center;margin-bottom:8px;"><span style="color:#3a2a10;font:bold 15px Georgia,serif;font-style:italic;">${r.title}</span></div>`;
+        html += `<div style="color:#4a3a20;font:13px Georgia,serif;white-space:pre-wrap;line-height:1.7;font-style:italic;">"${r.text}"</div>`;
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
+        html += `<button onclick="window._guidePagePrev()" style="${_bookBtnStyle}${guideBookPage <= 0 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>← Prev</button>`;
+        html += `<span style="color:rgba(60,45,20,0.5);font:11px Georgia,serif;">Rumour ${guideBookPage + 1} of ${JOURNAL_RUMOURS.length}</span>`;
+        html += `<button onclick="window._guidePageNext()" style="${_bookBtnStyle}${guideBookPage >= JOURNAL_RUMOURS.length - 1 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>Next →</button>`;
+        html += '</div>';
+        html += `<div style="text-align:center;margin-top:8px;"><button onclick="window._bookSection('menu')" style="${_bookBtnStyle}" ${_bookBtnHover}>Back</button></div>`;
+    }
     guideBookEl.innerHTML = html;
 }
 
-window._guidePagePrev = () => { if (guideBookPage > 0) { guideBookPage--; updateGuideBookUI(); } };
-window._guidePageNext = () => { if (guideBookPage < GUIDE_PAGES.length - 1) { guideBookPage++; updateGuideBookUI(); } };
-window._closeGuideBook = () => { guideBookOpen = false; guideBookEl.style.display = 'none'; };
+window._bookSection = (s) => { guideBookSection = s; guideBookPage = 0; updateGuideBookUI(); };
+window._guidePagePrev = () => {
+    if (guideBookPage > 0) { guideBookPage--; updateGuideBookUI(); }
+};
+window._guidePageNext = () => {
+    const maxPage = guideBookSection === 'journal' ? JOURNAL_RUMOURS.length - 1 : guideBookSection === 'knowledge' ? KNOWLEDGE_ENTRIES.length - 1 : GUIDE_PAGES.length - 1;
+    if (guideBookPage < maxPage) { guideBookPage++; updateGuideBookUI(); }
+};
+window._closeGuideBook = () => { guideBookOpen = false; guideBookSection = 'menu'; guideBookEl.style.display = 'none'; };
 
 // ── Chest system ──
 const chestData = {}; // key "bx,by,bz" → { items: { itemKey: count, ... } }
@@ -11874,11 +11948,107 @@ function executeCommand(input) {
             }
             break;
         }
+        case 'export': {
+            // /export x1 y1 z1 x2 y2 z2
+            if (args.length < 6) { addChatMessage('Usage: /export x1 y1 z1 x2 y2 z2', 'rgba(255,100,100,0.9)'); return; }
+            const ex = [Number(args[0]), Number(args[1]), Number(args[2])];
+            const ey = [Number(args[3]), Number(args[4]), Number(args[5])];
+            if (ex.some(isNaN) || ey.some(isNaN)) { addChatMessage('Invalid coordinates', 'rgba(255,100,100,0.9)'); return; }
+            const minX = Math.min(ex[0], ey[0]), maxX = Math.max(ex[0], ey[0]);
+            const minY = Math.min(ex[1], ey[1]), maxY = Math.max(ex[1], ey[1]);
+            const minZ = Math.min(ex[2], ey[2]), maxZ = Math.max(ex[2], ey[2]);
+            // Block name lookup
+            const blockNames = {};
+            for (const [name, id] of Object.entries(BLOCK)) blockNames[id] = name;
+            const blocks = [];
+            for (let bx = minX; bx <= maxX; bx++) {
+                for (let by = minY; by <= maxY; by++) {
+                    for (let bz = minZ; bz <= maxZ; bz++) {
+                        const b = world.getBlockAt(bx, by, bz);
+                        if (b !== BLOCK.AIR) {
+                            blocks.push({ x: bx - minX, y: by - minY, z: bz - minZ, block: blockNames[b] || b });
+                        }
+                    }
+                }
+            }
+            const exportData = {
+                size: { x: maxX - minX + 1, y: maxY - minY + 1, z: maxZ - minZ + 1 },
+                origin: { x: minX, y: minY, z: minZ },
+                blocks
+            };
+            const json = JSON.stringify(exportData);
+            // Copy to clipboard + download
+            navigator.clipboard.writeText(json).then(() => {
+                addChatMessage(`Exported ${blocks.length} blocks — copied to clipboard!`, 'rgba(150,220,150,0.9)');
+            }).catch(() => {
+                addChatMessage(`Exported ${blocks.length} blocks — downloading file`, 'rgba(150,220,150,0.9)');
+            });
+            const blob = new Blob([json], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `build_${minX}_${minY}_${minZ}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            addChatMessage(`Region: (${minX},${minY},${minZ}) to (${maxX},${maxY},${maxZ}) — ${blocks.length} blocks`, 'rgba(180,180,220,0.9)');
+            break;
+        }
+        case 'import': {
+            // /import x y z — imports from clipboard or file picker
+            if (args.length < 3) { addChatMessage('Usage: /import x y z (paste JSON or pick file)', 'rgba(255,100,100,0.9)'); return; }
+            const ix = Number(args[0]), iy = Number(args[1]), iz = Number(args[2]);
+            if (isNaN(ix) || isNaN(iy) || isNaN(iz)) { addChatMessage('Invalid coordinates', 'rgba(255,100,100,0.9)'); return; }
+            const blockIds = {};
+            for (const [name, id] of Object.entries(BLOCK)) blockIds[name] = id;
+            const doImport = (json) => {
+                try {
+                    const data = JSON.parse(json);
+                    if (!data.blocks || !Array.isArray(data.blocks)) { addChatMessage('Invalid build file', 'rgba(255,100,100,0.9)'); return; }
+                    let count = 0;
+                    for (const b of data.blocks) {
+                        const bid = typeof b.block === 'string' ? (blockIds[b.block] ?? 0) : b.block;
+                        if (bid === BLOCK.AIR) continue;
+                        world.setBlock(ix + b.x, iy + b.y, iz + b.z, bid);
+                        count++;
+                    }
+                    // Rebuild affected chunks
+                    const dirtyChunks = new Set();
+                    for (const b of data.blocks) {
+                        const cbx = ix + b.x, cbz = iz + b.z;
+                        dirtyChunks.add(Math.floor(cbx / CHUNK_SIZE) + ',' + Math.floor(cbz / CHUNK_SIZE));
+                    }
+                    for (const ck of dirtyChunks) {
+                        const [ccx, ccz] = ck.split(',').map(Number);
+                        chunkManager.rebuildChunkAt(ccx * CHUNK_SIZE, ccz * CHUNK_SIZE);
+                    }
+                    addChatMessage(`Imported ${count} blocks at (${ix}, ${iy}, ${iz})`, 'rgba(150,220,150,0.9)');
+                } catch (e) { addChatMessage('Import error: ' + e.message, 'rgba(255,100,100,0.9)'); }
+            };
+            // Try clipboard first, fall back to file picker
+            navigator.clipboard.readText().then(text => {
+                if (text.trim().startsWith('{')) {
+                    doImport(text);
+                } else {
+                    // Open file picker
+                    const fi = document.createElement('input');
+                    fi.type = 'file'; fi.accept = '.json';
+                    fi.onchange = () => { if (fi.files[0]) fi.files[0].text().then(doImport); };
+                    fi.click();
+                }
+            }).catch(() => {
+                const fi = document.createElement('input');
+                fi.type = 'file'; fi.accept = '.json';
+                fi.onchange = () => { if (fi.files[0]) fi.files[0].text().then(doImport); };
+                fi.click();
+            });
+            break;
+        }
         case 'help': {
             addChatMessage('/give <player> <item> [qty] — Give items', 'rgba(180,180,220,0.9)');
             addChatMessage('/tp <player> <x> <y> <z> — Teleport', 'rgba(180,180,220,0.9)');
             addChatMessage('/clear [player] — Clear inventory', 'rgba(180,180,220,0.9)');
             addChatMessage('/kill <player> — Kill player', 'rgba(180,180,220,0.9)');
+            addChatMessage('/export x1 y1 z1 x2 y2 z2 — Export build region', 'rgba(180,180,220,0.9)');
+            addChatMessage('/import x y z — Import build at position', 'rgba(180,180,220,0.9)');
             addChatMessage('Selectors: @s=self @a=all @r=random', 'rgba(180,180,220,0.9)');
             break;
         }
