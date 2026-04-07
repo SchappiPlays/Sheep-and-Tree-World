@@ -3071,6 +3071,34 @@ function startGame(loadSlotName) {
             playerHP = Math.min(playerHP + 2, playerMaxHP);
             updateHeartsUI();
             addChatMessage('The Necromancer has been destroyed! (+1 heart)', 'rgba(170,68,255,0.95)');
+            // Dying words — delayed dialogue
+            setTimeout(() => {
+                villagerDialogOpen = true;
+                villagerDialogEl.style.display = 'block';
+                if (pointerLocked) document.exitPointerLock();
+                _dialogNode = {
+                    _isNecro: true,
+                    text: () => "You... fool. You think you have won? I was not the threat. I was the SEAL. The power beneath this altar... I spent centuries keeping it contained. And now, with my death, the chains are broken. Something ancient stirs below — something that makes me look like a mere apprentice. You have not saved this world. You have doomed it.",
+                    options: [
+                        { label: "What have I done...?", next: -2 },
+                        { label: "I'll face whatever comes.", next: -2 },
+                    ]
+                };
+                _dialogSelection = 0;
+                _renderNecroDialog();
+                // Override pick to show final line
+                const origPick = window._necDialogPick;
+                window._necDialogPick = (idx) => {
+                    _dialogNode = {
+                        _isNecro: true,
+                        text: () => "It is already too late. The ground trembles. Can you not feel it? Something far, far worse than I ever was is waking beneath your feet. And it is... hungry. Farewell, mortal. You will need every ounce of strength you have gathered. And it will not be enough.",
+                        options: [{ label: "...", next: -1 }]
+                    };
+                    _dialogSelection = 0;
+                    _renderNecroDialog();
+                    window._necDialogPick = origPick;
+                };
+            }, 2000);
         };
     }
 
