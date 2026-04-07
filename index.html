@@ -3479,6 +3479,33 @@ function startGame(loadSlotName) {
             refreshUI();
             addChatMessage('The Ember Lord is extinguished! (+2 hearts)', 'rgba(255,102,34,0.95)');
             addChatMessage('Obtained: Infernal Greatsword + Ember Armor Set', 'rgba(255,200,100,0.95)');
+            // Dying words
+            setTimeout(() => {
+                villagerDialogOpen = true;
+                villagerDialogEl.style.display = 'block';
+                if (pointerLocked) document.exitPointerLock();
+                _dialogNode = {
+                    _isNecro: true, // reuse purple style for dramatic effect
+                    text: () => "You... think the fire dies with me? I was merely a spark. The true flame sleeps deep beneath the scorched earth — the thing that burned this land to ash in the first place. My death feeds it. Every drop of my power flows downward now, into the dark. It will rise. And when it does, this entire island will burn.",
+                    options: [
+                        { label: "What is it?", next: -2 },
+                        { label: "I'll stop it too.", next: -2 },
+                    ]
+                };
+                _dialogSelection = 0;
+                _renderNecroDialog();
+                const origPick = window._necDialogPick;
+                window._necDialogPick = (idx) => {
+                    _dialogNode = {
+                        _isNecro: true,
+                        text: () => "You cannot stop what you do not understand. The Necromancer and I... we were both keeping things in check, in our own way. With us gone, there is nothing standing between this world and what lurks below. Enjoy your victory while it lasts. It won't last long.",
+                        options: [{ label: "...", next: -1 }]
+                    };
+                    _dialogSelection = 0;
+                    _renderNecroDialog();
+                    window._necDialogPick = origPick;
+                };
+            }, 2000);
         };
     }
 
