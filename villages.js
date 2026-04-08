@@ -672,7 +672,7 @@ export class VillageManager {
 
             // Spawn blacksmith shopkeeper (fixed position near village)
             const bsAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
-            const shopDist = 14; // far enough to not overlap each other or houses
+            const shopDist = 28; // far enough past house ring to avoid overlap
             const bsX = vd.x + Math.cos(bsAngle) * shopDist;
             const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
             const bsY = this.world.getHeight(bsX, bsZ);
