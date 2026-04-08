@@ -20,6 +20,7 @@ export class Player {
         this.staminaDrain = 20; // per second while sprinting
         this.staminaRegen = 18; // per second while not sprinting
         this._crouching = false;
+        this.creative = false;
 
         // Movement constants — exact from game.html
         this.walkSpeed = 3.6;
@@ -1180,6 +1181,16 @@ export class Player {
         const moveX = hasInput ? Math.sin(moveAngle) * this.speed * dt : 0;
         const moveZ = hasInput ? Math.cos(moveAngle) * this.speed * dt : 0;
 
+        // Creative mode — fly, no gravity, no collision
+        if (this.creative) {
+            const flySpeed = wantSprint ? 16.0 : 8.0;
+            this.position.x += moveX;
+            this.position.z += moveZ;
+            if (keys[kj]) this.position.y += flySpeed * dt; // Space = up
+            if (keys['ShiftLeft'] || keys['ShiftRight']) this.position.y -= flySpeed * dt; // Shift = down
+            this.jumpVel = 0;
+            this.isGrounded = false;
+        } else {
         // Jump — exact same as game.html
         if (keys[kj] && this.isGrounded) {
             this.jumpVel = this.JUMP_VEL;
@@ -1269,8 +1280,10 @@ export class Player {
             }
         }
 
+        } // end creative else
+
         // Prevent falling through world — teleport back to surface
-        if (this.position.y < -20) {
+        if (!this.creative && this.position.y < -20) {
             const safeY = this.world.getHeight(this.position.x, this.position.z);
             this.position.y = safeY + 2;
             this.jumpVel = 0;

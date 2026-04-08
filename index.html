@@ -373,6 +373,7 @@ canvas { display: block; }
     <div style="position:absolute;width:2px;height:16px;left:-1px;top:-8px;background:rgba(255,255,255,0.6);"></div>
     <div style="position:absolute;width:16px;height:2px;top:-1px;left:-8px;background:rgba(255,255,255,0.6);"></div>
 </div>
+<canvas id="minimap" width="160" height="160" style="position:fixed;bottom:10px;left:10px;z-index:20;border-radius:50%;border:2px solid rgba(80,60,30,0.6);pointer-events:none;background:rgba(20,30,20,0.5);"></canvas>
 <div id="hearts" style="position:fixed;top:8px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
 <div id="manaBar" style="position:fixed;top:48px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
 <div id="staminaBar" style="position:fixed;top:78px;right:8px;z-index:20;pointer-events:none;width:100px;height:6px;background:rgba(40,40,40,0.5);border-radius:3px;"><div id="staminaFill" style="width:100%;height:100%;background:rgba(220,180,50,0.8);border-radius:3px;transition:width 0.1s;"></div></div>
@@ -4590,7 +4591,8 @@ const shootingStars = []; // { mesh, trail, x, y, z, landed, item }
 
 let playerDead = false;
 let deathScreenTimer = 0;
-let brokenHearts = 0; // hearts lost permanently until life crystal recovered
+let brokenHearts = 0;
+let creativeMode = false; // hearts lost permanently until life crystal recovered
 let lifeCrystals = []; // { x, z, mesh } — dropped on death
 
 // Death screen overlay
@@ -4600,7 +4602,7 @@ deathScreen.innerHTML = '<div style="color:#ff4444;font:bold 48px monospace;text
 document.body.appendChild(deathScreen);
 
 function playerTakeDamage(dmg) {
-    if (playerDead) return;
+    if (playerDead || creativeMode) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
     playerHP = Math.max(0, playerHP - dmg);
     updateHeartsUI();
@@ -6378,6 +6380,115 @@ mapCanvas.addEventListener('wheel', e => {
     drawWorldMap();
 }, { passive: false });
 
+// ── Minimap ──
+const minimapCanvas = document.getElementById('minimap');
+const mmCtx = minimapCanvas.getContext('2d');
+let _mmTimer = 0;
+const MM_SIZE = 160;
+const MM_RADIUS = 60; // world units shown
+
+function drawMinimap() {
+    const w = MM_SIZE, h = MM_SIZE, r = w / 2;
+    mmCtx.clearRect(0, 0, w, h);
+
+    // Clip to circle
+    mmCtx.save();
+    mmCtx.beginPath();
+    mmCtx.arc(r, r, r - 1, 0, Math.PI * 2);
+    mmCtx.clip();
+
+    // Dark background
+    mmCtx.fillStyle = 'rgba(20,30,20,0.8)';
+    mmCtx.fillRect(0, 0, w, h);
+
+    const px = player.position.x, pz = player.position.z;
+    const step = 4; // pixels per sample
+    const worldPerPx = (MM_RADIUS * 2) / w;
+
+    for (let sy = 0; sy < h; sy += step) {
+        for (let sx = 0; sx < w; sx += step) {
+            // Check if inside circle
+            const dx = sx - r, dy = sy - r;
+            if (dx * dx + dy * dy > (r - 2) * (r - 2)) continue;
+
+            const wx = px + (sx - r) * worldPerPx;
+            const wz = pz + (sy - r) * worldPerPx;
+            const th = getTerrainHeight(wx, wz);
+
+            if (th < 0.3) {
+                mmCtx.fillStyle = '#2a557a'; // water
+            } else {
+                const snow = getSnowBlend(wz), desert = getDesertBlend(wz);
+                const mtn = getMountainBlend(wx, wz), sc = getScorchedBlend(wx, wz);
+                if (sc > 0.3) mmCtx.fillStyle = '#2a2018';
+                else if (snow > 0.5) mmCtx.fillStyle = '#d0d0d8';
+                else if (snow > 0) mmCtx.fillStyle = '#8aaa8a';
+                else if (desert > 0.5) mmCtx.fillStyle = '#c4b06a';
+                else if (desert > 0) mmCtx.fillStyle = '#90904a';
+                else if (mtn > 0.5) mmCtx.fillStyle = '#787878';
+                else if (mtn > 0.1) mmCtx.fillStyle = '#5a7a4a';
+                else {
+                    // Shade grass by height
+                    const shade = Math.max(0.6, Math.min(1.0, 0.7 + th * 0.01));
+                    const g = Math.floor(0x90 * shade);
+                    mmCtx.fillStyle = `rgb(${Math.floor(0x4a * shade)},${g},${Math.floor(0x35 * shade)})`;
+                }
+            }
+            mmCtx.fillRect(sx, sy, step, step);
+        }
+    }
+
+    // Waypoints
+    for (const wp of waypoints) {
+        const wpx = r + (wp.x - px) / worldPerPx;
+        const wpy = r + (wp.z - pz) / worldPerPx;
+        const wdx = wpx - r, wdy = wpy - r;
+        if (wdx * wdx + wdy * wdy > (r - 4) * (r - 4)) continue;
+        const hex = WAYPOINT_COLORS[wp.color % WAYPOINT_COLORS.length];
+        const cr = (hex >> 16) & 0xff, cg = (hex >> 8) & 0xff, cb = hex & 0xff;
+        mmCtx.fillStyle = `rgb(${cr},${cg},${cb})`;
+        mmCtx.beginPath();
+        mmCtx.arc(wpx, wpy, 3, 0, Math.PI * 2);
+        mmCtx.fill();
+    }
+
+    // Life crystals
+    for (const lc of lifeCrystals) {
+        const lcx = r + (lc.x - px) / worldPerPx;
+        const lcy = r + (lc.z - pz) / worldPerPx;
+        const ldx = lcx - r, ldy = lcy - r;
+        if (ldx * ldx + ldy * ldy > (r - 4) * (r - 4)) continue;
+        mmCtx.fillStyle = '#ff3366';
+        mmCtx.beginPath();
+        mmCtx.arc(lcx, lcy, 3, 0, Math.PI * 2);
+        mmCtx.fill();
+    }
+
+    // Player arrow at center
+    const angle = player.group.rotation.y;
+    mmCtx.fillStyle = '#fff';
+    mmCtx.beginPath();
+    mmCtx.moveTo(r + Math.sin(angle) * 6, r + Math.cos(angle) * 6);
+    mmCtx.lineTo(r + Math.sin(angle + 2.5) * 3, r + Math.cos(angle + 2.5) * 3);
+    mmCtx.lineTo(r + Math.sin(angle - 2.5) * 3, r + Math.cos(angle - 2.5) * 3);
+    mmCtx.closePath();
+    mmCtx.fill();
+
+    // Border ring
+    mmCtx.restore();
+    mmCtx.strokeStyle = 'rgba(80,60,30,0.6)';
+    mmCtx.lineWidth = 2;
+    mmCtx.beginPath();
+    mmCtx.arc(r, r, r - 1, 0, Math.PI * 2);
+    mmCtx.stroke();
+
+    // N marker
+    mmCtx.fillStyle = 'rgba(200,180,140,0.7)';
+    mmCtx.font = 'bold 10px monospace';
+    mmCtx.textAlign = 'center';
+    mmCtx.fillText('N', r, 12);
+}
+
 // ── Waypoints ──
 const WAYPOINT_COLORS = [0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6, 0x1abc9c, 0xe67e22, 0xecf0f1];
 const WAYPOINT_COLOR_NAMES = ['Red', 'Blue', 'Green', 'Gold', 'Purple', 'Teal', 'Orange', 'White'];
@@ -6844,6 +6955,7 @@ function addToInventory(key, eggData) {
 }
 
 function removeFromInventory(blockType) {
+    if (creativeMode) return true; // unlimited blocks in creative
     if (!inventory[blockType]) return false;
     inventory[blockType]--;
     if (inventory[blockType] <= 0) {
@@ -11006,6 +11118,13 @@ function animate() {
         }
     }
 
+    // Minimap update (every 0.5s for performance)
+    _mmTimer += dt;
+    if (_mmTimer >= 0.5 && gameStarted && !playerDead) {
+        _mmTimer = 0;
+        drawMinimap();
+    }
+
     // Life crystal pickup + animation
     for (let i = lifeCrystals.length - 1; i >= 0; i--) {
         const lc = lifeCrystals[i];
@@ -12423,11 +12542,24 @@ function executeCommand(input) {
             });
             break;
         }
+        case 'creative': {
+            creativeMode = !creativeMode;
+            if (player) player.creative = creativeMode;
+            if (creativeMode) {
+                addChatMessage('Creative mode ON — fly with Space/Shift, unlimited blocks', 'rgba(150,220,150,0.9)');
+            } else {
+                addChatMessage('Creative mode OFF', 'rgba(220,150,150,0.9)');
+                // Reset to ground
+                if (player) { player.jumpVel = 0; }
+            }
+            break;
+        }
         case 'help': {
             addChatMessage('/give <player> <item> [qty] — Give items', 'rgba(180,180,220,0.9)');
             addChatMessage('/tp <player> <x> <y> <z> — Teleport', 'rgba(180,180,220,0.9)');
             addChatMessage('/clear [player] — Clear inventory', 'rgba(180,180,220,0.9)');
             addChatMessage('/kill <player> — Kill player', 'rgba(180,180,220,0.9)');
+            addChatMessage('/creative — Toggle creative mode (fly + unlimited blocks)', 'rgba(180,180,220,0.9)');
             addChatMessage('/export x1 y1 z1 x2 y2 z2 — Export build region', 'rgba(180,180,220,0.9)');
             addChatMessage('/import x y z — Import build at position', 'rgba(180,180,220,0.9)');
             addChatMessage('Selectors: @s=self @a=all @r=random', 'rgba(180,180,220,0.9)');
