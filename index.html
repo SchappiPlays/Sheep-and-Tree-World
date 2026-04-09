@@ -425,7 +425,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 1.0;
 renderer.setClearColor(SKY_COLOR);
 document.body.appendChild(renderer.domElement);
 
@@ -10853,9 +10853,9 @@ function animate() {
     if (isNight) dayBright = 0.08;
     else if (isDusk || isDawn) dayBright = 0.15 + dayBright * 0.5;
 
-    sun.intensity = 0.2 + dayBright * 0.9;
-    ambient.intensity = 0.1 + dayBright * 0.35;
-    hemi.intensity = 0.1 + dayBright * 0.45;
+    sun.intensity = 0.3 + dayBright * 1.1;
+    ambient.intensity = 0.15 + dayBright * 0.4;
+    hemi.intensity = 0.15 + dayBright * 0.5;
 
     // Sky color — smooth gradient through time of day
     // timeOfDay: 0.0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
