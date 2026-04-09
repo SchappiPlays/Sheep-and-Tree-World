@@ -887,6 +887,17 @@ export class CreatureManager {
                     } else if (sh.type === 'wolf') {
                         this._onCreatureDrop('leather', 1 + Math.floor(Math.random() * 2));
                         if (Math.random() < 0.3) this._onCreatureDrop('bone', 1);
+                    } else if (sh.type === 'sheep') {
+                        this._onCreatureDrop('raw_mutton', 1 + Math.floor(Math.random() * 2));
+                        this._onCreatureDrop('wool', 1 + Math.floor(Math.random() * 2));
+                    } else if (sh.type === 'cow') {
+                        this._onCreatureDrop('raw_beef', 2 + Math.floor(Math.random() * 2));
+                        this._onCreatureDrop('leather', 1);
+                    } else if (sh.type === 'pig') {
+                        this._onCreatureDrop('raw_pork', 1 + Math.floor(Math.random() * 2));
+                    } else if (sh.type === 'deer') {
+                        this._onCreatureDrop('raw_venison', 1 + Math.floor(Math.random() * 2));
+                        if (Math.random() < 0.4) this._onCreatureDrop('leather', 1);
                     }
                 }
             }
