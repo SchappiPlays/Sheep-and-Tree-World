@@ -1072,10 +1072,10 @@ function buildFarTerrain(centerX, centerZ) {
     // Ruined Fortress (-505, -335) — 80x80 blocks = ~38x38 world, walls 5.7h, towers 10h
     _addLodBox(-505, -335, 38, 5.7, 38, 0x6a6a5a); // outer walls (lower, ruined)
     _addLodBox(-505, -335, 14, 8, 11, 0x7a7a6a); // central keep
-    _addLodTower(-505-19, -175-19, 2, 10, 0x5a5a50); // corner towers
-    _addLodTower(-505+19, -175-19, 2, 10, 0x5a5a50);
-    _addLodTower(-505-19, -175+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505+19, -175+19, 2, 10, 0x5a5a50);
+    _addLodTower(-505-19, -335-19, 2, 10, 0x5a5a50); // corner towers
+    _addLodTower(-505+19, -335-19, 2, 10, 0x5a5a50);
+    _addLodTower(-505-19, -335+19, 2, 10, 0x5a5a50);
+    _addLodTower(-505+19, -335+19, 2, 10, 0x5a5a50);
     _addLodTower(-505, -335-19, 1.5, 8, 0x5a5a50); // mid-wall towers
     _addLodTower(-505, -335+19, 1.5, 8, 0x5a5a50);
 
@@ -1089,15 +1089,15 @@ function buildFarTerrain(centerX, centerZ) {
 
     // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-350) r=170)
     // Each gate has twin towers ~10.5h, positioned at ring edge
-    const _gateH = 10.5, _gateR = 1.9;
-    _addLodTower(80-6, -350, _gateR, _gateH, 0x6a6a5a); // East gate twin towers
-    _addLodTower(80+6, -350, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-140-6, -350, _gateR, _gateH, 0x6a6a5a); // West gate
-    _addLodTower(-140+6, -350, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30, -460-6, _gateR, _gateH, 0x6a6a5a); // North gate
-    _addLodTower(-30, -460+6, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30, -240-6, _gateR, _gateH, 0x6a6a5a); // South gate
-    _addLodTower(-30, -240+6, _gateR, _gateH, 0x6a6a5a);
+    const _gateH = 10.5, _gateR = 1.9, _gateSpread = 6;
+    _addLodTower(80, -350-_gateSpread, _gateR, _gateH, 0x6a6a5a); // East gate — towers along Z
+    _addLodTower(80, -350+_gateSpread, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-140, -350-_gateSpread, _gateR, _gateH, 0x6a6a5a); // West gate — towers along Z
+    _addLodTower(-140, -350+_gateSpread, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-30-_gateSpread, -460, _gateR, _gateH, 0x6a6a5a); // North gate — towers along X
+    _addLodTower(-30+_gateSpread, -460, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-30-_gateSpread, -240, _gateR, _gateH, 0x6a6a5a); // South gate — towers along X
+    _addLodTower(-30+_gateSpread, -240, _gateR, _gateH, 0x6a6a5a);
 
     // Village markers — actual village positions from VILLAGE_DEFS
     for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200}]) {
