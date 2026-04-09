@@ -429,10 +429,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
         // 4 finger bones
         const fingerDefs = [
-            { tip: [s*-1.71*S, 0, -1.74*S], mid: [s*-0.61*S, 0, -1.23*S] },
-            { tip: [s*-0.09*S, 0, -2.41*S], mid: [s*0.32*S, 0, -1.41*S] },
-            { tip: [s*0.81*S, 0, -2.27*S], mid: [s*1.1*S, 0, -1.2*S] },
-            { tip: [s*2.25*S, 0, -1.45*S], mid: [s*1.27*S, 0, -0.59*S] },
+            { tip: [s*-1.45*S, 0, -1.48*S], mid: [s*-0.52*S, 0, -1.05*S] },
+            { tip: [s*-0.08*S, 0, -2.05*S], mid: [s*0.27*S, 0, -1.20*S] },
+            { tip: [s*0.69*S, 0, -1.93*S], mid: [s*0.94*S, 0, -1.02*S] },
+            { tip: [s*1.91*S, 0, -1.23*S], mid: [s*1.08*S, 0, -0.50*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
@@ -485,7 +485,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
-        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -0.4*S];
+        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
         const ffArr = new Float32Array(324);
@@ -524,10 +524,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
         const fingerDefs = [
-            { tip: [s*-1.8*S, 0, -0.8*S], mid: [s*-0.65*S, 0, -0.2*S] },
-            { tip: [s*-0.6*S, 0, -1.5*S], mid: [s*-0.15*S, 0, -0.55*S] },
-            { tip: [s*0.65*S, 0, -1.7*S], mid: [s*0.45*S, 0, -0.65*S] },
-            { tip: [s*1.6*S, 0, -1.3*S], mid: [s*0.9*S, 0, -0.4*S] },
+            { tip: [s*-1.53*S, 0, -0.68*S], mid: [s*-0.55*S, 0, -0.17*S] },
+            { tip: [s*-0.51*S, 0, -1.28*S], mid: [s*-0.13*S, 0, -0.47*S] },
+            { tip: [s*0.55*S, 0, -1.45*S], mid: [s*0.38*S, 0, -0.55*S] },
+            { tip: [s*1.36*S, 0, -1.10*S], mid: [s*0.77*S, 0, -0.34*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
@@ -580,7 +580,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
-        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -0.4*S];
+        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
         const ffGeo = new THREE.BufferGeometry();
