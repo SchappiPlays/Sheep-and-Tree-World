@@ -642,6 +642,8 @@ function _initFireParticles(scene) {
         age: new Float32Array(FIRE_PARTICLE_MAX),
         life: new Float32Array(FIRE_PARTICLE_MAX),
         size: new Float32Array(FIRE_PARTICLE_MAX),
+        damping: new Float32Array(FIRE_PARTICLE_MAX),
+        gravity: new Float32Array(FIRE_PARTICLE_MAX),
         active: new Uint8Array(FIRE_PARTICLE_MAX),
         count: 0,
     };
@@ -1098,18 +1100,18 @@ export class DragonManager {
             const mx = bd.x + Math.sin(bd.angle) * headOffset;
             const my = bd.group.position.y + 1.2 * bd.growthScale;
             const mz = bd.z + Math.cos(bd.angle) * headOffset;
-            // Direction: where the player is looking
-            const lookYaw = player.group.rotation.y;
+            // Direction: wherever the crosshair is pointing (use camera yaw, not dragon yaw)
+            const lookYaw = (player._lookYaw !== undefined) ? player._lookYaw : player.group.rotation.y;
             const lookPitch = (player._lookPitch !== undefined) ? player._lookPitch : 0;
             const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
-            // Emit particles
-            this._emitFire(mx, my, mz, dx, dy, dz, 3);
+            // Emit particles — long-range mode
+            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1);
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
-                this._damageInFireCone(mx, my, mz, dx, dy, dz, 1);
+                this._damageInFireCone(mx, my, mz, dx, dy, dz, 1, 30);
             }
         } else {
             bd._breathingFire = false;
@@ -1330,7 +1332,7 @@ export class DragonManager {
     }
 
     // Emit fire particles from a position in a direction
-    _emitFire(ox, oy, oz, dx, dy, dz, count) {
+    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange) {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
@@ -1345,14 +1347,16 @@ export class DragonManager {
             fp.px[slot] = ox + (Math.random() - 0.5) * 0.3;
             fp.py[slot] = oy + (Math.random() - 0.5) * 0.3;
             fp.pz[slot] = oz + (Math.random() - 0.5) * 0.3;
-            const speed = 18 + Math.random() * 6;
-            const spread = 0.15;
+            const speed = longRange ? (32 + Math.random() * 8) : (18 + Math.random() * 6);
+            const spread = longRange ? 0.06 : 0.15;
             fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed;
             fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed;
             fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed;
             fp.age[slot] = 0;
-            fp.life[slot] = 0.7 + Math.random() * 0.4;
+            fp.life[slot] = longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4);
             fp.size[slot] = 0.6 + Math.random() * 0.5;
+            fp.damping[slot] = longRange ? 0.995 : 0.96;
+            fp.gravity[slot] = longRange ? 0.5 : 4.0;
         }
     }
 
@@ -1372,12 +1376,13 @@ export class DragonManager {
             fp.px[i] += fp.vx[i] * dt;
             fp.py[i] += fp.vy[i] * dt;
             fp.pz[i] += fp.vz[i] * dt;
-            // Slow down
-            fp.vx[i] *= 0.96;
-            fp.vy[i] *= 0.96;
-            fp.vz[i] *= 0.96;
-            // Slight upward drift
-            fp.vy[i] += 4 * dt;
+            // Slow down (per-particle damping)
+            const damp = fp.damping[i] || 0.96;
+            fp.vx[i] *= damp;
+            fp.vy[i] *= damp;
+            fp.vz[i] *= damp;
+            // Slight upward drift (per-particle)
+            fp.vy[i] += (fp.gravity[i] || 4.0) * dt;
             // Compute color (yellow → orange → red → smoke)
             const t = fp.age[i] / fp.life[i];
             let r, g, b;
@@ -1401,19 +1406,20 @@ export class DragonManager {
     }
 
     // Damage creatures in a cone in front of a position
-    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick) {
+    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick, maxRange) {
         if (!this._creatureMgr) return;
         const _l = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _l; dy /= _l; dz /= _l;
+        const range = maxRange || 12;
         for (const c of this._creatureMgr.creatures) {
             if (c.dead) continue;
             if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
             if (c.type === 'dragon' || c.type === 'babyDragon') continue;
             const cdx = c.x - ox, cdy = (c.group.position.y || 0) - oy, cdz = c.z - oz;
             const cd = Math.sqrt(cdx*cdx + cdy*cdy + cdz*cdz);
-            if (cd > 12 || cd < 0.1) continue;
+            if (cd > range || cd < 0.1) continue;
             const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
-            if (dot < 0.7) continue;
+            if (dot < 0.85) continue;
             c.hp -= dmgPerTick;
             if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
         }
