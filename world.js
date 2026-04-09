@@ -359,7 +359,7 @@ function getTerrainHeight(x, z) {
     const enchBlend = getEnchantedBlend(x, z);
     if (enchBlend > 0) { h -= enchBlend * 6; h += enchBlend * (Math.sin(x*0.12+z*0.08)*1.2 + Math.cos(x*0.09-z*0.11+1.5)*0.8); }
     const afHill = getAncientForestHillBlend(x, z);
-    if (afHill > 0) { h += afHill * 22 + afHill * Math.sin(x*0.08+z*0.06)*4 + afHill * Math.cos(x*0.05-z*0.07+1)*3; }
+    if (afHill > 0) { h += afHill * 40 + afHill * Math.sin(x*0.08+z*0.06)*6 + afHill * Math.cos(x*0.05-z*0.07+1)*4; }
 
     // Mountain passes
     const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
