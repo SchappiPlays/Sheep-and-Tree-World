@@ -2836,6 +2836,12 @@ function startGame(loadSlotName) {
         }
     };
 
+    // PvP — receive damage from another player
+    mp.onPvpHit = (damage, fromPid) => {
+        playerTakeDamage(damage);
+        addChatMessage('You were hit by another player!', 'rgba(255,100,100,0.9)');
+    };
+
     // Receive creature sync from host — match by cid
     mp.onCreatureSync = (list) => {
         const byId = new Map();
@@ -8555,7 +8561,24 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
             if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
             if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
-            if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
+            if (mp.active) {
+                mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
+                // PvP — check for remote players in front of us
+                const sinA = Math.sin(player.group.rotation.y);
+                const cosA = Math.cos(player.group.rotation.y);
+                for (const [pid, rp] of mp.remotePlayers) {
+                    if (!rp || !rp.group) continue;
+                    const rpx = rp.group.position.x, rpz = rp.group.position.z;
+                    const dx = rpx - player.position.x, dz = rpz - player.position.z;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist > 3 || dist < 0.1) continue;
+                    const dot = (dx * sinA + dz * cosA) / dist;
+                    if (dot < 0.3) continue;
+                    mp.sendPvpHit(pid, finalSwordDmg);
+                    addChatMessage('Hit player for ' + finalSwordDmg + ' damage', 'rgba(255,150,150,0.9)');
+                    break;
+                }
+            }
         } else {
             // Buffer combo swing even during cooldown
             player.triggerSwing();

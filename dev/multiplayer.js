@@ -101,6 +101,12 @@ export class Multiplayer {
                 // Relay attack events
                 if (this.onAttack) this.onAttack(data);
                 if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'pvp') {
+                // Direct PvP damage targeting a specific player
+                if (data.targetPid === this.myId && this.onPvpHit) {
+                    this.onPvpHit(data.damage, data.fromPid);
+                }
+                if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
             }
         });
 
@@ -149,6 +155,12 @@ export class Multiplayer {
     sendAttack(x, z, angle, damage) {
         if (!this.active) return;
         this._broadcast({ type: 'attack', x, z, angle, damage, pid: this.myId });
+    }
+
+    // Send a direct PvP hit to a specific player
+    sendPvpHit(targetPid, damage) {
+        if (!this.active) return;
+        this._broadcast({ type: 'pvp', targetPid, damage, fromPid: this.myId });
     }
 
     // Host sends creature state
