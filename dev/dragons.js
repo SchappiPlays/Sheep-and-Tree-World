@@ -1021,10 +1021,10 @@ export class DragonManager {
                 }
                 // Breathe fire if close enough — emit particles toward target
                 if (targetDist < 12) {
-                    const headOff = 1.5 * gs;
-                    const mx = bd.x + Math.sin(bd.angle) * headOff;
-                    const my = bd.group.position.y + 1.2 * gs;
-                    const mz = bd.z + Math.cos(bd.angle) * headOff;
+                    bd._breathingFire = true;
+                    const _mouth = _afv;
+                    this._getMouthWorld(bd, _mouth);
+                    const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
                     // Direction toward target
                     const tdy = (target.group.position.y || 0) - my;
                     const tdx = target.x - mx;
@@ -1035,6 +1035,8 @@ export class DragonManager {
                         target.hp -= dragonFireDmg;
                         if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
                     }
+                } else {
+                    bd._breathingFire = false;
                 }
                 const tY = this.getHeight(bd.x, bd.z);
                 bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
@@ -1095,11 +1097,10 @@ export class DragonManager {
         bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
         if (keys['KeyF']) {
             bd._breathingFire = true;
-            // Mouth/head position
-            const headOffset = 1.5 * bd.growthScale;
-            const mx = bd.x + Math.sin(bd.angle) * headOffset;
-            const my = bd.group.position.y + 1.2 * bd.growthScale;
-            const mz = bd.z + Math.cos(bd.angle) * headOffset;
+            // Actual mouth world position from the head matrix
+            const _mouth = _afv;
+            this._getMouthWorld(bd, _mouth);
+            const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
             // Direction: wherever the crosshair is pointing (use camera yaw, not dragon yaw)
             const lookYaw = (player._lookYaw !== undefined) ? player._lookYaw : player.group.rotation.y;
             const lookPitch = (player._lookPitch !== undefined) ? player._lookPitch : 0;
@@ -1311,6 +1312,21 @@ export class DragonManager {
             }
             bd.headGrp.rotation.x = Math.sin(bd.walkPhase * 0.8) * 0.1;
         }
+        // Jaw open animation — smoothly opens when breathing fire
+        if (bd.jawGrp) {
+            const target = bd._breathingFire ? 1 : 0;
+            bd._jawOpenT = (bd._jawOpenT || 0) + (target - (bd._jawOpenT || 0)) * Math.min(1, 12 * dt);
+            bd.jawGrp.rotation.x = bd._jawOpenT * 0.65;
+        }
+    }
+
+    // Compute the actual mouth world position from the head matrix
+    _getMouthWorld(bd, out) {
+        const S = 2.55;
+        bd.headGrp.updateMatrixWorld(true);
+        out.set(0, -0.1 * S, 0.7 * S);
+        out.applyMatrix4(bd.headGrp.matrixWorld);
+        return out;
     }
 
     // Apply egg carry pose overlay on player (call after player.update)
