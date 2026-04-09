@@ -11711,40 +11711,106 @@ function animate() {
         }
     }
 
-    // Fortress guardian wyvern — circle above fortress
+    // Fortress guardian wyvern — circle above fortress (day), land at night
     if (world._fortressDragon) {
         const fd = world._fortressDragon;
-        fd._flyAngle += fd._flySpeed * dt;
-        fd.x = -505 + Math.cos(fd._flyAngle) * fd._flyRadius;
-        fd.z = -175 + Math.sin(fd._flyAngle) * fd._flyRadius;
-        const flyY = getTerrainHeight(-505, -175) + fd._flyHeight + Math.sin(fd._flyAngle * 1.7) * 5;
-        fd.group.position.set(fd.x, flyY, fd.z);
-        // Face direction of flight — tangent to circle
-        fd.group.rotation.y = -fd._flyAngle;
-        // Slight bank into the turn
-        fd.group.rotation.z = 0.15;
-        // Slight nose-down pitch for flying
-        fd.group.rotation.x = 0.1;
-        // Set flying state so dragon update handles wing animation
-        fd.flying = true;
-        fd.walking = false;
+        const fortCX = -505, fortCZ = -175;
+        const landX = fortCX + 20, landZ = fortCZ + 15; // landing spot near fortress
+        const landY = getTerrainHeight(landX, landZ);
         fd._flapT = (fd._flapT || 0) + dt;
-        // Legs tucked
-        if (fd.legs) for (const leg of fd.legs) leg.rotation.x = 0.6;
-        // Tail wave
-        if (fd.tailSegs) for (let ti = 0; ti < fd.tailSegs.length; ti++) {
+
+        // Transition state
+        if (!fd._nightState) fd._nightState = 'flying'; // flying, landing, grounded, takeoff
+        const wantsGround = isNight;
+
+        if (wantsGround && fd._nightState === 'flying') {
+            fd._nightState = 'landing';
+            fd._landT = 0;
+        } else if (!wantsGround && fd._nightState === 'grounded') {
+            fd._nightState = 'takeoff';
+            fd._landT = 0;
+        }
+
+        if (fd._nightState === 'landing') {
+            fd._landT += dt * 0.25; // 4 second transition
+            const t = Math.min(1, fd._landT);
+            const smooth = t * t * (3 - 2 * t);
+            // Spiral down
+            fd._flyAngle += fd._flySpeed * dt * (1 - smooth * 0.8);
+            const curR = fd._flyRadius * (1 - smooth * 0.6);
+            fd.x = fortCX + Math.cos(fd._flyAngle) * curR * (1 - smooth) + landX * smooth;
+            fd.z = fortCZ + Math.sin(fd._flyAngle) * curR * (1 - smooth) + landZ * smooth;
+            const flyY = getTerrainHeight(fortCX, fortCZ) + fd._flyHeight * (1 - smooth) + landY * smooth;
+            fd.group.position.set(fd.x, flyY, fd.z);
+            fd.group.rotation.y = -fd._flyAngle * (1 - smooth) + Math.atan2(-(landX - fd.x), -(landZ - fd.z)) * smooth;
+            fd.group.rotation.z = 0.15 * (1 - smooth);
+            fd.group.rotation.x = 0.1 * (1 - smooth);
+            fd.flying = true;
+            if (fd.legs) for (const leg of fd.legs) leg.rotation.x = 0.6 * (1 - smooth);
+            if (t >= 1) { fd._nightState = 'grounded'; }
+        } else if (fd._nightState === 'grounded') {
+            // Resting on the ground
+            fd.x = landX; fd.z = landZ;
+            fd.group.position.set(landX, landY, landZ);
+            fd.group.rotation.y = Math.atan2(-(fortCX - landX), -(fortCZ - landZ)); // face fortress
+            fd.group.rotation.z = 0;
+            fd.group.rotation.x = 0;
+            fd.flying = false;
+            fd.walking = false;
+            // Legs down
+            if (fd.legs) for (const leg of fd.legs) leg.rotation.x = 0;
+            // Gentle breathing — subtle head bob
+            if (fd.headGrp) fd.headGrp.rotation.x = Math.sin(fd._flapT * 0.5) * 0.03 - 0.05;
+            if (fd.neckGrp) fd.neckGrp.rotation.x = Math.sin(fd._flapT * 0.4) * 0.02;
+            // Tail relaxed
+            if (fd.tailSegs) for (let ti = 0; ti < fd.tailSegs.length; ti++) {
+                fd.tailSegs[ti].rotation.y = Math.sin(fd._flapT * 0.8 + ti * 0.5) * 0.05;
+            }
+        } else if (fd._nightState === 'takeoff') {
+            fd._landT += dt * 0.3; // ~3.3 second transition
+            const t = Math.min(1, fd._landT);
+            const smooth = t * t * (3 - 2 * t);
+            fd._flyAngle += fd._flySpeed * dt * smooth;
+            fd.x = landX * (1 - smooth) + (fortCX + Math.cos(fd._flyAngle) * fd._flyRadius) * smooth;
+            fd.z = landZ * (1 - smooth) + (fortCZ + Math.sin(fd._flyAngle) * fd._flyRadius) * smooth;
+            const flyY = landY * (1 - smooth) + (getTerrainHeight(fortCX, fortCZ) + fd._flyHeight) * smooth;
+            fd.group.position.set(fd.x, flyY, fd.z);
+            fd.group.rotation.y = -fd._flyAngle;
+            fd.group.rotation.z = 0.15 * smooth;
+            fd.group.rotation.x = 0.1 * smooth;
+            fd.flying = true;
+            if (fd.legs) for (const leg of fd.legs) leg.rotation.x = 0.6 * smooth;
+            if (t >= 1) { fd._nightState = 'flying'; }
+        } else {
+            // Normal flying
+            fd._flyAngle += fd._flySpeed * dt;
+            fd.x = fortCX + Math.cos(fd._flyAngle) * fd._flyRadius;
+            fd.z = fortCZ + Math.sin(fd._flyAngle) * fd._flyRadius;
+            const flyY = getTerrainHeight(fortCX, fortCZ) + fd._flyHeight + Math.sin(fd._flyAngle * 1.7) * 5;
+            fd.group.position.set(fd.x, flyY, fd.z);
+            fd.group.rotation.y = -fd._flyAngle;
+            fd.group.rotation.z = 0.15;
+            fd.group.rotation.x = 0.1;
+            fd.flying = true;
+            fd.walking = false;
+            if (fd.legs) for (const leg of fd.legs) leg.rotation.x = 0.6;
+        }
+        // Tail wave (when flying)
+        if (fd.flying && fd.tailSegs) for (let ti = 0; ti < fd.tailSegs.length; ti++) {
             fd.tailSegs[ti].rotation.y = Math.sin(fd._flapT * 2 + ti * 0.35) * 0.1;
         }
-        // Head slightly down
-        if (fd.headGrp) fd.headGrp.rotation.x = -0.1;
-        if (fd.neckGrp) fd.neckGrp.rotation.x = 0.15;
+        // Head slightly down when flying
+        if (fd.flying) {
+            if (fd.headGrp) fd.headGrp.rotation.x = -0.1;
+            if (fd.neckGrp) fd.neckGrp.rotation.x = 0.15;
+        }
 
-        // Fire breath — attack player if too close to fortress
+        // Fire breath — attack player if too close to fortress (only while flying)
         const fdx = player.position.x - (-505), fdz = player.position.z - (-175);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 
-        if (fortDist < breathRange && playerHP > 0) {
+        if (fortDist < breathRange && playerHP > 0 && fd._nightState === 'flying') {
             fd._breathTimer += dt;
             if (!fd._exposureTimer) fd._exposureTimer = 0;
 
