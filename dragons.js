@@ -108,28 +108,30 @@ function updateArmFingerMem(w) {
         if (br.x || br.y) _afv.applyEuler(br);
         cTip = [_afv.x, _afv.y, _afv.z];
     } else { cTip = w._afStaticTip; cMid = w._afStaticMid; }
-    const N = 8;
+    const N = 7;
     const arm = [], fin = [];
-    // Arm edge: first half follows the forearm bone, second half bends toward finger tip
-    // so the trailing edge aligns with the first inter-finger membrane
-    const armEnd = toWgSpace([0, 0, 0], 1, elb, hand); // wrist/hand joint
-    const tipWg = toWgSpace(cTip, 2, elb, hand); // finger tip in wing space
+    // Body/arm edge: from elbow tip, along forearm, past wrist, ending near body
+    // Finger edge: from hand origin, along first finger to tip
+    // This fills the gap between the body and the first inter-finger membrane
+    const bodyPt = toWgSpace([0, 0, -0.8 * w._s * fl], 0, elb, hand); // body attachment (shoulder space)
     for (let i = 0; i <= N; i++) {
         const t = i / N;
-        if (t <= 0.5) {
-            // First half: along the forearm
-            const u = t * 2;
+        // Arm/body edge: elbow tip → wrist → body attachment
+        if (t <= 0.4) {
+            // Along forearm from tip to near wrist
+            const u = t / 0.4;
             arm.push(toWgSpace([si * fl * (1 - u), 0, 0], 1, elb, hand));
         } else {
-            // Second half: bend from wrist toward finger tip
-            const u = (t - 0.5) * 2;
+            // From wrist curving back toward body
+            const u = (t - 0.4) / 0.6;
+            const wrist = toWgSpace([0, 0, 0], 1, elb, hand);
             arm.push([
-                armEnd[0] + (tipWg[0] - armEnd[0]) * u,
-                armEnd[1] + (tipWg[1] - armEnd[1]) * u,
-                armEnd[2] + (tipWg[2] - armEnd[2]) * u,
+                wrist[0] + (bodyPt[0] - wrist[0]) * u,
+                wrist[1] + (bodyPt[1] - wrist[1]) * u,
+                wrist[2] + (bodyPt[2] - wrist[2]) * u,
             ]);
         }
-        // Finger edge: traces from hand origin to finger tip
+        // Finger edge: from hand origin to finger tip
         let fp;
         if (t <= 0.5) { const u = t * 2; fp = [cMid[0]*u, cMid[1]*u, cMid[2]*u]; }
         else { const u = (t - 0.5) * 2; fp = [cMid[0]*(1-u)+cTip[0]*u, cMid[1]*(1-u)+cTip[1]*u, cMid[2]*(1-u)+cTip[2]*u]; }
