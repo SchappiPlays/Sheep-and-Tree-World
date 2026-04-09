@@ -945,6 +945,83 @@ export class DragonManager {
             // Default to following the player
             if (bd._followingPlayer === undefined) bd._followingPlayer = true;
 
+            // ── Combat AI — find nearby hostile creature to fight ──
+            // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
+            let dragonFireDmg = 0.5;
+            if (bd.age >= 1200) dragonFireDmg = 1;
+            if (bd.age >= 2400) dragonFireDmg = 2;
+            if (bd.age >= 3600) dragonFireDmg = 3;
+
+            let target = null, targetDist = 25;
+            if (this._creatureMgr) {
+                for (const c of this._creatureMgr.creatures) {
+                    if (c.dead || !c.hostile || c._tamed) continue;
+                    if (c.type === 'babyDragon' || c.type === 'dragon') continue;
+                    if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+                    const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                    const cd = Math.sqrt(cdx*cdx + cdz*cdz);
+                    if (cd < targetDist) {
+                        // Only engage if target is close to player too
+                        const pdx = c.x - px, pdz = c.z - pz;
+                        if (pdx*pdx + pdz*pdz < 30 * 30) {
+                            targetDist = cd;
+                            target = c;
+                        }
+                    }
+                }
+            }
+
+            bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
+
+            if (target) {
+                // Chase target
+                const tdx = target.x - bd.x, tdz = target.z - bd.z;
+                bd.angle = Math.atan2(tdx, tdz);
+                bd.group.rotation.y = bd.angle;
+                const desiredDist = 4;
+                if (targetDist > desiredDist) {
+                    const cspd = Math.min(targetDist * 1.5, 6 + gs * 4) * dt;
+                    bd.x += Math.sin(bd.angle) * cspd;
+                    bd.z += Math.cos(bd.angle) * cspd;
+                    bd.walking = true;
+                } else {
+                    bd.walking = false;
+                }
+                // Breathe fire if close enough
+                if (targetDist < 8) {
+                    if (!bd._fireMesh) {
+                        const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+                        const fireMesh = new THREE.Mesh(new THREE.ConeGeometry(1.5, 6, 6, 1, true), fireMat);
+                        fireMesh.renderOrder = 998;
+                        this.scene.add(fireMesh);
+                        bd._fireMesh = fireMesh;
+                        bd._fireMat = fireMat;
+                    }
+                    bd._fireMesh.visible = true;
+                    const headY = bd.group.position.y + 1.5;
+                    const fx = bd.x + Math.sin(bd.angle) * 4;
+                    const fz = bd.z + Math.cos(bd.angle) * 4;
+                    bd._fireMesh.position.set(fx, headY, fz);
+                    bd._fireMesh.lookAt(target.x, headY, target.z);
+                    bd._fireMesh.rotateX(Math.PI / 2);
+                    bd._fireMat.opacity = 0.5 + Math.sin(performance.now() * 0.02) * 0.2;
+                    bd._fireMat.color.setHex(Math.random() > 0.3 ? 0xff6600 : 0xff3300);
+                    if (bd._fireBreathTimer <= 0) {
+                        bd._fireBreathTimer = 0.33;
+                        target.hp -= dragonFireDmg;
+                        if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
+                    }
+                } else if (bd._fireMesh) {
+                    bd._fireMesh.visible = false;
+                }
+                const tY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                this._animateDragon(dt, bd);
+                continue;
+            } else if (bd._fireMesh) {
+                bd._fireMesh.visible = false;
+            }
+
             // ── Follow player AI ──
             const bdx = px - bd.x, bdz = pz - bd.z;
             const bDist = Math.sqrt(bdx * bdx + bdz * bdz);

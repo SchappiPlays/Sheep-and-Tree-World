@@ -2863,6 +2863,7 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
+    creatures._dragonMgr = dragonMgr;
     player = new Player(scene, world);
     // Apply stat bonuses to player
     player.walkSpeed = 3.6 * getStatSpeedMult();
