@@ -975,6 +975,32 @@ function buildFarTerrain(centerX, centerZ) {
                     pushFace(wx+leafR, lTop, wz-leafR, wx+leafR, lBase, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lTop, wz-leafR, leafCol);
                 }
             }
+            // LOD pine trees — snow biome, conical shape
+            if (snow > 0.15 && allMtn < 0.5 && rawH >= 1 && rawH <= 60) {
+                const th2 = Math.sin(gx * 141.3 + gz * 277.9) * 43758.5453;
+                const pineChance = th2 - Math.floor(th2);
+                if (pineChance < 0.12) {
+                    const trunkH = BS * 7;
+                    const trunkR = BS * 0.4;
+                    const pineCol = 0x1a4a2a;
+                    const barkCol = 0x4a3020;
+                    const tBase = top;
+                    // Trunk
+                    pushFace(wx-trunkR, tBase+trunkH, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz+trunkR, wx-trunkR, tBase+trunkH, wz+trunkR, barkCol);
+                    pushFace(wx+trunkR, tBase+trunkH, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz-trunkR, wx+trunkR, tBase+trunkH, wz-trunkR, barkCol);
+                    pushFace(wx-trunkR, tBase+trunkH, wz+trunkR, wx-trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase+trunkH, wz+trunkR, barkCol);
+                    pushFace(wx+trunkR, tBase+trunkH, wz-trunkR, wx+trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase+trunkH, wz-trunkR, barkCol);
+                    // Conical canopy — triangle sides (approximated as narrow box tapering up)
+                    const cBase = tBase + BS * 2;
+                    const cTop = tBase + trunkH + BS * 2;
+                    const cR = BS * 2;
+                    // 4 triangular sides
+                    pushFace(wx-cR, cBase, wz-cR, wx, cTop, wz, wx-cR, cBase, wz+cR, wx-cR, cBase, wz+cR, pineCol);
+                    pushFace(wx+cR, cBase, wz+cR, wx, cTop, wz, wx+cR, cBase, wz-cR, wx+cR, cBase, wz-cR, pineCol);
+                    pushFace(wx-cR, cBase, wz+cR, wx, cTop, wz, wx+cR, cBase, wz+cR, wx+cR, cBase, wz+cR, pineCol);
+                    pushFace(wx+cR, cBase, wz-cR, wx, cTop, wz, wx-cR, cBase, wz-cR, wx-cR, cBase, wz-cR, pineCol);
+                }
+            }
         }
     }
 
@@ -1081,8 +1107,8 @@ function buildFarTerrain(centerX, centerZ) {
     }
 
     // Water plane — simple flat plane, shader-based cutout near player
-    const outerR = range * 1.5;
-    const farWaterGeo = new THREE.PlaneGeometry(outerR * 2, outerR * 2);
+    const outerR = range * 2;
+    const farWaterGeo = new THREE.PlaneGeometry(outerR * 2, outerR * 2 * ISLAND_NS_SCALE);
     farWaterGeo.rotateX(-Math.PI / 2);
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
     waterMat.onBeforeCompile = (shader) => {
@@ -1104,7 +1130,7 @@ function buildFarTerrain(centerX, centerZ) {
         waterMat._shader = shader;
     };
     farWater = new THREE.Mesh(farWaterGeo, waterMat);
-    farWater.position.y = -0.3;
+    farWater.position.y = 0.1;
     farWater.renderOrder = -2;
     scene.add(farWater);
 }
@@ -5937,7 +5963,7 @@ const worldMapEl = document.getElementById('worldMap');
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 let mapOpen = false;
-let mapViewX = 0, mapViewZ = 0, mapViewSize = 1200;
+let mapViewX = 0, mapViewZ = 0, mapViewSize = 1600;
 let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
 let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
 
@@ -5971,7 +5997,8 @@ function drawWorldMap() {
                 const wz = (py / scale) + mapViewZ - mapViewSize;
                 const idx = gy * cols + gx;
 
-                const dist = Math.sqrt(wx * wx + wz * wz);
+                const sz = wz / ISLAND_NS_SCALE;
+                const dist = Math.sqrt(wx * wx + sz * sz);
                 const localR = getIslandRadius(wx, wz);
 
                 if (dist > localR - 20) {
@@ -6474,7 +6501,7 @@ mapCanvas.addEventListener('wheel', e => {
     if (!mapOpen) return;
     e.preventDefault(); e.stopPropagation();
     const zf = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-    mapViewSize = Math.max(50, Math.min(2500, mapViewSize * zf));
+    mapViewSize = Math.max(50, Math.min(3500, mapViewSize * zf));
     drawWorldMap();
 }, { passive: false });
 
