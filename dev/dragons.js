@@ -701,6 +701,96 @@ export class DragonManager {
         playerSpine.add(this.carriedEggGrp);
     }
 
+    // ── Multiplayer sync helpers ──
+    _ensureMpId(bd) {
+        if (bd._mpId === undefined) {
+            this._nextMpId = (this._nextMpId || 0) + 1;
+            bd._mpId = this._nextMpId;
+        }
+        return bd._mpId;
+    }
+
+    // Host serializes its dragon list for broadcast to clients
+    serializeDragonsForSync() {
+        const list = [];
+        for (const bd of this.dragons) {
+            if (bd.state !== 'alive') continue;
+            this._ensureMpId(bd);
+            list.push({
+                id: bd._mpId,
+                x: +bd.x.toFixed(2), z: +bd.z.toFixed(2),
+                y: +bd.group.position.y.toFixed(2),
+                ry: +bd.angle.toFixed(3),
+                rx: +(bd.group.rotation.x || 0).toFixed(3),
+                gs: +bd.growthScale.toFixed(2),
+                wp: +bd.walkPhase.toFixed(2),
+                ec: bd.eggColor, wc: bd.wingColor || 0,
+                wy: bd.isWyvern ? 1 : 0,
+                fl: bd.flying ? 1 : 0,
+                wk: bd.walking ? 1 : 0,
+                bf: bd._breathingFire ? 1 : 0,
+                ib: bd._iceBreath ? 1 : 0,
+                ic: bd._iceDragon ? 1 : 0,
+                fy: bd._fireDirYaw !== undefined ? +bd._fireDirYaw.toFixed(2) : 999,
+                fp: bd._fireDirPitch !== undefined ? +bd._fireDirPitch.toFixed(2) : 0,
+                nm: bd.dragonName || '',
+            });
+        }
+        return list;
+    }
+
+    // Client receives host's dragon list and updates phantom dragons
+    applyDragonSync(list) {
+        if (!this._remoteDragons) this._remoteDragons = new Map();
+        const seen = new Set();
+        for (const d of list) {
+            seen.add(d.id);
+            let bd = this._remoteDragons.get(d.id);
+            if (!bd) {
+                // Spawn phantom
+                const hy = this.getHeight ? this.getHeight(d.x, d.z) : 0;
+                bd = makeBabyDragon(d.x, d.z, hy, d.ec, d.wc || null, !!d.wy);
+                bd._mpId = d.id;
+                bd._isRemote = true;
+                bd.dragonName = d.nm || '';
+                this.scene.add(bd.group);
+                this._remoteDragons.set(d.id, bd);
+            }
+            bd.x = d.x; bd.z = d.z;
+            bd.angle = d.ry;
+            bd.group.position.set(d.x, d.y, d.z);
+            bd.group.rotation.y = d.ry;
+            bd.group.rotation.x = d.rx;
+            bd.growthScale = d.gs;
+            bd.group.scale.setScalar(d.gs);
+            bd.footOffset = 0.95 * 2.55 * d.gs;
+            bd.walkPhase = d.wp;
+            bd.flying = !!d.fl;
+            bd.walking = !!d.wk;
+            bd._breathingFire = !!d.bf;
+            bd._iceBreath = !!d.ib;
+            if (d.fy !== 999) {
+                bd._fireDirYaw = d.fy;
+                bd._fireDirPitch = d.fp;
+            }
+        }
+        // Despawn dragons no longer present
+        for (const [id, bd] of this._remoteDragons) {
+            if (!seen.has(id)) {
+                this.scene.remove(bd.group);
+                this._remoteDragons.delete(id);
+            }
+        }
+    }
+
+    // Animate phantom dragons (call from main loop after sync)
+    updateRemoteDragons(dt) {
+        if (!this._remoteDragons) return;
+        for (const bd of this._remoteDragons.values()) {
+            this._animateDragon(dt, bd);
+        }
+    }
+
     build(getHeight) {
         if (this._built) return;
         this._built = true;
@@ -1485,7 +1575,7 @@ export class DragonManager {
                 this._emitFire(mx, my, mz, fdx, fdy, fdz, 4, 1, 1);
                 if (bd._fireBreathTimer <= 0) {
                     bd._fireBreathTimer = 0.4;
-                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28);
+                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28, player);
                 }
             } else {
                 bd._breathingFire = false;
@@ -1665,23 +1755,36 @@ export class DragonManager {
         }
     }
 
-    // Damage creatures in a cone in front of a position
-    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick, maxRange) {
-        if (!this._creatureMgr) return;
+    // Damage creatures (and optionally the player) in a cone in front of a position
+    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick, maxRange, hitPlayer) {
         const _l = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _l; dy /= _l; dz /= _l;
         const range = maxRange || 12;
-        for (const c of this._creatureMgr.creatures) {
-            if (c.dead) continue;
-            if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
-            if (c.type === 'dragon' || c.type === 'babyDragon') continue;
-            const cdx = c.x - ox, cdy = (c.group.position.y || 0) - oy, cdz = c.z - oz;
+        if (this._creatureMgr) {
+            for (const c of this._creatureMgr.creatures) {
+                if (c.dead) continue;
+                if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+                if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+                const cdx = c.x - ox, cdy = (c.group.position.y || 0) - oy, cdz = c.z - oz;
+                const cd = Math.sqrt(cdx*cdx + cdy*cdy + cdz*cdz);
+                if (cd > range || cd < 0.1) continue;
+                const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
+                if (dot < 0.85) continue;
+                c.hp -= dmgPerTick;
+                if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+            }
+        }
+        if (hitPlayer && typeof window !== 'undefined' && typeof window.playerTakeDamage === 'function') {
+            const cdx = hitPlayer.position.x - ox;
+            const cdy = (hitPlayer.position.y || 0) - oy;
+            const cdz = hitPlayer.position.z - oz;
             const cd = Math.sqrt(cdx*cdx + cdy*cdy + cdz*cdz);
-            if (cd > range || cd < 0.1) continue;
-            const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
-            if (dot < 0.85) continue;
-            c.hp -= dmgPerTick;
-            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+            if (cd > 0.1 && cd <= range) {
+                const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
+                if (dot >= 0.7) {
+                    window.playerTakeDamage(dmgPerTick);
+                }
+            }
         }
     }
 

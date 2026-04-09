@@ -95,6 +95,8 @@ export class Multiplayer {
                 if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'creatures') {
                 if (this.onCreatureSync) this.onCreatureSync(data.list);
+            } else if (data.type === 'dragons') {
+                if (this.onDragonSync) this.onDragonSync(data.list);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
@@ -173,6 +175,12 @@ export class Multiplayer {
             t: c.type,
         }));
         this._broadcast({ type: 'creatures', list });
+    }
+
+    // Host sends dragon state
+    sendDragonState(dragonList) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'dragons', list: dragonList });
     }
 
     _broadcast(data) {

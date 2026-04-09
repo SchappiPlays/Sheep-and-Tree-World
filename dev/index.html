@@ -2870,6 +2870,10 @@ function startGame(loadSlotName) {
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
     creatures._dragonMgr = dragonMgr;
+    // Receive dragon sync from host (only clients use this)
+    mp.onDragonSync = (list) => {
+        if (!mp.isHost && dragonMgr) dragonMgr.applyDragonSync(list);
+    };
     player = new Player(scene, world);
     // Apply stat bonuses to player
     player.walkSpeed = 3.6 * getStatSpeedMult();
@@ -4488,6 +4492,16 @@ function startGame(loadSlotName) {
             player.group.rotation.y = s.player.ry || 0;
             // Restore inventory
             Object.assign(inventory, s.inventory || {});
+            // Remove fortress sword meshes the player already collected
+            if (world._fortressSwordMeshes) {
+                for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
+                    const fs = world._fortressSwordMeshes[fi];
+                    if (inventory[fs.id]) {
+                        scene.remove(fs.mesh);
+                        world._fortressSwordMeshes.splice(fi, 1);
+                    }
+                }
+            }
             for (let i = 0; i < 9; i++) hotbarSlots[i] = s.hotbarSlots?.[i] || 0;
             selectedSlot = s.selectedSlot || 0;
             Object.assign(eggItems, s.eggItems || {});
@@ -5552,6 +5566,7 @@ deathScreen.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%
 deathScreen.innerHTML = '<div style="color:#ff4444;font:bold 48px monospace;text-shadow:0 0 20px #ff0000;">You Died</div><div style="color:#cc8888;font:14px monospace;margin-top:16px;">Respawning...</div>';
 document.body.appendChild(deathScreen);
 
+window.playerTakeDamage = playerTakeDamage;
 function playerTakeDamage(dmg) {
     if (playerDead || creativeMode) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
@@ -12234,7 +12249,7 @@ function animate() {
             const held = hotbarSlots[selectedSlot];
             mp.sendState(player, held, player.swingTimer, charColors);
         }
-        // Host syncs creatures + villagers at 5Hz
+        // Host syncs creatures + villagers + dragons at 5Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
             if (mp._creatureSendAccum >= 0.2) {
@@ -12249,6 +12264,8 @@ function animate() {
                     }));
                     mp._broadcast({ type: 'villagers', list: vList });
                 }
+                // Dragon sync (host's dragons → clients render as phantoms)
+                if (dragonMgr) mp.sendDragonState(dragonMgr.serializeDragonsForSync());
             }
         }
     }
@@ -12334,6 +12351,7 @@ function animate() {
     player._lookYaw = fpYaw;
     dragonMgr._timeOfDay = timeOfDay;
     dragonMgr.update(dt, player, keys);
+    if (mp.active && !mp.isHost) dragonMgr.updateRemoteDragons(dt);
 
     // Process smelt queue
     for (let si = smeltQueue.length - 1; si >= 0; si--) {
