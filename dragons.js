@@ -1094,7 +1094,7 @@ export class DragonManager {
     }
 
     getPrompt(player) {
-        const px = player.position.x, pz = player.position.z;
+        const px = player.position.x, py = player.position.y, pz = player.position.z;
         if (this.ridingDragon) return 'Press E to dismount' + (this.ridingRef && this.ridingRef.age >= 1550 ? ' | Space/Shift = fly up/down' : '');
         if (this.heldEgg) {
             const adx = px - this.altarX, adz = pz - this.altarZ;
