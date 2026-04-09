@@ -2962,6 +2962,146 @@ function startGame(loadSlotName) {
         }
     }
 
+    // === Ice Dragon Nest — far north ===
+    {
+        const nestX = -343, nestZ = -1250;
+        const nestY = getTerrainHeight(nestX, nestZ);
+        // Materials
+        const iceStoneMat = new THREE.MeshStandardMaterial({ color: 0xc8d8e8, roughness: 0.7, metalness: 0.15 });
+        const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x6a7888, roughness: 0.85 });
+        const iceMat = new THREE.MeshStandardMaterial({ color: 0xddeeff, roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.85 });
+        const eggShellMat = new THREE.MeshStandardMaterial({ color: 0xc0e0f0, roughness: 0.45, metalness: 0.25, emissive: 0x224466, emissiveIntensity: 0.1 });
+        const eggVeinMat = new THREE.MeshStandardMaterial({ color: 0x88ccee, emissive: 0x4488cc, emissiveIntensity: 0.3, roughness: 0.3 });
+        const sapphireMat = new THREE.MeshStandardMaterial({ color: 0x2a55cc, emissive: 0x1133aa, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.6 });
+        const diamondMat = new THREE.MeshStandardMaterial({ color: 0xeefcff, emissive: 0xaaccee, emissiveIntensity: 0.3, roughness: 0.1, metalness: 0.7 });
+        const ironOreMat = new THREE.MeshStandardMaterial({ color: 0x8a7060, roughness: 0.7, metalness: 0.4 });
+        const silverOreMat = new THREE.MeshStandardMaterial({ color: 0xd4d8e0, roughness: 0.4, metalness: 0.7 });
+        const goldOreMat = new THREE.MeshStandardMaterial({ color: 0xddbb44, emissive: 0x553300, emissiveIntensity: 0.15, roughness: 0.4, metalness: 0.7 });
+
+        const nestGrp = new THREE.Group();
+        nestGrp.position.set(nestX, nestY, nestZ);
+        // Nest rim — ring of stones
+        for (let a = 0; a < 36; a++) {
+            const ang = (a / 36) * Math.PI * 2;
+            const r = 12 + (Math.random() - 0.5) * 1.5;
+            const sx = Math.cos(ang) * r;
+            const sz = Math.sin(ang) * r;
+            const sw = 1.6 + Math.random() * 1.0;
+            const sh = 1.4 + Math.random() * 1.6;
+            const mat = (a % 3 === 0) ? iceMat : ((a % 3 === 1) ? iceStoneMat : darkStoneMat);
+            const stone = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sw), mat);
+            stone.position.set(sx, sh / 2, sz);
+            stone.rotation.y = Math.random() * Math.PI;
+            stone.castShadow = true; stone.receiveShadow = true;
+            nestGrp.add(stone);
+        }
+        // Inner low rim
+        for (let a = 0; a < 24; a++) {
+            const ang = (a / 24) * Math.PI * 2 + 0.05;
+            const r = 8;
+            const stone = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), iceStoneMat);
+            stone.position.set(Math.cos(ang) * r, 0.35, Math.sin(ang) * r);
+            stone.castShadow = true; nestGrp.add(stone);
+        }
+        // 6 ice dragon eggs (visual only)
+        const eggPositions = [];
+        for (let i = 0; i < 6; i++) {
+            const ang = (i / 6) * Math.PI * 2;
+            const r = 3.5;
+            eggPositions.push([Math.cos(ang) * r, Math.sin(ang) * r]);
+        }
+        for (const [ex, ez] of eggPositions) {
+            const eggGrp = new THREE.Group();
+            eggGrp.position.set(ex, 1.2, ez);
+            const egg = new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 12), eggShellMat);
+            egg.scale.set(1.0, 1.35, 1.0);
+            egg.castShadow = true; eggGrp.add(egg);
+            // Glowing veins
+            for (let v = 0; v < 5; v++) {
+                const vang = Math.random() * Math.PI * 2;
+                const vy = (Math.random() - 0.5) * 1.5;
+                const vein = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), eggVeinMat);
+                vein.position.set(Math.cos(vang) * 1.05, vy, Math.sin(vang) * 1.05);
+                vein.rotation.set(Math.random(), Math.random(), Math.random());
+                eggGrp.add(vein);
+            }
+            // Tilt slightly
+            eggGrp.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.3);
+            nestGrp.add(eggGrp);
+        }
+        // Gem clusters scattered around the eggs
+        for (let i = 0; i < 14; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const r = 4.5 + Math.random() * 3;
+            const cx2 = Math.cos(ang) * r;
+            const cz2 = Math.sin(ang) * r;
+            const isDiamond = Math.random() < 0.45;
+            const gMat = isDiamond ? diamondMat : sapphireMat;
+            const cluster = new THREE.Group();
+            cluster.position.set(cx2, 0.2, cz2);
+            for (let g = 0; g < 4; g++) {
+                const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.35 + Math.random() * 0.3), gMat);
+                gem.position.set((Math.random() - 0.5) * 0.7, 0.2 + Math.random() * 0.3, (Math.random() - 0.5) * 0.7);
+                gem.rotation.set(Math.random(), Math.random(), Math.random());
+                gem.castShadow = true;
+                cluster.add(gem);
+            }
+            nestGrp.add(cluster);
+        }
+        // Ore chunks
+        for (let i = 0; i < 10; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const r = 5.5 + Math.random() * 2.5;
+            const omat = [ironOreMat, silverOreMat, goldOreMat][Math.floor(Math.random() * 3)];
+            const chunk = new THREE.Mesh(new THREE.BoxGeometry(0.7 + Math.random() * 0.5, 0.5 + Math.random() * 0.4, 0.7 + Math.random() * 0.5), omat);
+            chunk.position.set(Math.cos(ang) * r, 0.3, Math.sin(ang) * r);
+            chunk.rotation.set(Math.random(), Math.random(), Math.random());
+            chunk.castShadow = true;
+            nestGrp.add(chunk);
+        }
+        // Treasure chest
+        const chestBodyMat = new THREE.MeshStandardMaterial({ color: 0x6b3f1a, roughness: 0.8 });
+        const chestIronMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, metalness: 0.7 });
+        const chestGrp = new THREE.Group();
+        chestGrp.position.set(0, 0.6, -5.5);
+        chestGrp.rotation.y = Math.PI;
+        const chestBody = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.0), chestBodyMat);
+        chestBody.castShadow = true; chestGrp.add(chestBody);
+        const chestLid = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.35, 1.05), chestBodyMat);
+        chestLid.position.y = 0.6; chestGrp.add(chestLid);
+        const chestLock = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.1), chestIronMat);
+        chestLock.position.set(0, 0.4, 0.55); chestGrp.add(chestLock);
+        for (let s = -1; s <= 1; s += 2) {
+            const band = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.05, 1.05), chestIronMat);
+            band.position.set(s * 0.7, 0.05, 0); chestGrp.add(band);
+        }
+        nestGrp.add(chestGrp);
+
+        scene.add(nestGrp);
+        world._iceDragonNest = nestGrp;
+
+        // Spawn the giant ice dragon at the nest
+        const iceDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0xddeeff, 0xa8c8e8, true);
+        iceDragon.age = 7200;
+        iceDragon.growthScale = 2.0;
+        iceDragon.group.scale.setScalar(iceDragon.growthScale);
+        iceDragon.footOffset = 0.95 * 2.55 * iceDragon.growthScale;
+        iceDragon.state = 'alive';
+        iceDragon.dragonName = 'Frostfang the Glacial';
+        iceDragon._iceDragon = true;
+        iceDragon._stationary = true; // exclude from save
+        iceDragon._unrideable = true;
+        iceDragon._nestX = nestX;
+        iceDragon._nestZ = nestZ;
+        iceDragon._iceState = 'idle';
+        iceDragon.maxHP = 250; iceDragon.hp = 250;
+        iceDragon.x = nestX; iceDragon.z = nestZ;
+        iceDragon.group.position.set(nestX, nestY + iceDragon.footOffset, nestZ);
+        scene.add(iceDragon.group);
+        dragonMgr.dragons.push(iceDragon);
+        world._iceDragon = iceDragon;
+    }
+
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
@@ -12180,6 +12320,7 @@ function animate() {
     // Dragons
     player._lookPitch = fpPitch;
     player._lookYaw = fpYaw;
+    dragonMgr._timeOfDay = timeOfDay;
     dragonMgr.update(dt, player, keys);
 
     // Process smelt queue

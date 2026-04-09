@@ -650,6 +650,7 @@ function _initFireParticles(scene) {
         size: new Float32Array(FIRE_PARTICLE_MAX),
         damping: new Float32Array(FIRE_PARTICLE_MAX),
         gravity: new Float32Array(FIRE_PARTICLE_MAX),
+        iceMode: new Uint8Array(FIRE_PARTICLE_MAX),
         active: new Uint8Array(FIRE_PARTICLE_MAX),
         count: 0,
     };
@@ -923,6 +924,12 @@ export class DragonManager {
                 continue;
             }
             if (bd.state !== 'alive') continue;
+            // Ice dragon — runs its own AI even though it's stationary-marked
+            if (bd._iceDragon) {
+                this._updateIceDragon(dt, bd, player);
+                this._animateDragon(dt, bd);
+                continue;
+            }
             // Stationary or fortress dragons skip growth + follow AI entirely
             if (bd._stationary || bd._fortressGuardian) {
                 this._animateDragon(dt, bd);
@@ -1360,6 +1367,164 @@ export class DragonManager {
         return out;
     }
 
+    // Ice dragon AI — sleeps at night, defends nest by day, sometimes flies "with purpose"
+    _updateIceDragon(dt, bd, player) {
+        const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
+        const isNight = tod < 0.22 || tod > 0.78;
+        const px = player.position.x, pz = player.position.z;
+        const dx = px - bd.x, dz = pz - bd.z;
+        const distXZ = Math.sqrt(dx*dx + dz*dz);
+        const sprinting = (player.sprintBlend || 0) > 0.5;
+        if (!bd._iceState) bd._iceState = 'idle';
+        if (!bd._iceTimer) bd._iceTimer = 0;
+        bd._iceTimer -= dt;
+        bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
+
+        // ── State transitions ──
+        if (isNight && bd._iceState !== 'sleeping' && bd._iceState !== 'defending' && distXZ > 18) {
+            // Return to nest then sleep
+            const nx = bd._nestX, nz = bd._nestZ;
+            const ndx = nx - bd.x, ndz = nz - bd.z;
+            if (Math.sqrt(ndx*ndx + ndz*ndz) < 4) {
+                bd._iceState = 'sleeping';
+                bd.flying = false;
+                bd.walking = false;
+            } else {
+                bd._iceState = 'returning';
+            }
+        }
+        if (bd._iceState === 'sleeping') {
+            if (sprinting && distXZ < 28) {
+                bd._iceState = 'defending';
+                bd._iceTimer = 0;
+            } else if (!isNight) {
+                bd._iceState = 'idle';
+            }
+        }
+        if (bd._iceState === 'idle') {
+            if (!isNight && distXZ < 40) {
+                bd._iceState = 'defending';
+            } else if (!isNight && bd._iceTimer <= 0) {
+                bd._iceState = 'flying_aimless';
+                bd._iceTimer = 6 + Math.random() * 8;
+                bd._iceFlyAngle = Math.random() * Math.PI * 2;
+                bd.flying = true;
+                bd.flyHeight = (this.getHeight ? this.getHeight(bd.x, bd.z) : 0) + 25 + Math.random() * 15;
+            }
+        }
+        if (bd._iceState === 'defending' && distXZ > 60) {
+            bd._iceState = 'returning';
+        }
+        if (bd._iceState === 'flying_aimless' && bd._iceTimer <= 0) {
+            bd._iceState = 'returning';
+        }
+        if (bd._iceState === 'returning') {
+            const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
+            if (Math.sqrt(ndx*ndx + ndz*ndz) < 5) {
+                bd._iceState = isNight ? 'sleeping' : 'idle';
+                bd._iceTimer = 15 + Math.random() * 20; // wait before next aimless flight
+                bd.flying = false;
+                bd.walking = false;
+            }
+        }
+
+        // ── State actions ──
+        const gs = bd.growthScale;
+        const gy = (this.getHeight ? this.getHeight(bd.x, bd.z) : 0);
+        if (bd._iceState === 'sleeping') {
+            // Stay at nest, low to ground, head down
+            bd.x = bd._nestX;
+            bd.z = bd._nestZ;
+            bd.flying = false; bd.walking = false;
+            bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            bd._fireDirYaw = bd.angle;
+            bd._fireDirPitch = 0.6; // head tucked down
+            bd._breathingFire = false;
+            // Force head pose without using breath aim path: just rotate head down softly
+            if (bd.headGrp) bd.headGrp.rotation.x = 0.4;
+        } else if (bd._iceState === 'idle') {
+            bd.x = bd._nestX; bd.z = bd._nestZ;
+            bd.flying = false; bd.walking = false;
+            bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            bd._breathingFire = false;
+        } else if (bd._iceState === 'defending') {
+            // Face player, breathe ice, walk toward
+            bd.angle = Math.atan2(dx, dz);
+            bd.group.rotation.y = bd.angle;
+            const desired = 12;
+            if (distXZ > desired) {
+                const spd = Math.min(8 + gs * 4, distXZ * 1.5) * dt;
+                bd.x += Math.sin(bd.angle) * spd;
+                bd.z += Math.cos(bd.angle) * spd;
+                bd.walking = true;
+            } else {
+                bd.walking = false;
+            }
+            bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            // Breathe ice if within range
+            if (distXZ < 25) {
+                bd._breathingFire = true;
+                const aimY = (player.position.y || 0) - (bd.group.position.y + 1.0 * gs);
+                const aimHoriz = Math.sqrt(dx*dx + dz*dz) || 1;
+                bd._fireDirYaw = Math.atan2(dx, dz);
+                bd._fireDirPitch = -Math.atan2(aimY, aimHoriz);
+                this._aimDragonHead(bd, true);
+                this._getMouthWorld(bd, _afv);
+                const mx = _afv.x, my = _afv.y, mz = _afv.z;
+                const fdx = Math.sin(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+                const fdy = -Math.sin(bd._fireDirPitch);
+                const fdz = Math.cos(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+                this._emitFire(mx, my, mz, fdx, fdy, fdz, 4, 1, 1);
+                if (bd._fireBreathTimer <= 0) {
+                    bd._fireBreathTimer = 0.4;
+                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28);
+                }
+            } else {
+                bd._breathingFire = false;
+            }
+        } else if (bd._iceState === 'flying_aimless') {
+            // Wander purposefully — fly forward in current direction
+            const speed = 18 + gs * 6;
+            bd._iceFlyAngle += (Math.random() - 0.5) * 0.4 * dt;
+            bd.angle = bd._iceFlyAngle;
+            bd.x += Math.sin(bd.angle) * speed * dt;
+            bd.z += Math.cos(bd.angle) * speed * dt;
+            // Stay within ~150 of nest
+            const ndx = bd.x - bd._nestX, ndz = bd.z - bd._nestZ;
+            if (ndx*ndx + ndz*ndz > 22500) {
+                bd._iceFlyAngle = Math.atan2(bd._nestX - bd.x, bd._nestZ - bd.z);
+                bd.angle = bd._iceFlyAngle;
+            }
+            bd.flying = true;
+            bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            bd.group.rotation.y = bd.angle;
+            bd._breathingFire = false;
+        } else if (bd._iceState === 'returning') {
+            const ang = Math.atan2(bd._nestX - bd.x, bd._nestZ - bd.z);
+            bd.angle = ang;
+            bd.group.rotation.y = ang;
+            const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
+            const nDist = Math.sqrt(ndx*ndx + ndz*ndz);
+            if (bd.flying) {
+                const sp = 22 * dt;
+                bd.x += (ndx / nDist) * sp;
+                bd.z += (ndz / nDist) * sp;
+                // Descend toward terrain as we get close
+                const targetH = gy + (nDist > 10 ? 25 : 5);
+                bd.flyHeight += (targetH - bd.flyHeight) * 2 * dt;
+                if (nDist < 8 && bd.flyHeight < gy + 6) bd.flying = false;
+                bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            } else {
+                const sp = (10 + gs * 4) * dt;
+                bd.x += (ndx / nDist) * sp;
+                bd.z += (ndz / nDist) * sp;
+                bd.walking = true;
+                bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            }
+            bd._breathingFire = false;
+        }
+    }
+
     // Aim head/neck so the snout points along bd._fireDirYaw / _fireDirPitch
     // The bend is distributed across all neck segments + head, producing a real curve
     _aimDragonHead(bd, snap) {
@@ -1411,7 +1576,7 @@ export class DragonManager {
     }
 
     // Emit fire particles from a position in a direction
-    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange) {
+    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode) {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
@@ -1435,7 +1600,9 @@ export class DragonManager {
             fp.life[slot] = longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4);
             fp.size[slot] = 0.6 + Math.random() * 0.5;
             fp.damping[slot] = longRange ? 0.995 : 0.96;
-            fp.gravity[slot] = longRange ? 0.5 : 4.0;
+            // Ice has slight DOWNWARD gravity (mist falls); fire has upward drift
+            fp.gravity[slot] = iceMode ? -1.5 : (longRange ? 0.5 : 4.0);
+            fp.iceMode[slot] = iceMode ? 1 : 0;
         }
     }
 
@@ -1462,12 +1629,18 @@ export class DragonManager {
             fp.vz[i] *= damp;
             // Slight upward drift (per-particle)
             fp.vy[i] += (fp.gravity[i] || 4.0) * dt;
-            // Compute color (yellow → orange → red → smoke)
+            // Compute color (yellow → orange → red → smoke for fire; white → cyan → blue for ice)
             const t = fp.age[i] / fp.life[i];
             let r, g, b;
-            if (t < 0.3) { r = 1.0; g = 0.85 - t * 0.5; b = 0.1; }
-            else if (t < 0.7) { r = 1.0; g = 0.4 - (t - 0.3) * 0.6; b = 0.05; }
-            else { const u = (t - 0.7) / 0.3; r = 0.5 - u * 0.3; g = 0.15 - u * 0.1; b = 0.1 - u * 0.05; }
+            if (fp.iceMode[i]) {
+                if (t < 0.3) { r = 0.85; g = 0.95; b = 1.0; }
+                else if (t < 0.7) { r = 0.55 - (t - 0.3) * 0.3; g = 0.75 - (t - 0.3) * 0.2; b = 1.0; }
+                else { const u = (t - 0.7) / 0.3; r = 0.4 - u * 0.2; g = 0.55 - u * 0.3; b = 0.95 - u * 0.3; }
+            } else {
+                if (t < 0.3) { r = 1.0; g = 0.85 - t * 0.5; b = 0.1; }
+                else if (t < 0.7) { r = 1.0; g = 0.4 - (t - 0.3) * 0.6; b = 0.05; }
+                else { const u = (t - 0.7) / 0.3; r = 0.5 - u * 0.3; g = 0.15 - u * 0.1; b = 0.1 - u * 0.05; }
+            }
             _c.setRGB(r, g, b);
             // Scale shrinks slightly with age
             const sc = fp.size[i] * (1 - t * 0.3);
