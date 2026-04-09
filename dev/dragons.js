@@ -417,7 +417,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const elbowGrp = new THREE.Group();
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
         elbowGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.075*S, 6, 4), bBone));
-        const fLen = 2.0 * S;
+        const fLen = 1.5 * S;
         const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.045*S, fLen, 6), bBone);
         foreBone.rotation.z = s * -Math.PI / 2;
         foreBone.position.set(s * fLen / 2, 0, 0); elbowGrp.add(foreBone);
@@ -427,12 +427,12 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         wristClaw.position.set(s * fLen, -0.07*S, 0); elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // 4 finger bones
+        // 4 finger bones (longer)
         const fingerDefs = [
-            { tip: [s*-1.45*S, 0, -1.48*S], mid: [s*-0.52*S, 0, -1.05*S] },
-            { tip: [s*-0.08*S, 0, -2.05*S], mid: [s*0.27*S, 0, -1.20*S] },
-            { tip: [s*0.69*S, 0, -1.93*S], mid: [s*0.94*S, 0, -1.02*S] },
-            { tip: [s*1.91*S, 0, -1.23*S], mid: [s*1.08*S, 0, -0.50*S] },
+            { tip: [s*-1.95*S, 0, -2.0*S], mid: [s*-0.7*S, 0, -1.42*S] },
+            { tip: [s*-0.11*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
+            { tip: [s*0.93*S, 0, -2.61*S], mid: [s*1.27*S, 0, -1.38*S] },
+            { tip: [s*2.59*S, 0, -1.66*S], mid: [s*1.46*S, 0, -0.68*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
@@ -512,7 +512,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const elbowGrp = new THREE.Group();
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
         elbowGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.075*S, 6, 4), bBone));
-        const fLen = 1.6 * S;
+        const fLen = 1.2 * S;
         const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.045*S, fLen, 6), bBone);
         foreBone.rotation.z = s * -Math.PI / 2;
         foreBone.position.set(s * fLen / 2, 0, 0);
@@ -524,10 +524,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
         const fingerDefs = [
-            { tip: [s*-1.53*S, 0, -0.68*S], mid: [s*-0.55*S, 0, -0.17*S] },
-            { tip: [s*-0.51*S, 0, -1.28*S], mid: [s*-0.13*S, 0, -0.47*S] },
-            { tip: [s*0.55*S, 0, -1.45*S], mid: [s*0.38*S, 0, -0.55*S] },
-            { tip: [s*1.36*S, 0, -1.10*S], mid: [s*0.77*S, 0, -0.34*S] },
+            { tip: [s*-2.05*S, 0, -0.92*S], mid: [s*-0.74*S, 0, -0.23*S] },
+            { tip: [s*-0.69*S, 0, -1.73*S], mid: [s*-0.18*S, 0, -0.63*S] },
+            { tip: [s*0.74*S, 0, -1.96*S], mid: [s*0.51*S, 0, -0.74*S] },
+            { tip: [s*1.84*S, 0, -1.49*S], mid: [s*1.04*S, 0, -0.46*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
@@ -1257,15 +1257,15 @@ export class DragonManager {
                 if (bd.isWyvern) {
                     const walkOff = wi === 0 ? Math.PI : 0; // alternate wing-arms
                     const wc = Math.sin(wp + walkOff);
-                    // -0.5 rad (~30° the other way) rotation on Y axis
                     const outward = si * -0.5;
+                    // Elbow: less upward bend (X reduced), more outward (Y more)
                     if (wb) {
                         w.rotation.set(wc*0.5, si*(0.54-wc*0.4) + outward, si*(0.5-wc*0.25));
-                        w._elbow.rotation.set(1.41-Math.max(0,wc)*0.4, si*-1.85, si*0.74);
+                        w._elbow.rotation.set(0.85-Math.max(0,wc)*0.4, si*-2.4, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     } else {
                         w.rotation.set(0, si*0.54 + outward, si*0.5);
-                        w._elbow.rotation.set(1.41, si*-1.85, si*0.74);
+                        w._elbow.rotation.set(0.85, si*-2.4, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     }
                 } else {
