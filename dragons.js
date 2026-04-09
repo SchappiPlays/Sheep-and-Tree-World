@@ -595,7 +595,7 @@ export class DragonManager {
         this.ridingDragon = null;
         this.ridingRef = null;
         this.altarX = -505;
-        this.altarZ = -175;
+        this.altarZ = -335;
         this._built = false;
         this.carriedEggGrp = null;
         this.carriedEggMat = null;

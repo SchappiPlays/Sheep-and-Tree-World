@@ -1859,7 +1859,7 @@ function startGame(loadSlotName) {
         };
         // All fortress swords
         const fortressSwords = [
-            { id: swordId, wx: -505, wz: -172, data: window._customSwords[swordId] },
+            { id: swordId, wx: -505, wz: -332, data: window._customSwords[swordId] },
         ];
 
         // Wyrmblade — long thin rapier with sapphire pommel
@@ -1871,7 +1871,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.9, bladeThickness: 0.7,
             trimMat: 'sapphire', name: 'Wyrmblade',
         };
-        fortressSwords.push({ id: s2, wx: -520, wz: -165, data: window._customSwords[s2] });
+        fortressSwords.push({ id: s2, wx: -520, wz: -325, data: window._customSwords[s2] });
 
         // Flamecleaver — wide heavy sword with emerald and gold
         const s3 = 'csword_fortress_flame';
@@ -1882,7 +1882,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.2, bladeThickness: 1.8,
             trimMat: 'emerald', name: 'Flamecleaver',
         };
-        fortressSwords.push({ id: s3, wx: -498, wz: -185, data: window._customSwords[s3] });
+        fortressSwords.push({ id: s3, wx: -498, wz: -345, data: window._customSwords[s3] });
 
         // Nightfang — sleek dagger with topaz
         const s4 = 'csword_fortress_night';
@@ -1904,7 +1904,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 3.8, bladeThickness: 1.6,
             trimMat: 'diamond', name: 'Stormbreaker',
         };
-        fortressSwords.push({ id: s5, wx: -490, wz: -170, data: window._customSwords[s5] });
+        fortressSwords.push({ id: s5, wx: -490, wz: -330, data: window._customSwords[s5] });
 
         // Duskrend — elegant sword with ruby guard and wolf pommel
         const s6 = 'csword_fortress_dusk';
@@ -1915,7 +1915,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.4, bladeThickness: 1.0,
             trimMat: 'gold_ingot', name: 'Duskrend',
         };
-        fortressSwords.push({ id: s6, wx: -515, wz: -178, data: window._customSwords[s6] });
+        fortressSwords.push({ id: s6, wx: -515, wz: -338, data: window._customSwords[s6] });
 
         // Voidpiercer — stone-handled with emerald accents
         const s7 = 'csword_fortress_void';
@@ -2129,7 +2129,7 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 3: Stone archway (-50, -175)
+        // Ruin 3: Stone archway (-50, -335)
         {
             const rx = Math.round(-50 / BS), rz = Math.round(-335 / BS);
             const gy = Math.floor(getTerrainHeight(-50, -335) / BS) + yOff;
