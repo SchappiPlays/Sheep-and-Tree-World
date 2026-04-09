@@ -372,7 +372,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
       if (isWyvern) {
         // ── Wyvern wing-arm ──
         const wg = new THREE.Group();
-        wg.position.set(s * 0.3 * S, 0.1 * S, 0.15 * S);
+        wg.position.set(s * 0.3 * S, 0.1 * S, 0.4 * S);
         const uLen = 0.75 * S;
         const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.08*S, 0.06*S, uLen, 6), bBone);
         upperBone.rotation.z = s * -Math.PI / 2;
@@ -452,6 +452,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
+        wg._afGroundedBodyPt = [s*-0.35*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
         const ffArr = new Float32Array(324);
@@ -466,7 +467,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
       } else {
         // ── Normal dragon wings ──
         const wg = new THREE.Group();
-        wg.position.set(s * 0.2 * S, 0.35 * S, 0.15 * S);
+        wg.position.set(s * 0.2 * S, 0.35 * S, 0.4 * S);
         const uLen = 1.1 * S;
         const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.08*S, 0.06*S, uLen, 6), bBone);
         upperBone.rotation.z = s * -Math.PI / 2;
@@ -546,6 +547,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
+        wg._afGroundedBodyPt = [s*-0.35*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
         const ffGeo = new THREE.BufferGeometry();
@@ -1062,9 +1064,9 @@ export class DragonManager {
                 applyFingerRots(w, w._groundFRots);
                 // Grounded: hide patagium, move afMesh body point to patagium's body point
                 if (w._patMesh) w._patMesh.visible = false;
-                if (w._afBodyPt && w._patP0) {
+                if (w._afBodyPt && w._afGroundedBodyPt) {
                     if (!w._afOrigBodyPt) w._afOrigBodyPt = w._afBodyPt.slice();
-                    w._afBodyPt = w._patP0;
+                    w._afBodyPt = w._afGroundedBodyPt;
                 }
                 updateWyvernMembrane(w);
             }
