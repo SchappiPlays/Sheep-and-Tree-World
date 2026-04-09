@@ -552,14 +552,11 @@ export class ChunkManager {
                         for (let vi = 0; vi < 4; vi++) {
                             let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
                             if (_isNaturalSurface) {
-                                // Sample terrain height at this corner
+                                // Sample exact terrain height at this corner — no clamping
+                                // Adjacent blocks share corners so slopes connect seamlessly
                                 const cx = (bx + verts[vi][0] * S) * BS;
                                 const cz = (bz + verts[vi][2] * S) * BS;
-                                const th = getTerrainHeight(cx, cz);
-                                // Clamp: allow full block range plus overlap into neighbors
-                                const blockTopY = (y - Y_OFF + S) * BS;
-                                const blockBotY = (y - Y_OFF) * BS;
-                                vy = Math.max(blockBotY - BS * 0.3, Math.min(blockTopY + BS * 1.0, th));
+                                vy = getTerrainHeight(cx, cz);
                             }
                             tPos.push(
                                 (lx + verts[vi][0] * S) * BS,
