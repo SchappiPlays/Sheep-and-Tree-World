@@ -352,11 +352,13 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
     const snout = new THREE.Mesh(new THREE.BoxGeometry(0.45*S, 0.3*S, 0.5*S), bMid);
     snout.position.set(0, -0.05*S, 0.45*S); headGrp.add(snout);
     // Eyes
+    const eyes = [];
     for (let s = -1; s <= 1; s += 2) {
         const eye = new THREE.Mesh(new THREE.BoxGeometry(0.12*S, 0.1*S, 0.14*S), dragonEyeMat);
         eye.position.set(s*0.3*S, 0.1*S, 0.28*S); headGrp.add(eye);
         const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.03*S, 0.08*S, 0.06*S), dragonPupilMat);
         pupil.position.set(s*0.04*S, 0, 0.045*S); eye.add(pupil);
+        eyes.push(eye);
     }
     // Horns — taper from wide base to pointy tip at top
     for (let s = -1; s <= 1; s += 2) {
@@ -607,7 +609,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
     g.rotation.y = Math.random() * Math.PI * 2;
 
     return {
-        group: g, legs, headGrp, neckGrp, neckSegs, tailGrp, tailSegs, jawGrp, wings: wingsArr,
+        group: g, legs, headGrp, neckGrp, neckSegs, tailGrp, tailSegs, jawGrp, wings: wingsArr, eyes,
         chest, midBody, x, z,
         angle: g.rotation.y, speed: 0,
         walkPhase: Math.random() * Math.PI * 2,
@@ -880,6 +882,7 @@ export class DragonManager {
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
                         bd.dragonName = egg.name;
+                        if (egg.isIce) bd._iceBreath = true;
                         this.heldEgg = null;
                     }
                 }
@@ -1050,7 +1053,7 @@ export class DragonManager {
                     const tdy = (target.group.position.y || 0) - my;
                     const tdx = target.x - mx;
                     const tdz = target.z - mz;
-                    this._emitFire(mx, my, mz, tdx, tdy, tdz, 2);
+                    this._emitFire(mx, my, mz, tdx, tdy, tdz, 2, 0, bd._iceBreath ? 1 : 0);
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
                         target.hp -= dragonFireDmg;
@@ -1133,8 +1136,8 @@ export class DragonManager {
             const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
-            // Emit particles — long-range mode
-            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1);
+            // Emit particles — long-range mode (ice if dragon breathes ice)
+            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0);
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
@@ -1383,44 +1386,39 @@ export class DragonManager {
         bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
 
         // ── State transitions ──
-        if (isNight && bd._iceState !== 'sleeping' && bd._iceState !== 'defending' && distXZ > 18) {
-            // Return to nest then sleep
-            const nx = bd._nestX, nz = bd._nestZ;
-            const ndx = nx - bd.x, ndz = nz - bd.z;
-            if (Math.sqrt(ndx*ndx + ndz*ndz) < 4) {
+        if (bd._iceState === 'sleeping') {
+            // Wakes only if sprinted near or day breaks
+            if (sprinting && distXZ < 28) {
+                bd._iceState = 'defending';
+            } else if (!isNight) {
+                bd._iceState = 'idle';
+            }
+        } else if (isNight) {
+            // Force return to nest then sleep — ignores player
+            const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
+            const ndist = Math.sqrt(ndx*ndx + ndz*ndz);
+            if (ndist < 4) {
                 bd._iceState = 'sleeping';
                 bd.flying = false;
                 bd.walking = false;
             } else {
                 bd._iceState = 'returning';
             }
-        }
-        if (bd._iceState === 'sleeping') {
-            if (sprinting && distXZ < 28) {
+        } else if (bd._iceState === 'idle') {
+            if (distXZ < 40) {
                 bd._iceState = 'defending';
-                bd._iceTimer = 0;
-            } else if (!isNight) {
-                bd._iceState = 'idle';
-            }
-        }
-        if (bd._iceState === 'idle') {
-            if (!isNight && distXZ < 40) {
-                bd._iceState = 'defending';
-            } else if (!isNight && bd._iceTimer <= 0) {
+            } else if (bd._iceTimer <= 0) {
                 bd._iceState = 'flying_aimless';
                 bd._iceTimer = 6 + Math.random() * 8;
                 bd._iceFlyAngle = Math.random() * Math.PI * 2;
                 bd.flying = true;
                 bd.flyHeight = (this.getHeight ? this.getHeight(bd.x, bd.z) : 0) + 25 + Math.random() * 15;
             }
-        }
-        if (bd._iceState === 'defending' && distXZ > 60) {
+        } else if (bd._iceState === 'defending' && distXZ > 60) {
             bd._iceState = 'returning';
-        }
-        if (bd._iceState === 'flying_aimless' && bd._iceTimer <= 0) {
+        } else if (bd._iceState === 'flying_aimless' && bd._iceTimer <= 0) {
             bd._iceState = 'returning';
-        }
-        if (bd._iceState === 'returning') {
+        } else if (bd._iceState === 'returning') {
             const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
             if (Math.sqrt(ndx*ndx + ndz*ndz) < 5) {
                 bd._iceState = isNight ? 'sleeping' : 'idle';
@@ -1428,6 +1426,14 @@ export class DragonManager {
                 bd.flying = false;
                 bd.walking = false;
             }
+        }
+
+        // ── Eye open/close based on state (lerped) ──
+        if (bd.eyes && bd.eyes.length) {
+            const eyeOpenTarget = (bd._iceState === 'sleeping') ? 0.08 : 1.0;
+            bd._iceEyeT = (bd._iceEyeT === undefined ? 1.0 : bd._iceEyeT);
+            bd._iceEyeT += (eyeOpenTarget - bd._iceEyeT) * Math.min(1, 6 * dt);
+            for (const eye of bd.eyes) eye.scale.y = bd._iceEyeT;
         }
 
         // ── State actions ──

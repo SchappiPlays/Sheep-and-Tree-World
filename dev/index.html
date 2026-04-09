@@ -1280,7 +1280,7 @@ function collectSaveData() {
         dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian && !bd._stationary).map(bd => ({
             x: bd.x, z: bd.z, age: bd.age, angle: bd.angle,
             eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
-            dragonName: bd.dragonName, hp: bd.hp,
+            dragonName: bd.dragonName, hp: bd.hp, iceBreath: !!bd._iceBreath,
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
@@ -3005,12 +3005,12 @@ function startGame(loadSlotName) {
 
         // 6 real ice dragon eggs — pickable & hatchable, pushed to dragonMgr.eggs
         const iceEggDefs = [
-            { dx: -3,  dz:  1, color: 0xddeeff, emissive: 0x224466, veinColor: 0x88ccee, wingColor: 0xa8c8e8, isWyvern: true, name: 'Frostfang Wyvern' },
-            { dx:  3,  dz:  1, color: 0xc8e0f5, emissive: 0x1a3a5a, veinColor: 0x66aacc, wingColor: 0x88b8d8, isWyvern: true, name: 'Glacial Wyvern' },
-            { dx:  0,  dz:  3, color: 0xeaf3ff, emissive: 0x33557a, veinColor: 0xaaddff, wingColor: 0xb8d4ee, isWyvern: true, name: 'Snowfall Wyvern' },
-            { dx: -2,  dz: -3, color: 0xb0d0e8, emissive: 0x224a6a, veinColor: 0x55aadd, wingColor: 0x99c2e0, isWyvern: true, name: 'Hailstorm Wyvern' },
-            { dx:  2,  dz: -3, color: 0xd0e8f8, emissive: 0x2a4a6a, veinColor: 0x77bbee, wingColor: 0xa0c8e6, isWyvern: true, name: 'Blizzard Wyvern' },
-            { dx:  0,  dz:  0, color: 0xf0f8ff, emissive: 0x4466aa, veinColor: 0xbbddff, wingColor: 0xc4dcf0, isWyvern: true, name: 'Permafrost Wyvern' },
+            { dx: -3,  dz:  1, color: 0xddeeff, emissive: 0x224466, veinColor: 0x88ccee, wingColor: 0xa8c8e8, isWyvern: true, isIce: true, name: 'White Ice Dragon' },
+            { dx:  3,  dz:  1, color: 0xc8e0f5, emissive: 0x1a3a5a, veinColor: 0x66aacc, wingColor: 0x88b8d8, isWyvern: true, isIce: true, name: 'Pale Blue Ice Dragon' },
+            { dx:  0,  dz:  3, color: 0xeaf3ff, emissive: 0x33557a, veinColor: 0xaaddff, wingColor: 0xb8d4ee, isWyvern: true, isIce: true, name: 'Snow Ice Dragon' },
+            { dx: -2,  dz: -3, color: 0xb0d0e8, emissive: 0x224a6a, veinColor: 0x55aadd, wingColor: 0x99c2e0, isWyvern: true, isIce: true, name: 'Steel Blue Ice Dragon' },
+            { dx:  2,  dz: -3, color: 0xd0e8f8, emissive: 0x2a4a6a, veinColor: 0x77bbee, wingColor: 0xa0c8e6, isWyvern: true, isIce: true, name: 'Powder Blue Ice Dragon' },
+            { dx:  0,  dz:  0, color: 0xf0f8ff, emissive: 0x4466aa, veinColor: 0xbbddff, wingColor: 0xc4dcf0, isWyvern: true, isIce: true, name: 'Crystal Ice Dragon' },
         ];
         const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
         const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
@@ -4613,6 +4613,7 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
+                    if (dd.iceBreath) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
