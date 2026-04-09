@@ -673,7 +673,7 @@ export class DragonManager {
             { dx: 3, dz: -5, color: 0x080808, emissive: 0x1a0800, veinColor: 0xffaa22, glowColor: 0xffcc44, wingColor: 0xdd6600, isWyvern: true, name: 'Obsidian Wyvern' },
             { dx: -3, dz: -6, color: 0x227744, emissive: 0x113a22, veinColor: 0x33cc66, glowColor: 0x33ff77, wingColor: 0x33cc66, isWyvern: true, name: 'Forest Wyvern' },
         ];
-        const eggGeo = new THREE.SphereGeometry(0.35, 12, 10);
+        const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
         const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
         const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
         const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
@@ -696,14 +696,14 @@ export class DragonManager {
             const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.2, emissive: ed.emissive, emissiveIntensity: 0.1 });
             const eggMesh = new THREE.Mesh(eggGeo, eggMat);
             eggMesh.scale.set(1.0, 1.35, 1.0);
-            eggMesh.position.y = 0.45;
+            eggMesh.position.y = 0.3;
             eggGrp.add(eggMesh);
             // Veins
             const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.15, roughness: 0.2 });
             for (let vi = 0; vi < 5; vi++) {
                 const va = (vi / 5) * Math.PI * 2;
                 const vein = new THREE.Mesh(veinGeo, veinMat);
-                vein.position.set(Math.cos(va) * 0.28, 0.45, Math.sin(va) * 0.28);
+                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
                 vein.rotation.z = (Math.random() - 0.5) * 0.4;
                 eggGrp.add(vein);
             }
