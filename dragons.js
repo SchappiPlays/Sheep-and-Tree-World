@@ -131,36 +131,21 @@ function updateArmFingerMem(w) {
     }
     if (w._afBodyPt) {
         const bp = toWgSpace(w._afBodyPt, 0, elb, hand);
-        const eA = arm[N], eF = fin[N];
-        // Sample the arm bone at additional points so the front edge follows the bone curve
-        // Front edge: arm bone (stays straight along the wing), back edge: trails to body point
-        const B = 3;
-        // Build a chain of points along the arm bone going back from elbow to shoulder
-        // and a chain along the trailing edge going to the body point
-        const armChain = [eA];
-        const trailChain = [eF];
-        for (let i = 1; i <= B; i++) {
-            const t = i / B;
-            // Arm side: stay along the forearm bone (already along it via toWgSpace at space 1)
-            // Just sample slightly further in along the bone toward shoulder (z=0 in elb space)
-            armChain.push(toWgSpace([si * fl * (1 - 1) - t * 0.1, 0, 0], 1, elb, hand));
-            // Trailing side: linear interp from finger end to body point
-            trailChain.push([
-                eF[0] + (bp[0] - eF[0]) * t,
-                eF[1] + (bp[1] - eF[1]) * t,
-                eF[2] + (bp[2] - eF[2]) * t,
-            ]);
-        }
-        for (let i = 0; i < B; i++) {
-            const fa = armChain[i], fb = armChain[i+1];
-            const ga = trailChain[i], gb = trailChain[i+1];
-            pos[vi++]=fa[0]; pos[vi++]=fa[1]; pos[vi++]=fa[2];
-            pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
-            pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
-            pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
-            pos[vi++]=gb[0]; pos[vi++]=gb[1]; pos[vi++]=gb[2];
-            pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
-        }
+        // Single quad: arm bone edge from elbow tip → shoulder; trailing edge from finger tip → body point
+        const armElbowEnd = arm[N]; // already in WG space — far end of arm chain at elbow position 0
+        const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand); // shoulder position
+        const finFingerEnd = fin[N]; // finger end (last sample of finger chain)
+        // Render as 1 quad: elbow corner -> shoulder corner -> body point -> finger tip
+        const fa = armElbowEnd;     // wing-side, near wrist/elbow
+        const fb = armShoulderEnd;  // wing-side, at shoulder
+        const ga = finFingerEnd;    // membrane edge, at finger tip end
+        const gb = bp;              // membrane edge, at body
+        pos[vi++]=fa[0]; pos[vi++]=fa[1]; pos[vi++]=fa[2];
+        pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
+        pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
+        pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
+        pos[vi++]=gb[0]; pos[vi++]=gb[1]; pos[vi++]=gb[2];
+        pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
     }
     for (; vi < pos.length;) pos[vi++] = 0;
     w._afGeo.attributes.position.needsUpdate = true;
