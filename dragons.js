@@ -130,15 +130,30 @@ function updateArmFingerMem(w) {
         pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
     }
     if (w._afBodyPt) {
-        const bp = w._afBodyPt;
+        const bp = toWgSpace(w._afBodyPt, 0, elb, hand);
         const eA = arm[N], eF = fin[N];
+        // Sample the arm bone at additional points so the front edge follows the bone curve
+        // Front edge: arm bone (stays straight along the wing), back edge: trails to body point
         const B = 3;
+        // Build a chain of points along the arm bone going back from elbow to shoulder
+        // and a chain along the trailing edge going to the body point
+        const armChain = [eA];
+        const trailChain = [eF];
+        for (let i = 1; i <= B; i++) {
+            const t = i / B;
+            // Arm side: stay along the forearm bone (already along it via toWgSpace at space 1)
+            // Just sample slightly further in along the bone toward shoulder (z=0 in elb space)
+            armChain.push(toWgSpace([si * fl * (1 - 1) - t * 0.1, 0, 0], 1, elb, hand));
+            // Trailing side: linear interp from finger end to body point
+            trailChain.push([
+                eF[0] + (bp[0] - eF[0]) * t,
+                eF[1] + (bp[1] - eF[1]) * t,
+                eF[2] + (bp[2] - eF[2]) * t,
+            ]);
+        }
         for (let i = 0; i < B; i++) {
-            const t0 = i/B, t1 = (i+1)/B;
-            const fa = [eA[0]+(bp[0]-eA[0])*t0, eA[1]+(bp[1]-eA[1])*t0, eA[2]+(bp[2]-eA[2])*t0];
-            const fb = [eA[0]+(bp[0]-eA[0])*t1, eA[1]+(bp[1]-eA[1])*t1, eA[2]+(bp[2]-eA[2])*t1];
-            const ga = [eF[0]+(bp[0]-eF[0])*t0, eF[1]+(bp[1]-eF[1])*t0, eF[2]+(bp[2]-eF[2])*t0];
-            const gb = [eF[0]+(bp[0]-eF[0])*t1, eF[1]+(bp[1]-eF[1])*t1, eF[2]+(bp[2]-eF[2])*t1];
+            const fa = armChain[i], fb = armChain[i+1];
+            const ga = trailChain[i], gb = trailChain[i+1];
             pos[vi++]=fa[0]; pos[vi++]=fa[1]; pos[vi++]=fa[2];
             pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
             pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
@@ -452,7 +467,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
-        wg._afGroundedBodyPt = [s*-0.35*S, -0.05*S, -1.5*S];
+        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -0.9*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
         const ffArr = new Float32Array(324);
@@ -547,7 +562,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
-        wg._afGroundedBodyPt = [s*-0.35*S, -0.05*S, -1.5*S];
+        wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -0.9*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
         const ffGeo = new THREE.BufferGeometry();
