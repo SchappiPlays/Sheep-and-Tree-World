@@ -1257,15 +1257,15 @@ export class DragonManager {
                 if (bd.isWyvern) {
                     const walkOff = wi === 0 ? Math.PI : 0; // alternate wing-arms
                     const wc = Math.sin(wp + walkOff);
-                    const outward = si * -0.5;
-                    // Elbow: less upward bend (X reduced), more outward (Y more)
+                    const outward = si * -1.1; // sweep back more
+                    // Elbow: less upward bend so forearm reaches ground
                     if (wb) {
                         w.rotation.set(wc*0.5, si*(0.54-wc*0.4) + outward, si*(0.5-wc*0.25));
-                        w._elbow.rotation.set(0.85-Math.max(0,wc)*0.4, si*-2.4, si*0.74);
+                        w._elbow.rotation.set(0.45-Math.max(0,wc)*0.4, si*-2.4, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     } else {
                         w.rotation.set(0, si*0.54 + outward, si*0.5);
-                        w._elbow.rotation.set(0.85, si*-2.4, si*0.74);
+                        w._elbow.rotation.set(0.45, si*-2.4, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     }
                 } else {
