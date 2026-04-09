@@ -104,6 +104,13 @@ export class Multiplayer {
             } else if (data.type === 'dragon_hatch') {
                 if (this.onDragonHatch) this.onDragonHatch(data);
                 if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'chest_loot') {
+                if (this.onChestLoot) this.onChestLoot(data.key);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'tod') {
+                if (this.onTimeOfDay) this.onTimeOfDay(data.t);
+            } else if (data.type === 'horses') {
+                if (this.onHorseSync) this.onHorseSync(data.list);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
@@ -202,6 +209,24 @@ export class Multiplayer {
     sendDragonHatch(info) {
         if (!this.active) return;
         this._broadcast({ type: 'dragon_hatch', ...info, fromPid: this.myId });
+    }
+
+    // Broadcast that a chest was looted (any peer)
+    sendChestLoot(key) {
+        if (!this.active) return;
+        this._broadcast({ type: 'chest_loot', key, fromPid: this.myId });
+    }
+
+    // Host broadcasts time of day
+    sendTimeOfDay(t) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'tod', t: +t.toFixed(4) });
+    }
+
+    // Host broadcasts horses
+    sendHorseState(list) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'horses', list });
     }
 
     _broadcast(data) {

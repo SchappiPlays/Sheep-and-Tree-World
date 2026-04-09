@@ -2887,6 +2887,29 @@ function startGame(loadSlotName) {
     dragonMgr.onEggPickedUp = (idx) => {
         if (mp.active) mp.sendEggPickup(idx);
     };
+    // Chest loot — when another peer loots a chest, mirror locally
+    mp.onChestLoot = (key) => {
+        if (chestData[key]) delete chestData[key];
+    };
+    // Time of day — clients adopt host's time
+    mp.onTimeOfDay = (t) => {
+        if (!mp.isHost) timeOfDay = t;
+    };
+    // Horses — clients update phantoms from host's broadcast
+    mp.onHorseSync = (list) => {
+        if (mp.isHost || !horseMgr) return;
+        for (const r of list) {
+            const h = horseMgr.horses[r.i];
+            if (h) {
+                h.x = r.x; h.z = r.z;
+                if (h.group) {
+                    h.group.position.set(r.x, r.y, r.z);
+                    h.group.rotation.y = r.ry;
+                }
+                h.walking = !!r.w;
+            }
+        }
+    };
     player = new Player(scene, world);
     // Apply stat bonuses to player
     player.walkSpeed = 3.6 * getStatSpeedMult();
@@ -8936,6 +8959,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
             }
             delete chestData[ck];
             updateHotbar();
+            if (mp.active) mp.sendChestLoot(ck);
         }
     }
 
@@ -12269,7 +12293,7 @@ function animate() {
             const held = hotbarSlots[selectedSlot];
             mp.sendState(player, held, player.swingTimer, charColors, dragonMgr && dragonMgr.ridingDragon);
         }
-        // Host syncs creatures + villagers at 5Hz
+        // Host syncs creatures + villagers + horses + time of day at 5Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
             if (mp._creatureSendAccum >= 0.2) {
@@ -12284,6 +12308,18 @@ function animate() {
                     }));
                     mp._broadcast({ type: 'villagers', list: vList });
                 }
+                // Horse sync
+                if (horseMgr && horseMgr.horses && horseMgr.horses.length > 0) {
+                    const hList = horseMgr.horses.map((h, i) => ({
+                        i, x: +h.x.toFixed(2), z: +h.z.toFixed(2),
+                        y: +(h.group ? h.group.position.y : 0).toFixed(2),
+                        ry: +(h.group ? h.group.rotation.y : 0).toFixed(2),
+                        w: h.walking ? 1 : 0,
+                    }));
+                    mp.sendHorseState(hList);
+                }
+                // Time of day sync
+                mp.sendTimeOfDay(timeOfDay);
             }
         }
         // Every peer syncs their owned dragons (host relays)
