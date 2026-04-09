@@ -563,15 +563,33 @@ export class ChunkManager {
                         // Collect sloped Y values
                         const _slopeYs = [];
                         const halfBS = BS * 0.5;
-                        for (let vi = 0; vi < 4; vi++) {
-                            let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
-                            if (_isSlopeable && verts[vi][1] === 1) {
-                                const cx = (bx + verts[vi][0] * S) * BS;
-                                const cz = (bz + verts[vi][2] * S) * BS;
-                                // Snap to half-block for blocky-smooth look
-                                vy = Math.round(getTerrainHeight(cx, cz) / halfBS) * halfBS;
+                        const blockTopY = (y - Y_OFF + S) * BS;
+                        if (_isSlopeable) {
+                            // Sample all 4 corners first
+                            const _rawYs = [];
+                            for (let vi = 0; vi < 4; vi++) {
+                                if (verts[vi][1] === 1) {
+                                    const cx = (bx + verts[vi][0] * S) * BS;
+                                    const cz = (bz + verts[vi][2] * S) * BS;
+                                    _rawYs.push(getTerrainHeight(cx, cz));
+                                } else _rawYs.push(0);
                             }
-                            _slopeYs.push(vy);
+                            // Check if terrain is roughly flat across all corners
+                            const topYs = _rawYs.filter((_, i) => verts[i][1] === 1);
+                            const yRange = Math.max(...topYs) - Math.min(...topYs);
+                            const isFlat = yRange < BS * 0.3;
+                            for (let vi = 0; vi < 4; vi++) {
+                                if (verts[vi][1] === 1) {
+                                    // Flat terrain: use block top. Sloped: snap to half-block
+                                    _slopeYs.push(isFlat ? blockTopY : Math.round(_rawYs[vi] / halfBS) * halfBS);
+                                } else {
+                                    _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
+                                }
+                            }
+                        } else {
+                            for (let vi = 0; vi < 4; vi++) {
+                                _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
+                            }
                         }
                         // Skip top face only if ALL corners are well below block bottom
                         if (fi === 2 && _isSlopeable) {
