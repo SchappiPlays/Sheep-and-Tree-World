@@ -593,19 +593,6 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
       }
     }
 
-    // Fire breath visual — 5 cones in front of head, attached to headGrp
-    const fireBreathGrp = new THREE.Group();
-    const fbMat = new THREE.MeshBasicMaterial({ color: 0xFF6600, transparent: true, opacity: 0.7 });
-    const fbMat2 = new THREE.MeshBasicMaterial({ color: 0xFFCC00, transparent: true, opacity: 0.6 });
-    for (let fi = 0; fi < 5; fi++) {
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.08*S + fi * 0.04*S, 0.4*S + fi * 0.22*S, 5), fi < 2 ? fbMat2 : fbMat);
-        cone.rotation.x = -Math.PI / 2;
-        cone.position.set((Math.random() - 0.5) * 0.15*S, (Math.random() - 0.5) * 0.15*S, 0.8*S + fi * 0.32*S);
-        fireBreathGrp.add(cone);
-    }
-    fireBreathGrp.visible = false;
-    headGrp.add(fireBreathGrp);
-
     g.scale.setScalar(babyScale);
     const footOffset = 0.95 * S * babyScale;
     g.position.set(x, terrainY + footOffset, z);
@@ -614,7 +601,6 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
 
     return {
         group: g, legs, headGrp, neckGrp, neckSegs, tailGrp, tailSegs, jawGrp, wings: wingsArr,
-        fireBreathGrp,
         chest, midBody, x, z,
         angle: g.rotation.y, speed: 0,
         walkPhase: Math.random() * Math.PI * 2,
@@ -634,12 +620,39 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
 // ── Dragon Manager ──
 export { makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane };
 
+// Fire breath particle system — shared across all dragons
+const FIRE_PARTICLE_MAX = 200;
+function _initFireParticles(scene) {
+    const geo = new THREE.SphereGeometry(0.15, 6, 5);
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9 });
+    const mesh = new THREE.InstancedMesh(geo, mat, FIRE_PARTICLE_MAX);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(FIRE_PARTICLE_MAX * 3), 3);
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    return {
+        mesh,
+        px: new Float32Array(FIRE_PARTICLE_MAX),
+        py: new Float32Array(FIRE_PARTICLE_MAX),
+        pz: new Float32Array(FIRE_PARTICLE_MAX),
+        vx: new Float32Array(FIRE_PARTICLE_MAX),
+        vy: new Float32Array(FIRE_PARTICLE_MAX),
+        vz: new Float32Array(FIRE_PARTICLE_MAX),
+        age: new Float32Array(FIRE_PARTICLE_MAX),
+        life: new Float32Array(FIRE_PARTICLE_MAX),
+        size: new Float32Array(FIRE_PARTICLE_MAX),
+        active: new Uint8Array(FIRE_PARTICLE_MAX),
+        count: 0,
+    };
+}
+
 export class DragonManager {
     constructor(scene, world) {
         this.scene = scene;
         this.world = world;
         this.eggs = [];
         this.dragons = [];
+        this._fireParticles = _initFireParticles(scene);
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
@@ -772,6 +785,8 @@ export class DragonManager {
     // Called each frame
     update(dt, player, keys) {
         const px = player.position.x, pz = player.position.z, py = player.position.y;
+        // Update fire particles every frame
+        this._updateFireParticles(dt);
 
         // ── L key: age up nearest dragon by 2 mins ──
         if (keys['KeyL'] && !this._lDown) {
@@ -1001,28 +1016,27 @@ export class DragonManager {
                 } else {
                     bd.walking = false;
                 }
-                // Breathe fire if close enough — uses attached fireBreathGrp
-                if (targetDist < 8) {
-                    if (bd.fireBreathGrp) {
-                        bd.fireBreathGrp.visible = true;
-                        for (const cone of bd.fireBreathGrp.children) {
-                            cone.scale.setScalar(0.9 + Math.random() * 0.2);
-                        }
-                    }
+                // Breathe fire if close enough — emit particles toward target
+                if (targetDist < 12) {
+                    const headOff = 1.5 * gs;
+                    const mx = bd.x + Math.sin(bd.angle) * headOff;
+                    const my = bd.group.position.y + 1.2 * gs;
+                    const mz = bd.z + Math.cos(bd.angle) * headOff;
+                    // Direction toward target
+                    const tdy = (target.group.position.y || 0) - my;
+                    const tdx = target.x - mx;
+                    const tdz = target.z - mz;
+                    this._emitFire(mx, my, mz, tdx, tdy, tdz, 2);
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
                         target.hp -= dragonFireDmg;
                         if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
                     }
-                } else if (bd.fireBreathGrp) {
-                    bd.fireBreathGrp.visible = false;
                 }
                 const tY = this.getHeight(bd.x, bd.z);
                 bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
                 this._animateDragon(dt, bd);
                 continue;
-            } else if (bd.fireBreathGrp) {
-                bd.fireBreathGrp.visible = false;
             }
 
             // ── Follow player AI ──
@@ -1074,40 +1088,29 @@ export class DragonManager {
         const walkSpeed = 6 + gs * 4;
         const turnRate = 2.5;
 
-        // F key — breathe fire (uses attached fireBreathGrp)
+        // F key — breathe fire as projectile particles
         bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
         if (keys['KeyF']) {
             bd._breathingFire = true;
-            if (bd.fireBreathGrp) {
-                bd.fireBreathGrp.visible = true;
-                // Subtle flicker
-                for (const cone of bd.fireBreathGrp.children) {
-                    cone.scale.setScalar(0.9 + Math.random() * 0.2);
-                }
-            }
-            // Damage creatures in range — every 0.33s for 3 dmg/sec
+            // Mouth/head position
+            const headOffset = 1.5 * bd.growthScale;
+            const mx = bd.x + Math.sin(bd.angle) * headOffset;
+            const my = bd.group.position.y + 1.2 * bd.growthScale;
+            const mz = bd.z + Math.cos(bd.angle) * headOffset;
+            // Direction: where the player is looking
+            const lookYaw = player.group.rotation.y;
+            const lookPitch = (player._lookPitch !== undefined) ? player._lookPitch : 0;
+            const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
+            const dy = -Math.sin(lookPitch);
+            const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
+            // Emit particles
+            this._emitFire(mx, my, mz, dx, dy, dz, 3);
+            // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
-                if (this._creatureMgr) {
-                    // Fire emerges from head in front of dragon
-                    const fireDist = 8;
-                    const fx = bd.x + Math.sin(bd.angle) * fireDist;
-                    const fz = bd.z + Math.cos(bd.angle) * fireDist;
-                    for (const c of this._creatureMgr.creatures) {
-                        if (c.dead) continue;
-                        if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
-                        if (c.type === 'dragon' || c.type === 'babyDragon') continue;
-                        const cdx = c.x - fx, cdz = c.z - fz;
-                        const cd = Math.sqrt(cdx*cdx + cdz*cdz);
-                        if (cd < 6) {
-                            c.hp -= 1; // 1 dmg per 0.33s = 3/sec
-                            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
-                        }
-                    }
-                }
+                this._damageInFireCone(mx, my, mz, dx, dy, dz, 1);
             }
         } else {
-            if (bd.fireBreathGrp) bd.fireBreathGrp.visible = false;
             bd._breathingFire = false;
         }
 
@@ -1306,6 +1309,96 @@ export class DragonManager {
 
     _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern);
+    }
+
+    // Emit fire particles from a position in a direction
+    _emitFire(ox, oy, oz, dx, dy, dz, count) {
+        const fp = this._fireParticles;
+        const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+        dx /= _len; dy /= _len; dz /= _len;
+        for (let i = 0; i < count; i++) {
+            // Find an inactive slot
+            let slot = -1;
+            for (let s = 0; s < FIRE_PARTICLE_MAX; s++) {
+                if (!fp.active[s]) { slot = s; break; }
+            }
+            if (slot < 0) return;
+            fp.active[slot] = 1;
+            fp.px[slot] = ox + (Math.random() - 0.5) * 0.3;
+            fp.py[slot] = oy + (Math.random() - 0.5) * 0.3;
+            fp.pz[slot] = oz + (Math.random() - 0.5) * 0.3;
+            const speed = 18 + Math.random() * 6;
+            const spread = 0.15;
+            fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed;
+            fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed;
+            fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed;
+            fp.age[slot] = 0;
+            fp.life[slot] = 0.7 + Math.random() * 0.4;
+            fp.size[slot] = 0.6 + Math.random() * 0.5;
+        }
+    }
+
+    _updateFireParticles(dt) {
+        const fp = this._fireParticles;
+        const _m = new THREE.Matrix4();
+        const _c = new THREE.Color();
+        let active = 0;
+        for (let i = 0; i < FIRE_PARTICLE_MAX; i++) {
+            if (!fp.active[i]) continue;
+            fp.age[i] += dt;
+            if (fp.age[i] >= fp.life[i]) {
+                fp.active[i] = 0;
+                continue;
+            }
+            // Move
+            fp.px[i] += fp.vx[i] * dt;
+            fp.py[i] += fp.vy[i] * dt;
+            fp.pz[i] += fp.vz[i] * dt;
+            // Slow down
+            fp.vx[i] *= 0.96;
+            fp.vy[i] *= 0.96;
+            fp.vz[i] *= 0.96;
+            // Slight upward drift
+            fp.vy[i] += 4 * dt;
+            // Compute color (yellow → orange → red → smoke)
+            const t = fp.age[i] / fp.life[i];
+            let r, g, b;
+            if (t < 0.3) { r = 1.0; g = 0.85 - t * 0.5; b = 0.1; }
+            else if (t < 0.7) { r = 1.0; g = 0.4 - (t - 0.3) * 0.6; b = 0.05; }
+            else { const u = (t - 0.7) / 0.3; r = 0.5 - u * 0.3; g = 0.15 - u * 0.1; b = 0.1 - u * 0.05; }
+            _c.setRGB(r, g, b);
+            // Scale shrinks slightly with age
+            const sc = fp.size[i] * (1 - t * 0.3);
+            _m.makeScale(sc, sc, sc);
+            _m.setPosition(fp.px[i], fp.py[i], fp.pz[i]);
+            fp.mesh.setMatrixAt(active, _m);
+            fp.mesh.setColorAt(active, _c);
+            active++;
+        }
+        fp.mesh.count = active;
+        if (active > 0) {
+            fp.mesh.instanceMatrix.needsUpdate = true;
+            if (fp.mesh.instanceColor) fp.mesh.instanceColor.needsUpdate = true;
+        }
+    }
+
+    // Damage creatures in a cone in front of a position
+    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick) {
+        if (!this._creatureMgr) return;
+        const _l = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+        dx /= _l; dy /= _l; dz /= _l;
+        for (const c of this._creatureMgr.creatures) {
+            if (c.dead) continue;
+            if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+            if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+            const cdx = c.x - ox, cdy = (c.group.position.y || 0) - oy, cdz = c.z - oz;
+            const cd = Math.sqrt(cdx*cdx + cdy*cdy + cdz*cdz);
+            if (cd > 12 || cd < 0.1) continue;
+            const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
+            if (dot < 0.7) continue;
+            c.hp -= dmgPerTick;
+            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+        }
     }
 
     // Damage a dragon — respects weapon tier (only steel+ from players)

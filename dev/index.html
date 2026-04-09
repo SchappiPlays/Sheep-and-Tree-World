@@ -12178,6 +12178,7 @@ function animate() {
     villageMgr.update(dt, player.position.x, player.position.z);
 
     // Dragons
+    player._lookPitch = fpPitch;
     dragonMgr.update(dt, player, keys);
 
     // Process smelt queue
