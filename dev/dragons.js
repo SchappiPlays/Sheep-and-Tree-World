@@ -593,6 +593,19 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
       }
     }
 
+    // Fire breath visual — 5 cones in front of head, attached to headGrp
+    const fireBreathGrp = new THREE.Group();
+    const fbMat = new THREE.MeshBasicMaterial({ color: 0xFF6600, transparent: true, opacity: 0.7 });
+    const fbMat2 = new THREE.MeshBasicMaterial({ color: 0xFFCC00, transparent: true, opacity: 0.6 });
+    for (let fi = 0; fi < 5; fi++) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.08*S + fi * 0.04*S, 0.4*S + fi * 0.22*S, 5), fi < 2 ? fbMat2 : fbMat);
+        cone.rotation.x = -Math.PI / 2;
+        cone.position.set((Math.random() - 0.5) * 0.15*S, (Math.random() - 0.5) * 0.15*S, 0.8*S + fi * 0.32*S);
+        fireBreathGrp.add(cone);
+    }
+    fireBreathGrp.visible = false;
+    headGrp.add(fireBreathGrp);
+
     g.scale.setScalar(babyScale);
     const footOffset = 0.95 * S * babyScale;
     g.position.set(x, terrainY + footOffset, z);
@@ -601,6 +614,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
 
     return {
         group: g, legs, headGrp, neckGrp, neckSegs, tailGrp, tailSegs, jawGrp, wings: wingsArr,
+        fireBreathGrp,
         chest, midBody, x, z,
         angle: g.rotation.y, speed: 0,
         walkPhase: Math.random() * Math.PI * 2,
@@ -987,39 +1001,28 @@ export class DragonManager {
                 } else {
                     bd.walking = false;
                 }
-                // Breathe fire if close enough
+                // Breathe fire if close enough — uses attached fireBreathGrp
                 if (targetDist < 8) {
-                    if (!bd._fireMesh) {
-                        const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-                        const fireMesh = new THREE.Mesh(new THREE.ConeGeometry(1.5, 6, 6, 1, true), fireMat);
-                        fireMesh.renderOrder = 998;
-                        this.scene.add(fireMesh);
-                        bd._fireMesh = fireMesh;
-                        bd._fireMat = fireMat;
+                    if (bd.fireBreathGrp) {
+                        bd.fireBreathGrp.visible = true;
+                        for (const cone of bd.fireBreathGrp.children) {
+                            cone.scale.setScalar(0.9 + Math.random() * 0.2);
+                        }
                     }
-                    bd._fireMesh.visible = true;
-                    const headY = bd.group.position.y + 1.5;
-                    const fx = bd.x + Math.sin(bd.angle) * 4;
-                    const fz = bd.z + Math.cos(bd.angle) * 4;
-                    bd._fireMesh.position.set(fx, headY, fz);
-                    bd._fireMesh.lookAt(target.x, headY, target.z);
-                    bd._fireMesh.rotateX(Math.PI / 2);
-                    bd._fireMat.opacity = 0.5 + Math.sin(performance.now() * 0.02) * 0.2;
-                    bd._fireMat.color.setHex(Math.random() > 0.3 ? 0xff6600 : 0xff3300);
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
                         target.hp -= dragonFireDmg;
                         if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
                     }
-                } else if (bd._fireMesh) {
-                    bd._fireMesh.visible = false;
+                } else if (bd.fireBreathGrp) {
+                    bd.fireBreathGrp.visible = false;
                 }
                 const tY = this.getHeight(bd.x, bd.z);
                 bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
                 this._animateDragon(dt, bd);
                 continue;
-            } else if (bd._fireMesh) {
-                bd._fireMesh.visible = false;
+            } else if (bd.fireBreathGrp) {
+                bd.fireBreathGrp.visible = false;
             }
 
             // ── Follow player AI ──
@@ -1071,50 +1074,40 @@ export class DragonManager {
         const walkSpeed = 6 + gs * 4;
         const turnRate = 2.5;
 
-        // F key — breathe fire
+        // F key — breathe fire (uses attached fireBreathGrp)
         bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
         if (keys['KeyF']) {
             bd._breathingFire = true;
-            // Fire breath visual mesh — create on demand
-            if (!bd._fireMesh) {
-                const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-                const fireMesh = new THREE.Mesh(new THREE.ConeGeometry(2.5, 12, 6, 1, true), fireMat);
-                fireMesh.renderOrder = 998;
-                this.scene.add(fireMesh);
-                bd._fireMesh = fireMesh;
-                bd._fireMat = fireMat;
+            if (bd.fireBreathGrp) {
+                bd.fireBreathGrp.visible = true;
+                // Subtle flicker
+                for (const cone of bd.fireBreathGrp.children) {
+                    cone.scale.setScalar(0.9 + Math.random() * 0.2);
+                }
             }
-            bd._fireMesh.visible = true;
-            // Position fire from dragon head, in facing direction
-            const headY = bd.flying ? bd.flyHeight + 1 : bd.group.position.y + 2;
-            const fireDist = 7;
-            const fx = bd.x + Math.sin(bd.angle) * fireDist;
-            const fz = bd.z + Math.cos(bd.angle) * fireDist;
-            bd._fireMesh.position.set(fx, headY, fz);
-            bd._fireMesh.lookAt(bd.x + Math.sin(bd.angle) * 100, headY, bd.z + Math.cos(bd.angle) * 100);
-            bd._fireMesh.rotateX(Math.PI / 2);
-            bd._fireMat.opacity = 0.5 + Math.sin(performance.now() * 0.02) * 0.2;
-            bd._fireMat.color.setHex(Math.random() > 0.3 ? 0xff6600 : 0xff3300);
             // Damage creatures in range — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
                 if (this._creatureMgr) {
+                    // Fire emerges from head in front of dragon
+                    const fireDist = 8;
+                    const fx = bd.x + Math.sin(bd.angle) * fireDist;
+                    const fz = bd.z + Math.cos(bd.angle) * fireDist;
                     for (const c of this._creatureMgr.creatures) {
                         if (c.dead) continue;
-                        // Skip dragons, colossus, ember lord, necromancers
                         if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
                         if (c.type === 'dragon' || c.type === 'babyDragon') continue;
                         const cdx = c.x - fx, cdz = c.z - fz;
                         const cd = Math.sqrt(cdx*cdx + cdz*cdz);
                         if (cd < 6) {
-                            c.hp -= 1; // 1 damage per 0.33s = 3/sec
+                            c.hp -= 1; // 1 dmg per 0.33s = 3/sec
                             if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
                         }
                     }
                 }
             }
-        } else if (bd._fireMesh) {
-            bd._fireMesh.visible = false;
+        } else {
+            if (bd.fireBreathGrp) bd.fireBreathGrp.visible = false;
             bd._breathingFire = false;
         }
 

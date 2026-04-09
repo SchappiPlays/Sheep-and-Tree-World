@@ -4441,9 +4441,14 @@ function startGame(loadSlotName) {
                     }
                 }
             }
-            // Restore dragons
+            // Restore dragons (skip stale fortress entities from old saves)
             if (s.dragons) {
                 for (const dd of s.dragons) {
+                    // Skip silver wyvern, fortress dragon, and other named fortress entities
+                    if (dd.dragonName === 'The Silver Wyvern' || dd.dragonName === 'Kaelthrazor the Ancient') continue;
+                    // Skip dragons at known fortress positions
+                    if (Math.abs(dd.x - (-505)) < 2 && Math.abs(dd.z - (-335)) < 2) continue; // ruined fortress
+                    if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
                     const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern);
                     bd.age = dd.age || 0;
