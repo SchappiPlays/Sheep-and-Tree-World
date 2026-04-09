@@ -550,20 +550,47 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
+                        // Collect sloped Y values
+                        const _slopeYs = [];
+                        const halfBS = BS * 0.5;
                         for (let vi = 0; vi < 4; vi++) {
                             let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
-                            // Slope vertices on surface blocks: top face + upper edge of side faces
                             if (_isSlopeable && verts[vi][1] === 1) {
                                 const cx = (bx + verts[vi][0] * S) * BS;
                                 const cz = (bz + verts[vi][2] * S) * BS;
-                                vy = getTerrainHeight(cx, cz);
+                                // Snap to half-block for blocky-smooth look
+                                vy = Math.round(getTerrainHeight(cx, cz) / halfBS) * halfBS;
                             }
+                            _slopeYs.push(vy);
+                        }
+                        // Skip top face if all corners below block bottom
+                        if (fi === 2 && _isSlopeable) {
+                            const bBot = (y - Y_OFF) * BS;
+                            if (_slopeYs[0] <= bBot && _slopeYs[1] <= bBot && _slopeYs[2] <= bBot && _slopeYs[3] <= bBot) continue;
+                        }
+                        // Compute slope normal for top face
+                        let nx = face.dir[0], ny = face.dir[1], nz = face.dir[2];
+                        if (_isSlopeable && fi === 2) {
+                            const ax = (verts[2][0] - verts[0][0]) * S * BS;
+                            const ay = _slopeYs[2] - _slopeYs[0];
+                            const az = (verts[2][2] - verts[0][2]) * S * BS;
+                            const bbx = (verts[1][0] - verts[0][0]) * S * BS;
+                            const bby = _slopeYs[1] - _slopeYs[0];
+                            const bbz = (verts[1][2] - verts[0][2]) * S * BS;
+                            nx = ay * bbz - az * bby;
+                            ny = az * bbx - ax * bbz;
+                            nz = ax * bby - ay * bbx;
+                            const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
+                            nx /= nl; ny /= nl; nz /= nl;
+                            if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+                        }
+                        for (let vi = 0; vi < 4; vi++) {
                             tPos.push(
                                 (lx + verts[vi][0] * S) * BS,
-                                vy,
+                                _slopeYs[vi],
                                 (lz + verts[vi][2] * S) * BS
                             );
-                            tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                            tNrm.push(nx, ny, nz);
                             tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                         }
                         tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
