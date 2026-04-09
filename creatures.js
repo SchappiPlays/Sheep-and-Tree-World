@@ -321,6 +321,100 @@ function makeDeer(x, z, terrainY) {
     };
 }
 
+// Wolf materials
+const wolfFurMat = new THREE.MeshStandardMaterial({ color: 0x6a6a6a });
+const wolfDarkMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+const wolfBellyMat = new THREE.MeshStandardMaterial({ color: 0x8a8a80 });
+const wolfNoseMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+
+function makeWolf(x, z, terrainY) {
+    const g = new THREE.Group();
+    // Fur color variation
+    const variant = Math.random();
+    const furMat = variant < 0.3 ? wolfDarkMat : variant < 0.6 ? wolfFurMat :
+        new THREE.MeshStandardMaterial({ color: 0x7a7060 }); // brownish
+
+    // Body — lean, longer than tall
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.26, 0.65), furMat);
+    body.position.y = 0.52; body.castShadow = true; g.add(body);
+
+    // Chest — slightly wider at front
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 0.2), furMat);
+    chest.position.set(0, 0.53, 0.22); g.add(chest);
+
+    // Belly
+    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.4), wolfBellyMat);
+    belly.position.y = 0.38; g.add(belly);
+
+    // Neck — angled forward
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.14), furMat);
+    neck.position.set(0, 0.65, 0.35); neck.rotation.x = -0.4; g.add(neck);
+
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.7, 0.42); g.add(headGrp);
+
+    // Skull — elongated snout
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.18), furMat);
+    headGrp.add(skull);
+
+    // Snout
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.16), furMat);
+    snout.position.set(0, -0.03, 0.14); headGrp.add(snout);
+
+    // Nose
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.03), wolfNoseMat);
+    nose.position.set(0, -0.02, 0.23); headGrp.add(nose);
+
+    // Eyes — yellow, predatory
+    const wolfEyeMat = new THREE.MeshStandardMaterial({ color: 0xddaa22, emissive: 0x886611, emissiveIntensity: 0.3 });
+    const eyeGeo = new THREE.SphereGeometry(0.022, 6, 6);
+    const lEye = new THREE.Mesh(eyeGeo, wolfEyeMat); lEye.position.set(-0.07, 0.02, 0.07); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeGeo, wolfEyeMat); rEye.position.set(0.07, 0.02, 0.07); headGrp.add(rEye);
+
+    // Pupils
+    const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const pupilGeo = new THREE.SphereGeometry(0.01, 4, 4);
+    const lPupil = new THREE.Mesh(pupilGeo, pupilMat); lPupil.position.set(-0.07, 0.02, 0.09); headGrp.add(lPupil);
+    const rPupil = new THREE.Mesh(pupilGeo, pupilMat); rPupil.position.set(0.07, 0.02, 0.09); headGrp.add(rPupil);
+
+    // Ears — pointed, upright
+    const earGeo = new THREE.ConeGeometry(0.035, 0.1, 4);
+    const lEar = new THREE.Mesh(earGeo, furMat);
+    lEar.position.set(-0.06, 0.11, -0.02); lEar.rotation.z = 0.15; headGrp.add(lEar);
+    const rEar = new THREE.Mesh(earGeo, furMat);
+    rEar.position.set(0.06, 0.11, -0.02); rEar.rotation.z = -0.15; headGrp.add(rEar);
+
+    // Legs — thin, muscular
+    const legs = [];
+    for (const [lx, ly, lz] of [[-0.1, 0.38, 0.2], [0.1, 0.38, 0.2], [-0.1, 0.38, -0.22], [0.1, 0.38, -0.22]]) {
+        const hip = new THREE.Group(); hip.position.set(lx, ly, lz); g.add(hip);
+        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), furMat);
+        upper.position.y = -0.11; hip.add(upper);
+        const lower = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.05), furMat);
+        lower.position.y = -0.3; hip.add(lower);
+        const paw = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.08), wolfDarkMat);
+        paw.position.set(0, -0.4, 0.01); hip.add(paw);
+        legs.push(hip);
+    }
+
+    // Tail — bushy, slightly drooping
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.3), furMat);
+    tail.position.set(0, 0.5, -0.46); tail.rotation.x = 0.4; g.add(tail);
+    const tailTip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.1), wolfDarkMat);
+    tailTip.position.set(0, 0.44, -0.58); g.add(tailTip);
+
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+        type: 'wolf', hostile: true, aggroRange: 14, attackRange: 1.5, attackDmg: 4, attackCD: 1.0, attackTimer: 0,
+        hp: 12, maxHP: 12, dead: false, chaseSpeed: 2.8,
+    };
+}
+
 // ── Enemy materials ──
 const goblinSkinMat = new THREE.MeshStandardMaterial({ color: 0x4a6a2a });
 const goblinEyeMat = new THREE.MeshStandardMaterial({ color: 0xcc2200, emissive: 0x661100, emissiveIntensity: 0.3 });
@@ -697,10 +791,12 @@ export class CreatureManager {
                     continue;
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
-                // Frozen lands — skeletons and occasional animals
-                if (typeHash < 0.6) {
+                // Frozen lands — skeletons, wolves, occasional animals
+                if (typeHash < 0.45) {
                     creature = makeSkeleton(sx, sz, terrainY);
-                } else if (typeHash < 0.75) {
+                } else if (typeHash < 0.65) {
+                    creature = makeWolf(sx, sz, terrainY);
+                } else if (typeHash < 0.8) {
                     creature = makeSheep(sx, sz, terrainY);
                 } else {
                     continue;
@@ -711,9 +807,12 @@ export class CreatureManager {
                 const treeHash = this.world._hash(bx * 0.37 + 7777, bz * 0.53 + 3333);
                 const isForested = treeHash <= 0.12; // generous check — near trees
 
-                if (isForested && typeHash < 0.5) {
+                if (isForested && typeHash < 0.3) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);
+                } else if (isForested && typeHash < 0.45) {
+                    // Forest — wolves
+                    creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.35) {
                     creature = makeSheep(sx, sz, terrainY);
                 } else if (typeHash < 0.6) {
@@ -785,6 +884,9 @@ export class CreatureManager {
                     } else if (sh.type === 'skeleton') {
                         this._onCreatureDrop('bone', 1 + Math.floor(Math.random() * 2));
                         if (Math.random() < 0.4) this._onCreatureDrop('stick', 2);
+                    } else if (sh.type === 'wolf') {
+                        this._onCreatureDrop('leather', 1 + Math.floor(Math.random() * 2));
+                        if (Math.random() < 0.3) this._onCreatureDrop('bone', 1);
                     }
                 }
             }
