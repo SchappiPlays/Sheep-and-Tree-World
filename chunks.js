@@ -282,15 +282,11 @@ export class ChunkManager {
                             const nb = this.world.getBlockAt(bx + dx, y, bz + dz);
                             return nb === BLOCK.AIR || nb === BLOCK.WATER;
                         };
-                        // Corner is low if BOTH adjacent cardinal neighbors are lower
-                        // -x-z corner: check -x and -z neighbors
-                        _cornerLow[0] = _isLower(-1, 0) && _isLower(0, -1);
-                        // -x+z corner: check -x and +z
-                        _cornerLow[1] = _isLower(-1, 0) && _isLower(0, 1);
-                        // +x-z corner: check +x and -z
-                        _cornerLow[2] = _isLower(1, 0) && _isLower(0, -1);
-                        // +x+z corner: check +x and +z
-                        _cornerLow[3] = _isLower(1, 0) && _isLower(0, 1);
+                        // Corner drops if EITHER adjacent cardinal neighbor or the diagonal is lower
+                        _cornerLow[0] = _isLower(-1, 0) || _isLower(0, -1) || _isLower(-1, -1);
+                        _cornerLow[1] = _isLower(-1, 0) || _isLower(0, 1) || _isLower(-1, 1);
+                        _cornerLow[2] = _isLower(1, 0) || _isLower(0, -1) || _isLower(1, -1);
+                        _cornerLow[3] = _isLower(1, 0) || _isLower(0, 1) || _isLower(1, 1);
                         _isSlopeable = _cornerLow[0] || _cornerLow[1] || _cornerLow[2] || _cornerLow[3];
                     }
 
@@ -599,9 +595,19 @@ export class ChunkManager {
 
                         const fv = face.verts;
                         for (let vi = 0; vi < 4; vi++) {
+                            let vyy = (y - Y_OFF + fv[vi][1] * S) * BS;
+                            // For sloped blocks: side face top vertices use corner heights
+                            if (_isSlopeable && fv[vi][1] === 1 && fi !== 2 && fi !== 3) {
+                                // Determine which corner this vertex maps to
+                                // fv[vi][0] = 0 or 1 (X), fv[vi][2] = 0 or 1 (Z)
+                                const cornerIdx = (fv[vi][0] * 2) + fv[vi][2];
+                                if (_cornerLow[cornerIdx]) {
+                                    vyy = (y - Y_OFF + S) * BS - (S * BS) * 0.5;
+                                }
+                            }
                             tPos.push(
                                 (lx + fv[vi][0] * S) * BS,
-                                (y - Y_OFF + fv[vi][1] * S) * BS,
+                                vyy,
                                 (lz + fv[vi][2] * S) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
