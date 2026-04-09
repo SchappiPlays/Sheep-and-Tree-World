@@ -272,15 +272,20 @@ export class ChunkManager {
                     }
 
                     // Check if this is a natural surface block (for terrain sloping)
-                    // Only slope if terrain height falls within this block's Y range
+                    // Only slope if a neighbor block is exactly 1 block higher or lower
                     let _isSlopeable = false;
                     if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + S) + ',' + bz)) {
-                        const _blockTopW = (y - Y_OFF + S) * BS;
-                        const _blockBotW = (y - Y_OFF) * BS;
-                        const _thCenter = getTerrainHeight(bx * BS, bz * BS);
-                        // Only slope if terrain actually passes through this block
-                        if (_thCenter >= _blockBotW - BS && _thCenter <= _blockTopW + BS) {
-                            _isSlopeable = true;
+                        // Check 8 neighbors (cardinal + diagonal) for a 1-block height difference
+                        for (const [ndx, ndz] of [[S,0],[-S,0],[0,S],[0,-S],[S,S],[S,-S],[-S,S],[-S,-S]]) {
+                            const nb = this.world.getBlockAt(bx + ndx, y + S, bz + ndz);
+                            const nbBelow = this.world.getBlockAt(bx + ndx, y, bz + ndz);
+                            const nbAbove = this.world.getBlockAt(bx + ndx, y - S, bz + ndz);
+                            // Neighbor is 1 block higher (solid above) or 1 block lower (air at same level, solid below)
+                            if ((nb !== BLOCK.AIR && nb !== BLOCK.WATER && nb !== BLOCK.LEAVES && nb !== BLOCK.PINE_LEAVES) ||
+                                (nbBelow === BLOCK.AIR && nbAbove !== BLOCK.AIR && nbAbove !== BLOCK.WATER)) {
+                                _isSlopeable = true;
+                                break;
+                            }
                         }
                     }
 
