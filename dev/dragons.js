@@ -5,6 +5,7 @@ import { BLOCK_SIZE } from './world.js';
 
 const _wmv = new THREE.Vector3();
 const _afv = new THREE.Vector3();
+const _afInvMat = new THREE.Matrix4();
 
 // ── Shared materials ──
 const dragonEyeMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xdd9900, emissiveIntensity: 0.8 });
@@ -446,7 +447,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
             makeDragonBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
             fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
         }
-        const _groundFRots = [{spreadY:-0.86,liftX:0.5,curlX:0},{spreadY:-0.37,liftX:0.5,curlX:0},{spreadY:-0.06,liftX:0.5,curlX:0},{spreadY:0.22,liftX:0.5,curlX:0}];
+        const _groundFRots = [{spreadY:-0.41,liftX:-0.2,curlX:0},{spreadY:0.08,liftX:-0.2,curlX:0},{spreadY:0.39,liftX:-0.2,curlX:0},{spreadY:0.67,liftX:-0.2,curlX:0}];
         const _flyFRots = [{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0}];
         // Main membrane
         const memOutline = [];
@@ -1280,11 +1281,17 @@ export class DragonManager {
                 }
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
-                // Grounded: hide patagium, move afMesh body point to patagium's body point
+                // Grounded: hide patagium, glue afMesh body point to a fixed point on the body
                 if (w._patMesh) w._patMesh.visible = false;
                 if (w._afBodyPt && w._afGroundedBodyPt) {
                     if (!w._afOrigBodyPt) w._afOrigBodyPt = w._afBodyPt.slice();
-                    w._afBodyPt = w._afGroundedBodyPt;
+                    // Target point in dragon-local space (parent of wg) — sticks to body side
+                    const S = 2.55;
+                    const tx = si * 0.05 * S, ty = -0.1 * S, tz = -1.4 * S;
+                    w.updateMatrix();
+                    _afInvMat.copy(w.matrix).invert();
+                    _afv.set(tx, ty, tz).applyMatrix4(_afInvMat);
+                    w._afBodyPt = [_afv.x, _afv.y, _afv.z];
                 }
                 updateWyvernMembrane(w);
             }
