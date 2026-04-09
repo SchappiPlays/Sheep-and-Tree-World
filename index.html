@@ -9079,7 +9079,6 @@ function updateGuideBookUI() {
         html += '<div style="display:flex;flex-direction:column;gap:10px;align-items:center;margin:24px 0;">';
         html += `<button onclick="window._bookSection('guide')" style="${_bookTabStyle}" ${_bookTabHover}>Guide</button>`;
         html += `<button onclick="window._bookSection('knowledge')" style="${_bookTabStyle}" ${_bookTabHover}>Knowledge</button>`;
-        html += `<button onclick="window._bookSection('journal')" style="${_bookTabStyle}" ${_bookTabHover}>Journal</button>`;
         html += '</div>';
         html += `<div style="text-align:center;margin-top:12px;"><button onclick="window._closeGuideBook()" style="${_bookBtnStyle}" ${_bookBtnHover}>Close</button></div>`;
     } else if (guideBookSection === 'guide') {
@@ -9108,19 +9107,6 @@ function updateGuideBookUI() {
         html += `<button onclick="window._guidePageNext()" style="${_bookBtnStyle}${guideBookPage >= KNOWLEDGE_ENTRIES.length - 1 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>Next →</button>`;
         html += '</div>';
         html += `<div style="text-align:center;margin-top:8px;"><button onclick="window._bookSection('menu')" style="${_bookBtnStyle}" ${_bookBtnHover}>Back</button></div>`;
-    } else if (guideBookSection === 'journal') {
-        html += '<div style="text-align:center;margin-bottom:12px;">';
-        html += '<span style="color:#3a2a10;font:bold 18px Georgia,serif;">Journal — Rumours</span>';
-        html += '</div>';
-        const r = JOURNAL_RUMOURS[guideBookPage];
-        html += `<div style="text-align:center;margin-bottom:8px;"><span style="color:#3a2a10;font:bold 15px Georgia,serif;font-style:italic;">${r.title}</span></div>`;
-        html += `<div style="color:#4a3a20;font:13px Georgia,serif;white-space:pre-wrap;line-height:1.7;font-style:italic;">"${r.text}"</div>`;
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">';
-        html += `<button onclick="window._guidePagePrev()" style="${_bookBtnStyle}${guideBookPage <= 0 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>← Prev</button>`;
-        html += `<span style="color:rgba(60,45,20,0.5);font:11px Georgia,serif;">Rumour ${guideBookPage + 1} of ${JOURNAL_RUMOURS.length}</span>`;
-        html += `<button onclick="window._guidePageNext()" style="${_bookBtnStyle}${guideBookPage >= JOURNAL_RUMOURS.length - 1 ? 'opacity:0.3;' : ''}" ${_bookBtnHover}>Next →</button>`;
-        html += '</div>';
-        html += `<div style="text-align:center;margin-top:8px;"><button onclick="window._bookSection('menu')" style="${_bookBtnStyle}" ${_bookBtnHover}>Back</button></div>`;
     }
     guideBookEl.innerHTML = html;
 }
@@ -9130,7 +9116,7 @@ window._guidePagePrev = () => {
     if (guideBookPage > 0) { guideBookPage--; updateGuideBookUI(); }
 };
 window._guidePageNext = () => {
-    const maxPage = guideBookSection === 'journal' ? JOURNAL_RUMOURS.length - 1 : guideBookSection === 'knowledge' ? KNOWLEDGE_ENTRIES.length - 1 : GUIDE_PAGES.length - 1;
+    const maxPage = guideBookSection === 'knowledge' ? KNOWLEDGE_ENTRIES.length - 1 : GUIDE_PAGES.length - 1;
     if (guideBookPage < maxPage) { guideBookPage++; updateGuideBookUI(); }
 };
 window._closeGuideBook = () => { guideBookOpen = false; guideBookSection = 'menu'; guideBookEl.style.display = 'none'; };
