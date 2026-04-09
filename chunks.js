@@ -272,7 +272,17 @@ export class ChunkManager {
                     }
 
                     // Check if this is a natural surface block (for terrain sloping)
-                    const _isSlopeable = (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz);
+                    // Only slope if terrain height falls within this block's Y range
+                    let _isSlopeable = false;
+                    if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + S) + ',' + bz)) {
+                        const _blockTopW = (y - Y_OFF + S) * BS;
+                        const _blockBotW = (y - Y_OFF) * BS;
+                        const _thCenter = getTerrainHeight(bx * BS, bz * BS);
+                        // Only slope if terrain actually passes through this block
+                        if (_thCenter >= _blockBotW - BS && _thCenter <= _blockTopW + BS) {
+                            _isSlopeable = true;
+                        }
+                    }
 
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
@@ -563,10 +573,10 @@ export class ChunkManager {
                             }
                             _slopeYs.push(vy);
                         }
-                        // Skip top face if all corners below block bottom
+                        // Skip top face only if ALL corners are well below block bottom
                         if (fi === 2 && _isSlopeable) {
-                            const bBot = (y - Y_OFF) * BS;
-                            if (_slopeYs[0] <= bBot && _slopeYs[1] <= bBot && _slopeYs[2] <= bBot && _slopeYs[3] <= bBot) continue;
+                            const bBot = (y - Y_OFF) * BS - BS * 0.5;
+                            if (_slopeYs[0] < bBot && _slopeYs[1] < bBot && _slopeYs[2] < bBot && _slopeYs[3] < bBot) continue;
                         }
                         // Compute slope normal for top face
                         let nx = face.dir[0], ny = face.dir[1], nz = face.dir[2];
