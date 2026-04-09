@@ -430,7 +430,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
         // 4 finger bones (longer)
         const fingerDefs = [
-            { tip: [s*-1.95*S, 0, -2.0*S], mid: [s*-0.7*S, 0, -1.42*S] },
+            { tip: [s*-1.66*S, 0, -1.7*S], mid: [s*-0.6*S, 0, -1.21*S] },
             { tip: [s*-0.11*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
             { tip: [s*0.93*S, 0, -2.61*S], mid: [s*1.27*S, 0, -1.38*S] },
             { tip: [s*2.59*S, 0, -1.66*S], mid: [s*1.46*S, 0, -0.68*S] },
