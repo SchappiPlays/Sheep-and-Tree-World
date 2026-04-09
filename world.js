@@ -244,19 +244,19 @@ function getTerrainHeight(x, z) {
 
     let h = 0;
     // Large rolling terrain — gentle hills everywhere
-    h += Math.sin(x * 0.04 + 0.5) * Math.cos(z * 0.035) * 6.0;
-    h += Math.sin(x * 0.025 - z * 0.03 + 1.2) * 4.0;
-    h += Math.cos(x * 0.015 + z * 0.02 + 0.7) * 3.5;
+    h += Math.sin(x * 0.04 + 0.5) * Math.cos(z * 0.035) * 5.0;
+    h += Math.sin(x * 0.025 - z * 0.03 + 1.2) * 3.5;
+    h += Math.cos(x * 0.015 + z * 0.02 + 0.7) * 3.0;
     // Medium undulations
-    h += Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09 - x * 0.04) * 2.5;
-    h += Math.cos(x * 0.07 - 0.8) * Math.sin(z * 0.065 + 0.3) * 2.0;
-    h += Math.sin(x * 0.055 + z * 0.045 - 1.5) * 1.8;
+    h += Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09 - x * 0.04) * 2.0;
+    h += Math.cos(x * 0.07 - 0.8) * Math.sin(z * 0.065 + 0.3) * 1.5;
+    h += Math.sin(x * 0.055 + z * 0.045 - 1.5) * 1.5;
     // Small detail
-    h += Math.sin(x * 0.15 + z * 0.12) * 0.8;
-    h += Math.cos(x * 0.18 - z * 0.14 + 2.0) * 0.6;
-    h += Math.sin(x * 0.22 + z * 0.19 - 0.5) * 0.4;
-    // Ensure base terrain is always slightly positive (no flat-at-zero areas)
-    h += 3.0;
+    h += Math.sin(x * 0.15 + z * 0.12) * 0.6;
+    h += Math.cos(x * 0.18 - z * 0.14 + 2.0) * 0.5;
+    h += Math.sin(x * 0.22 + z * 0.19 - 0.5) * 0.3;
+    // Clamp so inland terrain is always above sea level
+    h = Math.max(h, 1.5);
 
     // Path flattening
     for (const p of pathFlat) {
