@@ -271,6 +271,9 @@ export class ChunkManager {
                         continue;
                     }
 
+                    // Check if this is a natural surface block (for terrain sloping)
+                    const _isSlopeable = (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz);
+
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
                         const nbx = bx + face.dir[0] * S;
@@ -547,13 +550,10 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
-                        // Slope top face of natural surface blocks
-                        const _isNaturalSurface = fi === 2 && (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz);
                         for (let vi = 0; vi < 4; vi++) {
                             let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
-                            if (_isNaturalSurface) {
-                                // Sample exact terrain height at this corner — no clamping
-                                // Adjacent blocks share corners so slopes connect seamlessly
+                            // Slope vertices on surface blocks: top face + upper edge of side faces
+                            if (_isSlopeable && verts[vi][1] === 1) {
                                 const cx = (bx + verts[vi][0] * S) * BS;
                                 const cz = (bz + verts[vi][2] * S) * BS;
                                 vy = getTerrainHeight(cx, cz);
