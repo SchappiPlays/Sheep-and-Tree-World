@@ -203,8 +203,6 @@ function updateFingerMembranes(w) {
     let vi = 0;
     const wristHS = [0,0,0];
     const wrist = toWgSpace(wristHS, 2, elb, hand);
-    // When grounded, use body attachment point for first gap center
-    const bodyCenter = (w._groundedMem && w._afBodyPt) ? w._afBodyPt : null;
     for (let gap = 0; gap < 3; gap++) {
         const mA = mids[gap], tA = tips[gap], mB = mids[gap+1], tB = tips[gap+1];
         const outline = [];
@@ -215,12 +213,10 @@ function updateFingerMembranes(w) {
             outline.push([u*u*tA[0]+2*u*t*cpx+t*t*tB[0], u*u*tA[1]+2*u*t*cpy+t*t*tB[1], u*u*tA[2]+2*u*t*cpz+t*t*tB[2]]);
         }
         for (const t of [1.0, 0.7, 0.4, 0.15]) outline.push(ffPt(mB, tB, t));
-        // First gap uses body point when grounded to cover afMesh area
-        const center = (gap === 0 && bodyCenter) ? bodyCenter : wrist;
         for (let i = 0; i < outline.length - 1; i++) {
             const a = toWgSpace(outline[i], 2, elb, hand);
             const b = toWgSpace(outline[i+1], 2, elb, hand);
-            pos[vi++]=center[0]; pos[vi++]=center[1]; pos[vi++]=center[2];
+            pos[vi++]=wrist[0]; pos[vi++]=wrist[1]; pos[vi++]=wrist[2];
             pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
             pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
         }
@@ -454,7 +450,6 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
-        wg._afMesh = afMesh;
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
@@ -548,7 +543,6 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
-        wg._afMesh = afMesh;
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
@@ -1012,8 +1006,6 @@ export class DragonManager {
                 w._hand.rotation.set(0, 0, 0);
                 if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
                 applyFingerRots(w, w._flyFRots);
-                w._groundedMem = false;
-                if (w._afMesh) w._afMesh.visible = true;
                 updateWyvernMembrane(w);
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
@@ -1064,8 +1056,6 @@ export class DragonManager {
                 }
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
-                w._groundedMem = true;
-                if (w._afMesh) w._afMesh.visible = false;
                 updateWyvernMembrane(w);
             }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {

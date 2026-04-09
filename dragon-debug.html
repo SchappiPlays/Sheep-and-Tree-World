@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head><title>Dragon Membrane Debug</title></head>
+<body style="margin:0;background:#222;">
+<div id="info" style="position:fixed;top:10px;left:10px;color:#fff;font:14px monospace;z-index:10;background:rgba(0,0,0,0.7);padding:10px;border-radius:5px;">
+    <div style="margin-bottom:8px;font-weight:bold;">Dragon Membrane Debug</div>
+    <div><span style="color:#ff4444;">■</span> RED = Arm-finger membrane (afMesh)</div>
+    <div><span style="color:#44ff44;">■</span> GREEN = Inter-finger membranes (ffMesh)</div>
+    <div><span style="color:#4488ff;">■</span> BLUE = Main membrane (memMesh — normally hidden)</div>
+    <div><span style="color:#ffff44;">■</span> YELLOW = Patagium</div>
+    <div><span style="color:#aaaaaa;">■</span> GREY = Bones</div>
+    <div style="margin-top:8px;">Click+drag to orbit. Scroll to zoom.</div>
+    <div id="status" style="margin-top:5px;color:#ff8;">Loading...</div>
+</div>
+<script src="three.min.js"></script>
+<script>
+// Non-module script to avoid import issues
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x333344);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0x888888));
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(5, 10, 5);
+scene.add(sun);
+scene.add(new THREE.GridHelper(20, 20, 0x555555, 0x444444));
+
+// Load dragons.js as module to get DragonManager
+const script = document.createElement('script');
+script.type = 'module';
+script.textContent = `
+import { DragonManager } from './dragons.js';
+
+const scene = window._debugScene;
+const world = {
+    getHeight: () => 0,
+    _hash: (x,z) => { const d = Math.sin(x*127.1+z*311.7+42)*43758.5453; return d - Math.floor(d); }
+};
+
+try {
+    const dm = new DragonManager(scene, world);
+    const bd = dm._makeDragon(0, 0, 0, 0xcc8833, 0xddaa44, true);
+    bd.age = 7200;
+    bd.growthScale = 2.0;
+    bd.group.scale.setScalar(2.0);
+    bd.group.position.y = 0;
+    bd.flying = false;
+    bd.walking = false;
+    dm.dragons.push(bd);
+
+    // Run grounded animation
+    dm._animateDragon(0.016, bd);
+
+    // Add to scene (makeDragon doesn't do this automatically)
+    scene.add(bd.group);
+
+    // Force scale AFTER animation (animation doesn't set scale, update() does)
+    bd.group.scale.setScalar(2.0);
+    bd.group.position.set(0, 0, 0);
+    bd.footOffset = 0.95 * 2.55 * 2.0;
+
+    console.log('Dragon loaded, scale:', bd.group.scale.x, 'wings:', bd.wings.length);
+
+    // Color each membrane
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xff2222, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+    const greenMat = new THREE.MeshStandardMaterial({ color: 0x22ff22, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+    const blueMat = new THREE.MeshStandardMaterial({ color: 0x2288ff, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+    const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffff22, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+
+    for (const w of bd.wings) {
+        for (const child of w.children) {
+            if (!child.isMesh) continue;
+            const geo = child.geometry;
+            if (geo === w._afGeo) {
+                child.material = redMat;
+                child.renderOrder = 2;
+            } else if (geo === w._ffGeo) {
+                child.material = greenMat;
+                child.renderOrder = 3;
+            } else if (geo === w._memGeo) {
+                child.material = blueMat;
+                child.visible = true;
+                child.renderOrder = 1;
+            } else if (w._patGeo && geo === w._patGeo) {
+                child.material = yellowMat;
+                child.renderOrder = 4;
+            }
+        }
+    }
+
+    document.getElementById('status').textContent = 'Dragon loaded! Orbit to inspect.';
+    document.getElementById('status').style.color = '#4f4';
+} catch(e) {
+    document.getElementById('status').textContent = 'Error: ' + e.message;
+    document.getElementById('status').style.color = '#f44';
+    console.error(e);
+}
+`;
+window._debugScene = scene;
+document.body.appendChild(script);
+
+// Orbit controls
+let isDragging = false, prevX = 0, prevY = 0;
+let orbitAngle = 0.8, orbitPitch = 0.3, orbitDist = 20;
+renderer.domElement.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+renderer.domElement.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    orbitAngle -= (e.clientX - prevX) * 0.01;
+    orbitPitch = Math.max(-1, Math.min(1.2, orbitPitch + (e.clientY - prevY) * 0.01));
+    prevX = e.clientX; prevY = e.clientY;
+});
+renderer.domElement.addEventListener('mouseup', () => isDragging = false);
+renderer.domElement.addEventListener('wheel', e => {
+    orbitDist = Math.max(3, Math.min(30, orbitDist + e.deltaY * 0.01));
+    e.preventDefault();
+}, { passive: false });
+
+function animate() {
+    requestAnimationFrame(animate);
+    camera.position.set(
+        Math.sin(orbitAngle) * Math.cos(orbitPitch) * orbitDist,
+        Math.sin(orbitPitch) * orbitDist + 3,
+        Math.cos(orbitAngle) * Math.cos(orbitPitch) * orbitDist
+    );
+    camera.lookAt(0, 3, 0);
+    renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
