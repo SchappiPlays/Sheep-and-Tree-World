@@ -271,25 +271,27 @@ export class ChunkManager {
                         continue;
                     }
 
-                    // Check if this is a natural surface block that should have a slope
-                    // Slope goes on the UPPER block — check if any cardinal neighbor is 1 block LOWER
+                    // Check if this is a natural surface block that should have slopes
+                    // Each corner can independently drop to half-height if its neighbors are lower
                     let _isSlopeable = false;
-                    let _slopeDir = null; // which direction is lower
+                    let _cornerLow = [false, false, false, false]; // corners: -x-z, -x+z, +x-z, +x+z
                     const _aboveBlock = this.world.getBlockAt(bx, y + 1, bz);
                     const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
                     if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && _aboveIsOpen && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + 1) + ',' + bz)) {
-                        const _isSolidBlock = b => b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE;
-                        // Check cardinal neighbors for being 1 block lower
-                        for (const [ndx, ndz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-                            const nbSame = this.world.getBlockAt(bx + ndx, y, bz + ndz);
-                            const nbBelow = this.world.getBlockAt(bx + ndx, y - 1, bz + ndz);
-                            // Neighbor at same level is air, and block below neighbor is solid = 1 block drop
-                            if (nbSame === BLOCK.AIR && _isSolidBlock(nbBelow)) {
-                                _isSlopeable = true;
-                                _slopeDir = [ndx, ndz]; // direction toward the lower block
-                                break;
-                            }
-                        }
+                        const _isLower = (dx, dz) => {
+                            const nb = this.world.getBlockAt(bx + dx, y, bz + dz);
+                            return nb === BLOCK.AIR || nb === BLOCK.WATER;
+                        };
+                        // Corner is low if BOTH adjacent cardinal neighbors are lower
+                        // -x-z corner: check -x and -z neighbors
+                        _cornerLow[0] = _isLower(-1, 0) && _isLower(0, -1);
+                        // -x+z corner: check -x and +z
+                        _cornerLow[1] = _isLower(-1, 0) && _isLower(0, 1);
+                        // +x-z corner: check +x and -z
+                        _cornerLow[2] = _isLower(1, 0) && _isLower(0, -1);
+                        // +x+z corner: check +x and +z
+                        _cornerLow[3] = _isLower(1, 0) && _isLower(0, 1);
+                        _isSlopeable = _cornerLow[0] || _cornerLow[1] || _cornerLow[2] || _cornerLow[3];
                     }
 
                     for (let fi = 0; fi < 6; fi++) {
@@ -568,47 +570,31 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
-                        // Slopeable blocks: render as 2-step stair toward the lower neighbor
-                        if (_isSlopeable && _slopeDir && fi === 2) {
-                            const [sdx, sdz] = _slopeDir;
-                            const halfS = S * 0.5;
+                        // Slopeable blocks: top face with per-corner heights
+                        // Corners drop to half-height where neighbors are lower
+                        if (_isSlopeable && fi === 2) {
                             const baseX = lx * BS, baseZ = lz * BS;
                             const fullW = S * BS;
-                            const midY = (y - Y_OFF + S) * BS - halfS * BS; // half block height
                             const topY = (y - Y_OFF + S) * BS;
-                            // Upper step: half of the block on the HIGH side (away from lower neighbor)
-                            let uX0 = baseX, uX1 = baseX + fullW, uZ0 = baseZ, uZ1 = baseZ + fullW;
-                            // Lower step: half of the block on the LOW side (toward lower neighbor)
-                            let lX0 = baseX, lX1 = baseX + fullW, lZ0 = baseZ, lZ1 = baseZ + fullW;
-                            // Wall position
-                            let wX0, wX1, wZ0, wZ1, wnx = 0, wnz = 0;
-                            if (sdx > 0) { uX1 = baseX + halfS * BS; lX0 = baseX + halfS * BS; wX0 = wX1 = baseX + halfS * BS; wZ0 = baseZ; wZ1 = baseZ + fullW; wnx = 1; }
-                            else if (sdx < 0) { uX0 = baseX + halfS * BS; lX1 = baseX + halfS * BS; wX0 = wX1 = baseX + halfS * BS; wZ0 = baseZ + fullW; wZ1 = baseZ; wnx = -1; }
-                            else if (sdz > 0) { uZ1 = baseZ + halfS * BS; lZ0 = baseZ + halfS * BS; wZ0 = wZ1 = baseZ + halfS * BS; wX0 = baseX + fullW; wX1 = baseX; wnz = 1; }
-                            else { uZ0 = baseZ + halfS * BS; lZ1 = baseZ + halfS * BS; wZ0 = wZ1 = baseZ + halfS * BS; wX0 = baseX; wX1 = baseX + fullW; wnz = -1; }
-                            // Upper step top face (full height)
-                            tPos.push(uX0, topY, uZ0); tPos.push(uX0, topY, uZ1);
-                            tPos.push(uX1, topY, uZ0); tPos.push(uX1, topY, uZ1);
+                            const midY = topY - fullW * 0.5; // half block drop
+                            // Corner Y values: _cornerLow[i] ? midY : topY
+                            // Verts order: [0,1,0]=(-x,-z), [0,1,1]=(-x,+z), [1,1,0]=(+x,-z), [1,1,1]=(+x,+z)
+                            const cy = [
+                                _cornerLow[0] ? midY : topY, // -x-z
+                                _cornerLow[1] ? midY : topY, // -x+z
+                                _cornerLow[2] ? midY : topY, // +x-z
+                                _cornerLow[3] ? midY : topY, // +x+z
+                            ];
+                            // Top face with per-corner Y
+                            tPos.push(baseX, cy[0], baseZ);
+                            tPos.push(baseX, cy[1], baseZ + fullW);
+                            tPos.push(baseX + fullW, cy[2], baseZ);
+                            tPos.push(baseX + fullW, cy[3], baseZ + fullW);
                             tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
                             tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
                             tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
                             tVert += 4;
-                            // Lower step top face (mid height)
-                            tPos.push(lX0, midY, lZ0); tPos.push(lX0, midY, lZ1);
-                            tPos.push(lX1, midY, lZ0); tPos.push(lX1, midY, lZ1);
-                            tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
-                            tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
-                            tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                            tVert += 4;
-                            // Step wall between upper and lower
-                            const sc = tmpColor.clone().multiplyScalar(0.85);
-                            tPos.push(wX0, midY, wZ0); tPos.push(wX1, midY, wZ1);
-                            tPos.push(wX0, topY, wZ0); tPos.push(wX1, topY, wZ1);
-                            tNrm.push(wnx,0,wnz, wnx,0,wnz, wnx,0,wnz, wnx,0,wnz);
-                            tCol.push(sc.r,sc.g,sc.b, sc.r,sc.g,sc.b, sc.r,sc.g,sc.b, sc.r,sc.g,sc.b);
-                            tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                            tVert += 4;
-                            continue; // skip normal top face
+                            continue;
                         }
 
                         const fv = face.verts;
