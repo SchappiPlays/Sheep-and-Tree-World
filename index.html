@@ -846,6 +846,7 @@ window.addEventListener('resize', () => {
 
 // ── Far Terrain — merged block mesh of entire world (same style as title screen) ──
 let farTerrain = null, farWater = null;
+const _lodStructures = [];
 let _farCenterX = 0, _farCenterZ = 0; // track where skip zone is centered
 
 function buildFarTerrain(centerX, centerZ) {
@@ -1042,7 +1043,8 @@ function buildFarTerrain(centerX, centerZ) {
     scene.add(farTerrain);
 
     // LOD structure markers — simple colored shapes visible from far away
-    const _lodStructures = [];
+    for (const m of _lodStructures) scene.remove(m);
+    _lodStructures.length = 0;
     const _addLodBox = (wx, wz, w, h, d, color) => {
         const y = getTerrainHeight(wx, wz);
         const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
@@ -11338,6 +11340,13 @@ function animate() {
             lifeCrystals.splice(i, 1);
             addChatMessage('Life crystal recovered! A broken heart has been restored.', 'rgba(255,100,150,0.9)');
         }
+    }
+
+    // LOD structure visibility — hide when close, show when far
+    for (const m of _lodStructures) {
+        const dx = player.position.x - m.position.x, dz = player.position.z - m.position.z;
+        const d = dx * dx + dz * dz;
+        m.visible = d > 80 * 80; // hide within 80 units
     }
 
     // Waypoint beam animation
