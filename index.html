@@ -553,9 +553,9 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 // Build voxel terrain from actual game world
 {
     const BS = BLOCK_SIZE;
-    const step = 3; // sample every 3rd block for performance
+    const step = 5; // sample every 5th block for performance
     const S = BS * step; // world-space step size
-    const range = 250; // world units in each direction (covers hill ring)
+    const range = 150; // world units in each direction
     const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
     const _getBiome = (wx, wz) => {
         const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx,wz), sc = getScorchedBlend(wx,wz);
@@ -595,10 +595,10 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
         }
     }
 
-    // Trees — same logic as world.js with full canopy
+    // Trees — sparser for title screen performance
     const treeRange = Math.floor(range / BS);
-    for (let bx = -treeRange; bx <= treeRange; bx += 2) {
-        for (let bz = -treeRange; bz <= treeRange; bz += 2) {
+    for (let bx = -treeRange; bx <= treeRange; bx += 4) {
+        for (let bz = -treeRange; bz <= treeRange; bz += 4) {
             if (_hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > 0.06) continue;
             const jx = bx + Math.floor(_hash(bx+11,bz+22)*2);
             const jz = bz + Math.floor(_hash(bx+33,bz+44)*2);
@@ -629,9 +629,9 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
         }
     }
 
-    // Pine trees in snow biome (far terrain)
-    for (let bx = -treeRange; bx <= treeRange; bx += 2) {
-        for (let bz = -treeRange; bz <= treeRange; bz += 2) {
+    // Pine trees in snow biome (title screen)
+    for (let bx = -treeRange; bx <= treeRange; bx += 4) {
+        for (let bz = -treeRange; bz <= treeRange; bz += 4) {
             const wx = bx * BS, wz = bz * BS;
             const snowB = getSnowBlend(wz);
             if (snowB < 0.15) continue;
