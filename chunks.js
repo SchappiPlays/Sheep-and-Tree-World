@@ -565,67 +565,78 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
-                        // Collect sloped Y values
-                        const _slopeYs = [];
-                        const blockTopY = (y - Y_OFF + S) * BS;
-                        const blockBotY = (y - Y_OFF) * BS;
-                        if (_isSlopeable) {
-                            // Check which corners should be raised/lowered based on diagonal neighbors
-                            // Verts: [0,1,0]=(-x,-z), [0,1,1]=(-x,+z), [1,1,0]=(+x,-z), [1,1,1]=(+x,+z)
-                            // For each corner, check the diagonal neighbor in that direction
-                            const cornerDirs = [[-S, -S], [-S, S], [S, -S], [S, S]];
-                            for (let vi = 0; vi < 4; vi++) {
-                                if (verts[vi][1] === 1) {
-                                    const [cdx, cdz] = cornerDirs[vi];
-                                    const diagAbove = this.world.getBlockAt(bx + cdx, y + S, bz + cdz);
-                                    const diagBelow = this.world.getBlockAt(bx + cdx, y - S, bz + cdz);
-                                    const diagSame = this.world.getBlockAt(bx + cdx, y, bz + cdz);
-                                    if (diagAbove !== BLOCK.AIR && diagAbove !== BLOCK.WATER && diagAbove !== BLOCK.LEAVES && diagAbove !== BLOCK.PINE_LEAVES) {
-                                        // Neighbor is higher — raise this corner by 1 block
-                                        _slopeYs.push(blockTopY + BS);
-                                    } else if (diagSame === BLOCK.AIR || diagSame === BLOCK.WATER) {
-                                        // Neighbor is lower — lower this corner by 1 block
-                                        _slopeYs.push(blockTopY - BS);
-                                    } else {
-                                        _slopeYs.push(blockTopY);
-                                    }
-                                } else {
-                                    _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
-                                }
-                            }
-                        } else {
-                            for (let vi = 0; vi < 4; vi++) {
-                                _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
-                            }
-                        }
-                        // Skip top face only if ALL corners are well below block bottom
-                        if (fi === 2 && _isSlopeable) {
-                            const bBot = (y - Y_OFF) * BS - BS * 0.5;
-                            if (_slopeYs[0] < bBot && _slopeYs[1] < bBot && _slopeYs[2] < bBot && _slopeYs[3] < bBot) continue;
-                        }
-                        // Compute slope normal for top face
-                        let nx = face.dir[0], ny = face.dir[1], nz = face.dir[2];
+                        // Slopeable blocks: render as 2 half-height mini-blocks to form a step
                         if (_isSlopeable && fi === 2) {
-                            const ax = (verts[2][0] - verts[0][0]) * S * BS;
-                            const ay = _slopeYs[2] - _slopeYs[0];
-                            const az = (verts[2][2] - verts[0][2]) * S * BS;
-                            const bbx = (verts[1][0] - verts[0][0]) * S * BS;
-                            const bby = _slopeYs[1] - _slopeYs[0];
-                            const bbz = (verts[1][2] - verts[0][2]) * S * BS;
-                            nx = ay * bbz - az * bby;
-                            ny = az * bbx - ax * bbz;
-                            nz = ax * bby - ay * bbx;
-                            const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
-                            nx /= nl; ny /= nl; nz /= nl;
-                            if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+                            // Find which cardinal direction is higher
+                            const nPX = this.world.getBlockAt(bx + S, y + S, bz);
+                            const nNX = this.world.getBlockAt(bx - S, y + S, bz);
+                            const nPZ = this.world.getBlockAt(bx, y + S, bz + S);
+                            const nNZ = this.world.getBlockAt(bx, y + S, bz - S);
+                            const isSolid = b => b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES;
+                            const hPX = isSolid(nPX), hNX = isSolid(nNX), hPZ = isSolid(nPZ), hNZ = isSolid(nNZ);
+                            // Determine slope direction (which side is higher)
+                            // Render top half as a step: lower half = full width, upper half = half width toward higher side
+                            const halfS = S * 0.5;
+                            const baseX = lx * BS, baseZ = lz * BS;
+                            const botY = (y - Y_OFF) * BS;
+                            const midY = botY + halfS * BS;
+                            const topY = (y - Y_OFF + S) * BS;
+                            // Bottom half — always full block
+                            // (already rendered by the normal face code below for sides)
+                            // Top step — shifted toward the higher neighbor
+                            let stepX0 = baseX, stepX1 = baseX + S * BS;
+                            let stepZ0 = baseZ, stepZ1 = baseZ + S * BS;
+                            let hasStep = false;
+                            if (hPX && !hNX) { stepX0 = baseX + halfS * BS; hasStep = true; }
+                            else if (hNX && !hPX) { stepX1 = baseX + halfS * BS; hasStep = true; }
+                            else if (hPZ && !hNZ) { stepZ0 = baseZ + halfS * BS; hasStep = true; }
+                            else if (hNZ && !hPZ) { stepZ1 = baseZ + halfS * BS; hasStep = true; }
+                            if (hasStep) {
+                                // Lower step top (full width, at mid height)
+                                tPos.push(baseX, midY, baseZ); tPos.push(baseX, midY, baseZ + S*BS);
+                                tPos.push(baseX + S*BS, midY, baseZ); tPos.push(baseX + S*BS, midY, baseZ + S*BS);
+                                tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+                                tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                                // Upper step top (half width, at full height)
+                                tPos.push(stepX0, topY, stepZ0); tPos.push(stepX0, topY, stepZ1);
+                                tPos.push(stepX1, topY, stepZ0); tPos.push(stepX1, topY, stepZ1);
+                                tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+                                tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                                // Step front face (vertical wall of the upper step)
+                                if (hPX && !hNX) {
+                                    tPos.push(stepX0, midY, stepZ0); tPos.push(stepX0, midY, stepZ1);
+                                    tPos.push(stepX0, topY, stepZ0); tPos.push(stepX0, topY, stepZ1);
+                                } else if (hNX && !hPX) {
+                                    tPos.push(stepX1, midY, stepZ1); tPos.push(stepX1, midY, stepZ0);
+                                    tPos.push(stepX1, topY, stepZ1); tPos.push(stepX1, topY, stepZ0);
+                                } else if (hPZ && !hNZ) {
+                                    tPos.push(stepX1, midY, stepZ0); tPos.push(stepX0, midY, stepZ0);
+                                    tPos.push(stepX1, topY, stepZ0); tPos.push(stepX0, topY, stepZ0);
+                                } else {
+                                    tPos.push(stepX0, midY, stepZ1); tPos.push(stepX1, midY, stepZ1);
+                                    tPos.push(stepX0, topY, stepZ1); tPos.push(stepX1, topY, stepZ1);
+                                }
+                                const sc = tmpColor.clone().multiplyScalar(0.85);
+                                tNrm.push(0,0,1, 0,0,1, 0,0,1, 0,0,1);
+                                tCol.push(sc.r,sc.g,sc.b, sc.r,sc.g,sc.b, sc.r,sc.g,sc.b, sc.r,sc.g,sc.b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                                continue; // skip normal top face
+                            }
                         }
+
+                        const verts = face.verts;
                         for (let vi = 0; vi < 4; vi++) {
                             tPos.push(
                                 (lx + verts[vi][0] * S) * BS,
-                                _slopeYs[vi],
+                                (y - Y_OFF + verts[vi][1] * S) * BS,
                                 (lz + verts[vi][2] * S) * BS
                             );
-                            tNrm.push(nx, ny, nz);
+                            tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                             tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                         }
                         tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
