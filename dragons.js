@@ -450,6 +450,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
+        wg._afMesh = afMesh;
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
@@ -543,6 +544,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
+        wg._afMesh = afMesh;
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
@@ -1007,6 +1009,7 @@ export class DragonManager {
                 if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
                 applyFingerRots(w, w._flyFRots);
                 updateWyvernMembrane(w);
+                if (w._afMesh) w._afMesh.visible = true;
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
@@ -1057,6 +1060,7 @@ export class DragonManager {
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
                 updateWyvernMembrane(w);
+                if (w._afMesh) w._afMesh.visible = false;
             }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
                 bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 1.5 + ti * 0.4) * 0.15;
