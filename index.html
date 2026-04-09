@@ -1111,6 +1111,56 @@ function buildFarTerrain(centerX, centerZ) {
     _addLodTower(-30-_gateSpread, -240, _gateR, _gateH, 0x6a6a5a); // South gate — towers along X
     _addLodTower(-30+_gateSpread, -240, _gateR, _gateH, 0x6a6a5a);
 
+    // === SW Fortress at (-900, 575) — high detail LOD ===
+    // 120x100 blocks = ~57×47.5 world. Walls 18 blocks = ~8.55. Towers 28 = ~13.3. Keep towers 36 = ~17.1
+    const swFX = -900, swFZ = 575;
+    const swHW = 28.5; // half-width in world units (60 blocks * 0.475)
+    const swHD = 23.75; // half-depth (50 blocks * 0.475)
+    const swWallH = 8.55;
+    const swDark = 0x3a3a3e;
+    const swDarkLight = 0x4a4a50;
+    // Outer walls — 4 wall pieces (so we don't fill the inside)
+    _addLodBox(swFX, swFZ - swHD, swHW * 2 + 2, swWallH, 1.5, swDark); // north wall
+    _addLodBox(swFX, swFZ + swHD, swHW * 2 + 2, swWallH, 1.5, swDark); // south wall
+    _addLodBox(swFX - swHW, swFZ, 1.5, swWallH, swHD * 2 + 2, swDark); // west wall
+    _addLodBox(swFX + swHW, swFZ, 1.5, swWallH, swHD * 2 + 2, swDark); // east wall
+    // Corner towers (28 blocks tall = 13.3)
+    _addLodTower(swFX - swHW, swFZ - swHD, 2.4, 13.3, swDarkLight);
+    _addLodTower(swFX + swHW, swFZ - swHD, 2.4, 13.3, swDarkLight);
+    _addLodTower(swFX - swHW, swFZ + swHD, 2.4, 13.3, swDarkLight);
+    _addLodTower(swFX + swHW, swFZ + swHD, 2.4, 13.3, swDarkLight);
+    // Mid-wall towers (24 blocks = 11.4)
+    _addLodTower(swFX - swHW/2, swFZ - swHD, 1.9, 11.4, swDarkLight);
+    _addLodTower(swFX + swHW/2, swFZ - swHD, 1.9, 11.4, swDarkLight);
+    _addLodTower(swFX - swHW/2, swFZ + swHD, 1.9, 11.4, swDarkLight);
+    _addLodTower(swFX + swHW/2, swFZ + swHD, 1.9, 11.4, swDarkLight);
+    _addLodTower(swFX + swHW, swFZ - swHD/2, 1.9, 11.4, swDarkLight);
+    _addLodTower(swFX + swHW, swFZ + swHD/2, 1.9, 11.4, swDarkLight);
+    // Gate flanking towers (3 wide tower = 1.4 radius, 20 high = 9.5)
+    _addLodTower(swFX - 4, swFZ - swHD, 1.4, 9.5, swDarkLight); // N gate
+    _addLodTower(swFX + 4, swFZ - swHD, 1.4, 9.5, swDarkLight);
+    _addLodTower(swFX + swHW, swFZ - 4, 1.4, 9.5, swDarkLight); // E gate
+    _addLodTower(swFX + swHW, swFZ + 4, 1.4, 9.5, swDarkLight);
+    _addLodTower(swFX - 4, swFZ + swHD, 1.4, 9.5, swDarkLight); // S gate
+    _addLodTower(swFX + 4, swFZ + swHD, 1.4, 9.5, swDarkLight);
+    // Central great keep (30x24 blocks = 14.25 x 11.4, 26h = 12.35)
+    _addLodBox(swFX, swFZ, 14.25, 12.35, 11.4, 0x4a4a52);
+    // Keep corner towers (36 blocks tall = 17.1)
+    _addLodTower(swFX - 7, swFZ - 5.7, 2, 17.1, swDarkLight);
+    _addLodTower(swFX + 7, swFZ - 5.7, 2, 17.1, swDarkLight);
+    _addLodTower(swFX - 7, swFZ + 5.7, 2, 17.1, swDarkLight);
+    _addLodTower(swFX + 7, swFZ + 5.7, 2, 17.1, swDarkLight);
+    // Dragon enclosure walls (west of fortress)
+    const swEncW = 14.25; // 30 blocks
+    const swEncD = 19; // 40 blocks
+    const swEncH = 9.5; // 20 blocks
+    _addLodBox(swFX - swHW - swEncW, swFZ - swEncD/2, swEncW, swEncH, 1.5, swDark); // north
+    _addLodBox(swFX - swHW - swEncW, swFZ + swEncD/2, swEncW, swEncH, 1.5, swDark); // south
+    _addLodBox(swFX - swHW - swEncW * 2, swFZ, 1.5, swEncH, swEncD, swDark); // west (ocean side)
+    // Enclosure corner towers
+    _addLodTower(swFX - swHW - swEncW * 2, swFZ - swEncD/2, 1.4, 11.4, swDarkLight);
+    _addLodTower(swFX - swHW - swEncW * 2, swFZ + swEncD/2, 1.4, 11.4, swDarkLight);
+
     // Village markers — actual village positions from VILLAGE_DEFS
     for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200}]) {
         // Small cluster of house-sized boxes
