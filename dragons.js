@@ -129,7 +129,7 @@ function updateArmFingerMem(w) {
         pos[vi++]=gb[0]; pos[vi++]=gb[1]; pos[vi++]=gb[2];
         pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
     }
-    if (w._afBodyPt) {
+    if (w._afBodyPt && !w._groundedMem) {
         const bp = w._afBodyPt;
         const eA = arm[N], eF = fin[N];
         const B = 3;
@@ -1011,9 +1011,10 @@ export class DragonManager {
                 if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
                 applyFingerRots(w, w._flyFRots);
                 updateWyvernMembrane(w);
-                // Show membranes when flying
+                // Show all membranes when flying
                 if (w._afMesh) w._afMesh.visible = true;
                 if (w._ffMesh) w._ffMesh.visible = true;
+                w._groundedMem = false;
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
@@ -1064,9 +1065,8 @@ export class DragonManager {
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
                 updateWyvernMembrane(w);
-                // Hide membranes when grounded — they clip through folded wings
-                if (w._afMesh) w._afMesh.visible = false;
-                if (w._ffMesh) w._ffMesh.visible = false;
+                // Membranes stay visible but mark as grounded to skip trailing body section
+                w._groundedMem = true;
             }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
                 bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 1.5 + ti * 0.4) * 0.15;
