@@ -6627,6 +6627,8 @@ const BLOCK_INFO = {
     [BLOCK.FLOWER_YELLOW]: { name:'Yellow Flower', top:'#ddcc33', front:'#2a6a1a' },
     [BLOCK.FLOWER_BLUE]: { name:'Blue Flower', top:'#4466dd', front:'#2a6a1a' },
     [BLOCK.FLOWER_WHITE]: { name:'White Flower', top:'#eeeeff', front:'#2a6a1a' },
+    [BLOCK.PINE_WOOD]: { name:'Pine Log', top:'#5a3828', front:'#3a2018' },
+    [BLOCK.PINE_LEAVES]: { name:'Pine Needles', top:'#1a5a2a', front:'#0a3a1a' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -7103,10 +7105,13 @@ function updateInventoryUI() {
     // Crafting section
     const RECIPES = [
         { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
+        { from: BLOCK.PINE_WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
         { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1 },
         { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4 },
+        { from: BLOCK.PINE_WOOD, to: 'stick', fc: 1, tc: 4 },
         { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2 },
         { from: BLOCK.WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1 },
+        { from: BLOCK.PINE_WOOD, to: BLOCK.CRAFTING, fc: 4, tc: 1 },
         { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1 },
         { from: 3, to: 'furnace_block', fc: 8, tc: 1 },
     ];
@@ -7994,8 +7999,10 @@ document.body.appendChild(craftTableMenuEl);
 const WB_CATEGORIES = [
     { name: 'Materials', recipes: [
         { from: BLOCK.WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
+        { from: BLOCK.PINE_WOOD, to: BLOCK.PLANKS, fc: 1, tc: 4 },
         { from: BLOCK.PLANKS, to: BLOCK.WOOD, fc: 4, tc: 1 },
         { from: BLOCK.WOOD, to: 'stick', fc: 1, tc: 4 },
+        { from: BLOCK.PINE_WOOD, to: 'stick', fc: 1, tc: 4 },
         { from: BLOCK.PLANKS, to: 'stick', fc: 1, tc: 2 },
         { from: BLOCK.STONE, to: BLOCK.GRAVEL, fc: 1, tc: 4 },
         { from: BLOCK.GRAVEL, to: BLOCK.STONE, fc: 4, tc: 1 },

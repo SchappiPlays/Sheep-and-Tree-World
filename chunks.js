@@ -34,6 +34,8 @@ const STONE_DARK = new THREE.Color(0x686868);
 const STONE_LIGHT = new THREE.Color(0xa0a0a0);
 const LEAVES_DARK = new THREE.Color(0x1a7a1a);
 const LEAVES_LIGHT = new THREE.Color(0x35b535);
+const PINE_DARK = new THREE.Color(0x0a3a1a);
+const PINE_LIGHT = new THREE.Color(0x1a5a2a);
 const WOOD_DARK = new THREE.Color(0x5a3518);
 const WOOD_LIGHT = new THREE.Color(0x7d4f30);
 const PLANK_DARK = new THREE.Color(0x8a6a3a);
@@ -244,7 +246,8 @@ export class ChunkManager {
                     if (block === BLOCK.AIR) continue;
 
                     // Leaves go to separate transparent mesh
-                    if (block === BLOCK.LEAVES) {
+                    if (block === BLOCK.LEAVES || block === BLOCK.PINE_LEAVES) {
+                        const isPine = block === BLOCK.PINE_LEAVES;
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
                             const nbx = bx + face.dir[0] * S, nby = y + face.dir[1] * S, nbz = bz + face.dir[2] * S;
@@ -252,7 +255,7 @@ export class ChunkManager {
                             if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL) continue;
                             const ch = colorHash(bx, y, bz);
                             const ch2 = colorHash(bx + 100, y + 50, bz + 200);
-                            tmpColor.copy(LEAVES_DARK).lerp(LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
+                            tmpColor.copy(isPine ? PINE_DARK : LEAVES_DARK).lerp(isPine ? PINE_LIGHT : LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
                             tmpColor.r += (ch2 - 0.5) * 0.04;
                             tmpColor.g += (ch - 0.5) * 0.06;
                             tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
@@ -274,7 +277,7 @@ export class ChunkManager {
                         const nby = y + face.dir[1] * S;
                         const nbz = bz + face.dir[2] * S;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
-                        if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES) continue;
+                        if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES && neighbor !== BLOCK.PINE_LEAVES) continue;
 
                         // Per-block noise for color variation
                         const ch = colorHash(bx, y, bz);
@@ -304,9 +307,9 @@ export class ChunkManager {
                             tmpColor.setHex(BLOCK_COLORS[BLOCK.SAND]);
                             tmpColor.r += (ch - 0.5) * 0.06;
                             tmpColor.g += (ch - 0.5) * 0.04;
-                        } else if (block === BLOCK.LEAVES) {
-                            tmpColor.copy(LEAVES_DARK).lerp(LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
-                            // Subtle warm/cool tint
+                        } else if (block === BLOCK.LEAVES || block === BLOCK.PINE_LEAVES) {
+                            const _isPine = block === BLOCK.PINE_LEAVES;
+                            tmpColor.copy(_isPine ? PINE_DARK : LEAVES_DARK).lerp(_isPine ? PINE_LIGHT : LEAVES_LIGHT, ch * 0.7 + ch2 * 0.3);
                             tmpColor.r += (ch2 - 0.5) * 0.04;
                             tmpColor.g += (ch - 0.5) * 0.06;
                         } else if (block === BLOCK.WOOD) {

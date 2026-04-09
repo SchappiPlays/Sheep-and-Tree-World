@@ -9,7 +9,7 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32, PATH: 33,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32, PATH: 33, PINE_WOOD: 34, PINE_LEAVES: 35,
 };
 
 export const BLOCK_COLORS = {
@@ -17,6 +17,7 @@ export const BLOCK_COLORS = {
     [BLOCK.SAND]: 0xd4c07a, [BLOCK.WATER]: 0x3a7ab5, [BLOCK.SNOW]: 0xe8e8f0,
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
     [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x3a8a3a, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.PATH]: 0x8a7a5a, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
+    [BLOCK.PINE_WOOD]: 0x4a3020, [BLOCK.PINE_LEAVES]: 0x1a4a2a,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -337,6 +338,34 @@ function getTerrainHeight(x, z) {
         else{const cliff=1-(plD-0.7)/0.6;const cs=cliff*cliff*(3-2*cliff);h=h+(plateauH-h)*cs;}
     }
 
+    // Gentle elevated plateaus — gradual rises over large areas
+    // Northern coastal bluff — rises gently near the north coast
+    const nbDx = (x - (-200)) / 180, nbDz = (z - (-700)) / 120;
+    const nbD = nbDx*nbDx + nbDz*nbDz;
+    if (nbD < 1) { const t = 1 - nbD; const s = t*t*(3-2*t); h += s * 8; }
+
+    // Western highlands — gradual rise west of center
+    const whDx = (x - (-500)) / 200, whDz = (z - 0) / 160;
+    const whD = whDx*whDx + whDz*whDz;
+    if (whD < 1) { const t = 1 - whD; const s = t*t*(3-2*t); h += s * 6; }
+
+    // Eastern rolling hills — gentle undulations
+    const ehDx = (x - 300) / 250, ehDz = (z - 200) / 200;
+    const ehD = ehDx*ehDx + ehDz*ehDz;
+    if (ehD < 1) {
+        const t = 1 - ehD; const s = t*t*(3-2*t);
+        h += s * (4 + Math.sin(x * 0.03 + z * 0.04) * 2 + Math.cos(x * 0.05 - z * 0.03) * 1.5);
+    }
+
+    // Southern plateau — flat-topped mesa near desert edge
+    const spDx3 = (x - (-100)) / 80, spDz3 = (z - 300) / 60;
+    const spD3 = spDx3*spDx3 + spDz3*spDz3;
+    if (spD3 < 1.2) {
+        const plateauH = 12;
+        if (spD3 < 0.6) { h = Math.max(h, plateauH + Math.sin(x*0.15+z*0.12)*0.5); }
+        else { const cliff = 1-(spD3-0.6)/0.6; const cs=cliff*cliff*(3-2*cliff); h = Math.max(h, h + (plateauH-h)*cs); }
+    }
+
     // Rivers
     for (const riv of riverDefs) {
         const rb = getRiverBlend(x, z, riv);
@@ -646,6 +675,60 @@ export class World {
             }
         }
 
+        // Pine trees — snow biome, conical shape (taller, narrower canopy)
+        for (let lx = 0; lx < CHUNK_SIZE; lx += 2) {
+            for (let lz = 0; lz < CHUNK_SIZE; lz += 2) {
+                const bx = ox + lx, bz = oz + lz;
+                const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+                const snowB = getSnowBlend(wz);
+                if (snowB < 0.15) continue; // only in snowy areas
+                if (this._hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > 0.05) continue; // ~5% density
+                const jx = bx + Math.floor(this._hash(bx+55,bz+66)*2);
+                const jz = bz + Math.floor(this._hash(bx+77,bz+88)*2);
+                const ljx = jx - ox, ljz = jz - oz;
+                if (ljx < 0 || ljx >= CHUNK_SIZE || ljz < 0 || ljz >= CHUNK_SIZE) continue;
+                const pWx = jx * BLOCK_SIZE, pWz = jz * BLOCK_SIZE;
+                const h = getTerrainHeight(pWx, pWz);
+                if (h < 1 || h > 60) continue;
+                const allMtn = getMountainBlend(pWx,pWz)+getNWMountainBlend(pWx,pWz)+getSWMountainBlend(pWx,pWz)+getNEMountainBlend(pWx,pWz)+getSEMountainBlend(pWx,pWz)+getFarEastMountainBlend(pWx,pWz);
+                if (allMtn > 0.5) continue; // not on steep mountains
+                if (isOnPath(pWx, pWz)) continue;
+                const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
+                // Tall trunk, narrow conical canopy
+                const trunkH = 6 + Math.floor(this._hash(jx*1.3, jz*2.1) * 5); // 6-10
+                const canopyStartH = 2 + Math.floor(this._hash(jx*0.9, jz*1.7) * 2); // bare trunk before canopy
+                // Trunk
+                for (let ty = 1; ty <= trunkH; ty++) {
+                    const y = surfaceBlock + ty;
+                    if (y >= WORLD_HEIGHT) break;
+                    data[(y * CHUNK_SIZE + ljz) * CHUNK_SIZE + ljx] = BLOCK.PINE_WOOD;
+                }
+                // Conical canopy — widest at bottom, tapers to point
+                const coneH = trunkH - canopyStartH + 2;
+                const maxR = 2 + Math.floor(this._hash(jx*2.7, jz*0.8));
+                for (let dy = 0; dy < coneH; dy++) {
+                    const y = surfaceBlock + canopyStartH + dy;
+                    if (y >= WORLD_HEIGHT) break;
+                    const progress = dy / (coneH - 1);
+                    const r = Math.max(1, Math.ceil(maxR * (1 - progress * 0.9)));
+                    for (let ddx = -r; ddx <= r; ddx++) {
+                        for (let ddz = -r; ddz <= r; ddz++) {
+                            if (ddx*ddx + ddz*ddz > r*r) continue;
+                            const tlx = ljx+ddx, tlz = ljz+ddz;
+                            if (tlx<0||tlx>=CHUNK_SIZE||tlz<0||tlz>=CHUNK_SIZE) continue;
+                            const idx = (y*CHUNK_SIZE+tlz)*CHUNK_SIZE+tlx;
+                            if (data[idx] === BLOCK.AIR) data[idx] = BLOCK.PINE_LEAVES;
+                        }
+                    }
+                }
+                // Snow cap on top — a few snow blocks on the canopy top
+                const topY = surfaceBlock + trunkH + 2;
+                if (topY < WORLD_HEIGHT && snowB > 0.4) {
+                    data[(topY * CHUNK_SIZE + ljz) * CHUNK_SIZE + ljx] = BLOCK.SNOW;
+                }
+            }
+        }
+
         // Flowers — spawn on grass surfaces, some in bunches
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
             for (let lz = 0; lz < CHUNK_SIZE; lz++) {
@@ -780,6 +863,6 @@ export class World {
         const by = Math.floor(wy / BLOCK_SIZE) + 128;
         const bz = Math.floor(wz / BLOCK_SIZE);
         const b = this.getBlockAt(bx, by, bz);
-        return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE;
+        return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE;
     }
 }
