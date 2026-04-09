@@ -66,13 +66,47 @@ function applyFingerRots(w, rots) {
 }
 
 function updateWyvernMembrane(w) {
-    const outline = w._memOutline;
     const geo = w._memGeo;
     const elb = w._elbow, hand = w._hand;
     const pos = geo.attributes.position.array;
+
+    // Get actual finger tip/mid positions after rotation
+    const dynTips = [], dynMids = [];
+    if (w._fingerGrps) {
+        for (let fi = 0; fi < w._fingerGrps.length; fi++) {
+            const fg = w._fingerGrps[fi], br = fg.baseGrp.rotation;
+            _afv.set(fg.midPos[0], fg.midPos[1], fg.midPos[2]);
+            if (br.x || br.y) _afv.applyEuler(br);
+            dynMids.push([_afv.x, _afv.y, _afv.z]);
+            _afv.set(fg.tipLocal[0], fg.tipLocal[1], fg.tipLocal[2]);
+            if (fg.midGrp.rotation.x) _afv.applyEuler(new THREE.Euler(fg.midGrp.rotation.x, 0, 0));
+            _afv.x += fg.midPos[0]; _afv.y += fg.midPos[1]; _afv.z += fg.midPos[2];
+            if (br.x || br.y) _afv.applyEuler(br);
+            dynTips.push([_afv.x, _afv.y, _afv.z]);
+        }
+    } else {
+        for (let fi = 0; fi < 4; fi++) { dynTips.push(w._ffStaticTips[fi]); dynMids.push(w._ffStaticMids[fi]); }
+    }
+
+    // Build outline with dynamic finger tip positions
+    // First part: finger tips and midpoints between them (hand space = 2)
+    const dynOutline = [];
+    dynOutline.push({ p: dynTips[3], s: 2 }); // outermost finger tip
+    for (let i = 2; i >= 0; i--) {
+        const a = dynTips[i+1], b = dynTips[i];
+        dynOutline.push({ p: [(a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2*0.85], s: 2 });
+        dynOutline.push({ p: b, s: 2 });
+    }
+    // Rest of outline: trailing edge (arm and body) — use static positions
+    const outline = w._memOutline;
+    const fingerPts = 7; // 4 tips + 3 midpoints = first 7 entries in original
+    for (let i = fingerPts; i < outline.length; i++) {
+        dynOutline.push(outline[i]);
+    }
+
     const pts = [];
-    for (let i = 0; i < outline.length; i++) {
-        pts.push(toWgSpace(outline[i].p, outline[i].s, elb, hand));
+    for (let i = 0; i < dynOutline.length; i++) {
+        pts.push(toWgSpace(dynOutline[i].p, dynOutline[i].s, elb, hand));
     }
     const cx = w._memCenter;
     const c = toWgSpace(cx.p, cx.s, elb, hand);
@@ -441,7 +475,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const memGeo = new THREE.BufferGeometry();
         memGeo.setAttribute('position', new THREE.BufferAttribute(memArr, 3));
         const memMesh = new THREE.Mesh(memGeo, bMem);
-        memMesh.castShadow = true; memMesh.visible = false; wg.add(memMesh);
+        memMesh.castShadow = true; wg.add(memMesh);
+        wg._memMesh = memMesh;
         wg._memGeo = memGeo; wg._memOutline = memOutline; wg._memOutlineGround = memOutline; wg._memOutlineFly = memOutline; wg._memCenter = memCenter;
         wg._elbow = elbowGrp; wg._hand = handGrp; wg._s = s;
         wg._fingerGrps = fingerGrps; wg._groundFRots = _groundFRots; wg._flyFRots = _flyFRots;
@@ -536,7 +571,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const memGeo = new THREE.BufferGeometry();
         memGeo.setAttribute('position', new THREE.BufferAttribute(memArr, 3));
         const memMesh = new THREE.Mesh(memGeo, bMem);
-        memMesh.castShadow = true; memMesh.visible = false; wg.add(memMesh);
+        memMesh.castShadow = true; wg.add(memMesh);
+        wg._memMesh = memMesh;
         wg._memGeo = memGeo; wg._memOutline = memOutline; wg._memOutlineGround = memOutline; wg._memOutlineFly = memOutline; wg._memCenter = memCenter;
         wg._elbow = elbowGrp; wg._hand = handGrp; wg._s = s;
         wg._fingerGrps = fingerGrps; wg._groundFRots = _groundFRots; wg._flyFRots = _flyFRots;
