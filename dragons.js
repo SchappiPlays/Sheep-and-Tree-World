@@ -130,7 +130,7 @@ function updateArmFingerMem(w) {
         pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
     }
     if (w._afBodyPt) {
-        const bp = w._afBodyPt;
+        const bp = toWgSpace(w._afBodyPt, 0, elb, hand);
         const eA = arm[N], eF = fin[N];
         const B = 3;
         for (let i = 0; i < B; i++) {
