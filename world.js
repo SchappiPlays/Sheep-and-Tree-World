@@ -236,12 +236,20 @@ function getTerrainHeight(x, z) {
     let edgeFade = distFromCenter > fadeStart ? 1 - (distFromCenter - fadeStart) / 40 : 1;
 
     let h = 0;
-    h += Math.sin(x * 0.04 + 0.5) * Math.cos(z * 0.035) * 4.0;
-    h += Math.sin(x * 0.025 - z * 0.03 + 1.2) * 2.5;
-    h += Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09 - x * 0.04) * 1.5;
-    h += Math.cos(x * 0.07 - 0.8) * Math.sin(z * 0.065 + 0.3) * 1.2;
-    h += Math.sin(x * 0.15 + z * 0.12) * 0.5;
-    h += Math.cos(x * 0.18 - z * 0.14 + 2.0) * 0.4;
+    // Large rolling terrain — gentle hills everywhere
+    h += Math.sin(x * 0.04 + 0.5) * Math.cos(z * 0.035) * 6.0;
+    h += Math.sin(x * 0.025 - z * 0.03 + 1.2) * 4.0;
+    h += Math.cos(x * 0.015 + z * 0.02 + 0.7) * 3.5;
+    // Medium undulations
+    h += Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09 - x * 0.04) * 2.5;
+    h += Math.cos(x * 0.07 - 0.8) * Math.sin(z * 0.065 + 0.3) * 2.0;
+    h += Math.sin(x * 0.055 + z * 0.045 - 1.5) * 1.8;
+    // Small detail
+    h += Math.sin(x * 0.15 + z * 0.12) * 0.8;
+    h += Math.cos(x * 0.18 - z * 0.14 + 2.0) * 0.6;
+    h += Math.sin(x * 0.22 + z * 0.19 - 0.5) * 0.4;
+    // Ensure base terrain is always slightly positive (no flat-at-zero areas)
+    h += 3.0;
 
     // Path flattening
     for (const p of pathFlat) {
@@ -338,33 +346,38 @@ function getTerrainHeight(x, z) {
         else{const cliff=1-(plD-0.7)/0.6;const cs=cliff*cliff*(3-2*cliff);h=h+(plateauH-h)*cs;}
     }
 
-    // Gentle elevated plateaus — gradual rises over large areas
-    // Northern coastal bluff — rises gently near the north coast
-    const nbDx = (x - (-200)) / 180, nbDz = (z - (-700)) / 120;
+    // Elevated terrain features — gradual rises
+    // Northern coastal bluffs — high cliffs near north coast
+    const nbDx = (x - (-200)) / 220, nbDz = (z - (-650)) / 150;
     const nbD = nbDx*nbDx + nbDz*nbDz;
-    if (nbD < 1) { const t = 1 - nbD; const s = t*t*(3-2*t); h += s * 8; }
+    if (nbD < 1) { const t = 1 - nbD; const s = t*t*(3-2*t); h += s * 16 + s * Math.sin(x*0.06+z*0.05)*3; }
 
-    // Western highlands — gradual rise west of center
-    const whDx = (x - (-500)) / 200, whDz = (z - 0) / 160;
+    // Western highlands — large raised region
+    const whDx = (x - (-450)) / 250, whDz = (z - 50) / 200;
     const whD = whDx*whDx + whDz*whDz;
-    if (whD < 1) { const t = 1 - whD; const s = t*t*(3-2*t); h += s * 6; }
+    if (whD < 1) { const t = 1 - whD; const s = t*t*(3-2*t); h += s * 14 + s * Math.sin(x*0.04-z*0.05)*2.5; }
 
-    // Eastern rolling hills — gentle undulations
-    const ehDx = (x - 300) / 250, ehDz = (z - 200) / 200;
+    // Eastern rolling hills — undulating terrain
+    const ehDx = (x - 300) / 280, ehDz = (z - 200) / 220;
     const ehD = ehDx*ehDx + ehDz*ehDz;
     if (ehD < 1) {
         const t = 1 - ehD; const s = t*t*(3-2*t);
-        h += s * (4 + Math.sin(x * 0.03 + z * 0.04) * 2 + Math.cos(x * 0.05 - z * 0.03) * 1.5);
+        h += s * (10 + Math.sin(x * 0.03 + z * 0.04) * 4 + Math.cos(x * 0.05 - z * 0.03) * 3);
     }
 
-    // Southern plateau — flat-topped mesa near desert edge
-    const spDx3 = (x - (-100)) / 80, spDz3 = (z - 300) / 60;
+    // Southern plateau — flat-topped mesa at desert edge
+    const spDx3 = (x - (-100)) / 100, spDz3 = (z - 280) / 70;
     const spD3 = spDx3*spDx3 + spDz3*spDz3;
     if (spD3 < 1.2) {
-        const plateauH = 12;
+        const plateauH = 18;
         if (spD3 < 0.6) { h = Math.max(h, plateauH + Math.sin(x*0.15+z*0.12)*0.5); }
         else { const cliff = 1-(spD3-0.6)/0.6; const cs=cliff*cliff*(3-2*cliff); h = Math.max(h, h + (plateauH-h)*cs); }
     }
+
+    // Central-south gentle ridge — long low ridge running east-west
+    const ridgeDz = (z - 150) / 30;
+    const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
+    if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
     // Rivers
     for (const riv of riverDefs) {
@@ -642,7 +655,7 @@ export class World {
                 const h = getTerrainHeight(wx, wz);
                 const biome = this._getBiome(wx, wz);
                 if (biome !== 'grass' && biome !== 'desert_transition') continue;
-                if (h < 1 || h > 35) continue;
+                if (h < 1 || h > 50) continue;
                 if (isOnPath(wx, wz)) continue; // no trees on paths
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
@@ -737,7 +750,7 @@ export class World {
                 const biome = this._getBiome(wx, wz);
                 if (biome !== 'grass') continue;
                 const h = getTerrainHeight(wx, wz);
-                if (h < 1 || h > 30) continue;
+                if (h < 1 || h > 50) continue;
                 if (isOnPath(wx, wz)) continue; // no flowers on paths
                 // ~1% chance per block for flower patches (but bunches make them dense locally)
                 const fHash = this._hash(bx * 0.61 + 4444, bz * 0.47 + 5555);

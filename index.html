@@ -917,7 +917,7 @@ function buildFarTerrain(centerX, centerZ) {
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 35) {
+            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
                 if (treeChance < 0.18) {
@@ -5902,7 +5902,7 @@ function drawWorldMap() {
                 else if (snow > 0.3) biomeData[idx] = 3;
                 else if (desert > 0.3) biomeData[idx] = 4;
                 else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
-                else if (th > 1 && th < 35 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
+                else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
                 else biomeData[idx] = 0;
             }
         }
