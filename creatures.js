@@ -472,37 +472,111 @@ function makeGoblin(x, z, terrainY) {
 
 function makeSkeleton(x, z, terrainY) {
     const g = new THREE.Group();
-    // Ribcage body
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.35, 0.14), skelBoneMat);
-    body.position.y = 0.7; g.add(body);
-    // Spine detail
-    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.06), skelBoneMat);
-    spine.position.set(0, 0.7, -0.06); g.add(spine);
-    // Head — skull
+
+    // Body group at hip height — same as player (0.90)
+    const body = new THREE.Group();
+    body.position.y = 0.90;
+    g.add(body);
+
+    // Spine group (upper body pivot)
+    const spineGrp = new THREE.Group();
+    body.add(spineGrp);
+
+    // Ribcage — visible ribs instead of solid torso
+    // Spine column (center back)
+    const spineCol = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.55, 0.06), skelBoneMat);
+    spineCol.position.set(0, 0.3, -0.08); spineGrp.add(spineCol);
+    // Ribs — 4 pairs curving from spine
+    for (let ri = 0; ri < 4; ri++) {
+        const ribY = 0.12 + ri * 0.11;
+        const ribW = 0.18 - ri * 0.02; // wider at bottom
+        for (const side of [-1, 1]) {
+            const rib = new THREE.Mesh(new THREE.BoxGeometry(ribW, 0.03, 0.08), skelBoneMat);
+            rib.position.set(side * ribW * 0.5, ribY, -0.02);
+            rib.rotation.z = side * 0.15;
+            spineGrp.add(rib);
+        }
+    }
+    // Collarbone
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.06), skelBoneMat);
+    collar.position.set(0, 0.55, -0.02); spineGrp.add(collar);
+    // Pelvis
+    const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.06, 0.12), skelBoneMat);
+    pelvis.position.set(0, 0.0, 0); spineGrp.add(pelvis);
+
+    // Neck — thin bone
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.1, 6), skelBoneMat);
+    neck.position.y = 0.62; spineGrp.add(neck);
+
+    // Head — skull (same size as player head)
     const headGrp = new THREE.Group();
-    headGrp.position.set(0, 1.0, 0); g.add(headGrp);
-    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), skelBoneMat);
-    headGrp.add(skull);
-    // Jaw
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.14), skelBoneMat);
-    jaw.position.set(0, -0.1, 0.02); headGrp.add(jaw);
-    // Glowing eyes
-    const eyeG = new THREE.SphereGeometry(0.03, 6, 6);
-    const lEye = new THREE.Mesh(eyeG, skelEyeMat); lEye.position.set(-0.05, 0.02, 0.1); headGrp.add(lEye);
-    const rEye = new THREE.Mesh(eyeG, skelEyeMat); rEye.position.set(0.05, 0.02, 0.1); headGrp.add(rEye);
-    // Arms — bony
-    const armGeo = new THREE.BoxGeometry(0.05, 0.3, 0.05);
-    const lArm = new THREE.Mesh(armGeo, skelBoneMat); lArm.position.set(-0.17, 0.6, 0); g.add(lArm);
-    const rArm = new THREE.Mesh(armGeo, skelBoneMat); rArm.position.set(0.17, 0.6, 0); g.add(rArm);
-    // Legs — bony
+    headGrp.position.y = 0.76; spineGrp.add(headGrp);
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, 0.22), skelBoneMat);
+    skull.castShadow = true; headGrp.add(skull);
+    // Jaw — separate, slightly lower
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.16), skelBoneMat);
+    jaw.position.set(0, -0.12, 0.01); headGrp.add(jaw);
+    // Eye sockets — dark recesses
+    const socketMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const socketGeo = new THREE.BoxGeometry(0.06, 0.06, 0.04);
+    const lSocket = new THREE.Mesh(socketGeo, socketMat);
+    lSocket.position.set(-0.05, 0.04, 0.1); headGrp.add(lSocket);
+    const rSocket = lSocket.clone(); rSocket.position.x = 0.05; headGrp.add(rSocket);
+    // Glowing eyes inside sockets
+    const eyeG = new THREE.SphereGeometry(0.02, 6, 6);
+    const lEye = new THREE.Mesh(eyeG, skelEyeMat); lEye.position.set(-0.05, 0.04, 0.1); headGrp.add(lEye);
+    const rEye = new THREE.Mesh(eyeG, skelEyeMat); rEye.position.set(0.05, 0.04, 0.1); headGrp.add(rEye);
+    // Nose hole
+    const noseHole = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), socketMat);
+    noseHole.position.set(0, -0.02, 0.11); headGrp.add(noseHole);
+
+    // Arms — thin bones, same joint positions as player
+    const makeSkeletonArm = (sign) => {
+        const shoulder = new THREE.Group();
+        shoulder.position.set(sign * 0.28, 0.5, 0); spineGrp.add(shoulder);
+        // Upper arm bone
+        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.28, 0.05), skelBoneMat);
+        upper.position.y = -0.14; shoulder.add(upper);
+        // Elbow joint
+        const elbow = new THREE.Group(); elbow.position.y = -0.28; shoulder.add(elbow);
+        // Forearm bone
+        const fore = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.26, 0.04), skelBoneMat);
+        fore.position.y = -0.13; elbow.add(fore);
+        // Hand — bony fingers
+        const handGrp = new THREE.Group(); handGrp.position.y = -0.28; elbow.add(handGrp);
+        const hand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.03), skelBoneMat);
+        handGrp.add(hand);
+        return { shoulder, elbow, handGrp };
+    };
+    const leftArm = makeSkeletonArm(-1);
+    const rightArm = makeSkeletonArm(1);
+
+    // Weapon — rusty sword in left hand
+    const swordBlade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.02), new THREE.MeshStandardMaterial({ color: 0x8a8a7a }));
+    swordBlade.position.y = -0.15;
+    const swordHandle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.03), new THREE.MeshStandardMaterial({ color: 0x4a3a2a }));
+    swordHandle.position.y = 0.05;
+    leftArm.handGrp.add(swordBlade); leftArm.handGrp.add(swordHandle);
+
+    // Legs — thin bones, same joint positions as player
     const legs = [];
-    const legGeo = new THREE.BoxGeometry(0.05, 0.35, 0.05);
-    for (const lx of [-0.07, 0.07]) {
-        const hip = new THREE.Group(); hip.position.set(lx, 0.5, 0); g.add(hip);
-        const leg = new THREE.Mesh(legGeo, skelBoneMat); leg.position.y = -0.175; hip.add(leg);
-        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.12), skelBoneMat); foot.position.set(0, -0.37, 0.03); hip.add(foot);
+    for (const sign of [-1, 1]) {
+        const hip = new THREE.Group();
+        hip.position.set(sign * 0.11, 0, 0); body.add(hip);
+        // Thigh bone
+        const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.42, 0.06), skelBoneMat);
+        thigh.position.y = -0.21; hip.add(thigh);
+        // Knee joint
+        const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
+        // Shin bone
+        const shin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.40, 0.05), skelBoneMat);
+        shin.position.y = -0.20; knee.add(shin);
+        // Foot — bony
+        const foot = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.16), skelBoneMat);
+        foot.position.set(0, -0.43, 0.04); knee.add(foot);
         legs.push(hip);
     }
+
     g.position.set(x, terrainY, z);
     g.rotation.y = Math.random() * Math.PI * 2;
     return {
