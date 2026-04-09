@@ -566,30 +566,68 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
-                        // Slopeable blocks: top face with per-corner heights
-                        // Corners drop to half-height where neighbors are lower
+                        // Slopeable blocks: render top as 2x2 grid of mini-blocks at full or half height
                         if (_isSlopeable && fi === 2) {
                             const baseX = lx * BS, baseZ = lz * BS;
                             const fullW = S * BS;
+                            const halfW = fullW * 0.5;
                             const topY = (y - Y_OFF + S) * BS;
-                            const midY = topY - fullW * 0.5; // half block drop
-                            // Corner Y values: _cornerLow[i] ? midY : topY
-                            // Verts order: [0,1,0]=(-x,-z), [0,1,1]=(-x,+z), [1,1,0]=(+x,-z), [1,1,1]=(+x,+z)
-                            const cy = [
-                                _cornerLow[0] ? midY : topY, // -x-z
-                                _cornerLow[1] ? midY : topY, // -x+z
-                                _cornerLow[2] ? midY : topY, // +x-z
-                                _cornerLow[3] ? midY : topY, // +x+z
+                            const midY = topY - halfW; // half block lower
+                            const _r = tmpColor.r, _g = tmpColor.g, _b = tmpColor.b;
+                            const sideColor = tmpColor.clone().multiplyScalar(0.85);
+                            // Each mini-quad: corner low? render at midY, else topY
+                            // 4 mini-quads in 2x2 grid, each is one quarter of the block top
+                            // Corner index order: 0=-x-z, 1=-x+z, 2=+x-z, 3=+x+z
+                            const quadOffsets = [
+                                { x: 0,     z: 0,     ci: 0 }, // -x-z quadrant
+                                { x: 0,     z: halfW, ci: 1 }, // -x+z quadrant
+                                { x: halfW, z: 0,     ci: 2 }, // +x-z quadrant
+                                { x: halfW, z: halfW, ci: 3 }, // +x+z quadrant
                             ];
-                            // Top face with per-corner Y
-                            tPos.push(baseX, cy[0], baseZ);
-                            tPos.push(baseX, cy[1], baseZ + fullW);
-                            tPos.push(baseX + fullW, cy[2], baseZ);
-                            tPos.push(baseX + fullW, cy[3], baseZ + fullW);
-                            tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
-                            tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
-                            tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                            tVert += 4;
+                            for (const q of quadOffsets) {
+                                const qy = _cornerLow[q.ci] ? midY : topY;
+                                const qx0 = baseX + q.x, qx1 = baseX + q.x + halfW;
+                                const qz0 = baseZ + q.z, qz1 = baseZ + q.z + halfW;
+                                // Top face of mini-quad (flat)
+                                tPos.push(qx0, qy, qz0); tPos.push(qx0, qy, qz1);
+                                tPos.push(qx1, qy, qz0); tPos.push(qx1, qy, qz1);
+                                tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+                                tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                            }
+                            // Internal walls between mini-quads at different heights
+                            // Wall between -x-z (0) and +x-z (2): along X axis at Z=0..halfW
+                            const _addWall = (x0, z0, x1, z1, yLow, yHigh, nx, nz) => {
+                                tPos.push(x0, yLow, z0); tPos.push(x1, yLow, z1);
+                                tPos.push(x0, yHigh, z0); tPos.push(x1, yHigh, z1);
+                                tNrm.push(nx,0,nz, nx,0,nz, nx,0,nz, nx,0,nz);
+                                tCol.push(sideColor.r,sideColor.g,sideColor.b, sideColor.r,sideColor.g,sideColor.b, sideColor.r,sideColor.g,sideColor.b, sideColor.r,sideColor.g,sideColor.b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                            };
+                            // Walls along X axis (between -x and +x quadrants)
+                            // Front half (z=0..halfW): between corners 0 and 2
+                            if (_cornerLow[0] !== _cornerLow[2]) {
+                                if (_cornerLow[0]) _addWall(baseX + halfW, baseZ, baseX + halfW, baseZ + halfW, midY, topY, -1, 0);
+                                else _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ, midY, topY, 1, 0);
+                            }
+                            // Back half (z=halfW..fullW): between corners 1 and 3
+                            if (_cornerLow[1] !== _cornerLow[3]) {
+                                if (_cornerLow[1]) _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ + fullW, midY, topY, -1, 0);
+                                else _addWall(baseX + halfW, baseZ + fullW, baseX + halfW, baseZ + halfW, midY, topY, 1, 0);
+                            }
+                            // Walls along Z axis (between -z and +z quadrants)
+                            // Left half (x=0..halfW): between corners 0 and 1
+                            if (_cornerLow[0] !== _cornerLow[1]) {
+                                if (_cornerLow[0]) _addWall(baseX + halfW, baseZ + halfW, baseX, baseZ + halfW, midY, topY, 0, -1);
+                                else _addWall(baseX, baseZ + halfW, baseX + halfW, baseZ + halfW, midY, topY, 0, 1);
+                            }
+                            // Right half (x=halfW..fullW): between corners 2 and 3
+                            if (_cornerLow[2] !== _cornerLow[3]) {
+                                if (_cornerLow[2]) _addWall(baseX + fullW, baseZ + halfW, baseX + halfW, baseZ + halfW, midY, topY, 0, -1);
+                                else _addWall(baseX + halfW, baseZ + halfW, baseX + fullW, baseZ + halfW, midY, topY, 0, 1);
+                            }
                             continue;
                         }
 
