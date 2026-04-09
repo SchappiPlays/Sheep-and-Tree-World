@@ -629,12 +629,12 @@ export class ChunkManager {
                             }
                         }
 
-                        const verts = face.verts;
+                        const fv = face.verts;
                         for (let vi = 0; vi < 4; vi++) {
                             tPos.push(
-                                (lx + verts[vi][0] * S) * BS,
-                                (y - Y_OFF + verts[vi][1] * S) * BS,
-                                (lz + verts[vi][2] * S) * BS
+                                (lx + fv[vi][0] * S) * BS,
+                                (y - Y_OFF + fv[vi][1] * S) * BS,
+                                (lz + fv[vi][2] * S) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                             tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
