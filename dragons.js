@@ -108,30 +108,11 @@ function updateArmFingerMem(w) {
         if (br.x || br.y) _afv.applyEuler(br);
         cTip = [_afv.x, _afv.y, _afv.z];
     } else { cTip = w._afStaticTip; cMid = w._afStaticMid; }
-    const N = 7;
+    const N = 5;
     const arm = [], fin = [];
-    // Body/arm edge: from elbow tip, along forearm, past wrist, ending near body
-    // Finger edge: from hand origin, along first finger to tip
-    // This fills the gap between the body and the first inter-finger membrane
-    const bodyPt = toWgSpace([0, 0, -0.8 * w._s * fl], 0, elb, hand); // body attachment (shoulder space)
     for (let i = 0; i <= N; i++) {
         const t = i / N;
-        // Arm/body edge: elbow tip → wrist → body attachment
-        if (t <= 0.4) {
-            // Along forearm from tip to near wrist
-            const u = t / 0.4;
-            arm.push(toWgSpace([si * fl * (1 - u), 0, 0], 1, elb, hand));
-        } else {
-            // From wrist curving back toward body
-            const u = (t - 0.4) / 0.6;
-            const wrist = toWgSpace([0, 0, 0], 1, elb, hand);
-            arm.push([
-                wrist[0] + (bodyPt[0] - wrist[0]) * u,
-                wrist[1] + (bodyPt[1] - wrist[1]) * u,
-                wrist[2] + (bodyPt[2] - wrist[2]) * u,
-            ]);
-        }
-        // Finger edge: from hand origin to finger tip
+        arm.push(toWgSpace([si * fl * (1 - t), 0, 0], 1, elb, hand));
         let fp;
         if (t <= 0.5) { const u = t * 2; fp = [cMid[0]*u, cMid[1]*u, cMid[2]*u]; }
         else { const u = (t - 0.5) * 2; fp = [cMid[0]*(1-u)+cTip[0]*u, cMid[1]*(1-u)+cTip[1]*u, cMid[2]*(1-u)+cTip[2]*u]; }
@@ -469,8 +450,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
-        wg._afMesh = afMesh;
-        wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = null;
+        wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
         const ffArr = new Float32Array(324);
@@ -563,8 +543,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
-        wg._afMesh = afMesh;
-        wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = null;
+        wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         const ffArr = new Float32Array(324);
         const ffGeo = new THREE.BufferGeometry();
