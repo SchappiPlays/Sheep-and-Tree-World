@@ -117,6 +117,28 @@ function getAncientForestHillBlend(x, z) {
     const ring = 1 - Math.abs(d - 0.55) / 0.3;
     return Math.max(0, ring * ring);
 }
+// Plains zones — open grasslands with no/few trees
+function getPlainsBlend(x, z) {
+    let p = 0;
+    // Central plains — south of spawn
+    const cp1x = (x - 0) / 200, cp1z = (z - 120) / 150;
+    const cp1 = cp1x*cp1x + cp1z*cp1z;
+    if (cp1 < 1) { const t = 1 - cp1; p = Math.max(p, t*t*(3-2*t)); }
+    // Eastern plains — wide open area
+    const cp2x = (x - 350) / 180, cp2z = (z - (-50)) / 140;
+    const cp2 = cp2x*cp2x + cp2z*cp2z;
+    if (cp2 < 1) { const t = 1 - cp2; p = Math.max(p, t*t*(3-2*t)); }
+    // Northwest plains — between spawn and snow
+    const cp3x = (x - (-180)) / 160, cp3z = (z - (-200)) / 130;
+    const cp3 = cp3x*cp3x + cp3z*cp3z;
+    if (cp3 < 1) { const t = 1 - cp3; p = Math.max(p, t*t*(3-2*t)); }
+    // Southwest open area
+    const cp4x = (x - (-250)) / 170, cp4z = (z - 200) / 120;
+    const cp4 = cp4x*cp4x + cp4z*cp4z;
+    if (cp4 < 1) { const t = 1 - cp4; p = Math.max(p, t*t*(3-2*t)); }
+    return p;
+}
+
 function getSnowBlend(z) {
     if (z > -500) return 0; if (z < -650) return 1;
     return (z - (-500)) / (-650 - (-500));
@@ -229,7 +251,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -664,6 +686,9 @@ export class World {
                 const biome = this._getBiome(wx, wz);
                 if (biome !== 'grass' && biome !== 'desert_transition') continue;
                 if (h < 1 || h > 50) continue;
+                // Skip trees in plains zones
+                const plainsB = getPlainsBlend(wx, wz);
+                if (plainsB > 0.3 && this._hash(bx * 0.71 + 1234, bz * 0.83 + 5678) < plainsB * 0.9) continue;
                 if (isOnPath(wx, wz)) continue; // no trees on paths
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
