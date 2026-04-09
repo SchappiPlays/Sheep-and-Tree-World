@@ -12267,7 +12267,7 @@ function animate() {
         if (mp._sendAccum >= 0.05) { // 20Hz position updates
             mp._sendAccum = 0;
             const held = hotbarSlots[selectedSlot];
-            mp.sendState(player, held, player.swingTimer, charColors);
+            mp.sendState(player, held, player.swingTimer, charColors, dragonMgr && dragonMgr.ridingDragon);
         }
         // Host syncs creatures + villagers at 5Hz
         if (mp.isHost) {

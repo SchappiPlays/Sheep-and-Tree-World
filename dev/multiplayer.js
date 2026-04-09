@@ -135,7 +135,7 @@ export class Multiplayer {
     }
 
     // Send local player state
-    sendState(player, heldItem, swingTimer, charColors) {
+    sendState(player, heldItem, swingTimer, charColors, riding) {
         if (!this.active) return;
         const state = {
             type: 'state',
@@ -151,6 +151,7 @@ export class Multiplayer {
             sw: +(swingTimer >= 0 ? swingTimer : -1).toFixed(2),
             tool: heldItem || '',
             cc: charColors || null,
+            rd: riding ? 1 : 0,
         };
         this._broadcast(state);
     }
@@ -317,6 +318,7 @@ export class Multiplayer {
         rp._targetRY = s.ry; rp._targetRX = s.rx || 0;
         rp._wp = s.wp; rp._wb = s.wb; rp._sb = s.sb; rp._sw = s.sw;
         rp._tool = s.tool || '';
+        rp._riding = !!s.rd;
         rp._lastUpdate = performance.now();
 
         // Snap on first receive so player doesn't lerp from (0,0,0)
@@ -383,6 +385,23 @@ export class Multiplayer {
             const p = rp._wp, b = rp._wb, sp = rp._sb;
             const mix = (a, bv, t) => a + (bv - a) * t;
 
+            // Riding pose overrides walk animation entirely
+            if (rp._riding) {
+                rp.body.position.y = 0.95 * (rp._heightScale || 1);
+                rp.body.position.x = 0;
+                rp.leftLeg.hip.rotation.set(-1.5, 0, -0.2);
+                rp.rightLeg.hip.rotation.set(-1.5, 0, 0.2);
+                rp.leftLeg.knee.rotation.x = 0.15;
+                rp.rightLeg.knee.rotation.x = 0.15;
+                rp.leftArm.shoulder.rotation.set(-0.5, 0, 0.3);
+                rp.rightArm.shoulder.rotation.set(-0.5, 0, -0.3);
+                rp.leftArm.elbow.rotation.x = -0.8;
+                rp.rightArm.elbow.rotation.x = -0.8;
+                rp.spine.rotation.set(0.15, 0, 0);
+                rp.torso.rotation.y = 0;
+                rp.headGroup.rotation.x = -0.1;
+            } else {
+
             // Body bob
             rp.body.position.y = 0.95 * (rp._heightScale || 1) + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
             rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
@@ -435,6 +454,7 @@ export class Multiplayer {
                 rp.spine.rotation.x += swSpineX;
                 rp.spine.rotation.y += swSpineY;
             }
+            } // end else (not riding)
 
             // Hide remote player if no updates for 5 seconds (disconnected)
             if (performance.now() - rp._lastUpdate > 5000) {

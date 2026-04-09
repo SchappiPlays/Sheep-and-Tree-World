@@ -846,6 +846,15 @@ export class DragonManager {
             // Drive walk/flap phase locally
             bd.walkPhase += dt * (bd.flying ? 12 : (bd.walking ? 3 : 0.5));
             this._animateDragon(dt, bd);
+            // Emit fire/ice particles from phantom mouths so other peers see breath visually
+            if (bd._breathingFire && bd._fireDirYaw !== undefined) {
+                this._getMouthWorld(bd, _afv);
+                const mx = _afv.x, my = _afv.y, mz = _afv.z;
+                const fdx = Math.sin(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+                const fdy = -Math.sin(bd._fireDirPitch);
+                const fdz = Math.cos(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+                this._emitFire(mx, my, mz, fdx, fdy, fdz, 2, 1, bd._iceBreath ? 1 : 0);
+            }
         }
     }
 
