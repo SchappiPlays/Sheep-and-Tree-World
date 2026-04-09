@@ -1022,6 +1022,14 @@ export class DragonManager {
                 // Breathe fire if close enough — emit particles toward target
                 if (targetDist < 12) {
                     bd._breathingFire = true;
+                    // Aim head at target before sampling mouth position
+                    const aimDx = target.x - bd.x;
+                    const aimDz = target.z - bd.z;
+                    const aimY = (target.group.position.y || 0) - (bd.group.position.y + 1.0 * gs);
+                    const aimHoriz = Math.sqrt(aimDx*aimDx + aimDz*aimDz) || 1;
+                    bd._fireDirYaw = Math.atan2(aimDx, aimDz);
+                    bd._fireDirPitch = -Math.atan2(aimY, aimHoriz);
+                    this._aimDragonHead(bd);
                     const _mouth = _afv;
                     this._getMouthWorld(bd, _mouth);
                     const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
@@ -1097,13 +1105,18 @@ export class DragonManager {
         bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
         if (keys['KeyF']) {
             bd._breathingFire = true;
-            // Actual mouth world position from the head matrix
-            const _mouth = _afv;
-            this._getMouthWorld(bd, _mouth);
-            const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
             // Direction: wherever the crosshair is pointing (use camera yaw, not dragon yaw)
             const lookYaw = (player._lookYaw !== undefined) ? player._lookYaw : player.group.rotation.y;
             const lookPitch = (player._lookPitch !== undefined) ? player._lookPitch : 0;
+            // Tell the head to track this direction (used by _animateDragon)
+            bd._fireDirYaw = lookYaw;
+            bd._fireDirPitch = lookPitch;
+            // Snap head right now so the mouth position uses the aimed direction
+            this._aimDragonHead(bd);
+            // Actual mouth world position from the head matrix (after head turn)
+            const _mouth = _afv;
+            this._getMouthWorld(bd, _mouth);
+            const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
             const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
@@ -1312,6 +1325,12 @@ export class DragonManager {
             }
             bd.headGrp.rotation.x = Math.sin(bd.walkPhase * 0.8) * 0.1;
         }
+        // Override head rotation to track fire direction (after default head animation)
+        if (bd._breathingFire && bd._fireDirYaw !== undefined) {
+            this._aimDragonHead(bd);
+        } else {
+            bd.headGrp.rotation.y = (bd.headGrp.rotation.y || 0) * 0.85;
+        }
         // Jaw open animation — smoothly opens when breathing fire
         if (bd.jawGrp) {
             const target = bd._breathingFire ? 1 : 0;
@@ -1327,6 +1346,24 @@ export class DragonManager {
         out.set(0, -0.1 * S, 0.7 * S);
         out.applyMatrix4(bd.headGrp.matrixWorld);
         return out;
+    }
+
+    // Aim head/neck so the snout points along bd._fireDirYaw / _fireDirPitch
+    _aimDragonHead(bd) {
+        if (bd._fireDirYaw === undefined) return;
+        const bodyPitch = bd._flyTilt || 0;
+        const neckPitch = bd.neckGrp ? bd.neckGrp.rotation.x : 0;
+        // Yaw relative to body, clamped so head doesn't twist past the neck
+        let yawRel = bd._fireDirYaw - bd.angle;
+        while (yawRel > Math.PI) yawRel -= Math.PI * 2;
+        while (yawRel < -Math.PI) yawRel += Math.PI * 2;
+        yawRel = Math.max(-1.4, Math.min(1.4, yawRel));
+        // Pitch relative to body + neck
+        let pitchRel = -bd._fireDirPitch - bodyPitch - neckPitch;
+        pitchRel = Math.max(-1.0, Math.min(1.0, pitchRel));
+        bd.headGrp.rotation.y = yawRel;
+        bd.headGrp.rotation.x = pitchRel;
+        bd.headGrp.updateMatrixWorld(true);
     }
 
     // Apply egg carry pose overlay on player (call after player.update)
