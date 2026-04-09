@@ -1257,8 +1257,8 @@ export class DragonManager {
                 if (bd.isWyvern) {
                     const walkOff = wi === 0 ? Math.PI : 0; // alternate wing-arms
                     const wc = Math.sin(wp + walkOff);
-                    // +0.5 rad (~30°) outward rotation on Y axis to push wings away from body
-                    const outward = si * 0.5;
+                    // -0.5 rad (~30° the other way) rotation on Y axis
+                    const outward = si * -0.5;
                     if (wb) {
                         w.rotation.set(wc*0.5, si*(0.54-wc*0.4) + outward, si*(0.5-wc*0.25));
                         w._elbow.rotation.set(1.41-Math.max(0,wc)*0.4, si*-1.85, si*0.74);
