@@ -1,6 +1,6 @@
 // chunks.js — Chunk meshing and loading/unloading
 
-import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS } from './world.js';
+import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS, getTerrainHeight } from './world.js';
 
 let RENDER_DIST = 10; // default, updated by settings
 const LOD0_DIST = 6;    // full detail — every block, all faces
@@ -547,10 +547,23 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
+                        // Slope top face of natural surface blocks
+                        const _isNaturalSurface = fi === 2 && (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz);
                         for (let vi = 0; vi < 4; vi++) {
+                            let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
+                            if (_isNaturalSurface) {
+                                // Sample terrain height at this corner
+                                const cx = (bx + verts[vi][0] * S) * BS;
+                                const cz = (bz + verts[vi][2] * S) * BS;
+                                const th = getTerrainHeight(cx, cz);
+                                // Clamp: don't go below block bottom or too far above
+                                const blockTopY = (y - Y_OFF + S) * BS;
+                                const blockBotY = (y - Y_OFF) * BS;
+                                vy = Math.max(blockBotY + BS * 0.2, Math.min(blockTopY + BS * 0.5, th));
+                            }
                             tPos.push(
                                 (lx + verts[vi][0] * S) * BS,
-                                (y - Y_OFF + verts[vi][1] * S) * BS,
+                                vy,
                                 (lz + verts[vi][2] * S) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
