@@ -896,9 +896,34 @@ export class DragonManager {
                 continue;
             }
 
+            // ── Shoulder dragon (baby on player's shoulder) ──
+            if (bd._onShoulder) {
+                // Position on player's shoulder
+                bd.x = player.position.x;
+                bd.z = player.position.z;
+                const sy = player.position.y + 1.5;
+                bd.group.position.set(bd.x, sy, bd.z);
+                bd.group.rotation.y = player.group.rotation.y;
+                // Scale down further for shoulder
+                bd.group.scale.setScalar(gs * 0.7);
+                continue;
+            }
+
+            // Default to following the player
+            if (bd._followingPlayer === undefined) bd._followingPlayer = true;
+
             // ── Follow player AI ──
             const bdx = px - bd.x, bdz = pz - bd.z;
             const bDist = Math.sqrt(bdx * bdx + bdz * bdz);
+
+            // Only follow if flag is set
+            if (!bd._followingPlayer) {
+                bd.walking = false;
+                const tY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                this._animateDragon(dt, bd);
+                continue;
+            }
 
             // Teleport if too far
             if (bDist > 50) {
@@ -1131,6 +1156,52 @@ export class DragonManager {
 
     _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern);
+    }
+
+    // Find the dragon the player is looking at (raycast-style — closest in front, within range)
+    getLookedAtDragon(player) {
+        const px = player.position.x, pz = player.position.z;
+        const fwdX = Math.sin(player.group.rotation.y);
+        const fwdZ = Math.cos(player.group.rotation.y);
+        let best = null, bestDot = 0.85;
+        for (const bd of this.dragons) {
+            if (bd.state !== 'alive' || bd._fortressGuardian || bd._stationary) continue;
+            const dx = bd.x - px, dz = bd.z - pz;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > 12 || dist < 0.1) continue;
+            const dot = (dx * fwdX + dz * fwdZ) / dist;
+            if (dot > bestDot) { bestDot = dot; best = bd; }
+        }
+        return best;
+    }
+
+    toggleFollow(bd) {
+        if (!bd) return;
+        if (bd._followingPlayer === undefined) bd._followingPlayer = true;
+        bd._followingPlayer = !bd._followingPlayer;
+        return bd._followingPlayer;
+    }
+
+    putOnShoulder(bd) {
+        if (!bd) return false;
+        // Only baby dragons (age < 1200)
+        if (bd.age >= 1200) return false;
+        bd._onShoulder = true;
+        bd._followingPlayer = false;
+        return true;
+    }
+
+    takeOffShoulder(bd) {
+        if (!bd || !bd._onShoulder) return false;
+        bd._onShoulder = false;
+        bd._followingPlayer = true;
+        bd.group.scale.setScalar(bd.growthScale);
+        return true;
+    }
+
+    getShoulderDragon() {
+        for (const bd of this.dragons) if (bd._onShoulder) return bd;
+        return null;
     }
 
     getPrompt(player) {

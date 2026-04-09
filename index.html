@@ -6606,6 +6606,14 @@ document.addEventListener('keydown', e => {
             drawWorldMap();
         }
     }
+    // F key — toggle follow on the dragon you're looking at
+    if (e.code === 'KeyF' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
+        const looked = dragonMgr.getLookedAtDragon(player);
+        if (looked) {
+            const following = dragonMgr.toggleFollow(looked);
+            addChatMessage(`${looked.dragonName || 'Dragon'} is now ${following ? 'following' : 'staying'}`, 'rgba(180,200,255,0.9)');
+        }
+    }
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -10971,6 +10979,17 @@ function doPlace(e) {
         }
     }
 
+    // Right-click on a baby dragon to put it on shoulder
+    if (dragonMgr && placeHoldTime < 0.05 && !dragonMgr.getShoulderDragon()) {
+        const looked = dragonMgr.getLookedAtDragon(player);
+        if (looked && looked.age < 1200) {
+            if (dragonMgr.putOnShoulder(looked)) {
+                addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
+                return false;
+            }
+        }
+    }
+
     // Check for wolf taming (right-click while holding meat and looking at wolf)
     if (creatures && placeHoldTime < 0.05) {
         const held = hotbarSlots[selectedSlot];
@@ -12835,6 +12854,20 @@ function animate() {
                 }
                 break;
             }
+        }
+    }
+
+    // Shoulder dragon takeoff (E key, only if nothing else consumed it)
+    if (keys['KeyE'] && dragonMgr) {
+        const sd = dragonMgr.getShoulderDragon();
+        if (sd) {
+            dragonMgr.takeOffShoulder(sd);
+            // Place it next to the player
+            sd.x = player.position.x + Math.sin(player.group.rotation.y + Math.PI/2) * 1.5;
+            sd.z = player.position.z + Math.cos(player.group.rotation.y + Math.PI/2) * 1.5;
+            sd._followingPlayer = true;
+            addChatMessage('Dragon hops off your shoulder', 'rgba(180,255,180,0.9)');
+            keys['KeyE'] = false;
         }
     }
 
