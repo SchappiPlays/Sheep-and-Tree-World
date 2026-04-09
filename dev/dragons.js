@@ -447,7 +447,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
             makeDragonBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
             fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
         }
-        const _groundFRots = [{spreadY:-0.71,liftX:-0.2,curlX:0},{spreadY:-0.22,liftX:-0.2,curlX:0},{spreadY:0.09,liftX:-0.2,curlX:0},{spreadY:0.37,liftX:-0.2,curlX:0}];
+        const _groundFRots = [{spreadY:-0.56,liftX:0,curlX:0},{spreadY:-0.07,liftX:0,curlX:0},{spreadY:0.24,liftX:0,curlX:0},{spreadY:0.52,liftX:0,curlX:0}];
         const _flyFRots = [{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0}];
         // Main membrane
         const memOutline = [];
@@ -1259,14 +1259,14 @@ export class DragonManager {
                     const walkOff = wi === 0 ? Math.PI : 0; // alternate wing-arms
                     const wc = Math.sin(wp + walkOff);
                     const outward = si * 0.1; // sweep back
-                    // First joint: tilted slightly less up. Elbow: bend more so forearm reaches ground
+                    // Push wrist (and fingers) further from body via elbow Y
                     if (wb) {
                         w.rotation.set(wc*0.5, si*(0.54-wc*0.4) + outward, si*(0.35-wc*0.25));
-                        w._elbow.rotation.set(1.55-Math.max(0,wc)*0.4, si*-2.4, si*0.74);
+                        w._elbow.rotation.set(1.55-Math.max(0,wc)*0.4, si*-1.95, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     } else {
                         w.rotation.set(0, si*0.54 + outward, si*0.35);
-                        w._elbow.rotation.set(1.55, si*-2.4, si*0.74);
+                        w._elbow.rotation.set(1.55, si*-1.95, si*0.74);
                         w._hand.rotation.set(-0.2, si*1.25, si*-0.48);
                     }
                 } else {
