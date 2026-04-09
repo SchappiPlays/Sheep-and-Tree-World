@@ -379,6 +379,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         upperBone.position.set(s * uLen / 2, 0, 0);
         upperBone.castShadow = true; wg.add(upperBone);
         const _patM = makePatagium([s*-0.35*S, 0, -0.1*S], [s*uLen,0,0], 0.9*S, bMem, wg);
+        wg._patMesh = _patM;
         wg._patGeo = _patM.geometry; wg._patP0 = [s*-0.35*S, 0, -0.1*S]; wg._patP1 = [s*uLen,0,0]; wg._patMaxW = 0.9*S;
         const elbowGrp = new THREE.Group();
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
@@ -472,6 +473,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         upperBone.position.set(s * uLen / 2, 0, 0);
         upperBone.castShadow = true; wg.add(upperBone);
         const _patM2 = makePatagium([s*-0.35*S, 0, -0.1*S], [s*uLen,0,0], 0.9*S, bMem, wg);
+        wg._patMesh = _patM2;
         wg._patGeo = _patM2.geometry; wg._patP0 = [s*-0.35*S, 0, -0.1*S]; wg._patP1 = [s*uLen,0,0]; wg._patMaxW = 0.9*S;
         const elbowGrp = new THREE.Group();
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
@@ -1006,6 +1008,9 @@ export class DragonManager {
                 w._hand.rotation.set(0, 0, 0);
                 if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
                 applyFingerRots(w, w._flyFRots);
+                // Flying: show patagium, restore afMesh body point
+                if (w._patMesh) w._patMesh.visible = true;
+                if (w._afOrigBodyPt) w._afBodyPt = w._afOrigBodyPt;
                 updateWyvernMembrane(w);
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
@@ -1056,6 +1061,12 @@ export class DragonManager {
                 }
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
+                // Grounded: hide patagium, move afMesh body point to patagium's body point
+                if (w._patMesh) w._patMesh.visible = false;
+                if (w._afBodyPt && w._patP0) {
+                    if (!w._afOrigBodyPt) w._afOrigBodyPt = w._afBodyPt.slice();
+                    w._afBodyPt = w._patP0;
+                }
                 updateWyvernMembrane(w);
             }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
