@@ -29,17 +29,22 @@ function gaussianPeak(angle, center, width) {
     return Math.exp(-(d * d) / (2 * width * width));
 }
 
+// Island is elliptical — stretched on N-S axis (1.4x taller than wide)
+const ISLAND_NS_SCALE = 1.4;
+
 function getIslandRadius(x, z) {
-    const angle = Math.atan2(z, x);
+    // Scale z to create elliptical shape (wider N-S)
+    const sz = z / ISLAND_NS_SCALE;
+    const angle = Math.atan2(sz, x);
     let r = 1100;
     r += Math.sin(angle * 2.0 + 0.5) * 42;
     r += Math.cos(angle * 3.0 + 1.2) * 30;
     r += Math.sin(angle * 4.0 - 0.3) * 20;
     r += Math.cos(angle * 5.0 + 2.1) * 15;
     r += gaussianPeak(angle, 0.0, 0.28) * 180;
-    r += gaussianPeak(angle, Math.PI / 2, 0.26) * 140;
+    r += gaussianPeak(angle, Math.PI / 2, 0.26) * 180;
     r += gaussianPeak(angle, Math.PI, 0.30) * 160;
-    r += gaussianPeak(angle, -Math.PI / 2, 0.25) * 140;
+    r += gaussianPeak(angle, -Math.PI / 2, 0.25) * 180;
     r -= gaussianPeak(angle, 0.8, 0.22) * 110;
     r -= gaussianPeak(angle, 1.5, 0.24) * 115;
     r -= gaussianPeak(angle, -1.0, 0.25) * 120;
@@ -92,7 +97,7 @@ function getEnchantedBlend(x, z) {
     const t = 1 - d; return t * t;
 }
 function getAncientForestHillBlend(x, z) {
-    const hx = (x - (-30)) / 200, hz = (z - (-190)) / 200;
+    const hx = (x - (-30)) / 200, hz = (z - (-350)) / 200;
     const d = Math.sqrt(hx * hx + hz * hz);
     if (d > 0.85 || d < 0.3) return 0;
     // Gate gaps — suppress hills at cardinal directions
@@ -113,12 +118,12 @@ function getAncientForestHillBlend(x, z) {
     return Math.max(0, ring * ring);
 }
 function getSnowBlend(z) {
-    if (z > -350) return 0; if (z < -450) return 1;
-    return (z - (-350)) / (-450 - (-350));
+    if (z > -500) return 0; if (z < -650) return 1;
+    return (z - (-500)) / (-650 - (-500));
 }
 function getDesertBlend(z) {
-    if (z < 350) return 0; if (z > 450) return 1;
-    return (z - 350) / 100;
+    if (z < 500) return 0; if (z > 650) return 1;
+    return (z - 500) / 150;
 }
 function getScorchedBlend(x, z) {
     const xSpread = x < -300 ? 340 : 220;
@@ -224,10 +229,12 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath };
 
 function getTerrainHeight(x, z) {
-    const distFromCenter = Math.sqrt(x * x + z * z);
+    // Use scaled z for elliptical island boundary
+    const sz = z / ISLAND_NS_SCALE;
+    const distFromCenter = Math.sqrt(x * x + sz * sz);
     const localR = getIslandRadius(x, z);
 
     if (distFromCenter > localR - 30) return 0;
@@ -589,7 +596,7 @@ export class World {
     _placeTreesInChunk(cx, cz, data, ox, oz) {
         const yOff = 128;
         // Hill ring ancient forest — dense tall trees inside the ring
-        const hillCX = -30, hillCZ = -190, hillR = 170; // inner radius (flat area)
+        const hillCX = -30, hillCZ = -350, hillR = 170; // inner radius (flat area)
         const chunkWX = ox * BLOCK_SIZE, chunkWZ = oz * BLOCK_SIZE;
         const dxH = chunkWX + 8*BLOCK_SIZE - hillCX, dzH = chunkWZ + 8*BLOCK_SIZE - hillCZ;
         const chunkDistToHill = Math.sqrt(dxH*dxH + dzH*dzH);
@@ -792,7 +799,7 @@ export class World {
 
     _carveCaves(cx, cz, data, ox, oz) {
         const yOff = 128;
-        const hillCX = -30, hillCZ = -190, hillR = 200;
+        const hillCX = -30, hillCZ = -350, hillR = 200;
 
         // Quick check — skip entirely if chunk is far from the hill ring
         const chunkCenterWX = (ox + 8) * BLOCK_SIZE;

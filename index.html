@@ -405,7 +405,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, isOnPath } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -606,7 +606,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             const h = getTerrainHeight(wx, wz);
             const biome = _getBiome(wx, wz);
             if (biome !== 'grass' && biome !== 'desert_transition') continue;
-            if (h < 1 || h > 35) continue;
+            if (h < 1 || h > 50) continue;
             const trunkH = 4 + Math.floor(_hash(jx*1.7, jz*2.3) * 4);
             const canopyR = 2 + Math.floor(_hash(jx*3.1, jz*1.9) * 2);
             const canopyHH = canopyR * 2 + 1;
@@ -623,6 +623,37 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
                     for (let ddz = -r; ddz <= r; ddz++) {
                         if (ddx*ddx + ddz*ddz > r*r+1) continue;
                         addBlock(wx + ddx * BS, canopyBase + dy * BS, wz + ddz * BS, 0x2d7d2d);
+                    }
+                }
+            }
+        }
+    }
+
+    // Pine trees in snow biome (far terrain)
+    for (let bx = -treeRange; bx <= treeRange; bx += 2) {
+        for (let bz = -treeRange; bz <= treeRange; bz += 2) {
+            const wx = bx * BS, wz = bz * BS;
+            const snowB = getSnowBlend(wz);
+            if (snowB < 0.15) continue;
+            if (_hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > 0.05) continue;
+            const h = getTerrainHeight(wx, wz);
+            if (h < 1 || h > 60) continue;
+            const mtn = getMountainBlend(wx,wz)+getNWMountainBlend(wx,wz)+getSWMountainBlend(wx,wz)+getNEMountainBlend(wx,wz)+getSEMountainBlend(wx,wz)+getFarEastMountainBlend(wx,wz);
+            if (mtn > 0.5) continue;
+            const trunkH = 6 + Math.floor(_hash(bx*1.3, bz*2.1) * 5);
+            const canopyStartH = 2 + Math.floor(_hash(bx*0.9, bz*1.7) * 2);
+            // Trunk
+            for (let ty = 1; ty <= trunkH; ty++) addBlock(wx, h + ty * BS, wz, 0x4a3020);
+            // Conical canopy
+            const coneH = trunkH - canopyStartH + 2;
+            const maxR = 2 + Math.floor(_hash(bx*2.7, bz*0.8));
+            for (let dy = 0; dy < coneH; dy++) {
+                const progress = dy / (coneH - 1);
+                const r = Math.max(1, Math.ceil(maxR * (1 - progress * 0.9)));
+                for (let ddx = -r; ddx <= r; ddx++) {
+                    for (let ddz = -r; ddz <= r; ddz++) {
+                        if (ddx*ddx + ddz*ddz > r*r) continue;
+                        addBlock(wx + ddx * BS, h + (canopyStartH + dy) * BS, wz + ddz * BS, 0x1a4a2a);
                     }
                 }
             }
@@ -679,13 +710,13 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Gate structures matching in-game gates
     const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.8 });
-    const hillCX = -30, hillCZ = -190;
+    const hillCX = -30, hillCZ = -350;
     // [gateX, gateZ, axis, innerOffsetX, innerOffsetZ] — inner offset points toward hill ring center
     const _gateData = [
-        [-140, -190, 'z', 15, 0],   // west, inner = east
-        [80, -190, 'z', -15, 0],     // east, inner = west
-        [-30, -300, 'x', 0, 15],     // north, inner = south
-        [-30, -80, 'x', 0, -15],     // south, inner = north
+        [-140, -350, 'z', 15, 0],   // west, inner = east
+        [80, -350, 'z', -15, 0],     // east, inner = west
+        [-30, -460, 'x', 0, 15],     // north, inner = south
+        [-30, -240, 'x', 0, -15],     // south, inner = north
     ];
     for (const [gx, gz, axis, iox, ioz] of _gateData) {
         const gy = getTerrainHeight(gx, gz);
@@ -734,7 +765,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Boss figures — positioned on INNER side of each gate
     // Colossus (west gate, inner = east of gate)
-    const colBX = -140 + 15, colBZ = -190;
+    const colBX = -140 + 15, colBZ = -350;
     const colBY = getTerrainHeight(colBX, colBZ);
     const colFig = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, 3.5), new THREE.MeshStandardMaterial({ color: 0x777777 }));
     colFig.position.set(colBX, colBY + 4.5, colBZ); titleScene.add(colFig);
@@ -746,7 +777,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     colHead.position.set(colBX, colBY + 11, colBZ); titleScene.add(colHead);
 
     // Skeleton (east gate, inner = west of gate)
-    const skBX = 80 - 15, skBZ = -190;
+    const skBX = 80 - 15, skBZ = -350;
     const skBY = getTerrainHeight(skBX, skBZ);
     const skelFig = new THREE.Mesh(new THREE.BoxGeometry(1.8, 8, 1.2), new THREE.MeshStandardMaterial({ color: 0xd8d0c0 }));
     skelFig.position.set(skBX, skBY + 4, skBZ); titleScene.add(skelFig);
@@ -792,9 +823,9 @@ function animateTitle() {
     requestAnimationFrame(animateTitle);
     titleAngle += 0.0015;
     const r = 180, h = 70;
-    // Orbit around the hill ring center (-30, -190)
-    titleCam.position.set(-30 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -190 + Math.cos(titleAngle) * r);
-    titleCam.lookAt(-30, 5, -190);
+    // Orbit around the hill ring center (-30, -350)
+    titleCam.position.set(-30 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -350 + Math.cos(titleAngle) * r);
+    titleCam.lookAt(-30, 5, -350);
     titleRenderer.render(titleScene, titleCam);
 }
 animateTitle();
@@ -822,7 +853,7 @@ function buildFarTerrain(centerX, centerZ) {
     _farCenterX = centerX || 0;
     _farCenterZ = centerZ || 0;
     const BS = BLOCK_SIZE;
-    const range = 1200;
+    const range = 1600;
     const step = 6;
     const S = BS * step;
     const halfS = S * 0.5;
@@ -1003,7 +1034,6 @@ function buildFarTerrain(centerX, centerZ) {
         _lodStructures.push(mesh);
     };
     // The Castle (-400, 20) — 60x50 blocks = ~28x24 world, walls 8.5h, keep 13h, towers 12h
-    const BS = BLOCK_SIZE;
     _addLodBox(-400, 20, 28, 8.5, 24, 0x808080); // outer walls
     _addLodBox(-400, 20, 11, 13, 9.5, 0x8a8a8a); // central keep
     _addLodTower(-400-14, 20-12, 2.4, 12, 0x777777); // SW tower
@@ -1011,15 +1041,15 @@ function buildFarTerrain(centerX, centerZ) {
     _addLodTower(-400-14, 20+12, 2.4, 12, 0x777777); // NW tower
     _addLodTower(-400+14, 20+12, 2.4, 12, 0x777777); // NE tower
 
-    // Ruined Fortress (-505, -175) — 80x80 blocks = ~38x38 world, walls 5.7h, towers 10h
-    _addLodBox(-505, -175, 38, 5.7, 38, 0x6a6a5a); // outer walls (lower, ruined)
-    _addLodBox(-505, -175, 14, 8, 11, 0x7a7a6a); // central keep
+    // Ruined Fortress (-505, -335) — 80x80 blocks = ~38x38 world, walls 5.7h, towers 10h
+    _addLodBox(-505, -335, 38, 5.7, 38, 0x6a6a5a); // outer walls (lower, ruined)
+    _addLodBox(-505, -335, 14, 8, 11, 0x7a7a6a); // central keep
     _addLodTower(-505-19, -175-19, 2, 10, 0x5a5a50); // corner towers
     _addLodTower(-505+19, -175-19, 2, 10, 0x5a5a50);
     _addLodTower(-505-19, -175+19, 2, 10, 0x5a5a50);
     _addLodTower(-505+19, -175+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505, -175-19, 1.5, 8, 0x5a5a50); // mid-wall towers
-    _addLodTower(-505, -175+19, 1.5, 8, 0x5a5a50);
+    _addLodTower(-505, -335-19, 1.5, 8, 0x5a5a50); // mid-wall towers
+    _addLodTower(-505, -335+19, 1.5, 8, 0x5a5a50);
 
     // Scorched Castle (-300, 280) — 50x40 blocks = ~24x19 world, walls 4.75h, towers 6.65h
     _addLodBox(-300, 280, 24, 4.75, 19, 0x2a2020); // dark outer walls
@@ -1029,17 +1059,17 @@ function buildFarTerrain(centerX, centerZ) {
     _addLodTower(-300-12, 280+9.5, 1.4, 6.65, 0x221818);
     _addLodTower(-300+12, 280+9.5, 1.4, 6.65, 0x221818);
 
-    // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-190) r=170)
+    // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-350) r=170)
     // Each gate has twin towers ~10.5h, positioned at ring edge
     const _gateH = 10.5, _gateR = 1.9;
-    _addLodTower(80-6, -190, _gateR, _gateH, 0x6a6a5a); // East gate twin towers
-    _addLodTower(80+6, -190, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-140-6, -190, _gateR, _gateH, 0x6a6a5a); // West gate
-    _addLodTower(-140+6, -190, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30, -300-6, _gateR, _gateH, 0x6a6a5a); // North gate
-    _addLodTower(-30, -300+6, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30, -80-6, _gateR, _gateH, 0x6a6a5a); // South gate
-    _addLodTower(-30, -80+6, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(80-6, -350, _gateR, _gateH, 0x6a6a5a); // East gate twin towers
+    _addLodTower(80+6, -350, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-140-6, -350, _gateR, _gateH, 0x6a6a5a); // West gate
+    _addLodTower(-140+6, -350, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-30, -460-6, _gateR, _gateH, 0x6a6a5a); // North gate
+    _addLodTower(-30, -460+6, _gateR, _gateH, 0x6a6a5a);
+    _addLodTower(-30, -240-6, _gateR, _gateH, 0x6a6a5a); // South gate
+    _addLodTower(-30, -240+6, _gateR, _gateH, 0x6a6a5a);
 
     // Village markers — actual village positions from VILLAGE_DEFS
     for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200}]) {
@@ -1328,14 +1358,14 @@ function startGame(loadSlotName) {
     horseMgr = new HorseManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
-    // ── Giant Ruined Fortress at (-505, -175) ──
+    // ── Giant Ruined Fortress at (-505, -335) ──
     _initMagicShopStaffs();
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
-    buildForestGate(world, -140, -190, 'z', false);   // west gate (intact)
-    buildForestGate(world, 80, -190, 'z', true);       // east gate (half shattered)
-    buildForestGate(world, -30, -300, 'x', false);     // north gate (intact)
-    buildForestGate(world, -30, -80, 'x', false);      // south gate (intact)
+    buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
+    buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
+    buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)
+    buildForestGate(world, -30, -240, 'x', false);      // south gate (intact)
     buildForestRuins(world);
 
     function buildRuinedFortress(w) {
@@ -1343,7 +1373,7 @@ function startGame(loadSlotName) {
         const yOff = 128;
         const centerX = Math.round(-505 / BS);
         const centerZ = Math.round(-175 / BS);
-        const groundY = Math.floor(getTerrainHeight(-505, -175) / BS) + yOff;
+        const groundY = Math.floor(getTerrainHeight(-505, -335) / BS) + yOff;
         const S = BLOCK.DARK_STONE, G = BLOCK.GRAVEL, P = BLOCK.PLANKS, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
 
@@ -1832,7 +1862,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 1.2, bladeThickness: 0.8,
             trimMat: 'topaz', name: 'Nightfang',
         };
-        fortressSwords.push({ id: s4, wx: -510, wz: -190, data: window._customSwords[s4] });
+        fortressSwords.push({ id: s4, wx: -510, wz: -350, data: window._customSwords[s4] });
 
         // Stormbreaker — massive two-hander with diamond and steel
         const s5 = 'csword_fortress_storm';
@@ -2020,7 +2050,7 @@ function startGame(loadSlotName) {
             _pb(bx, by, bz, block);
         };
 
-        const hillCX = -30, hillCZ = -190;
+        const hillCX = -30, hillCZ = -350;
 
         // Ruin 1: Broken temple with pillars (-60, -210)
         {
@@ -2144,10 +2174,10 @@ function startGame(loadSlotName) {
                 rb(rx+dx, gy+8, rz-8+dz, S, 0.2);
         }
 
-        // Ruin 7: Foundation outline (-40, -190)
+        // Ruin 7: Foundation outline (-40, -350)
         {
-            const rx = Math.round(-40 / BS), rz = Math.round(-190 / BS);
-            const gy = Math.floor(getTerrainHeight(-40, -190) / BS) + yOff;
+            const rx = Math.round(-40 / BS), rz = Math.round(-350 / BS);
+            const gy = Math.floor(getTerrainHeight(-40, -350) / BS) + yOff;
             // Rectangular foundation — just low walls
             for (let dx = -8; dx <= 8; dx++) {
                 rb(rx+dx, gy, rz-6, S, 0.1); rb(rx+dx, gy+1, rz-6, S, 0.2);
@@ -2164,7 +2194,7 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-30, -190)
+        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-30, -350)
         {
             const rx = Math.round(hillCX / BS), rz = Math.round(hillCZ / BS);
             const gy = Math.floor(getTerrainHeight(hillCX, hillCZ) / BS) + yOff;
@@ -2278,8 +2308,8 @@ function startGame(loadSlotName) {
         _placeRuinChest(-20, -218, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
         // Chest in Staircase ruins (0, -180) — hidden under steps
         _placeRuinChest(2, -180, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
-        // Chest in Foundation ruins (-40, -190) — corner stash
-        _placeRuinChest(-46, -190, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
+        // Chest in Foundation ruins (-40, -350) — corner stash
+        _placeRuinChest(-46, -350, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
         // Central ruin — behind the altar
         _placeRuinChest(-28, -194, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
     }
@@ -2452,7 +2482,7 @@ function startGame(loadSlotName) {
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
-        const fortDragon = dragonMgr._makeDragon(-505, -175, getTerrainHeight(-505, -175), 0x0a0a0a, 0xcc7733, true);
+        const fortDragon = dragonMgr._makeDragon(-505, -335, getTerrainHeight(-505, -335), 0x0a0a0a, 0xcc7733, true);
         // Make it massive and fully grown
         fortDragon.age = 7200; // elder
         fortDragon.growthScale = 4.0; // 4x normal adult size
@@ -2479,7 +2509,7 @@ function startGame(loadSlotName) {
         fortDragon._fireMat = fireMat;
         fortDragon.x = -505;
         fortDragon.z = -175;
-        fortDragon.group.position.set(-505, getTerrainHeight(-505, -175) + 40, -175);
+        fortDragon.group.position.set(-505, getTerrainHeight(-505, -335) + 40, -175);
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
@@ -2564,7 +2594,7 @@ function startGame(loadSlotName) {
 
     // === Giant Skeleton Boss at east gate ===
     if (!killedBosses.has('The Ancient One')) {
-        const bossX = 80, bossZ = -190;
+        const bossX = 80, bossZ = -350;
 
         // Pre-generate the sword it will drop and wield
         const _bossRng = () => Math.random();
@@ -2744,7 +2774,7 @@ function startGame(loadSlotName) {
 
     // === Earth Colossus Boss near the western gate ===
     if (!killedBosses.has('Colossus of the Gate')) {
-        const colX = -155, colZ = -190;
+        const colX = -155, colZ = -350;
         const colY = getTerrainHeight(colX, colZ);
         const colossus = {
             group: new THREE.Group(), legs: [], headGrp: new THREE.Group(),
@@ -2945,7 +2975,7 @@ function startGame(loadSlotName) {
 
     // === Necromancer Boss at central ancient forest ruin ===
     if (!killedBosses.has('The Necromancer')) {
-        const necX = -30, necZ = -190;
+        const necX = -30, necZ = -350;
         const necY = getTerrainHeight(necX, necZ) + 1.5; // on the altar platform
 
         const necro = new Player(scene, world);
@@ -6275,7 +6305,7 @@ function drawWorldMap() {
         drawCastle(-400, 20, 'The Castle');
 
         // Ruined Fortress
-        drawRuins(-505, -175, 'Ruined Fortress');
+        drawRuins(-505, -335, 'Ruined Fortress');
 
         // Mountains
         drawMountain(602, -30, 'East Mountains', 10);
@@ -6293,15 +6323,15 @@ function drawWorldMap() {
         drawVillage(50, -150, 'Northwatch');
         drawVillage(-150, 200, 'Southmoor');
 
-        // Forest Gates (around the ancient forest hill ring at -30, -190)
-        drawGate(-140, -190, 'West Gate');
-        drawGate(80, -190, 'East Gate');
-        drawGate(-30, -300, 'North Gate');
-        drawGate(-30, -80, 'South Gate');
+        // Forest Gates (around the ancient forest hill ring at -30, -350)
+        drawGate(-140, -350, 'West Gate');
+        drawGate(80, -350, 'East Gate');
+        drawGate(-30, -460, 'North Gate');
+        drawGate(-30, -240, 'South Gate');
 
         // Gate bosses
-        drawDanger(-125, -190, 'Colossus');
-        drawDanger(65, -190, 'Skeleton');
+        drawDanger(-125, -350, 'Colossus');
+        drawDanger(65, -350, 'Skeleton');
         drawDanger(-30, -285, 'Dark Knight');
         drawDanger(-30, -95, 'Hobgoblin');
 
@@ -6309,7 +6339,7 @@ function drawWorldMap() {
         drawDanger(-115, 35, 'Goblin Outpost');
 
         // Ancient forest — large italic label
-        drawLabel(-30, -190, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
+        drawLabel(-30, -350, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
 
         // Forest ruins (inside the ancient forest)
         const ruinStyle = 'rgba(80, 55, 30, 0.5)';
