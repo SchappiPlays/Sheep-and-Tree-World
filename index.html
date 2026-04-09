@@ -982,6 +982,51 @@ function buildFarTerrain(centerX, centerZ) {
     farTerrain.receiveShadow = true;
     scene.add(farTerrain);
 
+    // LOD structure markers — simple colored shapes visible from far away
+    const _lodStructures = [];
+    const _addLodBox = (wx, wz, w, h, d, color) => {
+        const y = getTerrainHeight(wx, wz);
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        mesh.position.set(wx, y + h/2, wz);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        _lodStructures.push(mesh);
+    };
+    const _addLodTower = (wx, wz, r, h, color) => {
+        const y = getTerrainHeight(wx, wz);
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r*0.7, r, h, 6), mat);
+        mesh.position.set(wx, y + h/2, wz);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        _lodStructures.push(mesh);
+    };
+    // The Castle
+    _addLodBox(-400, 20, 12, 8, 10, 0x888888);
+    _addLodTower(-406, 14, 2, 12, 0x777777);
+    _addLodTower(-394, 14, 2, 12, 0x777777);
+    _addLodTower(-406, 26, 2, 12, 0x777777);
+    _addLodTower(-394, 26, 2, 12, 0x777777);
+    // Ruined Fortress
+    _addLodBox(-505, -175, 15, 5, 12, 0x6a6a60);
+    _addLodTower(-512, -181, 1.5, 7, 0x5a5a50);
+    _addLodTower(-498, -169, 1.5, 7, 0x5a5a50);
+    // Scorched Castle
+    _addLodBox(-300, 280, 10, 6, 8, 0x3a3030);
+    _addLodTower(-305, 276, 1.5, 9, 0x2a2020);
+    _addLodTower(-295, 284, 1.5, 9, 0x2a2020);
+    // Ancient Forest Gate Pillars (4 gates)
+    _addLodBox(-30 + 170, -190, 3, 6, 3, 0x6a6a5a);  // East gate
+    _addLodBox(-30 - 170, -190, 3, 6, 3, 0x6a6a5a);  // West gate
+    _addLodBox(-30, -190 + 170, 3, 6, 3, 0x6a6a5a);  // South gate
+    _addLodBox(-30, -190 - 170, 3, 6, 3, 0x6a6a5a);  // North gate
+    // Village markers (small house clusters)
+    for (const vd of [{x:0,z:15},{x:-100,z:50},{x:80,z:-60},{x:-250,z:-80}]) {
+        _addLodBox(vd.x, vd.z, 4, 3, 4, 0x8a6a3a);
+        _addLodBox(vd.x+5, vd.z+3, 3, 2.5, 3, 0x8a6a3a);
+    }
+
     // Water plane — simple flat plane, shader-based cutout near player
     const outerR = range * 1.5;
     const farWaterGeo = new THREE.PlaneGeometry(outerR * 2, outerR * 2);
