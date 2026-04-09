@@ -2031,27 +2031,64 @@ function startGame(loadSlotName) {
             }
         }
 
-        // === 3 ENTRANCES (N, E, S — west faces ocean for dragon enclosure) ===
-        // North gate
-        door(cx-3, gy+1, cz-HD, 6, 8, 'x');
-        // East gate
-        door(cx+HW, gy+1, cz-3, 6, 8, 'z');
-        // South gate
-        door(cx-3, gy+1, cz+HD, 6, 8, 'x');
-
-        // === CORNER TOWERS ===
+        // === CORNER TOWERS (build first) ===
         tower(cx-HW, cz-HD, 5, 28);
         tower(cx+HW, cz-HD, 5, 28);
         tower(cx-HW, cz+HD, 5, 28);
         tower(cx+HW, cz+HD, 5, 28);
-        // Mid-wall towers
-        tower(cx, cz-HD, 4, 24);
-        tower(cx, cz+HD, 4, 24);
-        tower(cx+HW, cz, 4, 24);
-        // Door reopens after towers
-        door(cx-3, gy+1, cz-HD, 6, 8, 'x');
-        door(cx+HW, gy+1, cz-3, 6, 8, 'z');
-        door(cx-3, gy+1, cz+HD, 6, 8, 'x');
+
+        // === MASSIVE GATES (N, E, S — west faces ocean) ===
+        // Each gate: 12 wide, 14 tall arched opening, flanked by 2 pillar towers
+        const buildGate = (gx, gz, axis) => {
+            const halfW = 6, gh = 14;
+            // Cut the opening in the wall
+            for (let dy = 0; dy < gh; dy++) {
+                for (let dw = -halfW; dw <= halfW; dw++) {
+                    if (axis === 'x') _placeBlock(gx + dw, gy+1+dy, gz, A);
+                    else _placeBlock(gx, gy+1+dy, gz + dw, A);
+                }
+            }
+            // Arched top — round off the corners
+            for (let ay = 0; ay < 3; ay++) {
+                const inset = 3 - ay;
+                for (let dw = -halfW + inset; dw <= halfW - inset; dw++) {
+                    if (axis === 'x') _placeBlock(gx + dw, gy+1+gh+ay, gz, A);
+                    else _placeBlock(gx, gy+1+gh+ay, gz + dw, A);
+                }
+                // Place stones at the curve
+                for (let dw of [-halfW + inset - 1, halfW - inset + 1]) {
+                    if (axis === 'x') _placeBlock(gx + dw, gy+1+gh+ay, gz, S);
+                    else _placeBlock(gx, gy+1+gh+ay, gz + dw, S);
+                }
+            }
+            // Flanking pillar towers (one on each side of the gate)
+            const pillarOff = halfW + 2;
+            if (axis === 'x') {
+                tower(gx - pillarOff, gz, 3, gh + 6);
+                tower(gx + pillarOff, gz, 3, gh + 6);
+            } else {
+                tower(gx, gz - pillarOff, 3, gh + 6);
+                tower(gx, gz + pillarOff, 3, gh + 6);
+            }
+            // Re-cut the gate opening (in case tower stones blocked it)
+            for (let dy = 0; dy < gh; dy++) {
+                for (let dw = -halfW; dw <= halfW; dw++) {
+                    if (axis === 'x') _placeBlock(gx + dw, gy+1+dy, gz, A);
+                    else _placeBlock(gx, gy+1+dy, gz + dw, A);
+                }
+            }
+        };
+        buildGate(cx, cz - HD, 'x'); // North
+        buildGate(cx + HW, cz, 'z'); // East
+        buildGate(cx, cz + HD, 'x'); // South
+
+        // Mid-wall towers (between corner towers and gates)
+        tower(cx - HW/2, cz-HD, 4, 24);
+        tower(cx + HW/2, cz-HD, 4, 24);
+        tower(cx - HW/2, cz+HD, 4, 24);
+        tower(cx + HW/2, cz+HD, 4, 24);
+        tower(cx+HW, cz - HD/2, 4, 24);
+        tower(cx+HW, cz + HD/2, 4, 24);
 
         // === GREAT KEEP — central hall ===
         const keepW = 30, keepD = 24, keepH = 26;
@@ -2090,30 +2127,45 @@ function startGame(loadSlotName) {
         door(cx + 18, gy+1, cz + 6, 1, 6, 'z');
 
         // === DRAGON ENCLOSURE (west side, facing ocean) ===
-        // Open courtyard wall — half-height stone wall around it
-        const encW = 30, encD = 40;
+        // Tall walls all around, only opens to fortress through arch
+        const encW = 30, encD = 40, encH = 20;
         const ex0 = cx - HW - encW, ez0 = cz - encD/2;
         // Flatten enclosure ground
         for (let x = ex0; x <= ex0 + encW; x++) for (let z = ez0; z <= ez0 + encD; z++) {
             _placeBlock(x, gy, z, ST);
-            for (let dy = 1; dy <= 20; dy++) _placeBlock(x, gy+dy, z, A);
+            for (let dy = 1; dy <= 30; dy++) _placeBlock(x, gy+dy, z, A);
         }
-        // Low walls (4 blocks high)
+        // Tall stone walls — north, south, west sides
         for (let x = ex0; x <= ex0 + encW; x++) {
-            for (let dy = 1; dy <= 4; dy++) {
-                _placeBlock(x, gy+dy, ez0, S);
-                _placeBlock(x, gy+dy, ez0 + encD, S);
+            for (let dy = 1; dy <= encH; dy++) {
+                _placeBlock(x, gy+dy, ez0, S); // north wall
+                _placeBlock(x, gy+dy, ez0 + encD, S); // south wall
+            }
+            // Crenellations
+            if (x % 2 === 0) {
+                _placeBlock(x, gy+encH+1, ez0, S);
+                _placeBlock(x, gy+encH+1, ez0 + encD, S);
             }
         }
         for (let z = ez0; z <= ez0 + encD; z++) {
-            for (let dy = 1; dy <= 4; dy++) {
-                _placeBlock(ex0, gy+dy, z, S);
+            for (let dy = 1; dy <= encH; dy++) {
+                _placeBlock(ex0, gy+dy, z, S); // west wall (faces ocean)
             }
+            if (z % 2 === 0) _placeBlock(ex0, gy+encH+1, z, S);
         }
-        // No west wall — open to ocean
-        // Connect enclosure to fortress with arch in west fortress wall
-        for (let dy = 1; dy <= 8; dy++) for (let dz = -3; dz <= 3; dz++) {
+        // Corner towers for the enclosure
+        tower(ex0, ez0, 3, encH + 4);
+        tower(ex0, ez0 + encD, 3, encH + 4);
+        // East side: shared wall with fortress (the fortress west wall)
+        // Build a connecting arch between fortress and enclosure
+        for (let dy = 1; dy <= 10; dy++) for (let dz = -4; dz <= 4; dz++) {
             _placeBlock(cx-HW, gy+dy, cz+dz, A);
+        }
+        // Arched top for the inner doorway
+        for (let ay = 0; ay < 2; ay++) {
+            for (let dz = -4 + (ay+1); dz <= 4 - (ay+1); dz++) {
+                _placeBlock(cx-HW, gy+11+ay, cz+dz, A);
+            }
         }
 
         // === MARK BOSS POSITIONS for spawning ===
@@ -2765,6 +2817,7 @@ function startGame(loadSlotName) {
         const sw = world._swFortressData;
 
         // --- Silver Dragon (stationary, harmless, unrideable) ---
+        // Silver body, ocean blue wings (not the ocean color, deeper cobalt)
         const silverDragon = dragonMgr._makeDragon(sw.dragonX, sw.dragonZ, getTerrainHeight(sw.dragonX, sw.dragonZ), 0xc8c8d8, 0x2a4ad8, true);
         silverDragon.age = 7200;
         silverDragon.growthScale = 3.5;
@@ -2775,14 +2828,26 @@ function startGame(loadSlotName) {
         silverDragon._stationary = true;
         silverDragon.flying = false;
         silverDragon.walking = false;
-        // Recolor the dragon — silver body, ocean blue wings with purple highlights
+        // Clone all materials so we can recolor without affecting other dragons
         silverDragon.group.traverse(child => {
-            if (child.isMesh && child.material && child.material.color) {
-                // Don't recolor dynamic membranes (they use bMem material reused)
-                if (!child.material._tagged) {
-                    child.material = child.material.clone();
-                    child.material._tagged = true;
-                }
+            if (child.isMesh && child.material) {
+                child.material = child.material.clone();
+            }
+        });
+        // Now find specific materials and recolor
+        silverDragon.group.traverse(child => {
+            if (!child.isMesh || !child.material || !child.material.color) return;
+            const c = child.material.color.getHex();
+            // Yellow eyes → purple
+            if (c === 0xffcc00) {
+                child.material.color.setHex(0xaa44ff);
+                if (child.material.emissive) child.material.emissive.setHex(0x6622aa);
+            }
+            // Body color (silver-ish) — leave as silver
+            // Wing membrane (ocean blue) — add purple highlight via emissive
+            if (c === 0x2a4ad8) {
+                if (child.material.emissive) child.material.emissive.setHex(0x4a1a6a);
+                if (child.material.emissiveIntensity !== undefined) child.material.emissiveIntensity = 0.15;
             }
         });
         // Set position properly
@@ -2791,18 +2856,22 @@ function startGame(loadSlotName) {
         silverDragon.z = sw.dragonZ;
         silverDragon.group.position.set(sw.dragonX, sdY, sw.dragonZ);
         // Face the ocean (west)
-        silverDragon.group.rotation.y = Math.PI / 2;
-        // Purple eyes
-        silverDragon.group.traverse(child => {
-            if (child.isMesh && child.material && child.material.color) {
-                const c = child.material.color.getHex();
-                // Catch eye-like materials (small dark/yellow meshes)
-                if ((c === 0xffaa00 || c === 0xffcc00 || c === 0xffee44) && child.geometry && child.geometry.type === 'SphereGeometry') {
-                    child.material.color.setHex(0xaa44ff);
-                    if (child.material.emissive) child.material.emissive.setHex(0x6622aa);
-                }
-            }
-        });
+        silverDragon.group.rotation.y = -Math.PI / 2;
+        // Add purple highlight stripes/spots on the body
+        const purpleHighlight = new THREE.MeshStandardMaterial({ color: 0x8833cc, emissive: 0x4a1a6a, emissiveIntensity: 0.3 });
+        const S = 2.55; // dragon scale constant
+        // Spots on chest, back, sides
+        const spotPositions = [
+            [-0.3*S, 0.4*S, 0.3*S], [0.3*S, 0.4*S, 0.3*S],
+            [-0.25*S, 0.5*S, 0], [0.25*S, 0.5*S, 0],
+            [-0.2*S, 0.4*S, -0.4*S], [0.2*S, 0.4*S, -0.4*S],
+            [0, 0.55*S, 0.1*S],
+        ];
+        for (const [sx, sy, sz] of spotPositions) {
+            const spot = new THREE.Mesh(new THREE.BoxGeometry(0.15*S, 0.04*S, 0.15*S), purpleHighlight);
+            spot.position.set(sx, sy, sz);
+            silverDragon.group.add(spot);
+        }
         scene.add(silverDragon.group);
         dragonMgr.dragons.push(silverDragon);
         world._silverDragon = silverDragon;

@@ -869,6 +869,11 @@ export class DragonManager {
         // ── Update all dragons ──
         for (const bd of this.dragons) {
             if (bd.state !== 'alive') continue;
+            // Stationary or fortress dragons skip growth + follow AI entirely
+            if (bd._stationary || bd._fortressGuardian) {
+                this._animateDragon(dt, bd);
+                continue;
+            }
 
             // Growth
             bd.age += dt;
