@@ -556,10 +556,10 @@ export class ChunkManager {
                                 const cx = (bx + verts[vi][0] * S) * BS;
                                 const cz = (bz + verts[vi][2] * S) * BS;
                                 const th = getTerrainHeight(cx, cz);
-                                // Clamp: don't go below block bottom or too far above
+                                // Clamp: allow full block range plus overlap into neighbors
                                 const blockTopY = (y - Y_OFF + S) * BS;
                                 const blockBotY = (y - Y_OFF) * BS;
-                                vy = Math.max(blockBotY + BS * 0.2, Math.min(blockTopY + BS * 0.5, th));
+                                vy = Math.max(blockBotY - BS * 0.3, Math.min(blockTopY + BS * 1.0, th));
                             }
                             tPos.push(
                                 (lx + verts[vi][0] * S) * BS,
