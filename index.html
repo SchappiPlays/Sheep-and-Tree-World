@@ -1277,7 +1277,7 @@ function collectSaveData() {
         customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
         eggItems: JSON.parse(JSON.stringify(eggItems)),
         modifiedBlocks: world._modifiedBlocks ? Object.fromEntries(world._modifiedBlocks) : {},
-        dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian).map(bd => ({
+        dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian && !bd._stationary).map(bd => ({
             x: bd.x, z: bd.z, age: bd.age, angle: bd.angle,
             eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
             dragonName: bd.dragonName, hp: bd.hp,
