@@ -955,7 +955,8 @@ function buildFarTerrain(centerX, centerZ) {
             if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
-                if (treeChance < 0.18 * (1 - plains * 0.85)) {
+                if (plains > 0.5) continue; // skip trees in plains entirely
+                if (treeChance < 0.18 * (1 - plains * 0.95)) {
                     const trunkH = BS * 5;   // ~2.4 world units (real trees 4-8 blocks)
                     const leafR = BS * 2.5;  // ~1.2 world units canopy radius
                     const trunkR = BS * 0.5; // ~0.24 world units trunk radius
