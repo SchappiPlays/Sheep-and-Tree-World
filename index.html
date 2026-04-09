@@ -359,6 +359,14 @@ canvas { display: block; }
                 <input type="checkbox" id="optParticles" checked style="accent-color:rgba(120,160,80,0.8);">
                 <label for="optParticles" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Particles & effects</label>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <label for="optSlopeStyle" style="color:rgba(180,170,140,0.7);font:11px monospace;cursor:pointer;">Slope style:</label>
+                <select id="optSlopeStyle" style="background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:4px;padding:2px 6px;font:11px monospace;">
+                    <option value="none">None</option>
+                    <option value="sloped">Sloped</option>
+                    <option value="mini" selected>Mini-blocks</option>
+                </select>
+            </div>
         </div>
     </div>
     <div style="width:300px;">
@@ -3956,6 +3964,8 @@ let optShadows = true;
 let optFarTerrain = true;
 let optClouds = true;
 let optParticles = true;
+let optSlopeStyle = 'mini'; // 'none', 'sloped', 'mini'
+window._slopeStyle = 'mini';
 
 // Load saved settings
 try {
@@ -3970,6 +3980,7 @@ try {
     if (saved.optFarTerrain !== undefined) optFarTerrain = saved.optFarTerrain;
     if (saved.optClouds !== undefined) optClouds = saved.optClouds;
     if (saved.optParticles !== undefined) optParticles = saved.optParticles;
+    if (saved.optSlopeStyle !== undefined) { optSlopeStyle = saved.optSlopeStyle; window._slopeStyle = optSlopeStyle; }
 } catch(e) {}
 // Apply performance settings after load
 renderer.shadowMap.enabled = optShadows;
@@ -3977,7 +3988,7 @@ sun.castShadow = optShadows;
 
 function saveSettings() {
     localStorage.setItem('satw_settings', JSON.stringify({
-        useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist, optShadows, optFarTerrain, optClouds, optParticles
+        useMouseLook, cameraMC, autoMineSnap, musicVolume, sensitivity: mouseSensitivity, renderDist: settingsRenderDist, optShadows, optFarTerrain, optClouds, optParticles, optSlopeStyle
     }));
 }
 
@@ -4612,6 +4623,24 @@ document.getElementById('optParticles').addEventListener('change', (e) => {
     optParticles = e.target.checked;
     saveSettings();
 });
+document.getElementById('optSlopeStyle').addEventListener('change', (e) => {
+    optSlopeStyle = e.target.value;
+    window._slopeStyle = optSlopeStyle;
+    saveSettings();
+    // Rebuild all loaded chunks to apply new slope style
+    if (chunkManager && chunkManager.loaded) {
+        const keys = Array.from(chunkManager.loaded.keys());
+        for (const k of keys) {
+            const [cx, cz] = k.split(',').map(Number);
+            chunkManager.rebuildChunkAt(cx * CHUNK_SIZE, cz * CHUNK_SIZE);
+        }
+    }
+});
+// Initialize dropdown value
+setTimeout(() => {
+    const sel = document.getElementById('optSlopeStyle');
+    if (sel) sel.value = optSlopeStyle;
+}, 0);
 
 // ── Music system ──
 const MUSIC_TRACKS = {

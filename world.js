@@ -882,6 +882,11 @@ export class World {
         const cz = Math.floor(bz / CHUNK_SIZE);
         const lx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
         const lz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+        // Invalidate slope cache for this position and the block below (which might need to slope now)
+        if (this._slopeCache) {
+            this._slopeCache.delete(bx + ',' + by + ',' + bz);
+            this._slopeCache.delete(bx + ',' + (by - 1) + ',' + bz);
+        }
         // Track for saving + deferred apply (even if chunk not loaded yet)
         this._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
         const ck = cx + ',' + cz;

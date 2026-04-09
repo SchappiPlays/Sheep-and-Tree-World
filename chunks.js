@@ -272,21 +272,34 @@ export class ChunkManager {
                     }
 
                     // Check if this is a natural surface block that should have slopes
-                    // Each corner can independently drop to half-height if its neighbors are lower
                     let _isSlopeable = false;
-                    let _cornerLow = [false, false, false, false]; // corners: -x-z, -x+z, +x-z, +x+z
+                    let _cornerLow = [false, false, false, false];
+                    const _slopeStyle = (typeof window !== 'undefined' && window._slopeStyle) || 'mini';
                     const _aboveBlock = this.world.getBlockAt(bx, y + 1, bz);
                     const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
-                    if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && _aboveIsOpen && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + 1) + ',' + bz)) {
-                        const _isLower = (dx, dz) => {
-                            const nb = this.world.getBlockAt(bx + dx, y, bz + dz);
-                            return nb === BLOCK.AIR || nb === BLOCK.WATER;
-                        };
-                        // Corner drops if EITHER adjacent cardinal neighbor or the diagonal is lower
-                        _cornerLow[0] = _isLower(-1, 0) || _isLower(0, -1) || _isLower(-1, -1);
-                        _cornerLow[1] = _isLower(-1, 0) || _isLower(0, 1) || _isLower(-1, 1);
-                        _cornerLow[2] = _isLower(1, 0) || _isLower(0, -1) || _isLower(1, -1);
-                        _cornerLow[3] = _isLower(1, 0) || _isLower(0, 1) || _isLower(1, 1);
+                    if (_slopeStyle !== 'none' && (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && _aboveIsOpen && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + 1) + ',' + bz)) {
+                        // Check slope cache first — slopes don't change when neighbors are broken
+                        const slopeKey = bx + ',' + y + ',' + bz;
+                        if (!this.world._slopeCache) this.world._slopeCache = new Map();
+                        let cached = this.world._slopeCache.get(slopeKey);
+                        if (cached === undefined) {
+                            const _isLower = (dx, dz) => {
+                                const nb = this.world.getBlockAt(bx + dx, y, bz + dz);
+                                return nb === BLOCK.AIR || nb === BLOCK.WATER;
+                            };
+                            const c = [
+                                _isLower(-1, 0) || _isLower(0, -1) || _isLower(-1, -1),
+                                _isLower(-1, 0) || _isLower(0, 1) || _isLower(-1, 1),
+                                _isLower(1, 0) || _isLower(0, -1) || _isLower(1, -1),
+                                _isLower(1, 0) || _isLower(0, 1) || _isLower(1, 1),
+                            ];
+                            cached = (c[0]?1:0) | ((c[1]?1:0)<<1) | ((c[2]?1:0)<<2) | ((c[3]?1:0)<<3);
+                            this.world._slopeCache.set(slopeKey, cached);
+                        }
+                        _cornerLow[0] = !!(cached & 1);
+                        _cornerLow[1] = !!(cached & 2);
+                        _cornerLow[2] = !!(cached & 4);
+                        _cornerLow[3] = !!(cached & 8);
                         _isSlopeable = _cornerLow[0] || _cornerLow[1] || _cornerLow[2] || _cornerLow[3];
                     }
 
@@ -576,26 +589,77 @@ export class ChunkManager {
                         tmpColor.multiplyScalar(0.93 + ch * 0.14);
 
                         const verts = face.verts;
-                        // Slopeable blocks: top face with per-corner heights (tilted quad)
+                        // Slopeable blocks: top face rendering depends on _slopeStyle
                         if (_isSlopeable && fi === 2) {
                             const baseX = lx * BS, baseZ = lz * BS;
                             const fullW = S * BS;
+                            const halfW = fullW * 0.5;
                             const topY = (y - Y_OFF + S) * BS;
-                            const midY = topY - fullW * 0.5; // half block drop
-                            const cy = [
-                                _cornerLow[0] ? midY : topY,
-                                _cornerLow[1] ? midY : topY,
-                                _cornerLow[2] ? midY : topY,
-                                _cornerLow[3] ? midY : topY,
-                            ];
-                            tPos.push(baseX, cy[0], baseZ);
-                            tPos.push(baseX, cy[1], baseZ + fullW);
-                            tPos.push(baseX + fullW, cy[2], baseZ);
-                            tPos.push(baseX + fullW, cy[3], baseZ + fullW);
-                            tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
-                            tCol.push(tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b, tmpColor.r,tmpColor.g,tmpColor.b);
-                            tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                            tVert += 4;
+                            const midY = topY - halfW;
+                            const _r = tmpColor.r, _g = tmpColor.g, _b = tmpColor.b;
+                            if (_slopeStyle === 'sloped') {
+                                // Tilted quad
+                                const cy = [
+                                    _cornerLow[0] ? midY : topY,
+                                    _cornerLow[1] ? midY : topY,
+                                    _cornerLow[2] ? midY : topY,
+                                    _cornerLow[3] ? midY : topY,
+                                ];
+                                tPos.push(baseX, cy[0], baseZ);
+                                tPos.push(baseX, cy[1], baseZ + fullW);
+                                tPos.push(baseX + fullW, cy[2], baseZ);
+                                tPos.push(baseX + fullW, cy[3], baseZ + fullW);
+                                tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+                                tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                            } else {
+                                // Mini-blocks: 2x2 grid of flat quads at full or half height
+                                const sideColor = tmpColor.clone().multiplyScalar(0.85);
+                                const _scR = sideColor.r, _scG = sideColor.g, _scB = sideColor.b;
+                                const quads = [
+                                    { x: 0,     z: 0,     ci: 0 },
+                                    { x: 0,     z: halfW, ci: 1 },
+                                    { x: halfW, z: 0,     ci: 2 },
+                                    { x: halfW, z: halfW, ci: 3 },
+                                ];
+                                for (const q of quads) {
+                                    const qy = _cornerLow[q.ci] ? midY : topY;
+                                    const qx0 = baseX + q.x, qx1 = baseX + q.x + halfW;
+                                    const qz0 = baseZ + q.z, qz1 = baseZ + q.z + halfW;
+                                    tPos.push(qx0, qy, qz0); tPos.push(qx0, qy, qz1);
+                                    tPos.push(qx1, qy, qz0); tPos.push(qx1, qy, qz1);
+                                    tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
+                                    tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
+                                    tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                    tVert += 4;
+                                }
+                                // Internal walls between mini-quads at different heights
+                                const _addWall = (x0, z0, x1, z1, nx, nz) => {
+                                    tPos.push(x0, midY, z0); tPos.push(x1, midY, z1);
+                                    tPos.push(x0, topY, z0); tPos.push(x1, topY, z1);
+                                    tNrm.push(nx,0,nz, nx,0,nz, nx,0,nz, nx,0,nz);
+                                    tCol.push(_scR,_scG,_scB, _scR,_scG,_scB, _scR,_scG,_scB, _scR,_scG,_scB);
+                                    tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                    tVert += 4;
+                                };
+                                if (_cornerLow[0] !== _cornerLow[2]) {
+                                    if (_cornerLow[0]) _addWall(baseX + halfW, baseZ, baseX + halfW, baseZ + halfW, -1, 0);
+                                    else _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ, 1, 0);
+                                }
+                                if (_cornerLow[1] !== _cornerLow[3]) {
+                                    if (_cornerLow[1]) _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ + fullW, -1, 0);
+                                    else _addWall(baseX + halfW, baseZ + fullW, baseX + halfW, baseZ + halfW, 1, 0);
+                                }
+                                if (_cornerLow[0] !== _cornerLow[1]) {
+                                    if (_cornerLow[0]) _addWall(baseX + halfW, baseZ + halfW, baseX, baseZ + halfW, 0, -1);
+                                    else _addWall(baseX, baseZ + halfW, baseX + halfW, baseZ + halfW, 0, 1);
+                                }
+                                if (_cornerLow[2] !== _cornerLow[3]) {
+                                    if (_cornerLow[2]) _addWall(baseX + fullW, baseZ + halfW, baseX + halfW, baseZ + halfW, 0, -1);
+                                    else _addWall(baseX + halfW, baseZ + halfW, baseX + fullW, baseZ + halfW, 0, 1);
+                                }
+                            }
                             continue;
                         }
 
