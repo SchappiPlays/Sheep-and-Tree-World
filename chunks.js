@@ -664,12 +664,59 @@ export class ChunkManager {
                         }
 
                         const fv = face.verts;
+                        // For sloped blocks (mini style): render side face as 2 stepped quads
+                        if (_isSlopeable && fi !== 2 && fi !== 3 && _slopeStyle === 'mini') {
+                            const halfW = S * BS * 0.5;
+                            const fullW = S * BS;
+                            const blockBotY = (y - Y_OFF) * BS;
+                            const blockTopY = (y - Y_OFF + S) * BS;
+                            const midY = blockTopY - halfW;
+                            const baseX = lx * BS, baseZ = lz * BS;
+                            // Get corner Y for this face's two top corners
+                            // Corner index: (X=0 or 1) * 2 + (Z=0 or 1)
+                            const _cornerYAt = (cx, cz) => {
+                                const ci = cx * 2 + cz;
+                                return _cornerLow[ci] ? midY : blockTopY;
+                            };
+                            // Render side face based on which face direction
+                            const _r = tmpColor.r, _g = tmpColor.g, _b = tmpColor.b;
+                            const _addQuad = (x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3) => {
+                                tPos.push(x0, y0, z0); tPos.push(x1, y1, z1);
+                                tPos.push(x2, y2, z2); tPos.push(x3, y3, z3);
+                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
+                                tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
+                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
+                                tVert += 4;
+                            };
+                            // Each side face is split into 2 vertical halves matching the 2 corners
+                            // Cardinal axis: which two corners are on this face
+                            if (fi === 0) { // +X face — corners (1,0)=ci2 and (1,1)=ci3
+                                const yA = _cornerYAt(1, 0), yB = _cornerYAt(1, 1);
+                                // Half toward Z=0: bottom-front to top using yA
+                                _addQuad(baseX + fullW, blockBotY, baseZ, baseX + fullW, blockBotY, baseZ + halfW, baseX + fullW, yA, baseZ, baseX + fullW, yA, baseZ + halfW);
+                                _addQuad(baseX + fullW, blockBotY, baseZ + halfW, baseX + fullW, blockBotY, baseZ + fullW, baseX + fullW, yB, baseZ + halfW, baseX + fullW, yB, baseZ + fullW);
+                            } else if (fi === 1) { // -X face — corners (0,0)=ci0 and (0,1)=ci1
+                                const yA = _cornerYAt(0, 0), yB = _cornerYAt(0, 1);
+                                _addQuad(baseX, blockBotY, baseZ, baseX, blockBotY, baseZ + halfW, baseX, yA, baseZ, baseX, yA, baseZ + halfW);
+                                _addQuad(baseX, blockBotY, baseZ + halfW, baseX, blockBotY, baseZ + fullW, baseX, yB, baseZ + halfW, baseX, yB, baseZ + fullW);
+                            } else if (fi === 4) { // +Z face — corners (0,1)=ci1 and (1,1)=ci3
+                                const yA = _cornerYAt(0, 1), yB = _cornerYAt(1, 1);
+                                _addQuad(baseX, blockBotY, baseZ + fullW, baseX + halfW, blockBotY, baseZ + fullW, baseX, yA, baseZ + fullW, baseX + halfW, yA, baseZ + fullW);
+                                _addQuad(baseX + halfW, blockBotY, baseZ + fullW, baseX + fullW, blockBotY, baseZ + fullW, baseX + halfW, yB, baseZ + fullW, baseX + fullW, yB, baseZ + fullW);
+                            } else if (fi === 5) { // -Z face — corners (0,0)=ci0 and (1,0)=ci2
+                                const yA = _cornerYAt(0, 0), yB = _cornerYAt(1, 0);
+                                _addQuad(baseX, blockBotY, baseZ, baseX + halfW, blockBotY, baseZ, baseX, yA, baseZ, baseX + halfW, yA, baseZ);
+                                _addQuad(baseX + halfW, blockBotY, baseZ, baseX + fullW, blockBotY, baseZ, baseX + halfW, yB, baseZ, baseX + fullW, yB, baseZ);
+                            }
+                            continue;
+                        }
                         for (let vi = 0; vi < 4; vi++) {
                             let vyy = (y - Y_OFF + fv[vi][1] * S) * BS;
                             // For sloped blocks: side face top vertices use corner heights
                             if (_isSlopeable && fv[vi][1] === 1 && fi !== 2 && fi !== 3) {
-                                // Determine which corner this vertex maps to
-                                // fv[vi][0] = 0 or 1 (X), fv[vi][2] = 0 or 1 (Z)
                                 const cornerIdx = (fv[vi][0] * 2) + fv[vi][2];
                                 if (_cornerLow[cornerIdx]) {
                                     vyy = (y - Y_OFF + S) * BS - (S * BS) * 0.5;
