@@ -545,7 +545,7 @@ export class CreatureManager {
         // Despawn far creatures (but never bosses)
         for (let i = this.creatures.length - 1; i >= 0; i--) {
             const sh = this.creatures[i];
-            if (sh._isBoss) continue;
+            if (sh._isBoss || sh._tamed) continue;
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             if (dx * dx + dz * dz > 30 * 30) {
                 this.scene.remove(sh.group);
@@ -584,6 +584,77 @@ export class CreatureManager {
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             const dist2 = dx * dx + dz * dz;
             if (dist2 > 25 * 25) continue;
+
+            // ── Tamed wolf AI — follow player, attack nearby hostiles ──
+            if (sh._tamed && sh._followPlayer) {
+                sh.attackTimer = Math.max(0, (sh.attackTimer || 0) - dt);
+                const dist = Math.sqrt(dist2);
+                // Look for nearby hostile to fight
+                let target = null, targetDist = 10;
+                for (const other of this.creatures) {
+                    if (other === sh || other.dead || !other.hostile || other._tamed) continue;
+                    const odx = other.x - sh.x, odz = other.z - sh.z;
+                    const od = Math.sqrt(odx * odx + odz * odz);
+                    if (od < targetDist) { target = other; targetDist = od; }
+                }
+                if (target) {
+                    // Chase and attack hostile
+                    const tdx = target.x - sh.x, tdz = target.z - sh.z;
+                    sh.angle = Math.atan2(-tdx, -tdz);
+                    sh.walking = true;
+                    sh.speed += ((targetDist > 1.5 ? 2.5 : 0) - sh.speed) * 5 * dt;
+                    if (targetDist < 1.5 && sh.attackTimer <= 0) {
+                        sh.attackTimer = 1.0;
+                        target.hp -= 4;
+                        target.x += tdx / targetDist * 0.3;
+                        target.z += tdz / targetDist * 0.3;
+                        if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
+                    }
+                } else if (dist > 4) {
+                    // Follow player
+                    sh.angle = Math.atan2(-dx, -dz);
+                    sh.walking = true;
+                    sh.speed += (2.0 - sh.speed) * 4 * dt;
+                } else if (dist > 2) {
+                    sh.angle = Math.atan2(-dx, -dz);
+                    sh.walking = true;
+                    sh.speed += (0.8 - sh.speed) * 4 * dt;
+                } else {
+                    sh.walking = false;
+                    sh.speed *= 0.9;
+                    sh.wanderTimer -= dt;
+                    if (sh.wanderTimer <= 0) {
+                        sh.idleHeadTarget = (Math.random() - 0.5) * 1.0;
+                        sh.wanderTimer = 2 + Math.random() * 3;
+                    }
+                }
+                // Teleport if too far
+                if (dist > 30) {
+                    sh.x = playerX + (Math.random() - 0.5) * 4;
+                    sh.z = playerZ + (Math.random() - 0.5) * 4;
+                }
+                // Rotation + movement + animation
+                let da = sh.angle - sh.group.rotation.y;
+                while (da > Math.PI) da -= Math.PI * 2;
+                while (da < -Math.PI) da += Math.PI * 2;
+                sh.group.rotation.y += da * 5 * dt;
+                if (sh.speed > 0.01) {
+                    sh.x += Math.sin(sh.group.rotation.y) * sh.speed * dt;
+                    sh.z += Math.cos(sh.group.rotation.y) * sh.speed * dt;
+                }
+                const tY = this.world.getHeight(sh.x, sh.z);
+                sh.group.position.set(sh.x, tY, sh.z);
+                const wb = clamp01(sh.speed / 0.5);
+                if (wb > 0.01) sh.walkPhase += sh.speed * dt * 12;
+                for (let li = 0; li < sh.legs.length; li++)
+                    sh.legs[li].rotation.x = ((li % 2 === 0) ? 1 : -1) * Math.sin(sh.walkPhase) * 0.5 * wb;
+                if (sh.walking) {
+                    sh.headGrp.rotation.x = Math.sin(sh.walkPhase * 2) * 0.06 * wb;
+                } else {
+                    sh.headGrp.rotation.y += (sh.idleHeadTarget - sh.headGrp.rotation.y) * 2 * dt;
+                }
+                continue;
+            }
 
             // ── Hostile AI — chase and attack player ──
             if (sh.hostile) {

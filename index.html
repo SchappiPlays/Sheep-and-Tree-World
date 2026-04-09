@@ -10191,6 +10191,62 @@ function doPlace(e) {
         }
     }
 
+    // Check for wolf taming (right-click while holding meat and looking at wolf)
+    if (creatures && placeHoldTime < 0.05) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (isMeat) {
+            const rc = new THREE.Raycaster();
+            rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+            for (const c of creatures.creatures) {
+                if (c.type !== 'wolf' || c.dead || c._tamed) continue;
+                const dx = c.x - player.position.x, dz = c.z - player.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist > 4) continue;
+                const vPos = new THREE.Vector3(c.x, c.group.position.y + 0.5, c.z);
+                const dir = vPos.clone().sub(rc.ray.origin);
+                const dot = dir.normalize().dot(rc.ray.direction);
+                if (dot > 0.9) {
+                    // Consume meat
+                    removeFromInventory(held);
+                    refreshUI();
+                    // 30% chance to tame, increases with each attempt
+                    if (!c._tameAttempts) c._tameAttempts = 0;
+                    c._tameAttempts++;
+                    const chance = 0.3 + c._tameAttempts * 0.15; // 30%, 45%, 60%, 75%...
+                    if (Math.random() < chance) {
+                        // Tamed!
+                        c._tamed = true;
+                        c.hostile = false;
+                        c.aggroRange = 0;
+                        c._followPlayer = true;
+                        c._tameOwner = true;
+                        addChatMessage('The wolf has been tamed! It will now follow and protect you.', 'rgba(150,220,150,0.9)');
+                        // Hearts particle effect
+                        const heartDiv = document.createElement('div');
+                        heartDiv.textContent = '\u2764\uFE0F';
+                        heartDiv.style.cssText = 'position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);font-size:48px;z-index:50;pointer-events:none;animation:none;';
+                        document.body.appendChild(heartDiv);
+                        setTimeout(() => heartDiv.remove(), 1000);
+                        // Add colored collar
+                        const collar = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.16), new THREE.MeshStandardMaterial({ color: 0xcc2222 }));
+                        collar.position.set(0, 0.65, 0.35);
+                        c.group.add(collar);
+                    } else {
+                        // Failed — wolf pauses aggro briefly
+                        c.attackTimer = 3;
+                        c.wanderTimer = 3;
+                        c.walking = false;
+                        c.speed = 0;
+                        const attempts = c._tameAttempts;
+                        addChatMessage(`The wolf sniffs the meat... (${Math.min(99, Math.round((0.3 + (attempts + 1) * 0.15) * 100))}% chance next time)`, 'rgba(220,200,150,0.9)');
+                    }
+                    return false;
+                }
+            }
+        }
+    }
+
     // Check for villager interaction (right-click while looking at villager)
     if (villageMgr && placeHoldTime < 0.05) {
         const rc = new THREE.Raycaster();

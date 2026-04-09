@@ -255,7 +255,7 @@ function getDragonMaxHP(age) {
 // ── makeBabyDragon — exact mesh from game.html ──
 function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
     const S = 2.55;
-    const babyScale = 0.08;
+    const babyScale = 0.04;
     const g = new THREE.Group();
 
     const baseHue = new THREE.Color(eggColor);
@@ -839,7 +839,7 @@ export class DragonManager {
             // Growth
             bd.age += dt;
             let gs;
-            if (bd.age < 1200) gs = 0.08 + (bd.age / 1200) * (0.25 - 0.08);
+            if (bd.age < 1200) gs = 0.04 + (bd.age / 1200) * (0.25 - 0.04);
             else if (bd.age < 2400) gs = 0.25 + ((bd.age - 1200) / 1200) * (0.50 - 0.25);
             else if (bd.age < 3600) gs = 0.50 + ((bd.age - 2400) / 1200) * (1.0 - 0.50);
             else if (bd.age < 7200) gs = 1.0 + ((bd.age - 3600) / 3600) * (2.0 - 1.0);
