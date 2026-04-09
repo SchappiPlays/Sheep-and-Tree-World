@@ -702,27 +702,52 @@ export class DragonManager {
     }
 
     // ── Multiplayer sync helpers ──
-    _ensureMpId(bd) {
-        if (bd._mpId === undefined) {
-            this._nextMpId = (this._nextMpId || 0) + 1;
-            bd._mpId = this._nextMpId;
+    setMyPid(pid) { this._myPid = pid; }
+
+    // Remove "world" dragons so the host's sync can take over (called when joining as client)
+    removeWorldDragons() {
+        for (let i = this.dragons.length - 1; i >= 0; i--) {
+            const bd = this.dragons[i];
+            if (bd._fortressGuardian || bd._stationary || bd._iceDragon) {
+                this.scene.remove(bd.group);
+                this.dragons.splice(i, 1);
+            }
         }
-        return bd._mpId;
     }
 
-    // Host serializes its dragon list for broadcast to clients
+    // Remove all phantom dragons owned by a peer (call when peer disconnects)
+    removeDragonsForPeer(pid) {
+        if (!this._remoteDragons) return;
+        for (const [id, bd] of this._remoteDragons) {
+            if (bd._ownerPid === pid) {
+                this.scene.remove(bd.group);
+                this._remoteDragons.delete(id);
+            }
+        }
+    }
+
+    // Serialize this peer's owned dragons for broadcast
     serializeDragonsForSync() {
+        const myPid = this._myPid || 'local';
         const list = [];
         for (const bd of this.dragons) {
             if (bd.state !== 'alive') continue;
-            this._ensureMpId(bd);
+            if (bd._isRemote) continue; // never broadcast phantoms
+            if (!bd._ownerPid) bd._ownerPid = myPid; // claim unowned dragons
+            if (bd._ownerPid !== myPid) continue;
+            if (!bd._mpId) {
+                this._nextMpId = (this._nextMpId || 0) + 1;
+                bd._mpId = myPid + ':' + this._nextMpId;
+            }
             list.push({
                 id: bd._mpId,
+                ow: bd._ownerPid,
                 x: +bd.x.toFixed(2), z: +bd.z.toFixed(2),
                 y: +bd.group.position.y.toFixed(2),
                 ry: +bd.angle.toFixed(3),
                 rx: +(bd.group.rotation.x || 0).toFixed(3),
-                gs: +bd.growthScale.toFixed(2),
+                gs: +bd.growthScale.toFixed(3),
+                ag: +(bd.age || 0).toFixed(0),
                 wp: +bd.walkPhase.toFixed(2),
                 ec: bd.eggColor, wc: bd.wingColor || 0,
                 wy: bd.isWyvern ? 1 : 0,
@@ -739,34 +764,43 @@ export class DragonManager {
         return list;
     }
 
-    // Client receives host's dragon list and updates phantom dragons
-    applyDragonSync(list) {
+    // Receive a peer's dragon list and update phantom dragons (per-peer despawn)
+    applyDragonSync(list, fromPid) {
         if (!this._remoteDragons) this._remoteDragons = new Map();
+        const myPid = this._myPid;
         const seen = new Set();
         for (const d of list) {
+            // Skip echoes of our own dragons
+            if (d.ow === myPid) continue;
             seen.add(d.id);
             let bd = this._remoteDragons.get(d.id);
             if (!bd) {
-                // Spawn phantom
                 const hy = this.getHeight ? this.getHeight(d.x, d.z) : 0;
                 bd = makeBabyDragon(d.x, d.z, hy, d.ec, d.wc || null, !!d.wy);
                 bd._mpId = d.id;
+                bd._ownerPid = d.ow;
                 bd._isRemote = true;
                 bd.dragonName = d.nm || '';
+                bd.x = d.x; bd.z = d.z;
+                bd.angle = d.ry;
+                bd.group.position.set(d.x, d.y, d.z);
+                bd.group.rotation.y = d.ry;
+                bd.group.rotation.x = d.rx;
+                bd.growthScale = d.gs;
+                bd.group.scale.setScalar(d.gs);
+                bd.footOffset = 0.95 * 2.55 * d.gs;
+                bd._tgtX = d.x; bd._tgtY = d.y; bd._tgtZ = d.z;
+                bd._tgtRY = d.ry; bd._tgtRX = d.rx; bd._tgtGS = d.gs;
                 this.scene.add(bd.group);
                 this._remoteDragons.set(d.id, bd);
             }
-            bd.x = d.x; bd.z = d.z;
-            bd.angle = d.ry;
-            bd.group.position.set(d.x, d.y, d.z);
-            bd.group.rotation.y = d.ry;
-            bd.group.rotation.x = d.rx;
-            bd.growthScale = d.gs;
-            bd.group.scale.setScalar(d.gs);
-            bd.footOffset = 0.95 * 2.55 * d.gs;
-            bd.walkPhase = d.wp;
-            bd.flying = !!d.fl;
+            // Update lerp targets
+            bd._tgtX = d.x; bd._tgtY = d.y; bd._tgtZ = d.z;
+            bd._tgtRY = d.ry; bd._tgtRX = d.rx;
+            bd._tgtGS = d.gs;
+            bd.age = d.ag;
             bd.walking = !!d.wk;
+            bd.flying = !!d.fl;
             bd._breathingFire = !!d.bf;
             bd._iceBreath = !!d.ib;
             if (d.fy !== 999) {
@@ -774,19 +808,43 @@ export class DragonManager {
                 bd._fireDirPitch = d.fp;
             }
         }
-        // Despawn dragons no longer present
-        for (const [id, bd] of this._remoteDragons) {
-            if (!seen.has(id)) {
-                this.scene.remove(bd.group);
-                this._remoteDragons.delete(id);
+        // Despawn dragons of this peer that weren't in this latest sync
+        if (fromPid) {
+            for (const [id, bd] of this._remoteDragons) {
+                if (bd._ownerPid === fromPid && !seen.has(id)) {
+                    this.scene.remove(bd.group);
+                    this._remoteDragons.delete(id);
+                }
             }
         }
     }
 
-    // Animate phantom dragons (call from main loop after sync)
+    // Animate phantom dragons each frame: smooth lerp + wing/walk animation
     updateRemoteDragons(dt) {
         if (!this._remoteDragons) return;
+        const lerp = Math.min(1, 12 * dt);
         for (const bd of this._remoteDragons.values()) {
+            if (bd._tgtX === undefined) continue;
+            // Lerp position
+            bd.x += (bd._tgtX - bd.x) * lerp;
+            bd.z += (bd._tgtZ - bd.z) * lerp;
+            const py = bd.group.position.y;
+            bd.group.position.set(bd.x, py + (bd._tgtY - py) * lerp, bd.z);
+            // Lerp yaw (shortest path)
+            let dy = bd._tgtRY - bd.angle;
+            while (dy > Math.PI) dy -= Math.PI * 2;
+            while (dy < -Math.PI) dy += Math.PI * 2;
+            bd.angle += dy * lerp;
+            bd.group.rotation.y = bd.angle;
+            bd.group.rotation.x += (bd._tgtRX - bd.group.rotation.x) * lerp;
+            // Lerp scale
+            const cs = bd.growthScale || 0.04;
+            const ns = cs + (bd._tgtGS - cs) * lerp;
+            bd.growthScale = ns;
+            bd.group.scale.setScalar(ns);
+            bd.footOffset = 0.95 * 2.55 * ns;
+            // Drive walk/flap phase locally
+            bd.walkPhase += dt * (bd.flying ? 12 : (bd.walking ? 3 : 0.5));
             this._animateDragon(dt, bd);
         }
     }
@@ -988,6 +1046,7 @@ export class DragonManager {
                         egg.group.visible = false;
                         egg._idx = i;
                         if (this.addToInventory) this.addToInventory('egg_' + i, egg);
+                        if (this.onEggPickedUp) this.onEggPickedUp(i);
                         pickedEgg = true;
                         break;
                     }

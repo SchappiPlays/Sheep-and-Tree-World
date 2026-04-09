@@ -2870,9 +2870,22 @@ function startGame(loadSlotName) {
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
     creatures._dragonMgr = dragonMgr;
-    // Receive dragon sync from host (only clients use this)
-    mp.onDragonSync = (list) => {
-        if (!mp.isHost && dragonMgr) dragonMgr.applyDragonSync(list);
+    // Bidirectional dragon sync — every peer broadcasts their own dragons
+    mp.onDragonSync = (list, fromPid) => {
+        if (dragonMgr) dragonMgr.applyDragonSync(list, fromPid);
+    };
+    mp.onEggPickup = (idx) => {
+        if (dragonMgr && dragonMgr.eggs[idx] && !dragonMgr.eggs[idx].pickedUp) {
+            dragonMgr.eggs[idx].pickedUp = true;
+            dragonMgr.eggs[idx].group.visible = false;
+        }
+    };
+    mp.onPeerDisconnect = (pid) => {
+        if (dragonMgr) dragonMgr.removeDragonsForPeer(pid);
+    };
+    // When the local player picks up an egg, broadcast it
+    dragonMgr.onEggPickedUp = (idx) => {
+        if (mp.active) mp.sendEggPickup(idx);
     };
     player = new Player(scene, world);
     // Apply stat bonuses to player
@@ -5161,6 +5174,7 @@ window._mpHost = () => {
     if (statusEl) statusEl.textContent = 'Creating room...';
     mp.host(code => {
         if (statusEl) statusEl.textContent = '';
+        if (dragonMgr) dragonMgr.setMyPid(mp.myId);
         updateMpPanel();
     });
 };
@@ -5172,6 +5186,11 @@ window._mpJoin = () => {
     if (statusEl) statusEl.textContent = 'Joining...';
     mp.join(code, id => {
         if (id) {
+            if (dragonMgr) {
+                dragonMgr.setMyPid(mp.myId);
+                // Drop world dragons; host's sync will repopulate them as phantoms
+                dragonMgr.removeWorldDragons();
+            }
             updateMpPanel();
         } else {
             if (statusEl) statusEl.textContent = 'Failed to connect';
@@ -5179,6 +5198,7 @@ window._mpJoin = () => {
     });
 };
 window._mpDisconnect = () => {
+    if (dragonMgr) dragonMgr.setMyPid('');
     mp.disconnect();
     updateMpPanel();
 };
@@ -12249,7 +12269,7 @@ function animate() {
             const held = hotbarSlots[selectedSlot];
             mp.sendState(player, held, player.swingTimer, charColors);
         }
-        // Host syncs creatures + villagers + dragons at 5Hz
+        // Host syncs creatures + villagers at 5Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
             if (mp._creatureSendAccum >= 0.2) {
@@ -12264,8 +12284,14 @@ function animate() {
                     }));
                     mp._broadcast({ type: 'villagers', list: vList });
                 }
-                // Dragon sync (host's dragons → clients render as phantoms)
-                if (dragonMgr) mp.sendDragonState(dragonMgr.serializeDragonsForSync());
+            }
+        }
+        // Every peer syncs their owned dragons (host relays)
+        if (mp.active && dragonMgr) {
+            mp._dragonSendAccum = (mp._dragonSendAccum || 0) + dt;
+            if (mp._dragonSendAccum >= 0.15) {
+                mp._dragonSendAccum = 0;
+                mp.sendDragonState(dragonMgr.serializeDragonsForSync());
             }
         }
     }
@@ -12351,7 +12377,7 @@ function animate() {
     player._lookYaw = fpYaw;
     dragonMgr._timeOfDay = timeOfDay;
     dragonMgr.update(dt, player, keys);
-    if (mp.active && !mp.isHost) dragonMgr.updateRemoteDragons(dt);
+    if (mp.active) dragonMgr.updateRemoteDragons(dt);
 
     // Process smelt queue
     for (let si = smeltQueue.length - 1; si >= 0; si--) {

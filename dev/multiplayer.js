@@ -96,7 +96,14 @@ export class Multiplayer {
             } else if (data.type === 'creatures') {
                 if (this.onCreatureSync) this.onCreatureSync(data.list);
             } else if (data.type === 'dragons') {
-                if (this.onDragonSync) this.onDragonSync(data.list);
+                if (this.onDragonSync) this.onDragonSync(data.list, data.fromPid || pid);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'egg_pickup') {
+                if (this.onEggPickup) this.onEggPickup(data.idx);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'dragon_hatch') {
+                if (this.onDragonHatch) this.onDragonHatch(data);
+                if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
@@ -115,6 +122,7 @@ export class Multiplayer {
         conn.on('close', () => {
             this._removeRemotePlayer(pid);
             this.connections.delete(pid);
+            if (this.onPeerDisconnect) this.onPeerDisconnect(pid);
         });
     }
 
@@ -177,10 +185,22 @@ export class Multiplayer {
         this._broadcast({ type: 'creatures', list });
     }
 
-    // Host sends dragon state
+    // Any peer broadcasts the dragons it owns; host relays to other clients
     sendDragonState(dragonList) {
-        if (!this.active || !this.isHost) return;
-        this._broadcast({ type: 'dragons', list: dragonList });
+        if (!this.active) return;
+        this._broadcast({ type: 'dragons', list: dragonList, fromPid: this.myId });
+    }
+
+    // Broadcast that an egg was picked up by this peer
+    sendEggPickup(idx) {
+        if (!this.active) return;
+        this._broadcast({ type: 'egg_pickup', idx, fromPid: this.myId });
+    }
+
+    // Broadcast a fresh hatch (so other peers can spawn the same dragon immediately)
+    sendDragonHatch(info) {
+        if (!this.active) return;
+        this._broadcast({ type: 'dragon_hatch', ...info, fromPid: this.myId });
     }
 
     _broadcast(data) {
