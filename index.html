@@ -11446,7 +11446,7 @@ function animate() {
         }
     }
 
-    creatures.update(dt, player.position.x, player.position.z);
+    creatures.update(dt, player.position.x, player.position.z, player.position.y);
 
     // Villagers
     villageMgr.update(dt, player.position.x, player.position.z);

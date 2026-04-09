@@ -599,7 +599,8 @@ export class CreatureManager {
         this._nextId = 0;
     }
 
-    update(dt, playerX, playerZ) {
+    update(dt, playerX, playerZ, playerY) {
+        this._playerY = playerY || 0;
         // Spawn sheep in nearby chunks that haven't been populated yet
         const pcx = Math.floor(playerX / (CHUNK_SIZE * BLOCK_SIZE));
         const pcz = Math.floor(playerZ / (CHUNK_SIZE * BLOCK_SIZE));
@@ -731,6 +732,19 @@ export class CreatureManager {
             }
 
             // ── Hostile AI — chase and attack player ──
+            // Skip aggro if player is too far above (flying on dragon)
+            const vertDist = Math.abs(this._playerY - sh.group.position.y);
+            if (sh.hostile && vertDist > 8) {
+                // Too high — just wander
+                sh.wanderTimer -= dt;
+                if (sh.wanderTimer <= 0) { sh.walking = !sh.walking; if (sh.walking) sh.angle += (Math.random()-0.5)*2.2; sh.wanderTimer = 1.5+Math.random()*3; }
+                sh.speed += ((sh.walking ? 0.5 : 0) - sh.speed) * 4 * dt;
+                let da = sh.angle - sh.group.rotation.y; while(da>Math.PI)da-=Math.PI*2; while(da<-Math.PI)da+=Math.PI*2;
+                sh.group.rotation.y += da * 3 * dt;
+                if (sh.speed > 0.01) { sh.x += Math.sin(sh.group.rotation.y)*sh.speed*dt; sh.z += Math.cos(sh.group.rotation.y)*sh.speed*dt; }
+                const _ty = this.world.getHeight(sh.x, sh.z); sh.group.position.set(sh.x, _ty, sh.z);
+                continue;
+            }
             if (sh.hostile) {
                 // Summoned skeletons are handled separately in the game loop
                 if (sh._isSummon) continue;
