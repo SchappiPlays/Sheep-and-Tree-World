@@ -1229,10 +1229,10 @@ export class DragonManager {
                 // Flying: show patagium, restore afMesh body point
                 if (w._patMesh) w._patMesh.visible = true;
                 if (w._afOrigBodyPt) w._afBodyPt = w._afOrigBodyPt;
-                // Glue patagium body anchor (p0) to start of first tail chunk in body space
+                // Glue patagium body anchor (p0) to halfway through 2nd body chunk
                 if (w._patP0) {
                     const S = 2.55;
-                    const tx = 0, ty = -0.05 * S, tz = -0.95 * S;
+                    const tx = 0, ty = 0, tz = -0.3 * S;
                     w.updateMatrix();
                     _afInvMat.copy(w.matrix).invert();
                     _afv.set(tx, ty, tz).applyMatrix4(_afInvMat);
@@ -1290,13 +1290,13 @@ export class DragonManager {
                 }
                 if (w._memOutlineGround) w._memOutline = w._memOutlineGround;
                 applyFingerRots(w, w._groundFRots);
-                // Grounded: hide patagium, glue afMesh body point to start of first tail chunk
+                // Grounded: hide patagium, glue afMesh body point to halfway through 2nd body chunk
                 if (w._patMesh) w._patMesh.visible = false;
                 if (w._afBodyPt && w._afGroundedBodyPt) {
                     if (!w._afOrigBodyPt) w._afOrigBodyPt = w._afBodyPt.slice();
-                    // Target = front face of first tail segment in dragon-local space
+                    // Target = center of midBody (2nd body chunk) in dragon-local space
                     const S = 2.55;
-                    const tx = 0, ty = -0.05 * S, tz = -0.95 * S;
+                    const tx = 0, ty = 0, tz = -0.3 * S;
                     w.updateMatrix();
                     _afInvMat.copy(w.matrix).invert();
                     _afv.set(tx, ty, tz).applyMatrix4(_afInvMat);
