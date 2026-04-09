@@ -274,7 +274,10 @@ export class ChunkManager {
                     // Check if this is a natural surface block that should have slopes
                     let _isSlopeable = false;
                     let _cornerLow = [false, false, false, false];
-                    const _slopeStyle = (typeof window !== 'undefined' && window._slopeStyle) || 'mini';
+                    // Use simpler slope styles at higher LODs for performance
+                    let _slopeStyle = (typeof window !== 'undefined' && window._slopeStyle) || 'mini';
+                    if (lod >= 2 && _slopeStyle === 'mini') _slopeStyle = 'sloped';
+                    if (lod >= 3) _slopeStyle = 'none';
                     const _aboveBlock = this.world.getBlockAt(bx, y + 1, bz);
                     const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
                     if (_slopeStyle !== 'none' && (block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && _aboveIsOpen && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + 1) + ',' + bz)) {

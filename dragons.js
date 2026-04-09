@@ -135,7 +135,7 @@ function updateArmFingerMem(w) {
         const armElbowEnd = arm[N]; // wing-side, near wrist/elbow
         const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand); // wing-side, at shoulder
         const finFingerEnd = fin[N]; // membrane outer edge, at finger end
-        const N2 = 3; // subdivisions
+        const N2 = 2; // subdivisions
         // Build 4 corners
         // U axis: 0=arm side (elbow→shoulder), 1=trailing side (finger→body)
         // V axis: 0=outer (elbow/finger), 1=inner (shoulder/body)
