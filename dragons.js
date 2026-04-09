@@ -131,21 +131,52 @@ function updateArmFingerMem(w) {
     }
     if (w._afBodyPt) {
         const bp = toWgSpace(w._afBodyPt, 0, elb, hand);
-        // Single quad: arm bone edge from elbow tip → shoulder; trailing edge from finger tip → body point
-        const armElbowEnd = arm[N]; // already in WG space — far end of arm chain at elbow position 0
-        const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand); // shoulder position
-        const finFingerEnd = fin[N]; // finger end (last sample of finger chain)
-        // Render as 1 quad: elbow corner -> shoulder corner -> body point -> finger tip
-        const fa = armElbowEnd;     // wing-side, near wrist/elbow
-        const fb = armShoulderEnd;  // wing-side, at shoulder
-        const ga = finFingerEnd;    // membrane edge, at finger tip end
-        const gb = bp;              // membrane edge, at body
-        pos[vi++]=fa[0]; pos[vi++]=fa[1]; pos[vi++]=fa[2];
-        pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
-        pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
-        pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
-        pos[vi++]=gb[0]; pos[vi++]=gb[1]; pos[vi++]=gb[2];
-        pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
+        // Trailing membrane: subdivided 3x3 grid that bends across multiple axes
+        const armElbowEnd = arm[N]; // wing-side, near wrist/elbow
+        const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand); // wing-side, at shoulder
+        const finFingerEnd = fin[N]; // membrane outer edge, at finger end
+        const N2 = 3; // subdivisions
+        // Build 4 corners
+        // U axis: 0=arm side (elbow→shoulder), 1=trailing side (finger→body)
+        // V axis: 0=outer (elbow/finger), 1=inner (shoulder/body)
+        const corners = [
+            [armElbowEnd, armShoulderEnd], // u=0
+            [finFingerEnd, bp],            // u=1
+        ];
+        const grid = [];
+        for (let u = 0; u <= N2; u++) {
+            grid.push([]);
+            const tu = u / N2;
+            for (let v = 0; v <= N2; v++) {
+                const tv = v / N2;
+                // Bilinear interpolation between 4 corners
+                const c00 = corners[0][0], c01 = corners[0][1];
+                const c10 = corners[1][0], c11 = corners[1][1];
+                let x = c00[0]*(1-tu)*(1-tv) + c10[0]*tu*(1-tv) + c01[0]*(1-tu)*tv + c11[0]*tu*tv;
+                let y = c00[1]*(1-tu)*(1-tv) + c10[1]*tu*(1-tv) + c01[1]*(1-tu)*tv + c11[1]*tu*tv;
+                let z = c00[2]*(1-tu)*(1-tv) + c10[2]*tu*(1-tv) + c01[2]*(1-tu)*tv + c11[2]*tu*tv;
+                // Add a downward sag in the middle (parabolic across u)
+                const sag = Math.sin(tu * Math.PI) * 0.08;
+                y -= sag;
+                // Slight inward curve toward body (parabolic across v)
+                const curve = Math.sin(tv * Math.PI) * 0.05;
+                y -= curve;
+                grid[u].push([x, y, z]);
+            }
+        }
+        // Render as triangle strips
+        for (let u = 0; u < N2; u++) {
+            for (let v = 0; v < N2; v++) {
+                const a = grid[u][v], b = grid[u+1][v];
+                const c = grid[u][v+1], d = grid[u+1][v+1];
+                pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
+                pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+                pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+                pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+                pos[vi++]=d[0]; pos[vi++]=d[1]; pos[vi++]=d[2];
+                pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+            }
+        }
     }
     for (; vi < pos.length;) pos[vi++] = 0;
     w._afGeo.attributes.position.needsUpdate = true;
@@ -447,7 +478,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         wg._elbow = elbowGrp; wg._hand = handGrp; wg._s = s;
         wg._fingerGrps = fingerGrps; wg._groundFRots = _groundFRots; wg._flyFRots = _flyFRots;
         // Arm-finger membrane
-        const afArr = new Float32Array(8 * 18);
+        const afArr = new Float32Array(300);
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
@@ -542,7 +573,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         wg._elbow = elbowGrp; wg._hand = handGrp; wg._s = s;
         wg._fingerGrps = fingerGrps; wg._groundFRots = _groundFRots; wg._flyFRots = _flyFRots;
         // Arm-finger + inter-finger membranes
-        const afArr = new Float32Array(8 * 18);
+        const afArr = new Float32Array(300);
         const afGeo = new THREE.BufferGeometry();
         afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
         const afMesh = new THREE.Mesh(afGeo, bMem); afMesh.castShadow = true; wg.add(afMesh);
