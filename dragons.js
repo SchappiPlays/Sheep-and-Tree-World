@@ -659,14 +659,13 @@ export class DragonManager {
 
         // ── Eggs — exact colours from game.html ──
         const eggDefs = [
-            // Normal dragons
-            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, name: 'Dark Red Dragon' },
-            { dx: 4, dz: -1, color: 0x443388, emissive: 0x221155, veinColor: 0x7744cc, glowColor: 0x7744ff, name: 'Purple Dragon' },
-            { dx: -2, dz: -4, color: 0x228844, emissive: 0x114422, veinColor: 0x22cc66, glowColor: 0x22ff66, name: 'Emerald Dragon' },
-            { dx: 5, dz: 3, color: 0x4488cc, emissive: 0x224466, veinColor: 0xccaa33, glowColor: 0x44aaff, wingColor: 0xccaa33, name: 'Steel Blue Dragon' },
-            { dx: -5, dz: -1, color: 0x886622, emissive: 0x443311, veinColor: 0xcc8822, glowColor: 0xffaa22, name: 'Amber Dragon' },
-            { dx: 3, dz: 4, color: 0x2255aa, emissive: 0x112a55, veinColor: 0xff8833, glowColor: 0x4488ff, wingColor: 0xff8833, name: 'Royal Blue Dragon' },
             // Wyverns
+            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, isWyvern: true, name: 'Dark Red Wyvern' },
+            { dx: 4, dz: -1, color: 0x443388, emissive: 0x221155, veinColor: 0x7744cc, glowColor: 0x7744ff, isWyvern: true, name: 'Purple Wyvern' },
+            { dx: -2, dz: -4, color: 0x228844, emissive: 0x114422, veinColor: 0x22cc66, glowColor: 0x22ff66, isWyvern: true, name: 'Emerald Wyvern' },
+            { dx: 5, dz: 3, color: 0x4488cc, emissive: 0x224466, veinColor: 0xccaa33, glowColor: 0x44aaff, wingColor: 0xccaa33, isWyvern: true, name: 'Steel Blue Wyvern' },
+            { dx: -5, dz: -1, color: 0x886622, emissive: 0x443311, veinColor: 0xcc8822, glowColor: 0xffaa22, isWyvern: true, name: 'Amber Wyvern' },
+            { dx: 3, dz: 4, color: 0x2255aa, emissive: 0x112a55, veinColor: 0xff8833, glowColor: 0x4488ff, wingColor: 0xff8833, isWyvern: true, name: 'Royal Blue Wyvern' },
             { dx: 2, dz: 5, color: 0x1a1a1a, emissive: 0x110505, veinColor: 0xaa2222, glowColor: 0xff2222, wingColor: 0xaa2020, isWyvern: true, name: 'Shadow Wyvern' },
             { dx: -4, dz: 4, color: 0xb0d4e8, emissive: 0x5a7a8a, veinColor: 0xd4aa40, glowColor: 0xb0d4ff, wingColor: 0xd4aa40, isWyvern: true, name: 'Ice & Gold Wyvern' },
             { dx: 6, dz: -3, color: 0xaa2222, emissive: 0x551111, veinColor: 0xff4422, glowColor: 0xff4422, isWyvern: true, name: 'Crimson Wyvern' },
