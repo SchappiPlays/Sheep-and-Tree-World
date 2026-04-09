@@ -834,10 +834,10 @@ export class CreatureManager {
         const chunkWorldZ = cz * CHUNK_SIZE * BLOCK_SIZE;
         const chunkWorldSize = CHUNK_SIZE * BLOCK_SIZE;
 
-        // Deterministic creature placement — ~1 per 3-4 chunks
-        for (let i = 0; i < 2; i++) {
+        // Deterministic creature placement — ~1 per 2-3 chunks
+        for (let i = 0; i < 3; i++) {
             const hash = this.world._hash(cx * 100 + i * 7 + 9999, cz * 100 + i * 13 + 8888);
-            if (hash > 0.12) continue;
+            if (hash > 0.18) continue;
 
             const sx = chunkWorldX + hash * chunkWorldSize * 3.7 % chunkWorldSize;
             const sz = chunkWorldZ + this.world._hash(cx + i * 31, cz + i * 47) * chunkWorldSize;
@@ -873,15 +873,19 @@ export class CreatureManager {
                     continue;
                 }
             } else {
-                // Check if in a forested area (same hash as tree placement)
+                // Check if in a forested area — check several nearby blocks for trees
                 const bx = Math.floor(sx / BLOCK_SIZE), bz = Math.floor(sz / BLOCK_SIZE);
-                const treeHash = this.world._hash(bx * 0.37 + 7777, bz * 0.53 + 3333);
-                const isForested = treeHash <= 0.12; // generous check — near trees
+                let isForested = false;
+                for (let dx = -3; dx <= 3 && !isForested; dx += 2) {
+                    for (let dz = -3; dz <= 3 && !isForested; dz += 2) {
+                        if (this.world._hash((bx+dx) * 0.37 + 7777, (bz+dz) * 0.53 + 3333) <= 0.06) isForested = true;
+                    }
+                }
 
-                if (isForested && typeHash < 0.3) {
+                if (isForested && typeHash < 0.35) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);
-                } else if (isForested && typeHash < 0.45) {
+                } else if (isForested && typeHash < 0.55) {
                     // Forest — wolves
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.35) {
