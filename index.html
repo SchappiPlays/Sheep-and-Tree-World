@@ -2862,6 +2862,7 @@ function startGame(loadSlotName) {
     };
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
+    dragonMgr._creatureMgr = creatures;
     player = new Player(scene, world);
     // Apply stat bonuses to player
     player.walkSpeed = 3.6 * getStatSpeedMult();
@@ -5390,6 +5391,20 @@ document.body.appendChild(deathScreen);
 function playerTakeDamage(dmg) {
     if (playerDead || creativeMode) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
+    // If riding a dragon, share damage with it (50/50)
+    if (dragonMgr && dragonMgr.ridingDragon && dragonMgr.ridingRef) {
+        const dragonShare = Math.ceil(dmg * 0.5);
+        const playerShare = dmg - dragonShare;
+        dragonMgr.ridingRef.hp -= dragonShare;
+        if (dragonMgr.ridingRef.hp <= 0) {
+            dragonMgr.ridingRef.hp = 0;
+            dragonMgr.ridingRef.state = 'dead';
+            dragonMgr.ridingDragon = false;
+            dragonMgr.ridingRef = null;
+            addChatMessage('Your dragon has fallen!', 'rgba(255,100,100,0.95)');
+        }
+        dmg = playerShare;
+    }
     playerHP = Math.max(0, playerHP - dmg);
     updateHeartsUI();
     // Red flash
@@ -8518,6 +8533,16 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     // Sword attack — damage creatures in front of player
     const swordDmg = _getSwordDamage(held);
     if (swordDmg && inventory[held] > 0) {
+        // Track weapon tier for dragon damage check
+        const heldStr = String(held);
+        if (heldStr.includes('dragonsteel')) window._playerWeaponTier = 'dragonsteel';
+        else if (heldStr.includes('diamond')) window._playerWeaponTier = 'diamond';
+        else if (heldStr.includes('steel')) window._playerWeaponTier = 'steel';
+        else if (heldStr.includes('iron')) window._playerWeaponTier = 'iron';
+        else if (heldStr.includes('gold')) window._playerWeaponTier = 'gold';
+        else if (heldStr.includes('copper')) window._playerWeaponTier = 'copper';
+        else if (heldStr.includes('stone')) window._playerWeaponTier = 'stone';
+        else window._playerWeaponTier = 'wood';
         if (attackCooldown <= 0) {
             player.triggerSwing();
             attackCooldown = 0.6 * getSwordCooldownMult();
@@ -13239,6 +13264,7 @@ function addChatMessage(text, color) {
     if (chatMessages.length > 50) chatMessages.shift();
     renderChatLog();
 }
+window.addChatMessage = addChatMessage;
 
 function renderChatLog() {
     // Show last 10 messages, fade old ones

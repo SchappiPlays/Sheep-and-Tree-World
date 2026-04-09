@@ -826,15 +826,23 @@ export class DragonManager {
                     }
                 }
                 if (canHatch) {
-                    const egg = this.heldEgg;
-                    // Remove egg from inventory
-                    if (this.removeFromInventory) this.removeFromInventory('egg_' + egg._idx);
-                    const hy = this.getHeight(px, pz);
-                    const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
-                    this.scene.add(bd.group);
-                    this.dragons.push(bd);
-                    bd.dragonName = egg.name;
-                    this.heldEgg = null;
+                    // Limit: max 3 player-owned dragons
+                    const ownedCount = this.dragons.filter(d => !d._fortressGuardian && !d._stationary && d.state === 'alive').length;
+                    if (ownedCount >= 3) {
+                        // Can't hatch more
+                        if (typeof window !== 'undefined' && window.addChatMessage) {
+                            window.addChatMessage('You already have 3 dragons. They cannot all coexist.', 'rgba(255,150,100,0.9)');
+                        }
+                    } else {
+                        const egg = this.heldEgg;
+                        if (this.removeFromInventory) this.removeFromInventory('egg_' + egg._idx);
+                        const hy = this.getHeight(px, pz);
+                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
+                        this.scene.add(bd.group);
+                        this.dragons.push(bd);
+                        bd.dragonName = egg.name;
+                        this.heldEgg = null;
+                    }
                 }
             } else {
                 // Check for nearby egg to pick up → add to inventory
@@ -869,11 +877,30 @@ export class DragonManager {
         if (!keys['KeyE']) this._eDown = false;
 
         // ── Update all dragons ──
-        for (const bd of this.dragons) {
+        for (let bi = this.dragons.length - 1; bi >= 0; bi--) {
+            const bd = this.dragons[bi];
+            if (bd.state === 'dead') {
+                this.scene.remove(bd.group);
+                this.dragons.splice(bi, 1);
+                continue;
+            }
             if (bd.state !== 'alive') continue;
             // Stationary or fortress dragons skip growth + follow AI entirely
             if (bd._stationary || bd._fortressGuardian) {
                 this._animateDragon(dt, bd);
+                continue;
+            }
+
+            // HP regen — 1% per sec
+            if (bd.hp < bd.maxHP) bd.hp = Math.min(bd.maxHP, bd.hp + bd.maxHP * 0.01 * dt);
+
+            // Death check
+            if (bd.hp <= 0) {
+                bd.state = 'dead';
+                if (this.ridingRef === bd) {
+                    this.ridingDragon = false;
+                    this.ridingRef = null;
+                }
                 continue;
             }
 
@@ -889,6 +916,12 @@ export class DragonManager {
             bd.group.scale.setScalar(gs);
             bd.footOffset = 0.95 * 2.55 * gs;
             bd.followDist = 2.5 + gs * 3;
+            // Update max HP as dragon grows
+            const newMaxHP = getDragonMaxHP(bd.age);
+            if (newMaxHP > bd.maxHP) {
+                bd.hp += (newMaxHP - bd.maxHP); // grow with new HP
+                bd.maxHP = newMaxHP;
+            }
 
             // ── Riding ──
             if (this.ridingDragon && this.ridingRef === bd) {
@@ -960,6 +993,53 @@ export class DragonManager {
         const flySpeed = 25 + gs * 15;
         const walkSpeed = 6 + gs * 4;
         const turnRate = 2.5;
+
+        // F key — breathe fire
+        bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
+        if (keys['KeyF']) {
+            bd._breathingFire = true;
+            // Fire breath visual mesh — create on demand
+            if (!bd._fireMesh) {
+                const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+                const fireMesh = new THREE.Mesh(new THREE.ConeGeometry(2.5, 12, 6, 1, true), fireMat);
+                fireMesh.renderOrder = 998;
+                this.scene.add(fireMesh);
+                bd._fireMesh = fireMesh;
+                bd._fireMat = fireMat;
+            }
+            bd._fireMesh.visible = true;
+            // Position fire from dragon head, in facing direction
+            const headY = bd.flying ? bd.flyHeight + 1 : bd.group.position.y + 2;
+            const fireDist = 7;
+            const fx = bd.x + Math.sin(bd.angle) * fireDist;
+            const fz = bd.z + Math.cos(bd.angle) * fireDist;
+            bd._fireMesh.position.set(fx, headY, fz);
+            bd._fireMesh.lookAt(bd.x + Math.sin(bd.angle) * 100, headY, bd.z + Math.cos(bd.angle) * 100);
+            bd._fireMesh.rotateX(Math.PI / 2);
+            bd._fireMat.opacity = 0.5 + Math.sin(performance.now() * 0.02) * 0.2;
+            bd._fireMat.color.setHex(Math.random() > 0.3 ? 0xff6600 : 0xff3300);
+            // Damage creatures in range — every 0.33s for 3 dmg/sec
+            if (bd._fireBreathTimer <= 0) {
+                bd._fireBreathTimer = 0.33;
+                if (this._creatureMgr) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead) continue;
+                        // Skip dragons, colossus, ember lord, necromancers
+                        if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+                        if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+                        const cdx = c.x - fx, cdz = c.z - fz;
+                        const cd = Math.sqrt(cdx*cdx + cdz*cdz);
+                        if (cd < 6) {
+                            c.hp -= 1; // 1 damage per 0.33s = 3/sec
+                            if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                        }
+                    }
+                }
+            }
+        } else if (bd._fireMesh) {
+            bd._fireMesh.visible = false;
+            bd._breathingFire = false;
+        }
 
         if (keys['KeyA'] || keys['ArrowLeft']) bd.angle += turnRate * dt;
         if (keys['KeyD'] || keys['ArrowRight']) bd.angle -= turnRate * dt;
@@ -1156,6 +1236,18 @@ export class DragonManager {
 
     _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern);
+    }
+
+    // Damage a dragon — respects weapon tier (only steel+ from players)
+    damageDragon(bd, amount, source) {
+        if (!bd || bd.state !== 'alive' || bd._fortressGuardian || bd._stationary) return false;
+        if (source === 'player_weapon') {
+            // Check held weapon tier — only steel/dragonsteel hurts dragons
+            const tier = (typeof window !== 'undefined' && window._playerWeaponTier) || 'wood';
+            if (tier !== 'steel' && tier !== 'diamond' && tier !== 'dragonsteel') return false;
+        }
+        bd.hp = Math.max(0, bd.hp - amount);
+        return true;
     }
 
     // Find the dragon the player is looking at (raycast-style — closest in front, within range)
