@@ -489,7 +489,7 @@ export class World {
                 const wx = bx * BLOCK_SIZE;
                 const wz = bz * BLOCK_SIZE;
                 const h = getTerrainHeight(wx, wz);
-                const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
+                const surfaceBlock = h < 0.01 ? yOff - 3 : Math.floor(h / BLOCK_SIZE) + yOff;
                 const seaBlock = yOff; // y=0 in world = sea level
 
                 const biome = this._getBiome(wx, wz);
@@ -516,7 +516,8 @@ export class World {
                 const riverWaterLevel = Math.floor(0.5 / BLOCK_SIZE) + yOff;
 
                 // Near coast = sand. Inland low areas = grass/water
-                const distFC = Math.sqrt(wx * wx + wz * wz);
+                const _sz = wz / ISLAND_NS_SCALE;
+                const distFC = Math.sqrt(wx * wx + _sz * _sz);
                 const isCoastal = distFC > getIslandRadius(wx, wz) - 80;
 
                 for (let y = 0; y < WORLD_HEIGHT; y++) {

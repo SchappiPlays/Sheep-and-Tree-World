@@ -907,7 +907,7 @@ function buildFarTerrain(centerX, centerZ) {
             // Shader handles the cutout dynamically — no mesh skip needed
             const wx = gx * S, wz = gz * S;
             const rawTH = getTerrainHeight(wx, wz);
-            if (rawTH < 0.5) continue; // skip ocean cells — water plane shows through
+            if (rawTH < 0.01) continue; // skip ocean cells (outside island boundary)
             const snapH = gH(gx, gz);
             const top = snapH + BS;
 
