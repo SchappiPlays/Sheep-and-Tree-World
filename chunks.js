@@ -275,13 +275,16 @@ export class ChunkManager {
                     // Slope goes on the UPPER block — check if any cardinal neighbor is 1 block LOWER
                     let _isSlopeable = false;
                     let _slopeDir = null; // which direction is lower
-                    if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && this.world.getBlockAt(bx, y + S, bz) === BLOCK.AIR && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + S) + ',' + bz)) {
-                        const _isSolidBlock = b => b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES;
-                        // Check cardinal neighbors for being 1 block lower (air at same level, solid below)
+                    const _aboveBlock = this.world.getBlockAt(bx, y + S, bz);
+                    const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
+                    if ((block === BLOCK.GRASS || block === BLOCK.DIRT || block === BLOCK.SAND || block === BLOCK.SNOW || block === BLOCK.GRAVEL || block === BLOCK.CLAY || block === BLOCK.PATH) && _aboveIsOpen && !this.world._modifiedBlocks.has(bx + ',' + y + ',' + bz) && !this.world._modifiedBlocks.has(bx + ',' + (y + S) + ',' + bz)) {
+                        const _isSolidBlock = b => b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE;
+                        // Check cardinal neighbors for being 1 block lower (air/flower at same level, solid below)
                         for (const [ndx, ndz] of [[S,0],[-S,0],[0,S],[0,-S]]) {
                             const nbSame = this.world.getBlockAt(bx + ndx, y, bz + ndz);
                             const nbBelow = this.world.getBlockAt(bx + ndx, y - S, bz + ndz);
-                            if (!_isSolidBlock(nbSame) && _isSolidBlock(nbBelow)) {
+                            // Only slope if neighbor is truly lower (air, not a flower sitting on same-level ground)
+                            if (nbSame === BLOCK.AIR && _isSolidBlock(nbBelow)) {
                                 _isSlopeable = true;
                                 _slopeDir = [ndx, ndz]; // direction toward the lower block
                                 break;
