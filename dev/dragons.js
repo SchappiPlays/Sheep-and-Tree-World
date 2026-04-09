@@ -1344,11 +1344,13 @@ export class DragonManager {
         if (bd._neckBendT > 0.01) {
             this._aimDragonHead(bd, false);
         } else if (bd.neckSegs) {
-            // Fully released — clear neck seg rotations so default head animation reads through
+            // Fully released — clear all rotations so default head animation reads through
+            bd._neckBendT = 0;
             for (const seg of bd.neckSegs) {
-                seg.rotation.y *= 0.85;
-                seg.rotation.x *= 0.85;
+                seg.rotation.y = 0;
+                seg.rotation.x = 0;
             }
+            bd.headGrp.rotation.y = 0;
         }
         // Jaw open animation — smoothly opens when breathing fire
         if (bd.jawGrp) {
@@ -1536,8 +1538,8 @@ export class DragonManager {
         while (yawRel > Math.PI) yawRel -= Math.PI * 2;
         while (yawRel < -Math.PI) yawRel += Math.PI * 2;
         yawRel = Math.max(-1.7, Math.min(1.7, yawRel));
-        // Pitch in body-local terms (subtract everything that already pitches the head)
-        let pitchRel = -bd._fireDirPitch - bodyPitch - baseNeckPitch;
+        // Pitch — flipped sign so the bend matches the aim direction
+        let pitchRel = bd._fireDirPitch - bodyPitch - baseNeckPitch;
         pitchRel = Math.max(-1.2, Math.min(1.2, pitchRel));
         if (snap) bd._neckBendT = 1;
         const bendT = bd._neckBendT || 0;
@@ -1549,10 +1551,10 @@ export class DragonManager {
             seg.rotation.y = segYaw;
             seg.rotation.x = segPitch;
         }
-        // Head finishes the rotation — blend with whatever the default head animation set
+        // Head finishes the rotation — yaw default is 0, pitch default already set by anim
         const headYawTarget = yawRel * 0.35;
         const headPitchTarget = pitchRel * 0.35;
-        bd.headGrp.rotation.y = bd.headGrp.rotation.y * (1 - bendT) + headYawTarget * bendT;
+        bd.headGrp.rotation.y = headYawTarget * bendT; // decays cleanly to 0
         bd.headGrp.rotation.x = bd.headGrp.rotation.x * (1 - bendT) + headPitchTarget * bendT;
         bd.headGrp.updateMatrixWorld(true);
     }
