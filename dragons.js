@@ -131,40 +131,42 @@ function updateArmFingerMem(w) {
     }
     if (w._afBodyPt) {
         const bp = toWgSpace(w._afBodyPt, 0, elb, hand);
-        // Trailing membrane: subdivided 3x3 grid that bends across multiple axes
-        const armElbowEnd = arm[N]; // wing-side, near wrist/elbow
-        const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand); // wing-side, at shoulder
-        const finFingerEnd = fin[N]; // membrane outer edge, at finger end
-        const N2 = 2; // subdivisions
-        // Build 4 corners
-        // U axis: 0=arm side (elbow→shoulder), 1=trailing side (finger→body)
-        // V axis: 0=outer (elbow/finger), 1=inner (shoulder/body)
-        const corners = [
-            [armElbowEnd, armShoulderEnd], // u=0
-            [finFingerEnd, bp],            // u=1
-        ];
+        // Trailing membrane: connects the wing to the body
+        // Front edge: shares the elbow edge of the arm-finger strip (arm[N], fin[N])
+        // Back edge: extends to the body point (bp)
+        // This makes the trailing membrane connect to the same edge the arm-finger strip ends on
+        const armElbowEnd = arm[N]; // shared with end of arm-finger strip
+        const finFingerEnd = fin[N]; // shared with end of arm-finger strip (finger side)
+        const armShoulderEnd = toWgSpace([0, 0, 0], 0, elb, hand);
+        // Single quad: from shared edge → body point
+        // Front side: elbow point → shoulder point (along body)
+        // Back side: finger end → body point (extension)
+        const N2 = 3;
         const grid = [];
         for (let u = 0; u <= N2; u++) {
             grid.push([]);
             const tu = u / N2;
             for (let v = 0; v <= N2; v++) {
                 const tv = v / N2;
-                // Bilinear interpolation between 4 corners
-                const c00 = corners[0][0], c01 = corners[0][1];
-                const c10 = corners[1][0], c11 = corners[1][1];
+                // u=0 → finger side (outer membrane edge)
+                // u=1 → arm side (inner edge along body)
+                // v=0 → at the elbow (shared with arm-finger strip end)
+                // v=1 → at the body point / shoulder
+                // Corners:
+                // (0,0): finFingerEnd  (0,1): bp (body, finger-side end)
+                // (1,0): armElbowEnd   (1,1): armShoulderEnd
+                const c00 = finFingerEnd, c01 = bp;
+                const c10 = armElbowEnd, c11 = armShoulderEnd;
                 let x = c00[0]*(1-tu)*(1-tv) + c10[0]*tu*(1-tv) + c01[0]*(1-tu)*tv + c11[0]*tu*tv;
                 let y = c00[1]*(1-tu)*(1-tv) + c10[1]*tu*(1-tv) + c01[1]*(1-tu)*tv + c11[1]*tu*tv;
                 let z = c00[2]*(1-tu)*(1-tv) + c10[2]*tu*(1-tv) + c01[2]*(1-tu)*tv + c11[2]*tu*tv;
-                // Add a downward sag in the middle (parabolic across u)
-                const sag = Math.sin(tu * Math.PI) * 0.08;
+                // Subtle sag in the middle
+                const sag = Math.sin(tu * Math.PI) * Math.sin(tv * Math.PI) * 0.06;
                 y -= sag;
-                // Slight inward curve toward body (parabolic across v)
-                const curve = Math.sin(tv * Math.PI) * 0.05;
-                y -= curve;
                 grid[u].push([x, y, z]);
             }
         }
-        // Render as triangle strips
+        // Render as triangles
         for (let u = 0; u < N2; u++) {
             for (let v = 0; v < N2; v++) {
                 const a = grid[u][v], b = grid[u+1][v];
