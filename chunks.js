@@ -567,19 +567,36 @@ export class ChunkManager {
                         const verts = face.verts;
                         // Collect sloped Y values
                         const _slopeYs = [];
-                        const halfBS = BS * 0.5;
                         const blockTopY = (y - Y_OFF + S) * BS;
                         const blockBotY = (y - Y_OFF) * BS;
-                        for (let vi = 0; vi < 4; vi++) {
-                            let vy = (y - Y_OFF + verts[vi][1] * S) * BS;
-                            if (_isSlopeable && verts[vi][1] === 1) {
-                                const cx = (bx + verts[vi][0] * S) * BS;
-                                const cz = (bz + verts[vi][2] * S) * BS;
-                                const th = getTerrainHeight(cx, cz);
-                                // Snap to half-block, but never below block bottom
-                                vy = Math.max(blockBotY, Math.round(th / halfBS) * halfBS);
+                        if (_isSlopeable) {
+                            // Check which corners should be raised/lowered based on diagonal neighbors
+                            // Verts: [0,1,0]=(-x,-z), [0,1,1]=(-x,+z), [1,1,0]=(+x,-z), [1,1,1]=(+x,+z)
+                            // For each corner, check the diagonal neighbor in that direction
+                            const cornerDirs = [[-S, -S], [-S, S], [S, -S], [S, S]];
+                            for (let vi = 0; vi < 4; vi++) {
+                                if (verts[vi][1] === 1) {
+                                    const [cdx, cdz] = cornerDirs[vi];
+                                    const diagAbove = this.world.getBlockAt(bx + cdx, y + S, bz + cdz);
+                                    const diagBelow = this.world.getBlockAt(bx + cdx, y - S, bz + cdz);
+                                    const diagSame = this.world.getBlockAt(bx + cdx, y, bz + cdz);
+                                    if (diagAbove !== BLOCK.AIR && diagAbove !== BLOCK.WATER && diagAbove !== BLOCK.LEAVES && diagAbove !== BLOCK.PINE_LEAVES) {
+                                        // Neighbor is higher — raise this corner by 1 block
+                                        _slopeYs.push(blockTopY + BS);
+                                    } else if (diagSame === BLOCK.AIR || diagSame === BLOCK.WATER) {
+                                        // Neighbor is lower — lower this corner by 1 block
+                                        _slopeYs.push(blockTopY - BS);
+                                    } else {
+                                        _slopeYs.push(blockTopY);
+                                    }
+                                } else {
+                                    _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
+                                }
                             }
-                            _slopeYs.push(vy);
+                        } else {
+                            for (let vi = 0; vi < 4; vi++) {
+                                _slopeYs.push((y - Y_OFF + verts[vi][1] * S) * BS);
+                            }
                         }
                         // Skip top face only if ALL corners are well below block bottom
                         if (fi === 2 && _isSlopeable) {
