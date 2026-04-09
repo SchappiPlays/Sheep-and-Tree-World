@@ -446,7 +446,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
             makeDragonBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
             fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
         }
-        const _groundFRots = [{spreadY:-0.56,liftX:0,curlX:0},{spreadY:-0.07,liftX:0,curlX:0},{spreadY:0.24,liftX:0,curlX:0},{spreadY:0.52,liftX:0,curlX:0}];
+        const _groundFRots = [{spreadY:-0.86,liftX:0.5,curlX:0},{spreadY:-0.37,liftX:0.5,curlX:0},{spreadY:-0.06,liftX:0.5,curlX:0},{spreadY:0.22,liftX:0.5,curlX:0}];
         const _flyFRots = [{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0}];
         // Main membrane
         const memOutline = [];
