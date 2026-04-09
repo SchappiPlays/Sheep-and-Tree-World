@@ -108,11 +108,28 @@ function updateArmFingerMem(w) {
         if (br.x || br.y) _afv.applyEuler(br);
         cTip = [_afv.x, _afv.y, _afv.z];
     } else { cTip = w._afStaticTip; cMid = w._afStaticMid; }
-    const N = 5;
+    const N = 8;
     const arm = [], fin = [];
+    // Arm edge: first half follows the forearm bone, second half bends toward finger tip
+    // so the trailing edge aligns with the first inter-finger membrane
+    const armEnd = toWgSpace([0, 0, 0], 1, elb, hand); // wrist/hand joint
+    const tipWg = toWgSpace(cTip, 2, elb, hand); // finger tip in wing space
     for (let i = 0; i <= N; i++) {
         const t = i / N;
-        arm.push(toWgSpace([si * fl * (1 - t), 0, 0], 1, elb, hand));
+        if (t <= 0.5) {
+            // First half: along the forearm
+            const u = t * 2;
+            arm.push(toWgSpace([si * fl * (1 - u), 0, 0], 1, elb, hand));
+        } else {
+            // Second half: bend from wrist toward finger tip
+            const u = (t - 0.5) * 2;
+            arm.push([
+                armEnd[0] + (tipWg[0] - armEnd[0]) * u,
+                armEnd[1] + (tipWg[1] - armEnd[1]) * u,
+                armEnd[2] + (tipWg[2] - armEnd[2]) * u,
+            ]);
+        }
+        // Finger edge: traces from hand origin to finger tip
         let fp;
         if (t <= 0.5) { const u = t * 2; fp = [cMid[0]*u, cMid[1]*u, cMid[2]*u]; }
         else { const u = (t - 0.5) * 2; fp = [cMid[0]*(1-u)+cTip[0]*u, cMid[1]*(1-u)+cTip[1]*u, cMid[2]*(1-u)+cTip[2]*u]; }
