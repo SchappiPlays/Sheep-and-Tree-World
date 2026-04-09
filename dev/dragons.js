@@ -352,10 +352,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.03*S, 0.08*S, 0.06*S), dragonPupilMat);
         pupil.position.set(s*0.04*S, 0, 0.045*S); eye.add(pupil);
     }
-    // Horns
+    // Horns — taper from wide base to pointy tip at top
     for (let s = -1; s <= 1; s += 2) {
-        makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.05*S, 0.04*S, bHorn, headGrp);
-        makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.04*S, 0.015*S, bHorn, headGrp);
+        makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
+        makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
     }
     // Jaw
     const jawGrp = new THREE.Group();
