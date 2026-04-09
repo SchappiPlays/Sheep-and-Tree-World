@@ -2195,6 +2195,134 @@ function startGame(loadSlotName) {
                 { x: FX + 1*BS, z: (cz + HD + 5) * BS },
             ],
         };
+
+        // === BONE PILES & DEAD SKELETONS around fortress ===
+        const boneMat = new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.85 });
+        const skullMat = new THREE.MeshStandardMaterial({ color: 0xddd5c0, roughness: 0.8 });
+        const darkSocketMat = new THREE.MeshStandardMaterial({ color: 0x1a1010, roughness: 0.9 });
+        const _hash = (a, b) => { const d = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return d - Math.floor(d); };
+
+        // Helper to make a single bone (cylinder)
+        const _makeBone = (x, y, z, len, rot) => {
+            const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, len, 5), boneMat);
+            bone.position.set(x, y, z);
+            bone.rotation.set(rot.x || 0, rot.y || 0, rot.z || 0);
+            bone.castShadow = true;
+            scene.add(bone);
+        };
+        // Helper to make a skull
+        const _makeSkull = (x, y, z, ry) => {
+            const skullG = new THREE.Group();
+            const skull = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.18), skullMat);
+            skullG.add(skull);
+            // Eye sockets
+            const lSocket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.03), darkSocketMat);
+            lSocket.position.set(-0.04, 0.02, 0.085); skullG.add(lSocket);
+            const rSocket = lSocket.clone(); rSocket.position.x = 0.04; skullG.add(rSocket);
+            // Jaw
+            const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.14), skullMat);
+            jaw.position.y = -0.1; skullG.add(jaw);
+            skullG.position.set(x, y, z);
+            skullG.rotation.y = ry;
+            scene.add(skullG);
+        };
+        // Pile of bones and skulls
+        const _makeBonePile = (cx, cz, count) => {
+            const baseY = getTerrainHeight(cx, cz) + 0.05;
+            for (let i = 0; i < count; i++) {
+                const ang = _hash(cx + i, cz + i*7) * Math.PI * 2;
+                const r = _hash(cx*2 + i, cz*3 + i) * 1.5;
+                const bx = cx + Math.cos(ang) * r;
+                const bz = cz + Math.sin(ang) * r;
+                const by = baseY + _hash(bx, bz) * 0.3;
+                const t = _hash(i*3 + cx, i*5 + cz);
+                if (t < 0.25) {
+                    // Skull
+                    _makeSkull(bx, by + 0.08, bz, _hash(bx, bz) * Math.PI * 2);
+                } else {
+                    // Bone
+                    const len = 0.2 + _hash(bx*2, bz*2) * 0.3;
+                    _makeBone(bx, by + 0.05, bz, len, {
+                        x: _hash(bx*7, bz*7) * 0.8 - 0.4,
+                        y: _hash(bx*11, bz*11) * Math.PI * 2,
+                        z: _hash(bx*13, bz*13) * Math.PI - Math.PI/2,
+                    });
+                }
+            }
+        };
+        // Helper to make a dead/fallen skeleton (sprawled bones)
+        const _makeDeadSkeleton = (cx, cz) => {
+            const baseY = getTerrainHeight(cx, cz) + 0.05;
+            const ry = _hash(cx, cz) * Math.PI * 2;
+            const cosR = Math.cos(ry), sinR = Math.sin(ry);
+            const rot = (lx, lz) => [cx + lx * cosR - lz * sinR, cz + lx * sinR + lz * cosR];
+            // Skull
+            _makeSkull(...[rot(0.5, 0)[0], baseY + 0.08, rot(0.5, 0)[1]], ry);
+            // Spine — 3 vertebrae
+            for (let i = 0; i < 3; i++) {
+                const [vx, vz] = rot(0.3 - i*0.15, 0);
+                const v = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.08), boneMat);
+                v.position.set(vx, baseY + 0.08, vz); scene.add(v);
+            }
+            // Ribcage — 4 ribs
+            for (let i = 0; i < 4; i++) {
+                const [rx, rz] = rot(0.1 - i*0.07, 0);
+                const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.025, 0.04), boneMat);
+                rib.position.set(rx, baseY + 0.1, rz);
+                rib.rotation.y = ry;
+                scene.add(rib);
+            }
+            // Arm bones
+            const [aLx, aLz] = rot(0.05, -0.15);
+            _makeBone(aLx, baseY + 0.06, aLz, 0.3, { z: ry + 0.5, x: -0.2 });
+            const [aRx, aRz] = rot(0.05, 0.15);
+            _makeBone(aRx, baseY + 0.06, aRz, 0.3, { z: ry - 0.5, x: 0.2 });
+            // Leg bones
+            const [lLx, lLz] = rot(-0.4, -0.08);
+            _makeBone(lLx, baseY + 0.06, lLz, 0.4, { z: ry + 0.3 });
+            const [lRx, lRz] = rot(-0.4, 0.08);
+            _makeBone(lRx, baseY + 0.06, lRz, 0.4, { z: ry - 0.3 });
+            // Pelvis
+            const [px, pz] = rot(-0.18, 0);
+            const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.1), boneMat);
+            pelvis.position.set(px, baseY + 0.07, pz);
+            pelvis.rotation.y = ry;
+            scene.add(pelvis);
+        };
+
+        // Scatter bone piles around fortress perimeter
+        const piles = [
+            // Near north gate
+            [FX - 8, (cz - HD - 4) * BS, 8],
+            [FX + 6, (cz - HD - 6) * BS, 6],
+            [FX - 12, (cz - HD - 9) * BS, 10],
+            // Near east gate
+            [(cx + HW + 6) * BS, FZ - 7, 7],
+            [(cx + HW + 9) * BS, FZ + 4, 9],
+            [(cx + HW + 12) * BS, FZ - 2, 6],
+            // Near south gate
+            [FX - 5, (cz + HD + 5) * BS, 8],
+            [FX + 9, (cz + HD + 7) * BS, 7],
+            [FX - 10, (cz + HD + 10) * BS, 9],
+            // Random scattered around walls
+            [FX - HW*BS - 6, FZ - 20, 5],
+            [FX - HW*BS - 4, FZ + 18, 6],
+            [FX + 18, FZ - HD*BS - 3, 5],
+            [FX - 22, FZ + HD*BS + 2, 7],
+        ];
+        for (const [px, pz, count] of piles) _makeBonePile(px, pz, count);
+        // Dead skeletons sprawled around
+        const deadSkels = [
+            [FX - 4, (cz - HD - 7) * BS],
+            [FX + 8, (cz - HD - 4) * BS],
+            [(cx + HW + 7) * BS, FZ + 6],
+            [(cx + HW + 4) * BS, FZ - 8],
+            [FX - 6, (cz + HD + 8) * BS],
+            [FX + 5, (cz + HD + 4) * BS],
+            [FX - HW*BS - 5, FZ - 10],
+            [FX - HW*BS - 7, FZ + 12],
+        ];
+        for (const [dx, dz] of deadSkels) _makeDeadSkeleton(dx, dz);
     }
 
     function buildForestGate(w, gateX, gateZ, axis, shattered) {
