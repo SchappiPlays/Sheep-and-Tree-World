@@ -1400,7 +1400,7 @@ function startGame(loadSlotName) {
         const BS = BLOCK_SIZE;
         const yOff = 128;
         const centerX = Math.round(-505 / BS);
-        const centerZ = Math.round(-175 / BS);
+        const centerZ = Math.round(-335 / BS);
         const groundY = Math.floor(getTerrainHeight(-505, -335) / BS) + yOff;
         const S = BLOCK.DARK_STONE, G = BLOCK.GRAVEL, P = BLOCK.PLANKS, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
@@ -2128,8 +2128,8 @@ function startGame(loadSlotName) {
 
         // Ruin 3: Stone archway (-50, -175)
         {
-            const rx = Math.round(-50 / BS), rz = Math.round(-175 / BS);
-            const gy = Math.floor(getTerrainHeight(-50, -175) / BS) + yOff;
+            const rx = Math.round(-50 / BS), rz = Math.round(-335 / BS);
+            const gy = Math.floor(getTerrainHeight(-50, -335) / BS) + yOff;
             // Two pillars
             for (let y = 0; y < 8; y++) {
                 rb(rx, gy+y, rz-3, S, 0.05);
@@ -2536,8 +2536,8 @@ function startGame(loadSlotName) {
         fortDragon._fireMesh = fireMesh;
         fortDragon._fireMat = fireMat;
         fortDragon.x = -505;
-        fortDragon.z = -175;
-        fortDragon.group.position.set(-505, getTerrainHeight(-505, -335) + 40, -175);
+        fortDragon.z = -335;
+        fortDragon.group.position.set(-505, getTerrainHeight(-505, -335) + 40, -335);
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
@@ -6377,7 +6377,7 @@ function drawWorldMap() {
         drawLabel(-20, -220, 'Stone Circle', ruinStyle, 8);
 
         // Dragon altar
-        const altX = toX(-505), altY = toY(-175);
+        const altX = toX(-505), altY = toY(-335);
         if (altX > -20 && altX < w+20 && altY > -20 && altY < h+20) {
             const s = Math.max(3, Math.min(7, 5 * scale));
             mapCtx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; mapCtx.lineWidth = 1.5;
@@ -11792,7 +11792,7 @@ function animate() {
     // Context music — boss > fortress > village > calm
     {
         const aliveBosses = creatures.creatures.filter(c => c._isBoss && !c.dead);
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-175);
+        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const cur = musicSystem.currentName;
 
@@ -11848,7 +11848,7 @@ function animate() {
     // Fortress guardian wyvern — circle above fortress (day), land at night
     if (world._fortressDragon) {
         const fd = world._fortressDragon;
-        const fortCX = -505, fortCZ = -175;
+        const fortCX = -505, fortCZ = -335;
         const landX = fortCX + 20, landZ = fortCZ + 15; // landing spot near fortress
         const landY = getTerrainHeight(landX, landZ);
         fd._flapT = (fd._flapT || 0) + dt;
@@ -11869,14 +11869,19 @@ function animate() {
             fd._landT += dt * 0.25; // 4 second transition
             const t = Math.min(1, fd._landT);
             const smooth = t * t * (3 - 2 * t);
-            // Spiral down
-            fd._flyAngle += fd._flySpeed * dt * (1 - smooth * 0.8);
-            const curR = fd._flyRadius * (1 - smooth * 0.6);
-            fd.x = fortCX + Math.cos(fd._flyAngle) * curR * (1 - smooth) + landX * smooth;
-            fd.z = fortCZ + Math.sin(fd._flyAngle) * curR * (1 - smooth) + landZ * smooth;
-            const flyY = getTerrainHeight(fortCX, fortCZ) + fd._flyHeight * (1 - smooth) + landY * smooth;
-            fd.group.position.set(fd.x, flyY, fd.z);
-            fd.group.rotation.y = -fd._flyAngle * (1 - smooth) + Math.atan2(-(landX - fd.x), -(landZ - fd.z)) * smooth;
+            // Keep orbiting but shrink radius and descend
+            fd._flyAngle += fd._flySpeed * dt * (1 - smooth * 0.7);
+            const orbitX = fortCX + Math.cos(fd._flyAngle) * fd._flyRadius;
+            const orbitZ = fortCZ + Math.sin(fd._flyAngle) * fd._flyRadius;
+            const orbitY = getTerrainHeight(fortCX, fortCZ) + fd._flyHeight;
+            // Lerp from orbit to landing spot
+            fd.x = orbitX + (landX - orbitX) * smooth;
+            fd.z = orbitZ + (landZ - orbitZ) * smooth;
+            const curY = orbitY + (landY - orbitY) * smooth;
+            fd.group.position.set(fd.x, curY, fd.z);
+            // Face direction of travel, blend to facing fortress
+            const faceAngle = Math.atan2(-(fortCX - landX), -(fortCZ - landZ));
+            fd.group.rotation.y = -fd._flyAngle + (-fd._flyAngle - faceAngle) * (smooth - 1);
             fd.group.rotation.z = 0.15 * (1 - smooth);
             fd.group.rotation.x = 0.1 * (1 - smooth);
             fd.flying = true;
@@ -11905,10 +11910,13 @@ function animate() {
             const t = Math.min(1, fd._landT);
             const smooth = t * t * (3 - 2 * t);
             fd._flyAngle += fd._flySpeed * dt * smooth;
-            fd.x = landX * (1 - smooth) + (fortCX + Math.cos(fd._flyAngle) * fd._flyRadius) * smooth;
-            fd.z = landZ * (1 - smooth) + (fortCZ + Math.sin(fd._flyAngle) * fd._flyRadius) * smooth;
-            const flyY = landY * (1 - smooth) + (getTerrainHeight(fortCX, fortCZ) + fd._flyHeight) * smooth;
-            fd.group.position.set(fd.x, flyY, fd.z);
+            const orbitX = fortCX + Math.cos(fd._flyAngle) * fd._flyRadius;
+            const orbitZ = fortCZ + Math.sin(fd._flyAngle) * fd._flyRadius;
+            const orbitY = getTerrainHeight(fortCX, fortCZ) + fd._flyHeight;
+            fd.x = landX + (orbitX - landX) * smooth;
+            fd.z = landZ + (orbitZ - landZ) * smooth;
+            const curY = landY + (orbitY - landY) * smooth;
+            fd.group.position.set(fd.x, curY, fd.z);
             fd.group.rotation.y = -fd._flyAngle;
             fd.group.rotation.z = 0.15 * smooth;
             fd.group.rotation.x = 0.1 * smooth;
@@ -11940,7 +11948,7 @@ function animate() {
         }
 
         // Fire breath — attack player if too close to fortress (only while flying)
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-175);
+        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 
