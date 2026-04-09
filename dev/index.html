@@ -2966,17 +2966,13 @@ function startGame(loadSlotName) {
     {
         const nestX = -343, nestZ = -1250;
         const nestY = getTerrainHeight(nestX, nestZ);
-        // Materials
+        const yOff = 128;
+        const BS = BLOCK_SIZE;
+
+        // Materials for decorative stone rim
         const iceStoneMat = new THREE.MeshStandardMaterial({ color: 0xc8d8e8, roughness: 0.7, metalness: 0.15 });
         const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x6a7888, roughness: 0.85 });
         const iceMat = new THREE.MeshStandardMaterial({ color: 0xddeeff, roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.85 });
-        const eggShellMat = new THREE.MeshStandardMaterial({ color: 0xc0e0f0, roughness: 0.45, metalness: 0.25, emissive: 0x224466, emissiveIntensity: 0.1 });
-        const eggVeinMat = new THREE.MeshStandardMaterial({ color: 0x88ccee, emissive: 0x4488cc, emissiveIntensity: 0.3, roughness: 0.3 });
-        const sapphireMat = new THREE.MeshStandardMaterial({ color: 0x2a55cc, emissive: 0x1133aa, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.6 });
-        const diamondMat = new THREE.MeshStandardMaterial({ color: 0xeefcff, emissive: 0xaaccee, emissiveIntensity: 0.3, roughness: 0.1, metalness: 0.7 });
-        const ironOreMat = new THREE.MeshStandardMaterial({ color: 0x8a7060, roughness: 0.7, metalness: 0.4 });
-        const silverOreMat = new THREE.MeshStandardMaterial({ color: 0xd4d8e0, roughness: 0.4, metalness: 0.7 });
-        const goldOreMat = new THREE.MeshStandardMaterial({ color: 0xddbb44, emissive: 0x553300, emissiveIntensity: 0.15, roughness: 0.4, metalness: 0.7 });
 
         const nestGrp = new THREE.Group();
         nestGrp.position.set(nestX, nestY, nestZ);
@@ -3003,82 +2999,97 @@ function startGame(loadSlotName) {
             stone.position.set(Math.cos(ang) * r, 0.35, Math.sin(ang) * r);
             stone.castShadow = true; nestGrp.add(stone);
         }
-        // 6 ice dragon eggs (visual only)
-        const eggPositions = [];
-        for (let i = 0; i < 6; i++) {
-            const ang = (i / 6) * Math.PI * 2;
-            const r = 3.5;
-            eggPositions.push([Math.cos(ang) * r, Math.sin(ang) * r]);
-        }
-        for (const [ex, ez] of eggPositions) {
-            const eggGrp = new THREE.Group();
-            eggGrp.position.set(ex, 1.2, ez);
-            const egg = new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 12), eggShellMat);
-            egg.scale.set(1.0, 1.35, 1.0);
-            egg.castShadow = true; eggGrp.add(egg);
-            // Glowing veins
-            for (let v = 0; v < 5; v++) {
-                const vang = Math.random() * Math.PI * 2;
-                const vy = (Math.random() - 0.5) * 1.5;
-                const vein = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), eggVeinMat);
-                vein.position.set(Math.cos(vang) * 1.05, vy, Math.sin(vang) * 1.05);
-                vein.rotation.set(Math.random(), Math.random(), Math.random());
-                eggGrp.add(vein);
-            }
-            // Tilt slightly
-            eggGrp.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.3);
-            nestGrp.add(eggGrp);
-        }
-        // Gem clusters scattered around the eggs
-        for (let i = 0; i < 14; i++) {
-            const ang = Math.random() * Math.PI * 2;
-            const r = 4.5 + Math.random() * 3;
-            const cx2 = Math.cos(ang) * r;
-            const cz2 = Math.sin(ang) * r;
-            const isDiamond = Math.random() < 0.45;
-            const gMat = isDiamond ? diamondMat : sapphireMat;
-            const cluster = new THREE.Group();
-            cluster.position.set(cx2, 0.2, cz2);
-            for (let g = 0; g < 4; g++) {
-                const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.35 + Math.random() * 0.3), gMat);
-                gem.position.set((Math.random() - 0.5) * 0.7, 0.2 + Math.random() * 0.3, (Math.random() - 0.5) * 0.7);
-                gem.rotation.set(Math.random(), Math.random(), Math.random());
-                gem.castShadow = true;
-                cluster.add(gem);
-            }
-            nestGrp.add(cluster);
-        }
-        // Ore chunks
-        for (let i = 0; i < 10; i++) {
-            const ang = Math.random() * Math.PI * 2;
-            const r = 5.5 + Math.random() * 2.5;
-            const omat = [ironOreMat, silverOreMat, goldOreMat][Math.floor(Math.random() * 3)];
-            const chunk = new THREE.Mesh(new THREE.BoxGeometry(0.7 + Math.random() * 0.5, 0.5 + Math.random() * 0.4, 0.7 + Math.random() * 0.5), omat);
-            chunk.position.set(Math.cos(ang) * r, 0.3, Math.sin(ang) * r);
-            chunk.rotation.set(Math.random(), Math.random(), Math.random());
-            chunk.castShadow = true;
-            nestGrp.add(chunk);
-        }
-        // Treasure chest
-        const chestBodyMat = new THREE.MeshStandardMaterial({ color: 0x6b3f1a, roughness: 0.8 });
-        const chestIronMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, metalness: 0.7 });
-        const chestGrp = new THREE.Group();
-        chestGrp.position.set(0, 0.6, -5.5);
-        chestGrp.rotation.y = Math.PI;
-        const chestBody = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.0), chestBodyMat);
-        chestBody.castShadow = true; chestGrp.add(chestBody);
-        const chestLid = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.35, 1.05), chestBodyMat);
-        chestLid.position.y = 0.6; chestGrp.add(chestLid);
-        const chestLock = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.1), chestIronMat);
-        chestLock.position.set(0, 0.4, 0.55); chestGrp.add(chestLock);
-        for (let s = -1; s <= 1; s += 2) {
-            const band = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.05, 1.05), chestIronMat);
-            band.position.set(s * 0.7, 0.05, 0); chestGrp.add(band);
-        }
-        nestGrp.add(chestGrp);
 
         scene.add(nestGrp);
         world._iceDragonNest = nestGrp;
+
+        // 6 real ice dragon eggs — pickable & hatchable, pushed to dragonMgr.eggs
+        const iceEggDefs = [
+            { dx: -3,  dz:  1, color: 0xddeeff, emissive: 0x224466, veinColor: 0x88ccee, wingColor: 0xa8c8e8, isWyvern: true, name: 'Frostfang Wyvern' },
+            { dx:  3,  dz:  1, color: 0xc8e0f5, emissive: 0x1a3a5a, veinColor: 0x66aacc, wingColor: 0x88b8d8, isWyvern: true, name: 'Glacial Wyvern' },
+            { dx:  0,  dz:  3, color: 0xeaf3ff, emissive: 0x33557a, veinColor: 0xaaddff, wingColor: 0xb8d4ee, isWyvern: true, name: 'Snowfall Wyvern' },
+            { dx: -2,  dz: -3, color: 0xb0d0e8, emissive: 0x224a6a, veinColor: 0x55aadd, wingColor: 0x99c2e0, isWyvern: true, name: 'Hailstorm Wyvern' },
+            { dx:  2,  dz: -3, color: 0xd0e8f8, emissive: 0x2a4a6a, veinColor: 0x77bbee, wingColor: 0xa0c8e6, isWyvern: true, name: 'Blizzard Wyvern' },
+            { dx:  0,  dz:  0, color: 0xf0f8ff, emissive: 0x4466aa, veinColor: 0xbbddff, wingColor: 0xc4dcf0, isWyvern: true, name: 'Permafrost Wyvern' },
+        ];
+        const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
+        const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
+        const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x4a4a52, roughness: 0.95 });
+        const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
+        for (const ed of iceEggDefs) {
+            const ex = nestX + ed.dx, ez = nestZ + ed.dz;
+            const ey = getTerrainHeight(ex, ez);
+            const eggGrp = new THREE.Group();
+            for (let ni = 0; ni < 8; ni++) {
+                const na = (ni / 8) * Math.PI * 2;
+                const nrs = 0.15 + Math.random() * 0.15;
+                const nr = new THREE.Mesh(nestRockGeo, nestRockMat);
+                nr.scale.setScalar(nrs / 0.2);
+                nr.position.set(Math.cos(na) * 0.6, nrs * 0.4, Math.sin(na) * 0.6);
+                nr.rotation.set(Math.random(), Math.random(), Math.random());
+                eggGrp.add(nr);
+            }
+            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.25, emissive: ed.emissive, emissiveIntensity: 0.15 });
+            const eggMesh = new THREE.Mesh(eggGeo, eggMat);
+            eggMesh.scale.set(1.0, 1.35, 1.0);
+            eggMesh.position.y = 0.3;
+            eggGrp.add(eggMesh);
+            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.2, roughness: 0.2 });
+            for (let vi = 0; vi < 5; vi++) {
+                const va = (vi / 5) * Math.PI * 2;
+                const vein = new THREE.Mesh(veinGeo, veinMat);
+                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
+                vein.rotation.z = (Math.random() - 0.5) * 0.4;
+                eggGrp.add(vein);
+            }
+            eggGrp.position.set(ex, ey, ez);
+            scene.add(eggGrp);
+            dragonMgr.eggs.push({
+                group: eggGrp, x: ex, z: ez, pickedUp: false,
+                color: ed.color, emissive: ed.emissive, veinColor: ed.veinColor,
+                wingColor: ed.wingColor || null,
+                isWyvern: !!ed.isWyvern, name: ed.name || 'Ice Dragon',
+            });
+        }
+
+        // Real ore blocks scattered around the nest interior
+        const oreSpots = [
+            { dx: -4, dz:  4, type: BLOCK.SAPPHIRE_ORE },
+            { dx:  4, dz:  4, type: BLOCK.DIAMOND_ORE },
+            { dx: -5, dz: -2, type: BLOCK.DIAMOND_ORE },
+            { dx:  5, dz: -1, type: BLOCK.SAPPHIRE_ORE },
+            { dx: -6, dz:  3, type: BLOCK.IRON_ORE },
+            { dx:  6, dz:  2, type: BLOCK.IRON_ORE },
+            { dx: -4, dz: -5, type: BLOCK.GOLD_ORE },
+            { dx:  4, dz: -5, type: BLOCK.GOLD_ORE },
+            { dx: -7, dz:  0, type: BLOCK.EMERALD_ORE },
+            { dx:  7, dz:  0, type: BLOCK.RUBY_ORE },
+            { dx:  0, dz:  6, type: BLOCK.DIAMOND_ORE },
+            { dx:  0, dz: -7, type: BLOCK.SAPPHIRE_ORE },
+        ];
+        for (const o of oreSpots) {
+            const owx = nestX + o.dx, owz = nestZ + o.dz;
+            const obx = Math.round(owx / BS), obz = Math.round(owz / BS);
+            const oby = Math.floor(getTerrainHeight(owx, owz) / BS) + yOff;
+            world.setBlock(obx, oby + 1, obz, o.type);
+        }
+
+        // Real treasure chest with rich loot
+        {
+            const cwx = nestX + 0.5, cwz = nestZ - 6;
+            const cbx = Math.round(cwx / BS), cbz = Math.round(cwz / BS);
+            const cby = Math.floor(getTerrainHeight(cwx, cwz) / BS) + yOff;
+            for (let dx = 0; dx <= 1; dx++)
+                for (let dy = 0; dy <= 1; dy++)
+                    for (let dz = 0; dz <= 1; dz++)
+                        world.setBlock(cbx+dx, cby+1+dy, cbz+dz, BLOCK.CHEST);
+            const ckey = _chestKey(cbx, cby+1, cbz);
+            chestData[ckey] = { items: {
+                'diamond': 8, 'sapphire': 12, 'emerald': 4, 'ruby': 4,
+                'gold_ingot': 10, 'iron_ingot': 16, 'steel_ingot': 4,
+                'dragonsteel_ingot': 2,
+            }};
+        }
 
         // Spawn the giant ice dragon at the nest
         const iceDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0xddeeff, 0xa8c8e8, true);
