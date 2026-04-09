@@ -1402,6 +1402,7 @@ function startGame(loadSlotName) {
     _initMagicShopStaffs();
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
+    buildSouthwestFortress(world);
     buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
     buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
     buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)
@@ -1938,6 +1939,210 @@ function startGame(loadSlotName) {
         fortressSwords.push({ id: s7, wx: -500, wz: -160, data: window._customSwords[s7] });
 
         w._fortressSwords = fortressSwords;
+    }
+
+    function buildSouthwestFortress(w) {
+        const BS = BLOCK_SIZE;
+        const yOff = 128;
+        const FX = -900, FZ = 575;
+        const centerX = Math.round(FX / BS);
+        const centerZ = Math.round(FZ / BS);
+        const groundY = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
+        const S = BLOCK.DARK_STONE, P = BLOCK.PLANKS, A = BLOCK.AIR, D = BLOCK.DIRT, ST = BLOCK.STONE;
+
+        const _placeBlock = (bx, by, bz, block) => {
+            if (by < 0 || by >= 256) return;
+            w._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
+            const mcx = Math.floor(bx / CHUNK_SIZE), mcz = Math.floor(bz / CHUNK_SIZE);
+            const mlx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const mlz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const ck = mcx + ',' + mcz;
+            if (!w._modsByChunk) w._modsByChunk = new Map();
+            if (!w._modsByChunk.has(ck)) w._modsByChunk.set(ck, []);
+            w._modsByChunk.get(ck).push({ lx: mlx, y: by, lz: mlz, block });
+        };
+        const box = (x0, y0, z0, x1, y1, z1, block) => {
+            for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) _placeBlock(x, y, z, block);
+        };
+        const room = (x0, y0, z0, rw, rd, rh, wb) => {
+            const x1 = x0+rw-1, z1 = z0+rd-1, y1 = y0+rh-1;
+            box(x0, y0, z0, x1, y0, z1, wb); // floor
+            box(x0, y1, z0, x1, y1, z1, wb); // ceiling
+            box(x0, y0, z0, x0, y1, z1, wb); // -x wall
+            box(x1, y0, z0, x1, y1, z1, wb); // +x wall
+            box(x0, y0, z0, x1, y1, z0, wb); // -z wall
+            box(x0, y0, z1, x1, y1, z1, wb); // +z wall
+            box(x0+1, y0+1, z0+1, x1-1, y1-1, z1-1, A); // hollow
+        };
+        const tower = (tx, tz, r, h) => {
+            for (let y = 0; y < h; y++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+                if (dx*dx+dz*dz > r*r+1) continue;
+                const isWall = dx*dx+dz*dz > (r-1)*(r-1);
+                if (isWall) _placeBlock(tx+dx, groundY+y, tz+dz, S);
+                else if (y === 0 || y % 5 === 0) _placeBlock(tx+dx, groundY+y, tz+dz, S);
+                else _placeBlock(tx+dx, groundY+y, tz+dz, A);
+            }
+            // Crenellations
+            for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+                if (dx*dx+dz*dz > r*r+1 || dx*dx+dz*dz < (r-1)*(r-1)) continue;
+                if ((dx+dz)%2===0) _placeBlock(tx+dx, groundY+h, tz+dz, S);
+            }
+        };
+        const door = (x, y0, z, dw, dh, axis) => {
+            for (let dy = 0; dy < dh; dy++) {
+                if (axis === 'x') for (let dz = 0; dz < dw; dz++) _placeBlock(x, y0+dy, z+dz, A);
+                else for (let dx = 0; dx < dw; dx++) _placeBlock(x+dx, y0+dy, z, A);
+            }
+        };
+
+        const cx = centerX, cz = centerZ, gy = groundY;
+        const HW = 60; // half-width (120 wide)
+        const HD = 50; // half-depth (100 deep)
+
+        // === FLATTEN ===
+        for (let x = cx-HW-8; x <= cx+HW+8; x++) for (let z = cz-HD-8; z <= cz+HD+8; z++) {
+            _placeBlock(x, gy, z, S);
+            for (let dy = 1; dy <= 3; dy++) _placeBlock(x, gy-dy, z, D);
+            // Clear above
+            for (let dy = 1; dy <= 30; dy++) _placeBlock(x, gy+dy, z, A);
+        }
+
+        // === OUTER WALLS ===
+        const wallH = 18;
+        // North wall
+        box(cx-HW, gy+1, cz-HD, cx+HW, gy+wallH, cz-HD, S);
+        // South wall
+        box(cx-HW, gy+1, cz+HD, cx+HW, gy+wallH, cz+HD, S);
+        // West wall
+        box(cx-HW, gy+1, cz-HD, cx-HW, gy+wallH, cz+HD, S);
+        // East wall
+        box(cx+HW, gy+1, cz-HD, cx+HW, gy+wallH, cz+HD, S);
+        // Crenellations
+        for (let i = -HW; i <= HW; i++) {
+            if (i % 2 === 0) {
+                _placeBlock(cx+i, gy+wallH+1, cz-HD, S);
+                _placeBlock(cx+i, gy+wallH+1, cz+HD, S);
+            }
+        }
+        for (let i = -HD; i <= HD; i++) {
+            if (i % 2 === 0) {
+                _placeBlock(cx-HW, gy+wallH+1, cz+i, S);
+                _placeBlock(cx+HW, gy+wallH+1, cz+i, S);
+            }
+        }
+
+        // === 3 ENTRANCES (N, E, S — west faces ocean for dragon enclosure) ===
+        // North gate
+        door(cx-3, gy+1, cz-HD, 6, 8, 'x');
+        // East gate
+        door(cx+HW, gy+1, cz-3, 6, 8, 'z');
+        // South gate
+        door(cx-3, gy+1, cz+HD, 6, 8, 'x');
+
+        // === CORNER TOWERS ===
+        tower(cx-HW, cz-HD, 5, 28);
+        tower(cx+HW, cz-HD, 5, 28);
+        tower(cx-HW, cz+HD, 5, 28);
+        tower(cx+HW, cz+HD, 5, 28);
+        // Mid-wall towers
+        tower(cx, cz-HD, 4, 24);
+        tower(cx, cz+HD, 4, 24);
+        tower(cx+HW, cz, 4, 24);
+        // Door reopens after towers
+        door(cx-3, gy+1, cz-HD, 6, 8, 'x');
+        door(cx+HW, gy+1, cz-3, 6, 8, 'z');
+        door(cx-3, gy+1, cz+HD, 6, 8, 'x');
+
+        // === GREAT KEEP — central hall ===
+        const keepW = 30, keepD = 24, keepH = 26;
+        const kx0 = cx - keepW/2, kz0 = cz - keepD/2;
+        room(kx0, gy+1, kz0, keepW, keepD, keepH, S);
+        // Keep entrance from south
+        door(cx-3, gy+1, kz0+keepD-1, 6, 7, 'x');
+        // Throne room raised platform at north end
+        for (let dx = -5; dx <= 5; dx++) for (let dz = 0; dz < 5; dz++) {
+            _placeBlock(cx+dx, gy+2, kz0+2+dz, S);
+            _placeBlock(cx+dx, gy+3, kz0+2+dz, S);
+        }
+        // Throne (dark stone seat)
+        _placeBlock(cx, gy+4, kz0+3, S);
+        _placeBlock(cx, gy+5, kz0+3, S);
+        _placeBlock(cx-1, gy+4, kz0+3, S);
+        _placeBlock(cx+1, gy+4, kz0+3, S);
+        _placeBlock(cx, gy+5, kz0+2, S);
+        // Pillars in keep
+        for (let pi = 0; pi < 4; pi++) {
+            const px = cx - 8 + (pi % 2) * 16;
+            const pz = kz0 + 8 + Math.floor(pi/2) * 10;
+            for (let py = 1; py <= keepH-2; py++) _placeBlock(px, gy+py, pz, S);
+        }
+
+        // === KEEP TOWERS (taller, more grand) ===
+        tower(cx - keepW/2, cz - keepD/2, 4, 36);
+        tower(cx + keepW/2, cz - keepD/2, 4, 36);
+        tower(cx - keepW/2, cz + keepD/2, 4, 36);
+        tower(cx + keepW/2, cz + keepD/2, 4, 36);
+
+        // === BARRACKS (east side) ===
+        room(cx + 18, gy+1, cz - 12, 14, 10, 7, S);
+        door(cx + 18, gy+1, cz - 5, 1, 6, 'z');
+        room(cx + 18, gy+1, cz + 4, 14, 10, 7, S);
+        door(cx + 18, gy+1, cz + 6, 1, 6, 'z');
+
+        // === DRAGON ENCLOSURE (west side, facing ocean) ===
+        // Open courtyard wall — half-height stone wall around it
+        const encW = 30, encD = 40;
+        const ex0 = cx - HW - encW, ez0 = cz - encD/2;
+        // Flatten enclosure ground
+        for (let x = ex0; x <= ex0 + encW; x++) for (let z = ez0; z <= ez0 + encD; z++) {
+            _placeBlock(x, gy, z, ST);
+            for (let dy = 1; dy <= 20; dy++) _placeBlock(x, gy+dy, z, A);
+        }
+        // Low walls (4 blocks high)
+        for (let x = ex0; x <= ex0 + encW; x++) {
+            for (let dy = 1; dy <= 4; dy++) {
+                _placeBlock(x, gy+dy, ez0, S);
+                _placeBlock(x, gy+dy, ez0 + encD, S);
+            }
+        }
+        for (let z = ez0; z <= ez0 + encD; z++) {
+            for (let dy = 1; dy <= 4; dy++) {
+                _placeBlock(ex0, gy+dy, z, S);
+            }
+        }
+        // No west wall — open to ocean
+        // Connect enclosure to fortress with arch in west fortress wall
+        for (let dy = 1; dy <= 8; dy++) for (let dz = -3; dz <= 3; dz++) {
+            _placeBlock(cx-HW, gy+dy, cz+dz, A);
+        }
+
+        // === MARK BOSS POSITIONS for spawning ===
+        if (!w._swFortressData) w._swFortressData = {};
+        w._swFortressData = {
+            necromancerX: FX, necromancerZ: cz * BS, necromancerY: groundY * BS + 5 * BS,
+            // Throne position in keep
+            necX: FX, necZ: (kz0 + 3) * BS,
+            // Dragon position in enclosure
+            dragonX: (ex0 + encW/2) * BS, dragonZ: FZ,
+            // Skeleton guard positions (4 per entrance, 3 entrances)
+            guardSpots: [
+                // North gate
+                { x: FX - 3*BS, z: (cz - HD - 3) * BS },
+                { x: FX + 3*BS, z: (cz - HD - 3) * BS },
+                { x: FX - 1*BS, z: (cz - HD - 5) * BS },
+                { x: FX + 1*BS, z: (cz - HD - 5) * BS },
+                // East gate
+                { x: (cx + HW + 3) * BS, z: FZ - 3*BS },
+                { x: (cx + HW + 3) * BS, z: FZ + 3*BS },
+                { x: (cx + HW + 5) * BS, z: FZ - 1*BS },
+                { x: (cx + HW + 5) * BS, z: FZ + 1*BS },
+                // South gate
+                { x: FX - 3*BS, z: (cz + HD + 3) * BS },
+                { x: FX + 3*BS, z: (cz + HD + 3) * BS },
+                { x: FX - 1*BS, z: (cz + HD + 5) * BS },
+                { x: FX + 1*BS, z: (cz + HD + 5) * BS },
+            ],
+        };
     }
 
     function buildForestGate(w, gateX, gateZ, axis, shattered) {
@@ -2553,6 +2758,181 @@ function startGame(loadSlotName) {
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
+    }
+
+    // === Southwest Fortress: THE Necromancer + Silver Dragon + Skeleton Guards ===
+    if (world._swFortressData) {
+        const sw = world._swFortressData;
+
+        // --- Silver Dragon (stationary, harmless, unrideable) ---
+        const silverDragon = dragonMgr._makeDragon(sw.dragonX, sw.dragonZ, getTerrainHeight(sw.dragonX, sw.dragonZ), 0xc8c8d8, 0x2a4ad8, true);
+        silverDragon.age = 7200;
+        silverDragon.growthScale = 3.5;
+        silverDragon.group.scale.setScalar(silverDragon.growthScale);
+        silverDragon.state = 'alive';
+        silverDragon.dragonName = 'The Silver Wyvern';
+        silverDragon._unrideable = true;
+        silverDragon._stationary = true;
+        silverDragon.flying = false;
+        silverDragon.walking = false;
+        // Recolor the dragon — silver body, ocean blue wings with purple highlights
+        silverDragon.group.traverse(child => {
+            if (child.isMesh && child.material && child.material.color) {
+                // Don't recolor dynamic membranes (they use bMem material reused)
+                if (!child.material._tagged) {
+                    child.material = child.material.clone();
+                    child.material._tagged = true;
+                }
+            }
+        });
+        // Set position properly
+        const sdY = getTerrainHeight(sw.dragonX, sw.dragonZ) + 1;
+        silverDragon.x = sw.dragonX;
+        silverDragon.z = sw.dragonZ;
+        silverDragon.group.position.set(sw.dragonX, sdY, sw.dragonZ);
+        // Face the ocean (west)
+        silverDragon.group.rotation.y = Math.PI / 2;
+        // Purple eyes
+        silverDragon.group.traverse(child => {
+            if (child.isMesh && child.material && child.material.color) {
+                const c = child.material.color.getHex();
+                // Catch eye-like materials (small dark/yellow meshes)
+                if ((c === 0xffaa00 || c === 0xffcc00 || c === 0xffee44) && child.geometry && child.geometry.type === 'SphereGeometry') {
+                    child.material.color.setHex(0xaa44ff);
+                    if (child.material.emissive) child.material.emissive.setHex(0x6622aa);
+                }
+            }
+        });
+        scene.add(silverDragon.group);
+        dragonMgr.dragons.push(silverDragon);
+        world._silverDragon = silverDragon;
+
+        // --- THE Necromancer ---
+        if (!killedBosses.has('THE Necromancer')) {
+            const necX = sw.necX, necZ = sw.necZ;
+            const necY = getTerrainHeight(necX, necZ) + 1.5;
+
+            const necro2 = new Player(scene, world);
+            necro2.group.position.set(necX, necY, necZ);
+            necro2.position.set(necX, necY, necZ);
+            necro2._skinMat.color.setHex(0xd0c8b8);
+            necro2._skinMat.roughness = 0.8;
+            necro2._shirtMat.color.setHex(0x0a0810);
+            necro2._pantsMat.color.setHex(0x080610);
+            necro2._shoeMat.color.setHex(0x060408);
+            necro2._hairMat.color.setHex(0x0a0a0a);
+            if (necro2.leftArm && necro2.leftArm.shoulder) {
+                necro2.leftArm.shoulder.scale.set(0.6, 1, 0.6);
+                necro2.rightArm.shoulder.scale.set(0.6, 1, 0.6);
+            }
+            if (necro2.headGroup) necro2.headGroup.scale.set(0.9, 1.05, 0.9);
+
+            // Cloak
+            const cloakMat2 = new THREE.MeshStandardMaterial({ color: 0x0a0810, roughness: 0.9, side: THREE.DoubleSide });
+            const cloakTop2 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.3), cloakMat2);
+            cloakTop2.position.set(0, 0.42, -0.02); necro2.spine.add(cloakTop2);
+            const cloakBack2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.06), cloakMat2);
+            cloakBack2.position.set(0, 0.05, -0.15); necro2.spine.add(cloakBack2);
+            const cloakLower2 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.5, 0.06), cloakMat2);
+            cloakLower2.position.set(0, -0.35, -0.13); necro2.spine.add(cloakLower2);
+            for (const s of [-1, 1]) {
+                const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.2), cloakMat2);
+                side.position.set(s * 0.2, 0.1, -0.05); necro2.spine.add(side);
+            }
+            const hoodMat2 = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.85 });
+            const hood2 = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.25), hoodMat2);
+            hood2.position.set(0, 0.15, -0.02); necro2.headGroup.add(hood2);
+            const hoodPeak2 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.2), hoodMat2);
+            hoodPeak2.position.set(0, 0.22, 0.04); necro2.headGroup.add(hoodPeak2);
+
+            // Glowing purple eyes
+            const necEyeMat2 = new THREE.MeshBasicMaterial({ color: 0xaa44ff });
+            const necLEye2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), necEyeMat2);
+            necLEye2.position.set(-0.06, 0.08, 0.13); necro2.headGroup.add(necLEye2);
+            const necREye2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), necEyeMat2);
+            necREye2.position.set(0.06, 0.08, 0.13); necro2.headGroup.add(necREye2);
+
+            // Permanent channeling pose — both arms raised, palms facing each other
+            necro2.spine.rotation.x = -0.1;
+            necro2.leftArm.shoulder.rotation.set(-1.2, 0, 0.5);
+            necro2.leftArm.elbow.rotation.set(-0.6, 0, 0);
+            necro2.rightArm.shoulder.rotation.set(-1.2, 0, -0.5);
+            necro2.rightArm.elbow.rotation.set(-0.6, 0, 0);
+
+            // Channeling orb between hands
+            const channelOrb = new THREE.Mesh(
+                new THREE.SphereGeometry(0.12, 12, 8),
+                new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.85 })
+            );
+            channelOrb.position.set(0, 1.5, 0.4);
+            necro2.group.add(channelOrb);
+            const channelGlow = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2, 8, 6),
+                new THREE.MeshBasicMaterial({ color: 0xdd88ff, transparent: true, opacity: 0.4 })
+            );
+            channelGlow.position.copy(channelOrb.position);
+            necro2.group.add(channelGlow);
+            const channelLight = new THREE.PointLight(0x8833cc, 2, 8);
+            channelLight.position.copy(channelOrb.position);
+            necro2.group.add(channelLight);
+
+            // Floating particles
+            const necParticles2 = new THREE.Group();
+            for (let i = 0; i < 12; i++) {
+                const p = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.04, 0.04, 0.04),
+                    new THREE.MeshBasicMaterial({ color: 0x8833cc, transparent: true, opacity: 0.6 })
+                );
+                p.position.set(
+                    (Math.random() - 0.5) * 1.0,
+                    0.5 + Math.random() * 1.5,
+                    (Math.random() - 0.5) * 1.0
+                );
+                p._phase = Math.random() * Math.PI * 2;
+                necParticles2.add(p);
+            }
+            necro2.group.add(necParticles2);
+
+            // Name label
+            const necCanvas2 = document.createElement('canvas');
+            necCanvas2.width = 256; necCanvas2.height = 48;
+            const necCtx2 = necCanvas2.getContext('2d');
+            necCtx2.fillStyle = '#aa44ff'; necCtx2.font = 'bold 24px monospace'; necCtx2.textAlign = 'center';
+            necCtx2.fillText('THE Necromancer', 128, 30);
+            const necTex2 = new THREE.CanvasTexture(necCanvas2);
+            const necLabel2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: necTex2, transparent: true, depthWrite: false }));
+            necLabel2.position.y = 2.3; necLabel2.scale.set(1.5, 0.28, 1);
+            necro2.group.add(necLabel2);
+
+            scene.add(necro2.group);
+
+            const necCreature2 = {
+                group: necro2.group, legs: [necro2.leftLeg.hip, necro2.rightLeg.hip],
+                headGrp: necro2.headGroup,
+                x: necX, z: necZ, angle: 0, speed: 0,
+                walkPhase: 0, wanderTimer: 3, idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+                type: 'skeleton', hostile: false, aggroRange: 0, attackRange: 0, attackDmg: 0, attackCD: 999, attackTimer: 0,
+                hp: 999, maxHP: 999, dead: false, chaseSpeed: 0, _turnSpeed: 0,
+                _isBoss: true, _bossName: 'THE Necromancer',
+                _isSWNecromancer: true, // separate from forest necromancer
+                _channelingPose: true,
+                _channelOrb: channelOrb, _channelGlow: channelGlow,
+                _necParticles: necParticles2,
+                _spine: necro2.spine,
+                _playerModel: necro2,
+            };
+            creatures.creatures.push(necCreature2);
+            world._swNecromancer = necCreature2;
+        }
+
+        // --- Skeleton guards (4 per entrance, 3 entrances = 12) ---
+        for (const spot of sw.guardSpots) {
+            const gy2 = getTerrainHeight(spot.x, spot.z);
+            const guard = creatures.spawnGuardSkeleton(spot.x, spot.z, gy2);
+            // Stand still until provoked
+            guard.hostile = false;
+            guard._waitingAtPost = true;
+        }
     }
 
     // === Gate Boss Progression System ===

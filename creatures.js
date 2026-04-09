@@ -599,6 +599,28 @@ export class CreatureManager {
         this._nextId = 0;
     }
 
+    spawnGuardSkeleton(x, z, terrainY) {
+        const c = makeSkeleton(x, z, terrainY);
+        // Purple eyes (replace green eye material)
+        c.group.traverse(child => {
+            if (child.isMesh && child.material === skelEyeMat) {
+                child.material = new THREE.MeshStandardMaterial({ color: 0xaa44ff, emissive: 0x6622aa, emissiveIntensity: 0.5 });
+            }
+        });
+        c._isGuard = true;
+        c._homeX = x;
+        c._homeZ = z;
+        c._homeAngle = c.angle;
+        c.aggroRange = 12;
+        c.attackDmg = 5;
+        c.hp = 18;
+        c.maxHP = 18;
+        c.cid = this._nextId++;
+        this.scene.add(c.group);
+        this.creatures.push(c);
+        return c;
+    }
+
     update(dt, playerX, playerZ, playerY) {
         this._playerY = playerY || 0;
         // Spawn sheep in nearby chunks that haven't been populated yet
@@ -727,6 +749,77 @@ export class CreatureManager {
                     sh.headGrp.rotation.x = Math.sin(sh.walkPhase * 2) * 0.06 * wb;
                 } else {
                     sh.headGrp.rotation.y += (sh.idleHeadTarget - sh.headGrp.rotation.y) * 2 * dt;
+                }
+                continue;
+            }
+
+            // ── Skeleton Guard AI ──
+            if (sh._isGuard) {
+                const gdist = Math.sqrt((sh.x - playerX)*(sh.x - playerX) + (sh.z - playerZ)*(sh.z - playerZ));
+                if (sh._waitingAtPost) {
+                    // Stand still until player gets within sight range
+                    if (gdist < 15) {
+                        sh._waitingAtPost = false;
+                        sh.hostile = true;
+                    } else {
+                        // Idle pose
+                        sh.walking = false;
+                        sh.speed *= 0.9;
+                        // Snap rotation to home angle
+                        let da = sh._homeAngle - sh.group.rotation.y;
+                        while (da > Math.PI) da -= Math.PI*2; while (da < -Math.PI) da += Math.PI*2;
+                        sh.group.rotation.y += da * 3 * dt;
+                        // Snap to home position
+                        sh.x = sh._homeX; sh.z = sh._homeZ;
+                        const _hy = this.world.getHeight(sh.x, sh.z);
+                        sh.group.position.set(sh.x, _hy, sh.z);
+                        continue;
+                    }
+                } else if (gdist > 30) {
+                    // Player escaped — return to post
+                    const dx = sh._homeX - sh.x, dz = sh._homeZ - sh.z;
+                    const homeDist = Math.sqrt(dx*dx + dz*dz);
+                    if (homeDist > 1) {
+                        sh.angle = Math.atan2(-dx, -dz);
+                        sh.walking = true;
+                        sh.speed += (1.5 - sh.speed) * 4 * dt;
+                        let da = sh.angle - sh.group.rotation.y;
+                        while (da > Math.PI) da -= Math.PI*2; while (da < -Math.PI) da += Math.PI*2;
+                        sh.group.rotation.y += da * 4 * dt;
+                        sh.x += Math.sin(sh.group.rotation.y) * sh.speed * dt;
+                        sh.z += Math.cos(sh.group.rotation.y) * sh.speed * dt;
+                        const _ty = this.world.getHeight(sh.x, sh.z);
+                        sh.group.position.set(sh.x, _ty, sh.z);
+                        continue;
+                    } else {
+                        // Reached post — go back to waiting
+                        sh._waitingAtPost = true;
+                        sh.hostile = false;
+                        sh.x = sh._homeX; sh.z = sh._homeZ;
+                        continue;
+                    }
+                }
+                // Otherwise fall through to normal hostile AI
+            }
+
+            // ── Channeling pose creatures (SW Necromancer) — frozen in place ──
+            if (sh._channelingPose) {
+                sh.walking = false;
+                sh.speed = 0;
+                sh.headGrp.rotation.x = -0.15;
+                // Animate the channel orb
+                if (sh._channelOrb) {
+                    sh._channelOrb.rotation.y += dt * 1.5;
+                    const pulse = 1 + Math.sin(performance.now() * 0.003) * 0.1;
+                    sh._channelOrb.scale.setScalar(pulse);
+                    if (sh._channelGlow) sh._channelGlow.scale.setScalar(pulse * 1.2);
+                }
+                // Animate particles
+                if (sh._necParticles) {
+                    for (const p of sh._necParticles.children) {
+                        p._phase += dt;
+                        p.position.y = 0.5 + Math.sin(p._phase) * 0.5 + 0.5;
+                    }
                 }
                 continue;
             }
