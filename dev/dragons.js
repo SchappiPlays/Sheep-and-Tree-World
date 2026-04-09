@@ -327,20 +327,26 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.04*S, h*S, 4), bDark);
         ridge.position.set(0, 0.42*S, 0.6*S - i*0.22*S); ridge.castShadow = true; g.add(ridge);
     }
-    // Neck
+    // Neck — chained groups so rotations propagate (allowing real bend)
     const neckGrp = new THREE.Group();
     neckGrp.position.set(0, 0.1*S, 0.75*S);
     const neckSegs = [];
+    let neckParent = neckGrp;
     for (let i = 0; i < 4; i++) {
         const t = i / 3; const w = (0.5 - t * 0.15) * S;
+        const segGrp = new THREE.Group();
+        if (i > 0) segGrp.position.set(0, 0.3*S, 0.233*S);
         const seg = new THREE.Mesh(new THREE.BoxGeometry(w, w, 0.4*S), i % 2 === 0 ? bTop : bMid);
-        seg.position.set(0, t*0.9*S, t*0.7*S); seg.castShadow = true;
-        neckGrp.add(seg); neckSegs.push(seg);
+        seg.castShadow = true;
+        segGrp.add(seg);
+        neckParent.add(segGrp);
+        neckSegs.push(segGrp);
+        neckParent = segGrp;
     }
     g.add(neckGrp);
-    // Head
+    // Head — child of last neck segment so neck bend carries the head
     const headGrp = new THREE.Group();
-    headGrp.position.set(0, 1.0*S, 0.9*S);
+    headGrp.position.set(0, 0.1*S, 0.2*S);
     const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.65*S, 0.5*S, 0.65*S), bTop);
     cranium.castShadow = true; headGrp.add(cranium);
     const snout = new THREE.Mesh(new THREE.BoxGeometry(0.45*S, 0.3*S, 0.5*S), bMid);
@@ -363,7 +369,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.4*S, 0.12*S, 0.55*S), bMid);
     jaw.position.set(0, 0, 0.1*S); jawGrp.add(jaw);
     headGrp.add(jawGrp); headGrp.scale.setScalar(0.75);
-    neckGrp.add(headGrp);
+    neckSegs[neckSegs.length - 1].add(headGrp);
     // Tail
     const tailGrp = new THREE.Group();
     tailGrp.position.set(0, -0.05*S, -1.1*S);
@@ -1029,7 +1035,7 @@ export class DragonManager {
                     const aimHoriz = Math.sqrt(aimDx*aimDx + aimDz*aimDz) || 1;
                     bd._fireDirYaw = Math.atan2(aimDx, aimDz);
                     bd._fireDirPitch = -Math.atan2(aimY, aimHoriz);
-                    this._aimDragonHead(bd);
+                    this._aimDragonHead(bd, true);
                     const _mouth = _afv;
                     this._getMouthWorld(bd, _mouth);
                     const mx = _mouth.x, my = _mouth.y, mz = _mouth.z;
@@ -1112,7 +1118,7 @@ export class DragonManager {
             bd._fireDirYaw = lookYaw;
             bd._fireDirPitch = lookPitch;
             // Snap head right now so the mouth position uses the aimed direction
-            this._aimDragonHead(bd);
+            this._aimDragonHead(bd, true);
             // Actual mouth world position from the head matrix (after head turn)
             const _mouth = _afv;
             this._getMouthWorld(bd, _mouth);
@@ -1325,11 +1331,17 @@ export class DragonManager {
             }
             bd.headGrp.rotation.x = Math.sin(bd.walkPhase * 0.8) * 0.1;
         }
-        // Override head rotation to track fire direction (after default head animation)
-        if (bd._breathingFire && bd._fireDirYaw !== undefined) {
-            this._aimDragonHead(bd);
-        } else {
-            bd.headGrp.rotation.y = (bd.headGrp.rotation.y || 0) * 0.85;
+        // Smoothly lerp neck bend amount toward target (1 if breathing, 0 otherwise)
+        const bendTarget = (bd._breathingFire && bd._fireDirYaw !== undefined) ? 1 : 0;
+        bd._neckBendT = (bd._neckBendT || 0) + (bendTarget - (bd._neckBendT || 0)) * Math.min(1, 8 * dt);
+        if (bd._neckBendT > 0.01) {
+            this._aimDragonHead(bd, false);
+        } else if (bd.neckSegs) {
+            // Fully released — clear neck seg rotations so default head animation reads through
+            for (const seg of bd.neckSegs) {
+                seg.rotation.y *= 0.85;
+                seg.rotation.x *= 0.85;
+            }
         }
         // Jaw open animation — smoothly opens when breathing fire
         if (bd.jawGrp) {
@@ -1349,20 +1361,34 @@ export class DragonManager {
     }
 
     // Aim head/neck so the snout points along bd._fireDirYaw / _fireDirPitch
-    _aimDragonHead(bd) {
-        if (bd._fireDirYaw === undefined) return;
+    // The bend is distributed across all neck segments + head, producing a real curve
+    _aimDragonHead(bd, snap) {
+        if (bd._fireDirYaw === undefined || !bd.neckSegs || bd.neckSegs.length === 0) return;
         const bodyPitch = bd._flyTilt || 0;
-        const neckPitch = bd.neckGrp ? bd.neckGrp.rotation.x : 0;
-        // Yaw relative to body, clamped so head doesn't twist past the neck
+        const baseNeckPitch = bd.neckGrp ? bd.neckGrp.rotation.x : 0;
+        // Yaw relative to body, clamped to a sane range
         let yawRel = bd._fireDirYaw - bd.angle;
         while (yawRel > Math.PI) yawRel -= Math.PI * 2;
         while (yawRel < -Math.PI) yawRel += Math.PI * 2;
-        yawRel = Math.max(-1.4, Math.min(1.4, yawRel));
-        // Pitch relative to body + neck
-        let pitchRel = -bd._fireDirPitch - bodyPitch - neckPitch;
-        pitchRel = Math.max(-1.0, Math.min(1.0, pitchRel));
-        bd.headGrp.rotation.y = yawRel;
-        bd.headGrp.rotation.x = pitchRel;
+        yawRel = Math.max(-1.7, Math.min(1.7, yawRel));
+        // Pitch in body-local terms (subtract everything that already pitches the head)
+        let pitchRel = -bd._fireDirPitch - bodyPitch - baseNeckPitch;
+        pitchRel = Math.max(-1.2, Math.min(1.2, pitchRel));
+        if (snap) bd._neckBendT = 1;
+        const bendT = bd._neckBendT || 0;
+        const nSegs = bd.neckSegs.length;
+        const segShare = 0.65 / nSegs;
+        const segYaw = yawRel * segShare * bendT;
+        const segPitch = pitchRel * segShare * bendT;
+        for (const seg of bd.neckSegs) {
+            seg.rotation.y = segYaw;
+            seg.rotation.x = segPitch;
+        }
+        // Head finishes the rotation — blend with whatever the default head animation set
+        const headYawTarget = yawRel * 0.35;
+        const headPitchTarget = pitchRel * 0.35;
+        bd.headGrp.rotation.y = bd.headGrp.rotation.y * (1 - bendT) + headYawTarget * bendT;
+        bd.headGrp.rotation.x = bd.headGrp.rotation.x * (1 - bendT) + headPitchTarget * bendT;
         bd.headGrp.updateMatrixWorld(true);
     }
 
