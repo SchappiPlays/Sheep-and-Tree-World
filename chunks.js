@@ -614,105 +614,49 @@ export class ChunkManager {
                                 tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
                                 tVert += 4;
                             } else {
-                                // Mini-blocks: 2x2 grid of flat quads at full or half height
-                                const sideColor = tmpColor.clone().multiplyScalar(0.85);
-                                const _scR = sideColor.r, _scG = sideColor.g, _scB = sideColor.b;
+                                // Mini-blocks: render 4 mini-cubes, each at full or half height
+                                // Each mini-cube is rendered with all 6 faces
+                                const _sc = tmpColor.clone().multiplyScalar(0.85);
+                                const _scR = _sc.r, _scG = _sc.g, _scB = _sc.b;
                                 const quads = [
                                     { x: 0,     z: 0,     ci: 0 },
                                     { x: 0,     z: halfW, ci: 1 },
                                     { x: halfW, z: 0,     ci: 2 },
                                     { x: halfW, z: halfW, ci: 3 },
                                 ];
-                                for (const q of quads) {
-                                    const qy = _cornerLow[q.ci] ? midY : topY;
-                                    const qx0 = baseX + q.x, qx1 = baseX + q.x + halfW;
-                                    const qz0 = baseZ + q.z, qz1 = baseZ + q.z + halfW;
-                                    tPos.push(qx0, qy, qz0); tPos.push(qx0, qy, qz1);
-                                    tPos.push(qx1, qy, qz0); tPos.push(qx1, qy, qz1);
-                                    tNrm.push(0,1,0, 0,1,0, 0,1,0, 0,1,0);
-                                    tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
-                                    tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                                    tVert += 4;
-                                }
-                                // Internal walls between mini-quads at different heights
-                                const _addWall = (x0, z0, x1, z1, nx, nz) => {
-                                    tPos.push(x0, midY, z0); tPos.push(x1, midY, z1);
-                                    tPos.push(x0, topY, z0); tPos.push(x1, topY, z1);
-                                    tNrm.push(nx,0,nz, nx,0,nz, nx,0,nz, nx,0,nz);
-                                    tCol.push(_scR,_scG,_scB, _scR,_scG,_scB, _scR,_scG,_scB, _scR,_scG,_scB);
+                                const _addCubeFace = (x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, nx,ny,nz, isTop) => {
+                                    const fr = isTop ? _r : _scR, fg = isTop ? _g : _scG, fb = isTop ? _b : _scB;
+                                    tPos.push(x0,y0,z0); tPos.push(x1,y1,z1);
+                                    tPos.push(x2,y2,z2); tPos.push(x3,y3,z3);
+                                    tNrm.push(nx,ny,nz, nx,ny,nz, nx,ny,nz, nx,ny,nz);
+                                    tCol.push(fr,fg,fb, fr,fg,fb, fr,fg,fb, fr,fg,fb);
                                     tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
                                     tVert += 4;
                                 };
-                                if (_cornerLow[0] !== _cornerLow[2]) {
-                                    if (_cornerLow[0]) _addWall(baseX + halfW, baseZ, baseX + halfW, baseZ + halfW, -1, 0);
-                                    else _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ, 1, 0);
-                                }
-                                if (_cornerLow[1] !== _cornerLow[3]) {
-                                    if (_cornerLow[1]) _addWall(baseX + halfW, baseZ + halfW, baseX + halfW, baseZ + fullW, -1, 0);
-                                    else _addWall(baseX + halfW, baseZ + fullW, baseX + halfW, baseZ + halfW, 1, 0);
-                                }
-                                if (_cornerLow[0] !== _cornerLow[1]) {
-                                    if (_cornerLow[0]) _addWall(baseX + halfW, baseZ + halfW, baseX, baseZ + halfW, 0, -1);
-                                    else _addWall(baseX, baseZ + halfW, baseX + halfW, baseZ + halfW, 0, 1);
-                                }
-                                if (_cornerLow[2] !== _cornerLow[3]) {
-                                    if (_cornerLow[2]) _addWall(baseX + fullW, baseZ + halfW, baseX + halfW, baseZ + halfW, 0, -1);
-                                    else _addWall(baseX + halfW, baseZ + halfW, baseX + fullW, baseZ + halfW, 0, 1);
+                                const blockBotY = (y - Y_OFF) * BS;
+                                for (const q of quads) {
+                                    const qTop = _cornerLow[q.ci] ? midY : topY;
+                                    const qBot = blockBotY;
+                                    const qx0 = baseX + q.x, qx1 = baseX + q.x + halfW;
+                                    const qz0 = baseZ + q.z, qz1 = baseZ + q.z + halfW;
+                                    // Top face
+                                    _addCubeFace(qx0, qTop, qz0, qx0, qTop, qz1, qx1, qTop, qz0, qx1, qTop, qz1, 0,1,0, true);
+                                    // -X face
+                                    _addCubeFace(qx0, qBot, qz0, qx0, qBot, qz1, qx0, qTop, qz0, qx0, qTop, qz1, -1,0,0, false);
+                                    // +X face
+                                    _addCubeFace(qx1, qBot, qz1, qx1, qBot, qz0, qx1, qTop, qz1, qx1, qTop, qz0, 1,0,0, false);
+                                    // -Z face
+                                    _addCubeFace(qx1, qBot, qz0, qx0, qBot, qz0, qx1, qTop, qz0, qx0, qTop, qz0, 0,0,-1, false);
+                                    // +Z face
+                                    _addCubeFace(qx0, qBot, qz1, qx1, qBot, qz1, qx0, qTop, qz1, qx1, qTop, qz1, 0,0,1, false);
                                 }
                             }
                             continue;
                         }
 
                         const fv = face.verts;
-                        // For sloped blocks (mini style): render side face as 2 stepped quads
-                        if (_isSlopeable && fi !== 2 && fi !== 3 && _slopeStyle === 'mini') {
-                            const halfW = S * BS * 0.5;
-                            const fullW = S * BS;
-                            const blockBotY = (y - Y_OFF) * BS;
-                            const blockTopY = (y - Y_OFF + S) * BS;
-                            const midY = blockTopY - halfW;
-                            const baseX = lx * BS, baseZ = lz * BS;
-                            // Get corner Y for this face's two top corners
-                            // Corner index: (X=0 or 1) * 2 + (Z=0 or 1)
-                            const _cornerYAt = (cx, cz) => {
-                                const ci = cx * 2 + cz;
-                                return _cornerLow[ci] ? midY : blockTopY;
-                            };
-                            // Render side face based on which face direction
-                            const _r = tmpColor.r, _g = tmpColor.g, _b = tmpColor.b;
-                            const _addQuad = (x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3) => {
-                                tPos.push(x0, y0, z0); tPos.push(x1, y1, z1);
-                                tPos.push(x2, y2, z2); tPos.push(x3, y3, z3);
-                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
-                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
-                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
-                                tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
-                                tCol.push(_r,_g,_b, _r,_g,_b, _r,_g,_b, _r,_g,_b);
-                                tIdx.push(tVert, tVert+1, tVert+2, tVert+2, tVert+1, tVert+3);
-                                tVert += 4;
-                            };
-                            // Each side face is split into 2 vertical halves matching the 2 corners
-                            // Cardinal axis: which two corners are on this face
-                            if (fi === 0) { // +X face — corners (1,0)=ci2 and (1,1)=ci3
-                                const yA = _cornerYAt(1, 0), yB = _cornerYAt(1, 1);
-                                // Half toward Z=0: bottom-front to top using yA
-                                _addQuad(baseX + fullW, blockBotY, baseZ, baseX + fullW, blockBotY, baseZ + halfW, baseX + fullW, yA, baseZ, baseX + fullW, yA, baseZ + halfW);
-                                _addQuad(baseX + fullW, blockBotY, baseZ + halfW, baseX + fullW, blockBotY, baseZ + fullW, baseX + fullW, yB, baseZ + halfW, baseX + fullW, yB, baseZ + fullW);
-                            } else if (fi === 1) { // -X face — corners (0,0)=ci0 and (0,1)=ci1
-                                const yA = _cornerYAt(0, 0), yB = _cornerYAt(0, 1);
-                                _addQuad(baseX, blockBotY, baseZ, baseX, blockBotY, baseZ + halfW, baseX, yA, baseZ, baseX, yA, baseZ + halfW);
-                                _addQuad(baseX, blockBotY, baseZ + halfW, baseX, blockBotY, baseZ + fullW, baseX, yB, baseZ + halfW, baseX, yB, baseZ + fullW);
-                            } else if (fi === 4) { // +Z face — corners (0,1)=ci1 and (1,1)=ci3
-                                const yA = _cornerYAt(0, 1), yB = _cornerYAt(1, 1);
-                                _addQuad(baseX, blockBotY, baseZ + fullW, baseX + halfW, blockBotY, baseZ + fullW, baseX, yA, baseZ + fullW, baseX + halfW, yA, baseZ + fullW);
-                                _addQuad(baseX + halfW, blockBotY, baseZ + fullW, baseX + fullW, blockBotY, baseZ + fullW, baseX + halfW, yB, baseZ + fullW, baseX + fullW, yB, baseZ + fullW);
-                            } else if (fi === 5) { // -Z face — corners (0,0)=ci0 and (1,0)=ci2
-                                const yA = _cornerYAt(0, 0), yB = _cornerYAt(1, 0);
-                                _addQuad(baseX, blockBotY, baseZ, baseX + halfW, blockBotY, baseZ, baseX, yA, baseZ, baseX + halfW, yA, baseZ);
-                                _addQuad(baseX + halfW, blockBotY, baseZ, baseX + fullW, blockBotY, baseZ, baseX + halfW, yB, baseZ, baseX + fullW, yB, baseZ);
-                            }
-                            continue;
-                        }
+                        // For sloped mini-block style: skip cardinal side faces — each mini-cube renders its own
+                        if (_isSlopeable && fi !== 2 && fi !== 3 && _slopeStyle === 'mini') continue;
                         for (let vi = 0; vi < 4; vi++) {
                             let vyy = (y - Y_OFF + fv[vi][1] * S) * BS;
                             // For sloped blocks: side face top vertices use corner heights
