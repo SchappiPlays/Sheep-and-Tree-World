@@ -175,19 +175,23 @@ export class Multiplayer {
     // to avoid PeerJS BinaryPack stalling on the cc charColors object.
     sendState(player, heldItem, swingTimer, charColors, riding) {
         if (!this.active) return;
+        // Defensive: ensure all values are valid finite numbers / strings
+        // (NaN/Infinity/undefined break BinaryPack serialization silently)
+        const safeNum = (n, def) => Number.isFinite(n) ? +n.toFixed(2) : (def || 0);
+        const safeStr = (v) => v == null ? '' : String(v);
         const state = {
             type: 'state',
-            pid: this.myId,
-            x: +player.position.x.toFixed(2),
-            y: +player.position.y.toFixed(2),
-            z: +player.position.z.toFixed(2),
-            ry: +player.group.rotation.y.toFixed(3),
-            rx: +(player.group.rotation.x || 0).toFixed(3),
-            wp: +(player.walkPhase || 0).toFixed(2),
-            wb: +(player.walkBlend || 0).toFixed(2),
-            sb: +(player.sprintBlend || 0).toFixed(2),
-            sw: +(swingTimer >= 0 ? swingTimer : -1).toFixed(2),
-            tool: heldItem || '',
+            pid: safeStr(this.myId),
+            x: safeNum(player.position.x),
+            y: safeNum(player.position.y),
+            z: safeNum(player.position.z),
+            ry: safeNum(player.group.rotation.y),
+            rx: safeNum(player.group.rotation.x),
+            wp: safeNum(player.walkPhase),
+            wb: safeNum(player.walkBlend),
+            sb: safeNum(player.sprintBlend),
+            sw: safeNum(swingTimer >= 0 ? swingTimer : -1, -1),
+            tool: safeStr(heldItem),
             rd: riding ? 1 : 0,
         };
         this._broadcast(state);

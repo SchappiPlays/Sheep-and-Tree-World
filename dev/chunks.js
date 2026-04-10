@@ -322,6 +322,32 @@ export class ChunkManager {
                             else if (fi === 4 && (_cornerLow[1] || _cornerLow[3])) _forceRender = true; // +Z face
                             else if (fi === 5 && (_cornerLow[0] || _cornerLow[2])) _forceRender = true; // -Z face
                         }
+                        // Also force-render this side face if the NEIGHBOR has a slope on the
+                        // side facing us — its dropped corner exposes a part of our side face.
+                        if (!_forceRender && fi !== 2 && fi !== 3 && _neighborSolid) {
+                            const _nbAbove = this.world.getBlockAt(nbx, nby + 1, nbz);
+                            const _nbAboveOpen = _nbAbove === BLOCK.AIR || _nbAbove === BLOCK.FLOWER_RED || _nbAbove === BLOCK.FLOWER_YELLOW || _nbAbove === BLOCK.FLOWER_BLUE || _nbAbove === BLOCK.FLOWER_WHITE;
+                            const _nbSlopable = _nbAboveOpen && (neighbor === BLOCK.GRASS || neighbor === BLOCK.DIRT || neighbor === BLOCK.SAND || neighbor === BLOCK.SNOW || neighbor === BLOCK.GRAVEL || neighbor === BLOCK.CLAY || neighbor === BLOCK.PATH);
+                            if (_nbSlopable) {
+                                const _nbIsLower = (dx, dz) => {
+                                    const nb = this.world.getBlockAt(nbx + dx, nby, nbz + dz);
+                                    return nb === BLOCK.AIR || nb === BLOCK.WATER;
+                                };
+                                const nb0 = _nbIsLower(-1, 0) || _nbIsLower(0, -1) || _nbIsLower(-1, -1);
+                                const nb1 = _nbIsLower(-1, 0) || _nbIsLower(0, 1)  || _nbIsLower(-1, 1);
+                                const nb2 = _nbIsLower(1, 0)  || _nbIsLower(0, -1) || _nbIsLower(1, -1);
+                                const nb3 = _nbIsLower(1, 0)  || _nbIsLower(0, 1)  || _nbIsLower(1, 1);
+                                // For our face fi, the neighbor's corners on the side meeting us:
+                                // fi 0 (+X) → neighbor's -X side = nb0,nb1
+                                // fi 1 (-X) → neighbor's +X side = nb2,nb3
+                                // fi 4 (+Z) → neighbor's -Z side = nb0,nb2
+                                // fi 5 (-Z) → neighbor's +Z side = nb1,nb3
+                                if (fi === 0 && (nb0 || nb1)) _forceRender = true;
+                                else if (fi === 1 && (nb2 || nb3)) _forceRender = true;
+                                else if (fi === 4 && (nb0 || nb2)) _forceRender = true;
+                                else if (fi === 5 && (nb1 || nb3)) _forceRender = true;
+                            }
+                        }
                         if (_neighborSolid && !_forceRender) continue;
 
                         // Per-block noise for color variation
