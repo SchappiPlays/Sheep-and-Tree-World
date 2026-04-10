@@ -1404,7 +1404,7 @@ export class DragonManager {
             bd._grabbing = true;
             // Tilt back and extend rear legs forward
             if (!bd._grabTilt) bd._grabTilt = 0;
-            bd._grabTilt += (0.45 - bd._grabTilt) * 4 * dt;
+            bd._grabTilt += (-0.45 - bd._grabTilt) * 4 * dt;
             bd.group.rotation.x = (bd._flyTilt || 0) + bd._grabTilt;
             // Check for creatures near the rear feet to grab
             if (!bd._grabbedCreature && this._creatureMgr) {
