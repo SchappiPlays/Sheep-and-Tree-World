@@ -1173,6 +1173,29 @@ export class DragonManager {
             // Default to following the player
             if (bd._followingPlayer === undefined) bd._followingPlayer = true;
 
+            // ── Sleep at night (if not following player) ──
+            const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
+            const isNight = tod < 0.22 || tod > 0.78;
+            if (isNight && !bd._followingPlayer) {
+                bd._sleeping = true;
+                bd.walking = false;
+                bd.speed = 0;
+                bd._breathingFire = false;
+                // Sleep pose
+                const bTerrainY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+                this._animateDragonSleep(dt, bd);
+                continue;
+            }
+            if (bd._sleeping) {
+                bd._sleeping = false;
+                bd._sleepBlend = 0;
+                // Reopen eyes
+                if (bd.eyes) for (const eye of bd.eyes) eye.scale.y = 1;
+                // Reset leg splay
+                for (const leg of bd.legs) leg.rotation.z = 0;
+            }
+
             // ── Combat AI — find nearby hostile creature to fight ──
             // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
             let dragonFireDmg = 0.5;
@@ -1807,6 +1830,72 @@ export class DragonManager {
             const target = (bd._breathingFire || (bd._biting && (bd._biteTarget || bd._biteDragonTarget))) ? 1 : 0;
             bd._jawOpenT = (bd._jawOpenT || 0) + (target - (bd._jawOpenT || 0)) * Math.min(1, 12 * dt);
             bd.jawGrp.rotation.x = bd._jawOpenT * 0.65;
+        }
+    }
+
+    _animateDragonSleep(dt, bd) {
+        // Smoothly transition into sleep pose
+        const t = Math.min(1, (bd._sleepBlend || 0) + dt * 2);
+        bd._sleepBlend = t;
+        const lerp = (a, b) => a + (b - a) * t;
+
+        // Neck segments curve to one side and flatten
+        if (bd.neckSegs) {
+            for (let i = 0; i < bd.neckSegs.length; i++) {
+                const seg = bd.neckSegs[i];
+                seg.rotation.y = lerp(seg.rotation.y, 0.25 + i * 0.1); // curve right
+                seg.rotation.x = lerp(seg.rotation.x, 0.15); // flatten down
+            }
+        }
+        // Head rests flat, turned to the side
+        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0.3);
+        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.2);
+
+        // Jaw closed
+        if (bd.jawGrp) {
+            bd._jawOpenT = (bd._jawOpenT || 0) * 0.9;
+            bd.jawGrp.rotation.x = bd._jawOpenT * 0.65;
+        }
+
+        // Close eyes
+        if (bd.eyes) {
+            for (const eye of bd.eyes) {
+                eye.scale.y = lerp(eye.scale.y, 0.1);
+            }
+        }
+
+        // Wings outstretched and relaxed on the ground
+        for (const w of bd.wings) {
+            const si = w._s;
+            w.rotation.set(
+                lerp(w.rotation.x, 0),
+                lerp(w.rotation.y, si * 0.6),
+                lerp(w.rotation.z, si * -0.5)
+            );
+            if (w._elbow) w._elbow.rotation.set(
+                lerp(w._elbow.rotation.x, 0),
+                lerp(w._elbow.rotation.y, si * -0.3),
+                lerp(w._elbow.rotation.z, si * -0.3)
+            );
+            if (w._hand) w._hand.rotation.set(
+                lerp(w._hand.rotation.x, 0),
+                lerp(w._hand.rotation.y, 0),
+                lerp(w._hand.rotation.z, 0)
+            );
+        }
+
+        // Tail curves to same side as head (right)
+        for (let ti = 0; ti < bd.tailSegs.length; ti++) {
+            bd.tailSegs[ti].rotation.y = lerp(bd.tailSegs[ti].rotation.y, 0.15 + ti * 0.05);
+        }
+
+        // Legs tucked underneath, slightly splayed
+        for (let li = 0; li < bd.legs.length; li++) {
+            const leg = bd.legs[li];
+            if (bd.isWyvern && li < 2) continue; // front legs hidden on wyvern
+            const side = (li % 2 === 0) ? 1 : -1;
+            leg.rotation.x = lerp(leg.rotation.x, 0.7); // tucked back
+            leg.rotation.z = lerp(leg.rotation.z, side * 0.3); // splayed out
         }
     }
 
