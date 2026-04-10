@@ -48,6 +48,8 @@ export class Multiplayer {
         });
         this.peer.on('connection', conn => {
             if (this.connections.size >= 4) { conn.close(); return; }
+            // Force JSON serialization (binary/binarypack has known stall bugs with nested objects)
+            conn.serialization = 'json';
             // Connection may already be open or open later
             const doSetup = () => this._setupConnection(conn);
             if (conn.open) doSetup();
@@ -63,7 +65,8 @@ export class Multiplayer {
         this.isHost = false;
         this.peer.on('open', id => {
             this.myId = id;
-            const conn = this.peer.connect(code, { reliable: true });
+            // Force JSON serialization on the outgoing connection
+            const conn = this.peer.connect(code, { reliable: true, serialization: 'json' });
             conn.on('open', () => {
                 this.hostConn = conn;
                 this.active = true;
@@ -302,6 +305,19 @@ export class Multiplayer {
                 console.log('[mp] sent', data.type, 'to', sent, 'peers (#' + this._sentTypes[data.type] + ')');
             }
         }
+    }
+
+    // Print channel state every 3s so we can see if connections are alive and how big the buffer is
+    debugHeartbeat() {
+        if (!this.active) return;
+        const parts = [];
+        for (const [pid, c] of this.connections) {
+            const dc = c.conn && c.conn.dataChannel;
+            const buffered = dc ? dc.bufferedAmount : '?';
+            const rs = dc ? dc.readyState : '?';
+            parts.push(pid.slice(0, 8) + ':' + rs + '/buf=' + buffered);
+        }
+        console.log('[mp HB]', this.isHost ? 'HOST' : 'CLIENT', 'peers=' + this.connections.size, 'remote=' + this.remotePlayers.size, parts.join(' | '));
     }
 
     _createRemotePlayer(pid) {

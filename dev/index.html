@@ -12354,6 +12354,9 @@ function animate() {
 
     // Multiplayer sync
     if (mp.active) {
+        // Heartbeat — diagnostic dump every 3s
+        mp._hbAccum = (mp._hbAccum || 0) + dt;
+        if (mp._hbAccum >= 3.0) { mp._hbAccum = 0; mp.debugHeartbeat(); }
         // Interpolate remote players every frame for smooth movement
         mp.updateRemotePlayers();
 
