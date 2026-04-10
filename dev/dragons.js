@@ -733,6 +733,7 @@ export class DragonManager {
         for (const bd of this.dragons) {
             if (bd.state !== 'alive') continue;
             if (bd._isRemote) continue; // never broadcast phantoms
+            if (bd._fortressGuardian || bd._stationary || bd._iceDragon) continue; // world dragons exist locally for everyone
             if (!bd._ownerPid) bd._ownerPid = myPid; // claim unowned dragons
             if (bd._ownerPid !== myPid) continue;
             if (!bd._mpId) {
