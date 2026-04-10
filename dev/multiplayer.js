@@ -4,10 +4,14 @@
 // One server process holds the authoritative world state. All players
 // connect TO it as clients. Same model as Java Edition Minecraft.
 //
-// Override the server URL by setting `window._wsUrl` before the page loads,
-// or by appending `?ws=wss://your-server.example/` to the page URL.
-
-const DEFAULT_WS_URL = 'wss://satw-mp.onrender.com';
+// By default the client auto-detects the server URL based on the page
+// origin — if the page was loaded from http://foo:8080/, it connects to
+// ws://foo:8080/ on the same origin. This means the same server.js that
+// served the game files also accepts the WebSocket connection.
+//
+// You can override the URL with:
+//   ?ws=wss://your-server.example/   (query string)
+//   window._wsUrl = '...';            (before the script loads)
 
 function _resolveWsUrl() {
     try {
@@ -16,7 +20,13 @@ function _resolveWsUrl() {
         if (fromQuery) return fromQuery;
     } catch (e) {}
     if (typeof window !== 'undefined' && window._wsUrl) return window._wsUrl;
-    return DEFAULT_WS_URL;
+    // Default: same origin as the page, swapping http(s) for ws(s)
+    try {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return proto + '//' + location.host;
+    } catch (e) {
+        return 'ws://localhost:8080';
+    }
 }
 
 export class Multiplayer {
