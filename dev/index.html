@@ -228,11 +228,7 @@ canvas { display: block; }
             <div id="savedGames"></div>
             <div style="margin-top:16px;border-top:1px solid rgba(120,160,80,0.3);padding-top:12px;">
                 <div style="color:rgba(180,170,140,0.6);font:11px monospace;margin-bottom:8px;">Multiplayer</div>
-                <button class="menu-btn" id="hostBtn" style="margin-bottom:6px;">Host Game</button>
-                <div style="display:flex;gap:4px;">
-                    <input id="joinCode" placeholder="Room code" style="flex:1;padding:10px;font:14px monospace;background:rgba(30,40,25,0.7);color:rgba(220,210,180,0.9);border:2px solid rgba(120,160,80,0.4);border-radius:6px;outline:none;">
-                    <button class="menu-btn" id="joinBtn" style="width:80px;">Join</button>
-                </div>
+                <button class="menu-btn" id="playOnlineBtn" style="margin-bottom:6px;">Play Online</button>
                 <div id="mpStatus" style="color:rgba(150,200,100,0.7);font:11px monospace;margin-top:6px;min-height:16px;"></div>
             </div>
         </div>
@@ -406,7 +402,6 @@ canvas { display: block; }
 <div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
 <div id="dragGhost"></div>
 <div id="worldMap"><h2>World Map</h2><canvas id="mapCanvas" width="600" height="600"></canvas></div>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="three.min.js" onerror="
     var s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
@@ -1362,21 +1357,10 @@ async function _ensureMpStats() {
     _saveMpStats();
 }
 
-document.getElementById('hostBtn').addEventListener('click', async () => {
+document.getElementById('playOnlineBtn').addEventListener('click', async () => {
     await _ensureMpStats();
-    document.getElementById('mpStatus').textContent = 'Creating room...';
-    mp.host(code => {
-        document.getElementById('mpStatus').textContent = 'Room: ' + code + ' (waiting for players)';
-        document.getElementById('joinCode').value = code;
-        startGame(null);
-    });
-});
-document.getElementById('joinBtn').addEventListener('click', async () => {
-    const code = document.getElementById('joinCode').value.trim().toUpperCase();
-    if (!code) return;
-    await _ensureMpStats();
-    document.getElementById('mpStatus').textContent = 'Joining...';
-    mp.join(code, id => {
+    document.getElementById('mpStatus').textContent = 'Connecting...';
+    mp.host(id => {
         if (id) {
             document.getElementById('mpStatus').textContent = 'Connected!';
             startGame(null);
@@ -5261,46 +5245,22 @@ document.body.appendChild(mpPanelEl);
 function updateMpPanel() {
     let html = '<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;margin-bottom:12px;">Multiplayer</div>';
     if (mp.active) {
-        html += `<div style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">${mp.isHost ? 'Hosting' : 'Connected'} | Players: ${mp.playerCount || 1}</div>`;
-        html += `<div style="color:rgba(200,180,100,0.9);font:14px monospace;text-align:center;padding:8px;background:rgba(80,60,30,0.4);border-radius:4px;margin-bottom:8px;">Room: ${mp.myId}</div>`;
-        html += `<div style="color:rgba(150,140,110,0.5);font:10px monospace;text-align:center;margin-bottom:10px;">Share this code with friends to join</div>`;
+        html += `<div style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">Connected | Players: ${mp.playerCount || 1}</div>`;
         html += `<button onclick="window._mpDisconnect()" class="menu-btn" style="width:100%;background:rgba(80,40,30,0.7);border-color:rgba(160,80,60,0.5);">Disconnect</button>`;
     } else {
-        html += `<button onclick="window._mpHost()" class="menu-btn" style="width:100%;margin-bottom:8px;">Host Game</button>`;
-        html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
-        html += `<input type="text" id="mpJoinInput" placeholder="Room code" style="flex:1;padding:8px;font:12px monospace;background:rgba(30,25,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,100,60,0.4);border-radius:4px;">`;
-        html += `<button onclick="window._mpJoin()" class="menu-btn" style="width:70px;">Join</button>`;
-        html += '</div>';
+        html += `<button onclick="window._mpHost()" class="menu-btn" style="width:100%;margin-bottom:8px;">Play Online</button>`;
         html += '<div id="mpPanelStatus" style="color:rgba(150,140,110,0.5);font:11px monospace;text-align:center;min-height:16px;"></div>';
     }
     html += `<button onclick="window._closeMpPanel()" class="menu-btn" style="width:100%;margin-top:8px;">Back</button>`;
     mpPanelEl.innerHTML = html;
-    const inp = document.getElementById('mpJoinInput');
-    if (inp) { inp.addEventListener('keydown', e => e.stopPropagation()); }
 }
 
 window._mpHost = () => {
     const statusEl = document.getElementById('mpPanelStatus');
-    if (statusEl) statusEl.textContent = 'Creating room...';
-    mp.host(code => {
-        if (statusEl) statusEl.textContent = '';
-        if (dragonMgr) dragonMgr.setMyPid(mp.myId);
-        updateMpPanel();
-    });
-};
-window._mpJoin = () => {
-    const inp = document.getElementById('mpJoinInput');
-    const code = inp ? inp.value.trim().toUpperCase() : '';
-    if (!code) return;
-    const statusEl = document.getElementById('mpPanelStatus');
-    if (statusEl) statusEl.textContent = 'Joining...';
-    mp.join(code, id => {
+    if (statusEl) statusEl.textContent = 'Connecting...';
+    mp.host(id => {
         if (id) {
-            if (dragonMgr) {
-                dragonMgr.setMyPid(mp.myId);
-                // Drop world dragons; host's sync will repopulate them as phantoms
-                dragonMgr.removeWorldDragons();
-            }
+            if (dragonMgr) dragonMgr.setMyPid(mp.myId);
             updateMpPanel();
         } else {
             if (statusEl) statusEl.textContent = 'Failed to connect';
