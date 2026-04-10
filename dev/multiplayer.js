@@ -83,8 +83,10 @@ export class Multiplayer {
         this.connections.set(pid, { conn, lastState: null });
         // Create remote player model
         this._createRemotePlayer(pid);
+        console.log('[mp] connected to peer', pid, '— total peers:', this.connections.size);
 
         conn.on('data', data => {
+            try {
             if (data.type === 'state') {
                 this._applyRemoteState(pid, data);
                 // Host relays player state to other clients so everyone sees each other
@@ -134,6 +136,9 @@ export class Multiplayer {
                     this.onPvpHit(data.damage, data.fromPid);
                 }
                 if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
+            }
+            } catch (err) {
+                console.warn('[mp] error handling message', data && data.type, err);
             }
         });
 
@@ -352,6 +357,7 @@ export class Multiplayer {
         g.add(label);
 
         g.rotation.order = 'YXZ';
+        g.visible = false; // hidden until first state arrives so they don't appear at (0,0,0)
         this.scene.add(g);
 
         const rp = {
@@ -391,6 +397,8 @@ export class Multiplayer {
             rp._hasReceived = true;
             rp.group.position.set(s.x, s.y, s.z);
             rp.group.rotation.y = s.ry;
+            rp.group.visible = true;
+            console.log('[mp] first state from', actualPid, 'at', s.x, s.y, s.z);
         }
 
         // Apply character colors and name from remote player

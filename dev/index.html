@@ -5188,6 +5188,22 @@ let pointerLocked = false;
 document.addEventListener('pointerlockchange', () => {
     pointerLocked = !!document.pointerLockElement;
 });
+// When window regains focus (e.g. switching back from another Chrome window),
+// re-acquire pointer lock automatically so the cursor goes back to hidden
+window.addEventListener('focus', () => {
+    if (useMouseLook && gameStarted && !gamePaused && !pointerLocked
+        && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen
+        && !anvilOpen && !blastFurnaceOpen && !settingsOpen && !chestOpen
+        && !guideBookOpen && !mpPanelOpen && !chatOpen) {
+        // Chrome has a pointer-lock cooldown after exit; retry a couple of times
+        const tryLock = (attempts) => {
+            if (attempts <= 0 || pointerLocked) return;
+            try { renderer.domElement.requestPointerLock(); } catch (e) {}
+            setTimeout(() => { if (!pointerLocked) tryLock(attempts - 1); }, 400);
+        };
+        setTimeout(() => tryLock(4), 100);
+    }
+});
 document.addEventListener('mousemove', e => {
     if (!pointerLocked) return;
     fpYaw -= e.movementX * 0.002 * mouseSensitivity;
