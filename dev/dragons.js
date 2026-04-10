@@ -1397,6 +1397,78 @@ export class DragonManager {
         player.spine.rotation.y = 0;
         player.spine.rotation.z = 0;
 
+        // ── G key — grab creatures with talons ──
+        if (keys['KeyG'] && !bd.isWyvern) {
+            bd._grabbing = true;
+            // Tilt back and extend rear legs forward
+            if (!bd._grabTilt) bd._grabTilt = 0;
+            bd._grabTilt += (0.45 - bd._grabTilt) * 4 * dt;
+            bd.group.rotation.x = (bd._flyTilt || 0) + bd._grabTilt;
+            // Check for creatures near the rear feet to grab
+            if (!bd._grabbedCreature && this._creatureMgr) {
+                // Rear leg world positions (legs 2,3 are rear)
+                bd.group.updateMatrixWorld(true);
+                const footWorld = new THREE.Vector3();
+                const S = 2.55;
+                // Average of both rear feet
+                footWorld.set(0, -0.7 * S * gs, -0.7 * S * gs);
+                footWorld.applyMatrix4(bd.group.matrixWorld);
+                const grabR = 2.5 * gs;
+                let closest = null, closestDist = grabR * grabR;
+                for (const c of this._creatureMgr.creatures) {
+                    if (c.dead) continue;
+                    if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+                    const cdx = c.x - footWorld.x, cdz = c.z - footWorld.z;
+                    const d2 = cdx * cdx + cdz * cdz;
+                    if (d2 < closestDist) { closestDist = d2; closest = c; }
+                }
+                if (closest) {
+                    bd._grabbedCreature = closest;
+                    bd._grabStartY = closest.group.position.y;
+                }
+            }
+            // Hold grabbed creature at foot position
+            if (bd._grabbedCreature) {
+                const c = bd._grabbedCreature;
+                if (c.dead) { bd._grabbedCreature = null; }
+                else {
+                    bd.group.updateMatrixWorld(true);
+                    const S = 2.55;
+                    const footWorld = new THREE.Vector3(0, -0.95 * S * gs, -0.5 * S * gs);
+                    footWorld.applyMatrix4(bd.group.matrixWorld);
+                    c.x = footWorld.x;
+                    c.z = footWorld.z;
+                    c.group.position.set(footWorld.x, footWorld.y, footWorld.z);
+                    c.walking = false;
+                    c.speed = 0;
+                }
+            }
+        } else if (bd._grabbing) {
+            // Released G — drop the creature
+            bd._grabbing = false;
+            if (bd._grabbedCreature) {
+                const c = bd._grabbedCreature;
+                if (!c.dead) {
+                    // Calculate fall damage based on height
+                    const terrY = this.getHeight(c.x, c.z);
+                    const fallH = c.group.position.y - terrY;
+                    if (fallH > 3) {
+                        const dmg = Math.floor(fallH * 1.5);
+                        c.hp -= dmg;
+                        if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                    }
+                    // Let it fall — position stays at current spot, gravity in creature update will handle it
+                    c.group.position.y = c.group.position.y; // keep current y, creature system handles gravity
+                }
+                bd._grabbedCreature = null;
+            }
+            bd._grabTilt = 0;
+        }
+        if (!bd._grabbing && bd._grabTilt) {
+            bd._grabTilt *= Math.max(0, 1 - 4 * dt);
+            if (bd._grabTilt < 0.01) bd._grabTilt = 0;
+        }
+
         bd.walking = wantDir !== 0;
         this._animateDragon(dt, bd);
     }
@@ -1432,6 +1504,19 @@ export class DragonManager {
                 updateWyvernMembrane(w);
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
+            // Grabbing: rear legs extend forward/down to grab
+            if (bd._grabbing) {
+                bd.legs[2].rotation.x = -0.8; // rear left forward
+                bd.legs[3].rotation.x = -0.8; // rear right forward
+                // Curl inward slightly if holding something
+                if (bd._grabbedCreature) {
+                    bd.legs[2].rotation.z = 0.15;
+                    bd.legs[3].rotation.z = -0.15;
+                }
+            } else {
+                bd.legs[2].rotation.z = 0;
+                bd.legs[3].rotation.z = 0;
+            }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
                 bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 0.5 + ti * 0.35) * 0.07;
             }
