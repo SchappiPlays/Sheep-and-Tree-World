@@ -1839,17 +1839,21 @@ export class DragonManager {
         bd._sleepBlend = t;
         const lerp = (a, b) => a + (b - a) * t;
 
-        // Neck segments curve to one side and flatten
+        // Neck segments droop down to ground and curve to one side
         if (bd.neckSegs) {
             for (let i = 0; i < bd.neckSegs.length; i++) {
                 const seg = bd.neckSegs[i];
-                seg.rotation.y = lerp(seg.rotation.y, 0.25 + i * 0.1); // curve right
-                seg.rotation.x = lerp(seg.rotation.x, 0.15); // flatten down
+                seg.rotation.y = lerp(seg.rotation.y, 0.2 + i * 0.08); // curve right
+                seg.rotation.x = lerp(seg.rotation.x, 0.45 + i * 0.1); // droop down to ground
             }
         }
-        // Head rests flat, turned to the side
-        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0.3);
-        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.2);
+        // Neck group itself droops
+        if (bd.neckGrp) {
+            bd.neckGrp.rotation.x = lerp(bd.neckGrp.rotation.x, 0.5);
+        }
+        // Head rests on the ground, turned to the side
+        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0.6);
+        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.25);
 
         // Jaw closed
         if (bd.jawGrp) {
@@ -1864,18 +1868,18 @@ export class DragonManager {
             }
         }
 
-        // Wings outstretched and relaxed on the ground
+        // Wings stretched out like flying but tilted slightly down
         for (const w of bd.wings) {
             const si = w._s;
             w.rotation.set(
                 lerp(w.rotation.x, 0),
-                lerp(w.rotation.y, si * 0.6),
-                lerp(w.rotation.z, si * -0.5)
+                lerp(w.rotation.y, si * 0.15),  // spread out like flight
+                lerp(w.rotation.z, si * 0.25)   // tilted slightly down
             );
             if (w._elbow) w._elbow.rotation.set(
                 lerp(w._elbow.rotation.x, 0),
-                lerp(w._elbow.rotation.y, si * -0.3),
-                lerp(w._elbow.rotation.z, si * -0.3)
+                lerp(w._elbow.rotation.y, si * -0.25),
+                lerp(w._elbow.rotation.z, si * 0.15)  // slightly drooped
             );
             if (w._hand) w._hand.rotation.set(
                 lerp(w._hand.rotation.x, 0),
