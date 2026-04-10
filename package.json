@@ -4,11 +4,16 @@
   "main": "main.js",
   "author": "Lucas",
   "description": "Sheep and Tree World",
+  "type": "module",
   "scripts": {
     "start": "electron .",
+    "server": "node server.js",
     "build": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:all": "electron-builder --mac --win"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
   },
   "build": {
     "appId": "com.lucas.sheepandtreeworld",

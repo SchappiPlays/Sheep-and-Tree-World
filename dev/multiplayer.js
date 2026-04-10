@@ -1,253 +1,240 @@
-// multiplayer.js — PeerJS-based P2P multiplayer (up to 5 players)
+// multiplayer.js — WebSocket-based multiplayer client
+//
+// This connects to a Node WebSocket server (see /server.js at repo root).
+// One server process holds the authoritative world state. All players
+// connect TO it as clients. Same model as Java Edition Minecraft.
+//
+// Override the server URL by setting `window._wsUrl` before the page loads,
+// or by appending `?ws=wss://your-server.example/` to the page URL.
+
+const DEFAULT_WS_URL = 'wss://satw-mp.onrender.com';
+
+function _resolveWsUrl() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = params.get('ws');
+        if (fromQuery) return fromQuery;
+    } catch (e) {}
+    if (typeof window !== 'undefined' && window._wsUrl) return window._wsUrl;
+    return DEFAULT_WS_URL;
+}
 
 export class Multiplayer {
     constructor(scene) {
         this.scene = scene;
-        this.peer = null;
-        this.connections = new Map(); // peerId → { conn, playerMesh, lastState }
-        this.isHost = false;
-        this.hostConn = null; // if client, connection to host
+        this.ws = null;
         this.myId = '';
         this.active = false;
-        this.onBlockChange = null; // callback(bx,by,bz,blockType)
-        this.onCreatureSync = null; // callback(creatures)
-        this.remotePlayers = new Map(); // peerId → { group, body, spine, ... }
+        this.isHost = false; // legacy field — server marks one client as host for AI broadcasts
+        this.connections = new Map(); // pid → { name, charColors }
+        this.remotePlayers = new Map();
         this._sendAccum = 0;
         this._creatureSendAccum = 0;
+
+        // Callbacks (populated by index.html)
+        this.onBlockChange = null;
+        this.onCreatureSync = null;
+        this.onDragonSync = null;
+        this.onEggPickup = null;
+        this.onChestLoot = null;
+        this.onSwordPickup = null;
+        this.onBossKilled = null;
+        this.onChat = null;
+        this.onWorldStateSync = null;
+        this.onTimeOfDay = null;
+        this.onHorseSync = null;
+        this.onVillagerSync = null;
+        this.onAttack = null;
+        this.onPvpHit = null;
+        this.onPeerDisconnect = null;
+        this.onDragonHatch = null;
     }
 
-    // ICE servers for NAT traversal
-    _iceConfig() {
-        return {
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' },
-                    { urls: 'turn:relay.backups.cz', username: 'webrtc', credential: 'webrtc' },
-                ]
+    // ── Connection lifecycle ──
+
+    _connect(callback) {
+        const wsUrl = _resolveWsUrl();
+        console.log('[mp] connecting to', wsUrl);
+        try {
+            this.ws = new WebSocket(wsUrl);
+        } catch (e) {
+            console.error('[mp] WebSocket init failed:', e);
+            if (callback) callback(null);
+            return;
+        }
+        this._connectCallback = callback;
+
+        this.ws.onopen = () => {
+            console.log('[mp] WebSocket connected');
+        };
+        this.ws.onmessage = (e) => {
+            let msg;
+            try { msg = JSON.parse(e.data); } catch (err) { return; }
+            this._handleMessage(msg);
+        };
+        this.ws.onerror = (e) => {
+            console.warn('[mp] WebSocket error', e);
+            if (this._connectCallback) {
+                this._connectCallback(null);
+                this._connectCallback = null;
             }
+        };
+        this.ws.onclose = () => {
+            console.log('[mp] WebSocket disconnected');
+            this.active = false;
+            for (const [pid] of this.remotePlayers) this._removeRemotePlayer(pid);
+            this.remotePlayers.clear();
+            this.connections.clear();
         };
     }
 
-    // Host a game — returns room code via callback
-    host(callback) {
-        const code = 'SATW-' + Math.floor(Math.random() * 9000 + 1000);
-        this.peer = new Peer(code, { debug: 0, ...this._iceConfig() });
-        this.isHost = true;
-        this.peer.on('open', id => {
-            this.myId = id;
+    // Legacy host/join API — both just connect to the shared server now
+    host(callback) { this._connect(id => callback && callback(id ? 'SHARED-WORLD' : null)); }
+    join(_code, callback) { this._connect(callback); }
+
+    disconnect() {
+        if (this.ws) try { this.ws.close(); } catch (e) {}
+        this.ws = null;
+        this.active = false;
+        for (const [pid] of this.remotePlayers) this._removeRemotePlayer(pid);
+        this.remotePlayers.clear();
+        this.connections.clear();
+    }
+
+    get playerCount() { return this.remotePlayers.size + 1; }
+
+    debugHeartbeat() {
+        if (!this.active) return;
+        console.log('[mp HB]', this.isHost ? 'HOST' : 'CLIENT',
+            'pid=' + this.myId, 'players=' + (this.remotePlayers.size + 1),
+            'buf=' + (this.ws && this.ws.bufferedAmount));
+    }
+
+    // ── Incoming messages ──
+
+    _handleMessage(msg) {
+        if (!msg || !msg.t) return;
+        const t = msg.t;
+        const pid = String(msg.pid || '');
+
+        if (t === 'welcome') {
+            this.myId = String(msg.pid);
             this.active = true;
-            callback(id);
-        });
-        this.peer.on('connection', conn => {
-            if (this.connections.size >= 4) { conn.close(); return; }
-            // Connection may already be open or open later
-            const doSetup = () => this._setupConnection(conn);
-            if (conn.open) doSetup();
-            else conn.on('open', doSetup);
-        });
-        this.peer.on('error', err => console.error('Peer error:', err));
-        this.peer.on('disconnected', () => console.warn('Peer disconnected from server'));
-    }
-
-    // Join a game by room code
-    join(code, callback) {
-        this.peer = new Peer(undefined, { debug: 0, ...this._iceConfig() });
-        this.isHost = false;
-        this.peer.on('open', id => {
-            this.myId = id;
-            // serialization 'json' avoids PeerJS BinaryPack which silently drops
-            // messages with certain shapes. Host auto-negotiates the same mode.
-            const conn = this.peer.connect(code, { reliable: true, serialization: 'json' });
-            conn.on('open', () => {
-                this.hostConn = conn;
-                this.active = true;
-                this._setupConnection(conn);
-                callback(id);
-            });
-            conn.on('error', err => console.error('Join error:', err));
-        });
-        this.peer.on('error', err => {
-            console.error('Peer error:', err);
-            callback(null);
-        });
-    }
-
-    _setupConnection(conn) {
-        const pid = conn.peer;
-        this.connections.set(pid, { conn, lastState: null });
-        // Create remote player model
-        this._createRemotePlayer(pid);
-        console.log('[mp] connected to peer', pid, '— total peers:', this.connections.size, '— I am', this.isHost ? 'HOST' : 'CLIENT', 'myId=', this.myId);
-        // Reset send counters so we see the first sends to this new peer
-        this._sentTypes = {};
-
-        const _typeCounts = {};
-        // Grab the raw RTCDataChannel underneath PeerJS and use it directly.
-        // We DISABLE PeerJS's internal data handling entirely (it errors on
-        // every message because of serializer mismatch, which throttles the
-        // channel and bloats the host's send buffer).
-        const dc = conn.dataChannel || conn._dc;
-        if (dc) {
-            console.log('[mp] using raw RTCDataChannel for', pid);
-            this.connections.get(pid).rawDc = dc;
-
-            // Block PeerJS from processing messages — we're handling them ourselves
-            try {
-                conn._handleDataMessage = function () {};
-                if (conn._handleMessage) conn._handleMessage = function () {};
-            } catch (e) {}
-
-            dc.addEventListener('message', e => {
-                let text;
-                if (typeof e.data === 'string') text = e.data;
-                else if (e.data instanceof ArrayBuffer) {
-                    try { text = new TextDecoder().decode(e.data); }
-                    catch (err) { return; }
-                } else if (e.data && e.data.byteLength !== undefined) {
-                    try { text = new TextDecoder().decode(new Uint8Array(e.data)); }
-                    catch (err) { return; }
-                } else return;
-                let data;
-                try { data = JSON.parse(text); }
-                catch (err) { return; }
-                const t = data && data.type;
-                if (t) {
-                    _typeCounts[t] = (_typeCounts[t] || 0) + 1;
-                    if (_typeCounts[t] <= 3) {
-                        console.log('[mp] [raw] recv', t, 'from', pid, '#' + _typeCounts[t]);
-                    }
+            this.isHost = !!msg.isHost;
+            console.log('[mp] welcomed as pid', this.myId, 'isHost=', this.isHost);
+            // Apply authoritative world state
+            if (msg.world && this.onWorldStateSync) {
+                this.onWorldStateSync({
+                    swords: msg.world.pickedSwords || [],
+                    chests: msg.world.lootedChests || [],
+                    eggs: msg.world.pickedEggs || [],
+                    bosses: msg.world.killedBosses || [],
+                });
+            }
+            if (msg.world && this.onTimeOfDay) this.onTimeOfDay(msg.world.tod);
+            // Pre-create remote players for peers already connected
+            if (msg.peers) {
+                for (const p of msg.peers) {
+                    const pp = String(p.pid);
+                    this._createRemotePlayer(pp);
+                    if (p.cc) this._applyRemoteCC(pp, p.cc);
                 }
-                try { this._dispatchMessage(pid, data); }
-                catch (err) { console.warn('[mp] dispatch error', err); }
-            });
-        } else {
-            console.warn('[mp] no raw dataChannel available, falling back to PeerJS send/recv');
-            conn.on('data', data => {
-                const t = data && data.type;
-                if (t) {
-                    _typeCounts[t] = (_typeCounts[t] || 0) + 1;
-                    if (_typeCounts[t] <= 3) {
-                        console.log('[mp] [peerjs] recv', t, 'from', pid, '#' + _typeCounts[t]);
-                    }
-                }
-                try { this._dispatchMessage(pid, data); }
-                catch (err) { console.warn('[mp] dispatch error', err); }
-            });
+            }
+            if (this._connectCallback) {
+                this._connectCallback(this.myId);
+                this._connectCallback = null;
+            }
+            return;
         }
-
-        conn.on('close', () => {
+        if (t === 'host_promoted') {
+            this.isHost = true;
+            console.log('[mp] promoted to host');
+            return;
+        }
+        if (t === 'player_join') {
+            this._createRemotePlayer(pid);
+            return;
+        }
+        if (t === 'player_leave') {
             this._removeRemotePlayer(pid);
-            this.connections.delete(pid);
             if (this.onPeerDisconnect) this.onPeerDisconnect(pid);
-        });
-    }
-
-    // Central message dispatch — called by both raw RTCDataChannel and PeerJS handlers
-    _dispatchMessage(pid, data) {
-        if (!data || !data.type) return;
-        if (data.type === 'state') {
-            this._applyRemoteState(pid, data);
-            if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: pid });
-        } else if (data.type === 'cc') {
-            this._applyRemoteCC(data._fromPid || pid, data);
-            if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: data._fromPid || pid });
-        } else if (data.type === 'block') {
-            if (this.onBlockChange) this.onBlockChange(data.bx, data.by, data.bz, data.b);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'creatures') {
-            if (this.onCreatureSync) this.onCreatureSync(data.list);
-        } else if (data.type === 'dragons') {
-            if (this.onDragonSync) this.onDragonSync(data.list, data.fromPid || pid);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'egg_pickup') {
-            if (this.onEggPickup) this.onEggPickup(data.idx);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'dragon_hatch') {
-            if (this.onDragonHatch) this.onDragonHatch(data);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'chest_loot') {
-            if (this.onChestLoot) this.onChestLoot(data.key);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'tod') {
-            if (this.onTimeOfDay) this.onTimeOfDay(data.t);
-        } else if (data.type === 'horses') {
-            if (this.onHorseSync) this.onHorseSync(data.list);
-        } else if (data.type === 'sword_pickup') {
-            if (this.onSwordPickup) this.onSwordPickup(data.id);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'world_state') {
-            if (this.onWorldStateSync) this.onWorldStateSync(data);
-        } else if (data.type === 'boss_killed') {
-            if (this.onBossKilled) this.onBossKilled(data.name);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'chat') {
-            if (this.onChat) this.onChat(data.text, data.name, data.color);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'villagers') {
-            if (this.onVillagerSync) this.onVillagerSync(data.list);
-        } else if (data.type === 'attack') {
-            if (this.onAttack) this.onAttack(data);
-            if (this.isHost) this._relayToOthers(pid, data);
-        } else if (data.type === 'pvp') {
-            if (data.targetPid === this.myId && this.onPvpHit) {
-                this.onPvpHit(data.damage, data.fromPid);
-            }
-            if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
+            return;
+        }
+        if (t === 'state') {
+            this._applyRemoteState(pid, msg);
+            return;
+        }
+        if (t === 'cc') {
+            this._applyRemoteCC(pid, msg);
+            return;
+        }
+        if (t === 'block') {
+            if (this.onBlockChange) this.onBlockChange(msg.bx, msg.by, msg.bz, msg.b);
+            return;
+        }
+        if (t === 'creatures') {
+            if (this.onCreatureSync) this.onCreatureSync(msg.list);
+            return;
+        }
+        if (t === 'dragons') {
+            if (this.onDragonSync) this.onDragonSync(msg.list, pid);
+            return;
+        }
+        if (t === 'horses') {
+            if (this.onHorseSync) this.onHorseSync(msg.list);
+            return;
+        }
+        if (t === 'tod') {
+            if (this.onTimeOfDay) this.onTimeOfDay(msg.tod);
+            return;
+        }
+        if (t === 'villagers') {
+            if (this.onVillagerSync) this.onVillagerSync(msg.list);
+            return;
+        }
+        if (t === 'chat') {
+            if (this.onChat) this.onChat(msg.text, msg.name, msg.color);
+            return;
+        }
+        if (t === 'egg_pickup') {
+            if (this.onEggPickup) this.onEggPickup(msg.idx);
+            return;
+        }
+        if (t === 'chest_loot') {
+            if (this.onChestLoot) this.onChestLoot(msg.key);
+            return;
+        }
+        if (t === 'sword_pickup') {
+            if (this.onSwordPickup) this.onSwordPickup(msg.id);
+            return;
+        }
+        if (t === 'boss_killed') {
+            if (this.onBossKilled) this.onBossKilled(msg.name);
+            return;
+        }
+        if (t === 'attack') {
+            if (this.onAttack) this.onAttack(msg);
+            return;
+        }
+        if (t === 'pvp') {
+            if (msg.targetPid === this.myId && this.onPvpHit) this.onPvpHit(msg.damage, msg.fromPid);
+            return;
         }
     }
 
-    // Send to a specific peer using raw RTCDataChannel if available, falling back to PeerJS conn
-    _sendTo(c, data) {
-        if (c.rawDc && c.rawDc.readyState === 'open') {
-            // Backpressure: drop non-critical messages when send buffer is filling up
-            if (c.rawDc.bufferedAmount > 65536) {
-                const t = data && data.type;
-                // Always send small critical messages; drop bulky periodic syncs when overloaded
-                if (t === 'state' || t === 'cc' || t === 'block' || t === 'attack' || t === 'pvp' ||
-                    t === 'egg_pickup' || t === 'chest_loot' || t === 'sword_pickup' ||
-                    t === 'boss_killed' || t === 'chat' || t === 'tod') {
-                    // OK — small message, send anyway
-                } else {
-                    return false; // drop creatures/dragons/horses/villagers/world_state when backed up
-                }
-            }
-            try { c.rawDc.send(JSON.stringify(data)); return true; }
-            catch (e) { console.warn('[mp] raw send failed', e); }
-        }
-        if (c.conn && c.conn.open) {
-            try { c.conn.send(data); return true; }
-            catch (e) { console.warn('[mp] peerjs send failed', e); }
-        }
-        return false;
+    // ── Outgoing send helpers ──
+
+    _send(data) {
+        if (!this.active || !this.ws || this.ws.readyState !== 1) return;
+        try { this.ws.send(JSON.stringify(data)); } catch (e) {}
     }
 
-    _relayToOthers(fromPid, data) {
-        for (const [pid, c] of this.connections) {
-            if (pid !== fromPid) {
-                this._sendTo(c, data);
-            }
-        }
-    }
-
-    // Send local player state — flat primitives only (no nested objects)
-    // to avoid PeerJS BinaryPack stalling on the cc charColors object.
     sendState(player, heldItem, swingTimer, charColors, riding) {
         if (!this.active) return;
-        // Defensive: ensure all values are valid finite numbers / strings
-        // (NaN/Infinity/undefined break BinaryPack serialization silently)
         const safeNum = (n, def) => Number.isFinite(n) ? +n.toFixed(2) : (def || 0);
         const safeStr = (v) => v == null ? '' : String(v);
-        const state = {
-            type: 'state',
-            pid: safeStr(this.myId),
+        this._send({
+            t: 'state',
             x: safeNum(player.position.x),
             y: safeNum(player.position.y),
             z: safeNum(player.position.z),
@@ -259,51 +246,31 @@ export class Multiplayer {
             sw: safeNum(swingTimer >= 0 ? swingTimer : -1, -1),
             tool: safeStr(heldItem),
             rd: riding ? 1 : 0,
-        };
-        this._broadcast(state);
-        // Send charColors as a separate one-shot message (and re-send periodically in case packets are lost)
-        if (charColors) {
-            this._ccLastSend = (this._ccLastSend || 0) + 1;
-            if (!this._ccSent || this._ccLastSend > 200) {
-                this._ccSent = true;
-                this._ccLastSend = 0;
-                this._broadcast({
-                    type: 'cc',
-                    pid: this.myId,
-                    shirt: charColors.shirt || '',
-                    pants: charColors.pants || '',
-                    skin: charColors.skin || '',
-                    hair: charColors.hair || '',
-                    shoes: charColors.shoes || '',
-                    name: charColors.name || 'Player',
-                    hairStyle: charColors.hairStyle || 'short',
-                    height: +(charColors.height || 1),
-                });
-            }
+        });
+        // Send charColors as a one-shot, then re-send every ~10s for new joiners
+        this._ccLastSend = (this._ccLastSend || 0) + 1;
+        if (charColors && (!this._ccSent || this._ccLastSend > 200)) {
+            this._ccSent = true;
+            this._ccLastSend = 0;
+            this._send({
+                t: 'cc',
+                shirt: charColors.shirt || '',
+                pants: charColors.pants || '',
+                skin: charColors.skin || '',
+                hair: charColors.hair || '',
+                shoes: charColors.shoes || '',
+                name: charColors.name || 'Player',
+                hairStyle: charColors.hairStyle || 'short',
+                height: +(charColors.height || 1),
+            });
         }
     }
 
-    // Send block change
-    sendBlockChange(bx, by, bz, blockType) {
-        if (!this.active) return;
-        this._broadcast({ type: 'block', bx, by, bz, b: blockType });
-    }
-
-    // Send attack event
-    sendAttack(x, z, angle, damage) {
-        if (!this.active) return;
-        this._broadcast({ type: 'attack', x, z, angle, damage, pid: this.myId });
-    }
-
-    // Send a direct PvP hit to a specific player
-    sendPvpHit(targetPid, damage) {
-        if (!this.active) return;
-        this._broadcast({ type: 'pvp', targetPid, damage, fromPid: this.myId });
-    }
-
-    // Host sends creature state
+    sendBlockChange(bx, by, bz, b) { this._send({ t: 'block', bx, by, bz, b }); }
+    sendAttack(x, z, angle, damage) { this._send({ t: 'attack', x, z, angle, damage }); }
+    sendPvpHit(targetPid, damage) { this._send({ t: 'pvp', targetPid, damage, fromPid: this.myId }); }
     sendCreatureState(creatureList) {
-        if (!this.active || !this.isHost) return;
+        if (!this.isHost) return; // only host broadcasts creatures
         const list = creatureList.map(c => ({
             id: c.cid, x: +c.x.toFixed(2), z: +c.z.toFixed(2),
             ry: +c.group.rotation.y.toFixed(2),
@@ -315,108 +282,32 @@ export class Multiplayer {
             np: c._necProvoked ? 1 : 0,
             hp: c.hp != null ? +c.hp.toFixed(0) : null,
         }));
-        this._broadcast({ type: 'creatures', list });
+        this._send({ t: 'creatures', list });
     }
+    sendHorseState(list) { if (this.isHost) this._send({ t: 'horses', list }); }
+    sendChestLoot(key) { this._send({ t: 'chest_loot', key }); }
+    sendEggPickup(idx) { this._send({ t: 'egg_pickup', idx }); }
+    sendSwordPickup(id) { this._send({ t: 'sword_pickup', id }); }
+    sendBossKilled(name) { this._send({ t: 'boss_killed', name }); }
+    sendChat(text, name, color) { this._send({ t: 'chat', text, name, color }); }
+    sendDragonState(list) { this._send({ t: 'dragons', list }); }
+    sendDragonHatch(info) { this._send({ t: 'dragon_hatch', ...info }); }
+    // Server is authoritative for these — no-op
+    sendTimeOfDay(_t) { /* server runs the clock */ }
+    sendWorldState(_state) { /* server has the source of truth */ }
 
-    // Any peer broadcasts the dragons it owns; host relays to other clients
-    sendDragonState(dragonList) {
-        if (!this.active) return;
-        this._broadcast({ type: 'dragons', list: dragonList, fromPid: this.myId });
-    }
-
-    // Broadcast that an egg was picked up by this peer
-    sendEggPickup(idx) {
-        if (!this.active) return;
-        this._broadcast({ type: 'egg_pickup', idx, fromPid: this.myId });
-    }
-
-    // Broadcast a fresh hatch (so other peers can spawn the same dragon immediately)
-    sendDragonHatch(info) {
-        if (!this.active) return;
-        this._broadcast({ type: 'dragon_hatch', ...info, fromPid: this.myId });
-    }
-
-    // Broadcast that a chest was looted (any peer)
-    sendChestLoot(key) {
-        if (!this.active) return;
-        this._broadcast({ type: 'chest_loot', key, fromPid: this.myId });
-    }
-
-    // Host broadcasts time of day
-    sendTimeOfDay(t) {
-        if (!this.active || !this.isHost) return;
-        this._broadcast({ type: 'tod', t: +t.toFixed(4) });
-    }
-
-    // Host broadcasts horses
-    sendHorseState(list) {
-        if (!this.active || !this.isHost) return;
-        this._broadcast({ type: 'horses', list });
-    }
-
-    // Broadcast a fortress sword pickup
-    sendSwordPickup(id) {
-        if (!this.active) return;
-        this._broadcast({ type: 'sword_pickup', id, fromPid: this.myId });
-    }
-
-    // Host broadcasts authoritative world state snapshot (low frequency)
-    sendWorldState(state) {
-        if (!this.active || !this.isHost) return;
-        this._broadcast({ type: 'world_state', ...state });
-    }
-
-    // Broadcast a boss kill so all peers add it to their killedBosses set
-    sendBossKilled(name) {
-        if (!this.active) return;
-        this._broadcast({ type: 'boss_killed', name, fromPid: this.myId });
-    }
-
-    // Broadcast a chat message
-    sendChat(text, name, color) {
-        if (!this.active) return;
-        this._broadcast({ type: 'chat', text, name, color, fromPid: this.myId });
-    }
-
-    _broadcast(data) {
-        let sent = 0;
-        for (const [pid, c] of this.connections) {
-            if (this._sendTo(c, data)) sent++;
-        }
-        // Log first 3 broadcasts of each type so we can see if outgoing works
-        if (data && data.type) {
-            if (!this._sentTypes) this._sentTypes = {};
-            this._sentTypes[data.type] = (this._sentTypes[data.type] || 0) + 1;
-            if (this._sentTypes[data.type] <= 3) {
-                console.log('[mp] sent', data.type, 'to', sent, 'peers (#' + this._sentTypes[data.type] + ')');
-            }
-        }
-    }
-
-    // Print channel state every 3s so we can see if connections are alive and how big the buffer is
-    debugHeartbeat() {
-        if (!this.active) return;
-        const parts = [];
-        for (const [pid, c] of this.connections) {
-            const dc = c.conn && c.conn.dataChannel;
-            const buffered = dc ? dc.bufferedAmount : '?';
-            const rs = dc ? dc.readyState : '?';
-            parts.push(pid.slice(0, 8) + ':' + rs + '/buf=' + buffered);
-        }
-        console.log('[mp HB]', this.isHost ? 'HOST' : 'CLIENT', 'peers=' + this.connections.size, 'remote=' + this.remotePlayers.size, parts.join(' | '));
-    }
+    // ── Remote player rendering (carried over from PeerJS version) ──
 
     _createRemotePlayer(pid) {
+        if (this.remotePlayers.has(pid)) return;
         const g = new THREE.Group();
 
         const skinMat = new THREE.MeshStandardMaterial({ color: 0xE8B49D });
-        const shirtMat = new THREE.MeshStandardMaterial({ color: 0xBB4444 }); // red shirt to distinguish
+        const shirtMat = new THREE.MeshStandardMaterial({ color: 0xBB4444 });
         const pantsMat = new THREE.MeshStandardMaterial({ color: 0x334466 });
         const shoeMat = new THREE.MeshStandardMaterial({ color: 0x332211 });
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x3B2507 });
         const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-
-        // Colors will be set from remote player's character customization
 
         const body = new THREE.Group();
         body.position.y = 0.95;
@@ -483,12 +374,10 @@ export class Multiplayer {
         g.add(label);
 
         g.rotation.order = 'YXZ';
-        // Position at world spawn so the player is at least visible somewhere
-        // until their first state message arrives
         g.position.set(0, 5, 0);
         g.visible = true;
         this.scene.add(g);
-        console.log('[mp] created remote player slot for', pid, '— scene now has', this.remotePlayers.size, 'remote(s)');
+        console.log('[mp] created remote player slot for', pid);
 
         const rp = {
             group: g, body, spine, headGroup, torso,
@@ -507,27 +396,11 @@ export class Multiplayer {
     }
 
     _applyRemoteState(pid, s) {
-        // If this is relayed state from another client, use their pid
-        const actualPid = s._fromPid || pid;
-        if (actualPid === this.myId) {
-            if (!this._selfStateLogged) {
-                this._selfStateLogged = true;
-                console.warn('[mp] _applyRemoteState got self state — skipping. actualPid=', actualPid, 'myId=', this.myId);
-            }
-            return; // don't render self
-        }
-        if (!this._applyStateLogged) {
-            this._applyStateLogged = 0;
-        }
-        if (this._applyStateLogged < 3) {
-            this._applyStateLogged++;
-            console.log('[mp] _applyRemoteState #' + this._applyStateLogged, 'actualPid=', actualPid, 'pos=', s.x, s.y, s.z, 'remotePlayers has it?', this.remotePlayers.has(actualPid));
-        }
-        if (!this.remotePlayers.has(actualPid)) this._createRemotePlayer(actualPid);
-        const rp = this.remotePlayers.get(actualPid);
+        if (pid === this.myId) return;
+        if (!this.remotePlayers.has(pid)) this._createRemotePlayer(pid);
+        const rp = this.remotePlayers.get(pid);
         if (!rp) return;
 
-        // Store target state for per-frame interpolation
         rp._targetX = s.x; rp._targetY = s.y; rp._targetZ = s.z;
         rp._targetRY = s.ry; rp._targetRX = s.rx || 0;
         rp._wp = s.wp; rp._wb = s.wb; rp._sb = s.sb; rp._sw = s.sw;
@@ -535,18 +408,15 @@ export class Multiplayer {
         rp._riding = !!s.rd;
         rp._lastUpdate = performance.now();
 
-        // Snap on first receive so player doesn't lerp from (0,0,0)
         if (!rp._hasReceived) {
             rp._hasReceived = true;
             rp.group.position.set(s.x, s.y, s.z);
             rp.group.rotation.y = s.ry;
             rp.group.visible = true;
-            console.log('[mp] first state from', actualPid, 'at', s.x, s.y, s.z);
+            console.log('[mp] first state from', pid, 'at', s.x, s.y, s.z);
         }
-
     }
 
-    // Apply character colors received from a peer (sent as a separate message)
     _applyRemoteCC(pid, cc) {
         if (pid === this.myId) return;
         if (!this.remotePlayers.has(pid)) this._createRemotePlayer(pid);
@@ -579,32 +449,26 @@ export class Multiplayer {
         }
     }
 
-    // Call this every frame to smoothly interpolate remote players
     updateRemotePlayers() {
         for (const [pid, rp] of this.remotePlayers) {
             if (!rp._hasReceived) continue;
 
-            // Smooth position interpolation
             const tx = rp._targetX, ty = rp._targetY, tz = rp._targetZ;
             rp.group.position.x += (tx - rp.group.position.x) * 0.15;
             rp.group.position.y += (ty - rp.group.position.y) * 0.15;
             rp.group.position.z += (tz - rp.group.position.z) * 0.15;
 
-            // Smooth rotation interpolation
             let da = rp._targetRY - rp.group.rotation.y;
             while (da > Math.PI) da -= Math.PI * 2;
             while (da < -Math.PI) da += Math.PI * 2;
             rp.group.rotation.y += da * 0.15;
             rp.group.rotation.x = rp._targetRX;
 
-            // Update tool visibility
             this._updateRemoteTool(rp, rp._tool);
 
-            // Animation
             const p = rp._wp, b = rp._wb, sp = rp._sb;
             const mix = (a, bv, t) => a + (bv - a) * t;
 
-            // Riding pose overrides walk animation entirely
             if (rp._riding) {
                 rp.body.position.y = 0.95 * (rp._heightScale || 1);
                 rp.body.position.x = 0;
@@ -620,76 +484,64 @@ export class Multiplayer {
                 rp.torso.rotation.y = 0;
                 rp.headGroup.rotation.x = -0.1;
             } else {
+                rp.body.position.y = 0.95 * (rp._heightScale || 1) + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
+                rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
 
-            // Body bob
-            rp.body.position.y = 0.95 * (rp._heightScale || 1) + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
-            rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
+                const legAmp = mix(0.5, 0.85, sp);
+                const legSwing = Math.sin(p) * legAmp * b;
+                rp.leftLeg.hip.rotation.x = legSwing;
+                rp.rightLeg.hip.rotation.x = -legSwing;
+                const kneeAmp = mix(0.7, 1.25, sp);
+                rp.leftLeg.knee.rotation.x = Math.max(0, -Math.sin(p)) * kneeAmp * b;
+                rp.rightLeg.knee.rotation.x = Math.max(0, Math.sin(p)) * kneeAmp * b;
 
-            // Legs
-            const legAmp = mix(0.5, 0.85, sp);
-            const legSwing = Math.sin(p) * legAmp * b;
-            rp.leftLeg.hip.rotation.x = legSwing;
-            rp.rightLeg.hip.rotation.x = -legSwing;
-            const kneeAmp = mix(0.7, 1.25, sp);
-            rp.leftLeg.knee.rotation.x = Math.max(0, -Math.sin(p)) * kneeAmp * b;
-            rp.rightLeg.knee.rotation.x = Math.max(0, Math.sin(p)) * kneeAmp * b;
+                rp.spine.rotation.x = mix(0.04, 0.16, sp) * b;
+                rp.spine.rotation.y = 0; rp.spine.rotation.z = 0;
+                rp.torso.rotation.y = Math.sin(p) * mix(0.04, 0.07, sp) * b;
+                rp.headGroup.rotation.x = -rp.spine.rotation.x * 0.45;
 
-            // Spine
-            rp.spine.rotation.x = mix(0.04, 0.16, sp) * b;
-            rp.spine.rotation.y = 0; rp.spine.rotation.z = 0;
-            rp.torso.rotation.y = Math.sin(p) * mix(0.04, 0.07, sp) * b;
-            rp.headGroup.rotation.x = -rp.spine.rotation.x * 0.45;
+                const armMul = mix(0.7, 1.1, sp);
+                rp.leftArm.shoulder.rotation.x = -legSwing * armMul;
+                rp.leftArm.shoulder.rotation.z = 0;
+                rp.rightArm.shoulder.rotation.x = legSwing * armMul;
+                rp.rightArm.shoulder.rotation.z = 0;
+                const elbBase = mix(-0.15, -1.4, sp);
+                const elbDyn = mix(0.3, 0.45, sp);
+                rp.leftArm.elbow.rotation.x = b * (elbBase - Math.max(0, Math.sin(p)) * elbDyn);
+                rp.rightArm.elbow.rotation.x = b * (elbBase - Math.max(0, -Math.sin(p)) * elbDyn);
 
-            // Arms
-            const armMul = mix(0.7, 1.1, sp);
-            rp.leftArm.shoulder.rotation.x = -legSwing * armMul;
-            rp.leftArm.shoulder.rotation.z = 0;
-            rp.rightArm.shoulder.rotation.x = legSwing * armMul;
-            rp.rightArm.shoulder.rotation.z = 0;
-            const elbBase = mix(-0.15, -1.4, sp);
-            const elbDyn = mix(0.3, 0.45, sp);
-            rp.leftArm.elbow.rotation.x = b * (elbBase - Math.max(0, Math.sin(p)) * elbDyn);
-            rp.rightArm.elbow.rotation.x = b * (elbBase - Math.max(0, -Math.sin(p)) * elbDyn);
-
-            // Swing overlay
-            const sw = rp._sw;
-            if (sw >= 0 && sw <= 1.5) {
-                const t = Math.min(sw, 1);
-                const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
-                let swShX, swShZ, swElX, swSpineX, swSpineY;
-                if (t < 0.2) {
-                    const u = ss(0, 0.2, t);
-                    swShX = u * -1.1; swShZ = u * 0.3; swElX = u * -0.25; swSpineY = u * -0.45; swSpineX = u * 0.03;
-                } else if (t < 0.45) {
-                    const u = ss(0.2, 0.45, t);
-                    swShX = -1.1; swShZ = 0.3 + (-0.15 - 0.3) * u; swElX = -0.25 + 0.15 * u; swSpineY = -0.45 + 1.0 * u; swSpineX = 0.03 + 0.03 * u;
-                } else {
-                    const u = ss(0.45, 1.0, t);
-                    swShX = -1.1 * (1 - u); swShZ = -0.15 * (1 - u); swElX = -0.1 * (1 - u); swSpineY = 0.55 * (1 - u); swSpineX = 0.06 * (1 - u);
+                const sw = rp._sw;
+                if (sw >= 0 && sw <= 1.5) {
+                    const t = Math.min(sw, 1);
+                    const ss = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+                    let swShX, swShZ, swElX, swSpineX, swSpineY;
+                    if (t < 0.2) {
+                        const u = ss(0, 0.2, t);
+                        swShX = u * -1.1; swShZ = u * 0.3; swElX = u * -0.25; swSpineY = u * -0.45; swSpineX = u * 0.03;
+                    } else if (t < 0.45) {
+                        const u = ss(0.2, 0.45, t);
+                        swShX = -1.1; swShZ = 0.3 + (-0.15 - 0.3) * u; swElX = -0.25 + 0.15 * u; swSpineY = -0.45 + 1.0 * u; swSpineX = 0.03 + 0.03 * u;
+                    } else {
+                        const u = ss(0.45, 1.0, t);
+                        swShX = -1.1 * (1 - u); swShZ = -0.15 * (1 - u); swElX = -0.1 * (1 - u); swSpineY = 0.55 * (1 - u); swSpineX = 0.06 * (1 - u);
+                    }
+                    rp.leftArm.shoulder.rotation.x += swShX;
+                    rp.leftArm.shoulder.rotation.z += swShZ;
+                    rp.leftArm.elbow.rotation.x += swElX;
+                    rp.spine.rotation.x += swSpineX;
+                    rp.spine.rotation.y += swSpineY;
                 }
-                rp.leftArm.shoulder.rotation.x += swShX;
-                rp.leftArm.shoulder.rotation.z += swShZ;
-                rp.leftArm.elbow.rotation.x += swElX;
-                rp.spine.rotation.x += swSpineX;
-                rp.spine.rotation.y += swSpineY;
             }
-            } // end else (not riding)
 
-            // Hide remote player if no updates for 5 seconds (disconnected)
-            if (performance.now() - rp._lastUpdate > 5000) {
-                rp.group.visible = false;
-            } else {
-                rp.group.visible = true;
-            }
+            if (performance.now() - rp._lastUpdate > 5000) rp.group.visible = false;
+            else rp.group.visible = true;
         }
     }
 
-    // Update held tool mesh on remote player
     _updateRemoteTool(rp, toolName) {
         if (rp._currentTool === toolName) return;
         rp._currentTool = toolName;
 
-        // Remove old tool
         if (rp._toolMesh) {
             rp.leftArm.handGrp.remove(rp._toolMesh);
             rp._toolMesh = null;
@@ -699,7 +551,6 @@ export class Multiplayer {
         const toolGroup = new THREE.Group();
 
         if (toolName.includes('pickaxe')) {
-            // Pickaxe
             const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('gold') ? 0xffd700 : toolName.includes('iron') ? 0xbbbbbb : toolName.includes('copper') ? 0xcc7744 : 0x888888;
             const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
             handle.position.y = -0.2;
@@ -708,7 +559,6 @@ export class Multiplayer {
             toolGroup.add(handle, head);
             toolGroup.rotation.x = -0.3;
         } else if (toolName.includes('sword') || toolName.includes('csword')) {
-            // Sword
             const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('gold') ? 0xffd700 : toolName.includes('iron') ? 0xcccccc : toolName.includes('copper') ? 0xcc7744 : 0xaaaaaa;
             const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
             handle.position.y = -0.15;
@@ -719,7 +569,6 @@ export class Multiplayer {
             toolGroup.add(handle, guard, blade);
             toolGroup.rotation.x = Math.PI - 0.4;
         } else if (toolName.includes('staff') || toolName.includes('cstaff')) {
-            // Staff
             const isVoid = toolName.includes('void');
             const isFire = toolName.includes('fire');
             const isIce = toolName.includes('ice');
@@ -733,7 +582,6 @@ export class Multiplayer {
             toolGroup.add(pole, orb);
             toolGroup.rotation.x = -0.2;
         } else if (toolName.includes('axe')) {
-            // Axe
             const color = toolName.includes('diamond') ? 0x44ddff : toolName.includes('iron') ? 0xbbbbbb : 0xcc7744;
             const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
             handle.position.y = -0.2;
@@ -742,7 +590,7 @@ export class Multiplayer {
             toolGroup.add(handle, head);
             toolGroup.rotation.x = -0.3;
         } else {
-            return; // Unknown tool, don't show anything
+            return;
         }
 
         rp._toolMesh = toolGroup;
@@ -756,15 +604,4 @@ export class Multiplayer {
             this.remotePlayers.delete(pid);
         }
     }
-
-    disconnect() {
-        for (const [pid] of this.connections) this._removeRemotePlayer(pid);
-        this.connections.clear();
-        if (this.peer) this.peer.destroy();
-        this.peer = null;
-        this.active = false;
-        this.hostConn = null;
-    }
-
-    get playerCount() { return this.connections.size + 1; }
 }
