@@ -83,9 +83,15 @@ export class Multiplayer {
         this.connections.set(pid, { conn, lastState: null });
         // Create remote player model
         this._createRemotePlayer(pid);
-        console.log('[mp] connected to peer', pid, '— total peers:', this.connections.size);
+        console.log('[mp] connected to peer', pid, '— total peers:', this.connections.size, '— I am', this.isHost ? 'HOST' : 'CLIENT', 'myId=', this.myId);
 
+        let _dataCount = 0;
         conn.on('data', data => {
+            // Log first 5 incoming messages so we can see if data is arriving at all
+            if (_dataCount < 5) {
+                console.log('[mp] recv', data.type, 'from', pid, '#' + (_dataCount + 1));
+                _dataCount++;
+            }
             try {
             if (data.type === 'state') {
                 this._applyRemoteState(pid, data);
@@ -275,8 +281,21 @@ export class Multiplayer {
     }
 
     _broadcast(data) {
+        let sent = 0;
         for (const [pid, c] of this.connections) {
-            if (c.conn.open) try { c.conn.send(data); } catch(e) {}
+            if (c.conn.open) {
+                try { c.conn.send(data); sent++; } catch(e) {
+                    console.warn('[mp] send failed to', pid, e);
+                }
+            }
+        }
+        // Log first 3 broadcasts of each type so we can see if outgoing works
+        if (data && data.type) {
+            if (!this._sentTypes) this._sentTypes = {};
+            this._sentTypes[data.type] = (this._sentTypes[data.type] || 0) + 1;
+            if (this._sentTypes[data.type] <= 3) {
+                console.log('[mp] sent', data.type, 'to', sent, 'peers (#' + this._sentTypes[data.type] + ')');
+            }
         }
     }
 
