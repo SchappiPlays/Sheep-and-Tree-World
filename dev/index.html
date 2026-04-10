@@ -2890,10 +2890,53 @@ function startGame(loadSlotName) {
     // Chest loot — when another peer loots a chest, mirror locally
     mp.onChestLoot = (key) => {
         if (chestData[key]) delete chestData[key];
+        if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
+        world._lootedChestKeys.add(key);
+    };
+    // Authoritative world snapshot from host (handles late joiners)
+    mp.onWorldStateSync = (state) => {
+        if (mp.isHost) return;
+        // Picked-up swords
+        if (state.swords && world._fortressSwordMeshes) {
+            const claimed = new Set(state.swords);
+            for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
+                const fs = world._fortressSwordMeshes[fi];
+                if (claimed.has(fs.id)) {
+                    scene.remove(fs.mesh);
+                    world._fortressSwordMeshes.splice(fi, 1);
+                }
+            }
+        }
+        // Looted chests
+        if (state.chests) {
+            for (const k of state.chests) delete chestData[k];
+        }
+        // Picked eggs
+        if (state.eggs && dragonMgr) {
+            for (const idx of state.eggs) {
+                const e = dragonMgr.eggs[idx];
+                if (e && !e.pickedUp) {
+                    e.pickedUp = true;
+                    if (e.group) e.group.visible = false;
+                }
+            }
+        }
     };
     // Time of day — clients adopt host's time
     mp.onTimeOfDay = (t) => {
         if (!mp.isHost) timeOfDay = t;
+    };
+    // Fortress sword pickup — when another peer claims a sword, remove it locally
+    mp.onSwordPickup = (id) => {
+        if (!world._fortressSwordMeshes) return;
+        for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
+            const fs = world._fortressSwordMeshes[fi];
+            if (fs.id === id) {
+                scene.remove(fs.mesh);
+                world._fortressSwordMeshes.splice(fi, 1);
+                break;
+            }
+        }
     };
     // Horses — clients update phantoms from host's broadcast
     mp.onHorseSync = (list) => {
@@ -8958,6 +9001,8 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                 inventory[item] = (inventory[item] || 0) + count;
             }
             delete chestData[ck];
+            if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
+            world._lootedChestKeys.add(ck);
             updateHotbar();
             if (mp.active) mp.sendChestLoot(ck);
         }
@@ -12321,6 +12366,17 @@ function animate() {
                 // Time of day sync
                 mp.sendTimeOfDay(timeOfDay);
             }
+            // Lower-frequency authoritative world snapshot for late joiners
+            mp._worldStateAccum = (mp._worldStateAccum || 0) + dt;
+            if (mp._worldStateAccum >= 2.0) {
+                mp._worldStateAccum = 0;
+                const allSwordIds = world._fortressSwords ? world._fortressSwords.map(fs => fs.id) : [];
+                const remaining = new Set((world._fortressSwordMeshes || []).map(m => m.id));
+                const pickedSwords = allSwordIds.filter(id => !remaining.has(id));
+                const lootedChests = world._lootedChestKeys ? Array.from(world._lootedChestKeys) : [];
+                const pickedEggs = dragonMgr ? dragonMgr.eggs.map((e, i) => e.pickedUp ? i : -1).filter(i => i >= 0) : [];
+                mp.sendWorldState({ swords: pickedSwords, chests: lootedChests, eggs: pickedEggs });
+            }
         }
         // Every peer syncs their owned dragons (host relays)
         if (mp.active && dragonMgr) {
@@ -13139,6 +13195,7 @@ function animate() {
                     scene.remove(fs.mesh);
                     world._fortressSwordMeshes.splice(fi, 1);
                     addChatMessage('You draw ' + sName + ' from the ancient stone.', 'rgba(255,200,100,0.9)');
+                    if (mp.active) mp.sendSwordPickup(fs.id);
                     keys['KeyE'] = false;
                 }
                 break;

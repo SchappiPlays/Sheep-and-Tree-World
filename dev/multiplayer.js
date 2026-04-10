@@ -111,6 +111,11 @@ export class Multiplayer {
                 if (this.onTimeOfDay) this.onTimeOfDay(data.t);
             } else if (data.type === 'horses') {
                 if (this.onHorseSync) this.onHorseSync(data.list);
+            } else if (data.type === 'sword_pickup') {
+                if (this.onSwordPickup) this.onSwordPickup(data.id);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'world_state') {
+                if (this.onWorldStateSync) this.onWorldStateSync(data);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
@@ -227,6 +232,18 @@ export class Multiplayer {
     sendHorseState(list) {
         if (!this.active || !this.isHost) return;
         this._broadcast({ type: 'horses', list });
+    }
+
+    // Broadcast a fortress sword pickup
+    sendSwordPickup(id) {
+        if (!this.active) return;
+        this._broadcast({ type: 'sword_pickup', id, fromPid: this.myId });
+    }
+
+    // Host broadcasts authoritative world state snapshot (low frequency)
+    sendWorldState(state) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'world_state', ...state });
     }
 
     _broadcast(data) {
