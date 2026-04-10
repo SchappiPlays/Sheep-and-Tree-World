@@ -1074,9 +1074,10 @@ export class CreatureManager {
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
                 // Frozen lands — mostly skeletons, rare wolves
+                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
                 if (typeHash < 0.6) {
                     creature = makeSkeleton(sx, sz, terrainY);
-                } else if (typeHash < 0.68) {
+                } else if (typeHash < 0.68 && !nearSpawn) {
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.85) {
                     creature = makeSheep(sx, sz, terrainY);
@@ -1093,10 +1094,11 @@ export class CreatureManager {
                     }
                 }
 
+                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
                 if (isForested && typeHash < 0.4) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);
-                } else if (isForested && typeHash < 0.46) {
+                } else if (isForested && typeHash < 0.46 && !nearSpawn) {
                     // Forest — rare wolves
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.35) {
