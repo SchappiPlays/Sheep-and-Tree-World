@@ -1400,7 +1400,7 @@ export class DragonManager {
         player.spine.rotation.z = 0;
 
         // ── G key — grab creatures with talons ──
-        if (keys['KeyG'] && !bd.isWyvern) {
+        if (keys['KeyG']) {
             bd._grabbing = true;
             // Tilt back and extend rear legs forward
             if (!bd._grabTilt) bd._grabTilt = 0;
