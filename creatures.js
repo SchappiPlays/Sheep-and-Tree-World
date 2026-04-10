@@ -845,6 +845,36 @@ export class CreatureManager {
                 const dist = Math.sqrt(dist2);
                 sh.attackTimer = Math.max(0, (sh.attackTimer || 0) - dt);
 
+                // Check if a player dragon is closer than the player — target it instead
+                let targetDragon = null, dragonDist = dist;
+                if (this._dragonMgr) {
+                    for (const bd of this._dragonMgr.dragons) {
+                        if (bd.state !== 'alive' || bd._fortressGuardian || bd._stationary) continue;
+                        const ddx = bd.x - sh.x, ddz = bd.z - sh.z;
+                        const dd = Math.sqrt(ddx*ddx + ddz*ddz);
+                        if (dd < dragonDist && dd < sh.aggroRange) { targetDragon = bd; dragonDist = dd; }
+                    }
+                }
+                if (targetDragon) {
+                    const ddx = targetDragon.x - sh.x, ddz = targetDragon.z - sh.z;
+                    sh.angle = Math.atan2(ddx, ddz);
+                    sh.walking = true;
+                    sh.speed += ((dragonDist > sh.attackRange + 1 ? sh.chaseSpeed : 0) - sh.speed) * 5 * dt;
+                    if (dragonDist < sh.attackRange + 1 && sh.attackTimer <= 0) {
+                        sh.attackTimer = sh.attackCD;
+                        targetDragon.hp -= sh.attackDmg;
+                        if (targetDragon.hp <= 0) { targetDragon.hp = 0; targetDragon.state = 'dead'; }
+                    }
+                    // Skip the rest of the AI for this creature this frame
+                    let da2 = sh.angle - sh.group.rotation.y;
+                    while(da2>Math.PI)da2-=Math.PI*2; while(da2<-Math.PI)da2+=Math.PI*2;
+                    sh.group.rotation.y += da2 * 5 * dt;
+                    if (sh.speed > 0.01) { sh.x += Math.sin(sh.group.rotation.y)*sh.speed*dt; sh.z += Math.cos(sh.group.rotation.y)*sh.speed*dt; }
+                    const _ty2 = this.world.getHeight(sh.x, sh.z);
+                    sh.group.position.set(sh.x, _ty2, sh.z);
+                    continue;
+                }
+
                 // Check if a summoned skeleton is closer than the player — target it instead
                 let targetSummon = null, summonDist = dist;
                 for (const other of this.creatures) {
@@ -1044,9 +1074,10 @@ export class CreatureManager {
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
                 // Frozen lands — mostly skeletons, rare wolves
+                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
                 if (typeHash < 0.6) {
                     creature = makeSkeleton(sx, sz, terrainY);
-                } else if (typeHash < 0.68) {
+                } else if (typeHash < 0.68 && !nearSpawn) {
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.85) {
                     creature = makeSheep(sx, sz, terrainY);
@@ -1063,10 +1094,11 @@ export class CreatureManager {
                     }
                 }
 
+                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
                 if (isForested && typeHash < 0.4) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);
-                } else if (isForested && typeHash < 0.46) {
+                } else if (isForested && typeHash < 0.46 && !nearSpawn) {
                     // Forest — rare wolves
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.35) {
