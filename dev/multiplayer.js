@@ -4,14 +4,11 @@
 // One server process holds the authoritative world state. All players
 // connect TO it as clients. Same model as Java Edition Minecraft.
 //
-// By default the client auto-detects the server URL based on the page
-// origin — if the page was loaded from http://foo:8080/, it connects to
-// ws://foo:8080/ on the same origin. This means the same server.js that
-// served the game files also accepts the WebSocket connection.
-//
-// You can override the URL with:
+// The default server is hosted on Render (free tier). You can override with:
 //   ?ws=wss://your-server.example/   (query string)
 //   window._wsUrl = '...';            (before the script loads)
+
+const DEFAULT_WS_URL = 'wss://sheep-and-tree-world.onrender.com';
 
 function _resolveWsUrl() {
     try {
@@ -20,13 +17,14 @@ function _resolveWsUrl() {
         if (fromQuery) return fromQuery;
     } catch (e) {}
     if (typeof window !== 'undefined' && window._wsUrl) return window._wsUrl;
-    // Default: same origin as the page, swapping http(s) for ws(s)
+    // If running locally against a dev server, prefer same-origin
     try {
-        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return proto + '//' + location.host;
-    } catch (e) {
-        return 'ws://localhost:8080';
-    }
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return proto + '//' + location.host;
+        }
+    } catch (e) {}
+    return DEFAULT_WS_URL;
 }
 
 export class Multiplayer {
