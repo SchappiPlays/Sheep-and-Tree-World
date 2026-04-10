@@ -1316,8 +1316,8 @@ export class DragonManager {
             const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
-            // Emit particles — long-range mode (ice if dragon breathes ice)
-            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0);
+            // Emit particles — long-range mode (ice if dragon breathes ice), inherit dragon velocity
+            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0, bd._velX || 0, bd._velY || 0, bd._velZ || 0);
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
@@ -1507,6 +1507,7 @@ export class DragonManager {
         }
 
         // Movement
+        const prevX = bd.x, prevZ = bd.z, prevY = bd.group.position.y;
         if (wantDir !== 0) {
             const spd = speed * wantDir * dt;
             bd.x += Math.sin(bd.angle) * spd;
@@ -1529,6 +1530,13 @@ export class DragonManager {
             bd.group.rotation.x = 0;
             const terrY = this.getHeight(bd.x, bd.z);
             bd.group.position.set(bd.x, terrY + bd.footOffset, bd.z);
+        }
+
+        // Track dragon velocity for fire particle inheritance
+        if (dt > 0) {
+            bd._velX = (bd.x - prevX) / dt;
+            bd._velY = (bd.group.position.y - prevY) / dt;
+            bd._velZ = (bd.z - prevZ) / dt;
         }
 
         // Player sits on dragon's back — compute seat position in dragon's local space
@@ -2023,10 +2031,11 @@ export class DragonManager {
     }
 
     // Emit fire particles from a position in a direction
-    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode) {
+    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode, dragonVx, dragonVy, dragonVz) {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
+        const dvx = dragonVx || 0, dvy = dragonVy || 0, dvz = dragonVz || 0;
         for (let i = 0; i < count; i++) {
             // Find an inactive slot
             let slot = -1;
@@ -2040,9 +2049,9 @@ export class DragonManager {
             fp.pz[slot] = oz + (Math.random() - 0.5) * 0.3;
             const speed = longRange ? (32 + Math.random() * 8) : (18 + Math.random() * 6);
             const spread = longRange ? 0.06 : 0.15;
-            fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed;
-            fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed;
-            fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed;
+            fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed + dvx;
+            fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed + dvy;
+            fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed + dvz;
             fp.age[slot] = 0;
             fp.life[slot] = longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4);
             fp.size[slot] = 0.6 + Math.random() * 0.5;
