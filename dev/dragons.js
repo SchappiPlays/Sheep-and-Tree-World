@@ -1446,21 +1446,14 @@ export class DragonManager {
                 }
             }
         } else if (bd._grabbing) {
-            // Released G — drop the creature
+            // Released G — drop the creature, let it fall with gravity
             bd._grabbing = false;
             if (bd._grabbedCreature) {
                 const c = bd._grabbedCreature;
                 if (!c.dead) {
-                    // Calculate fall damage based on height
-                    const terrY = this.getHeight(c.x, c.z);
-                    const fallH = c.group.position.y - terrY;
-                    if (fallH > 3) {
-                        const dmg = Math.floor(fallH * 1.5);
-                        c.hp -= dmg;
-                        if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
-                    }
-                    // Let it fall — position stays at current spot, gravity in creature update will handle it
-                    c.group.position.y = c.group.position.y; // keep current y, creature system handles gravity
+                    c._falling = true;
+                    c._fallVel = 0;
+                    c._fallStartY = c.group.position.y;
                 }
                 bd._grabbedCreature = null;
             }

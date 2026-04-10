@@ -1009,11 +1009,29 @@ export class CreatureManager {
                 sh.z += Math.cos(sh.group.rotation.y) * sh.speed * dt;
             }
 
-            // Terrain following
+            // Terrain following (with falling support)
             const terrainY = this.world.getHeight(sh.x, sh.z);
             sh.group.position.x = sh.x;
             sh.group.position.z = sh.z;
-            sh.group.position.y = terrainY;
+            if (sh._falling) {
+                sh._fallVel = (sh._fallVel || 0) + 25 * dt; // gravity
+                sh.group.position.y -= sh._fallVel * dt;
+                if (sh.group.position.y <= terrainY) {
+                    sh.group.position.y = terrainY;
+                    // Fall damage
+                    const fallH = sh._fallStartY - terrainY;
+                    if (fallH > 3) {
+                        const dmg = Math.floor(fallH * 1.5);
+                        sh.hp -= dmg;
+                        if (sh.hp <= 0) { sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0; }
+                    }
+                    sh._falling = false;
+                    sh._fallVel = 0;
+                    sh._fallStartY = 0;
+                }
+            } else {
+                sh.group.position.y = terrainY;
+            }
 
             // ── Animation — exact from game.html ──
             const wb = clamp01(sh.speed / 0.25);
