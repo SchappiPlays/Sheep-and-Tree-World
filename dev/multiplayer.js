@@ -245,6 +245,8 @@ export class Multiplayer {
 
     _send(data) {
         if (!this.active || !this.ws || this.ws.readyState !== 1) return;
+        // Skip non-critical sends if buffer is backing up (> 64KB)
+        if (this.ws.bufferedAmount > 65536 && data.t !== 'cc' && data.t !== 'block') return;
         try { this.ws.send(JSON.stringify(data)); } catch (e) {}
     }
 
@@ -468,19 +470,20 @@ export class Multiplayer {
         }
     }
 
-    updateRemotePlayers() {
+    updateRemotePlayers(dt) {
+        const lerpRate = 1 - Math.pow(0.001, dt || 0.016); // ~0.15 at 60fps, frame-independent
         for (const [pid, rp] of this.remotePlayers) {
             if (!rp._hasReceived) continue;
 
             const tx = rp._targetX, ty = rp._targetY, tz = rp._targetZ;
-            rp.group.position.x += (tx - rp.group.position.x) * 0.15;
-            rp.group.position.y += (ty - rp.group.position.y) * 0.15;
-            rp.group.position.z += (tz - rp.group.position.z) * 0.15;
+            rp.group.position.x += (tx - rp.group.position.x) * lerpRate;
+            rp.group.position.y += (ty - rp.group.position.y) * lerpRate;
+            rp.group.position.z += (tz - rp.group.position.z) * lerpRate;
 
             let da = rp._targetRY - rp.group.rotation.y;
             while (da > Math.PI) da -= Math.PI * 2;
             while (da < -Math.PI) da += Math.PI * 2;
-            rp.group.rotation.y += da * 0.15;
+            rp.group.rotation.y += da * lerpRate;
             rp.group.rotation.x = rp._targetRX;
 
             this._updateRemoteTool(rp, rp._tool);
@@ -552,7 +555,7 @@ export class Multiplayer {
                 }
             }
 
-            if (performance.now() - rp._lastUpdate > 5000) rp.group.visible = false;
+            if (performance.now() - rp._lastUpdate > 15000) rp.group.visible = false;
             else rp.group.visible = true;
         }
     }

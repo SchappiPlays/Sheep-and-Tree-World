@@ -12343,7 +12343,7 @@ function animate() {
         mp._hbAccum = (mp._hbAccum || 0) + dt;
         if (mp._hbAccum >= 3.0) { mp._hbAccum = 0; mp.debugHeartbeat(); }
         // Interpolate remote players every frame for smooth movement
-        mp.updateRemotePlayers();
+        mp.updateRemotePlayers(dt);
 
         mp._sendAccum += dt;
         if (mp._sendAccum >= 0.1) { // 10Hz position updates (reduced from 20Hz to ease backpressure)
@@ -12354,9 +12354,15 @@ function animate() {
         // Host syncs creatures + villagers + horses + time of day at ~3Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
-            if (mp._creatureSendAccum >= 0.33) {
+            if (mp._creatureSendAccum >= 1.0) { // ~1Hz creature sync
                 mp._creatureSendAccum = 0;
-                mp.sendCreatureState(creatures.creatures);
+                // Only sync creatures within 200u of the player to limit payload
+                const _cx = player.position.x, _cz = player.position.z;
+                const nearCreatures = creatures.creatures.filter(c => {
+                    const dx = c.x - _cx, dz = c.z - _cz;
+                    return dx * dx + dz * dz < 40000;
+                });
+                mp.sendCreatureState(nearCreatures);
                 // Villager sync
                 if (villageMgr && villageMgr.villagers.length > 0) {
                     const vList = villageMgr.villagers.map(v => ({
@@ -12364,7 +12370,7 @@ function animate() {
                         ry: +v.group.rotation.y.toFixed(2),
                         w: v.walking ? 1 : 0,
                     }));
-                    mp._broadcast({ type: 'villagers', list: vList });
+                    mp._send({ t: 'villagers', list: vList });
                 }
                 // Horse sync
                 if (horseMgr && horseMgr.horses && horseMgr.horses.length > 0) {
