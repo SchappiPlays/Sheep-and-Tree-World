@@ -1906,13 +1906,14 @@ export class DragonManager {
             bd.tailSegs[ti].rotation.y = lerp(bd.tailSegs[ti].rotation.y, 0.15 + ti * 0.05);
         }
 
-        // Legs tucked underneath, slightly splayed
+        // Legs splayed flat to the sides so body sits on the ground
         for (let li = 0; li < bd.legs.length; li++) {
             const leg = bd.legs[li];
             if (bd.isWyvern && li < 2) continue; // front legs hidden on wyvern
             const side = (li % 2 === 0) ? 1 : -1;
-            leg.rotation.x = lerp(leg.rotation.x, 0.7); // tucked back
-            leg.rotation.z = lerp(leg.rotation.z, side * 0.3); // splayed out
+            const isFront = li < 2;
+            leg.rotation.x = lerp(leg.rotation.x, isFront ? 0.3 : -0.3); // front forward, rear back
+            leg.rotation.z = lerp(leg.rotation.z, side * 1.2); // splayed far out to sides
         }
     }
 
