@@ -1181,9 +1181,9 @@ export class DragonManager {
                 bd.walking = false;
                 bd.speed = 0;
                 bd._breathingFire = false;
-                // Sleep pose
+                // Sleep pose — lower body to ground (reduce footOffset)
                 const bTerrainY = this.getHeight(bd.x, bd.z);
-                bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+                bd.group.position.set(bd.x, bTerrainY + bd.footOffset * 0.35, bd.z);
                 this._animateDragonSleep(dt, bd);
                 continue;
             }
@@ -1192,8 +1192,11 @@ export class DragonManager {
                 bd._sleepBlend = 0;
                 // Reopen eyes
                 if (bd.eyes) for (const eye of bd.eyes) eye.scale.y = 1;
-                // Reset leg splay
+                // Reset head roll and leg splay
+                bd.headGrp.rotation.z = 0;
+                bd.headGrp.rotation.order = 'XYZ';
                 for (const leg of bd.legs) leg.rotation.z = 0;
+                for (const seg of bd.tailSegs) seg.rotation.x = 0;
             }
 
             // ── Combat AI — find nearby hostile creature to fight ──
@@ -1839,21 +1842,23 @@ export class DragonManager {
         bd._sleepBlend = t;
         const lerp = (a, b) => a + (b - a) * t;
 
-        // Neck segments droop down to ground and curve to one side
+        // Neck: bend sideways and down so head rests on the ground curving right
+        if (bd.neckGrp) {
+            bd.neckGrp.rotation.x = lerp(bd.neckGrp.rotation.x, 0.7); // droop down
+            bd.neckGrp.rotation.y = lerp(bd.neckGrp.rotation.y, 0.3); // curve right
+        }
         if (bd.neckSegs) {
             for (let i = 0; i < bd.neckSegs.length; i++) {
                 const seg = bd.neckSegs[i];
-                seg.rotation.y = lerp(seg.rotation.y, 0.2 + i * 0.08); // curve right
-                seg.rotation.x = lerp(seg.rotation.x, 0.45 + i * 0.1); // droop down to ground
+                seg.rotation.x = lerp(seg.rotation.x, 0.35); // each seg droops further
+                seg.rotation.y = lerp(seg.rotation.y, 0.25);  // curves right
             }
         }
-        // Neck group itself droops
-        if (bd.neckGrp) {
-            bd.neckGrp.rotation.x = lerp(bd.neckGrp.rotation.x, 0.5);
-        }
-        // Head rests on the ground, turned to the side
-        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0.6);
-        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.25);
+        // Head on its side (roll via z), facing inward/sideways
+        bd.headGrp.rotation.order = 'YXZ';
+        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0);    // no pitch
+        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.4);   // facing inward
+        bd.headGrp.rotation.z = lerp(bd.headGrp.rotation.z || 0, 1.2); // rolled onto its side
 
         // Jaw closed
         if (bd.jawGrp) {
@@ -1868,25 +1873,21 @@ export class DragonManager {
             }
         }
 
-        // Wings stretched out like flying but tilted slightly down, with membranes
+        // Wings flat on the ground — spread out like flying, nearly flat
         for (const w of bd.wings) {
             const si = w._s;
             w.rotation.set(
                 lerp(w.rotation.x, 0),
-                lerp(w.rotation.y, si * 0.15),   // spread like flight
-                lerp(w.rotation.z, si * -0.35)   // tilted down toward ground
+                lerp(w.rotation.y, si * 0.15),
+                lerp(w.rotation.z, si * -0.55)  // droop down flat
             );
             if (w._elbow) w._elbow.rotation.set(
                 lerp(w._elbow.rotation.x, 0),
                 lerp(w._elbow.rotation.y, si * -0.25),
-                lerp(w._elbow.rotation.z, si * -0.2)  // drooped down
+                lerp(w._elbow.rotation.z, si * -0.35) // flat
             );
-            if (w._hand) w._hand.rotation.set(
-                lerp(w._hand.rotation.x, 0),
-                lerp(w._hand.rotation.y, 0),
-                lerp(w._hand.rotation.z, 0)
-            );
-            // Use flying finger positions and membrane
+            if (w._hand) w._hand.rotation.set(0, 0, 0);
+            // Flying membrane setup
             if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
             if (w._flyFRots) applyFingerRots(w, w._flyFRots);
             if (w._patMesh) w._patMesh.visible = true;
@@ -1901,19 +1902,20 @@ export class DragonManager {
             updateWyvernMembrane(w);
         }
 
-        // Tail curves to same side as head (right)
+        // Tail flat on ground, curves more to same side as head
         for (let ti = 0; ti < bd.tailSegs.length; ti++) {
-            bd.tailSegs[ti].rotation.y = lerp(bd.tailSegs[ti].rotation.y, 0.15 + ti * 0.05);
+            bd.tailSegs[ti].rotation.x = lerp(bd.tailSegs[ti].rotation.x, 0.1); // flat
+            bd.tailSegs[ti].rotation.y = lerp(bd.tailSegs[ti].rotation.y, 0.25 + ti * 0.1); // strong curve
         }
 
-        // Legs splayed flat to the sides so body sits on the ground
+        // Legs splayed flat to the sides
         for (let li = 0; li < bd.legs.length; li++) {
             const leg = bd.legs[li];
-            if (bd.isWyvern && li < 2) continue; // front legs hidden on wyvern
+            if (bd.isWyvern && li < 2) continue;
             const side = (li % 2 === 0) ? 1 : -1;
             const isFront = li < 2;
-            leg.rotation.x = lerp(leg.rotation.x, isFront ? 0.3 : -0.3); // front forward, rear back
-            leg.rotation.z = lerp(leg.rotation.z, side * 1.2); // splayed far out to sides
+            leg.rotation.x = lerp(leg.rotation.x, isFront ? 0.3 : -0.3);
+            leg.rotation.z = lerp(leg.rotation.z, side * 1.4); // even more splayed
         }
     }
 
