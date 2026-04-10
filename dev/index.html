@@ -11299,13 +11299,33 @@ function doPlace(e) {
         }
     }
 
-    // Right-click on a baby dragon to put it on shoulder
-    if (dragonMgr && placeHoldTime < 0.05 && !dragonMgr.getShoulderDragon()) {
-        const looked = dragonMgr.getLookedAtDragon(player);
-        if (looked && looked.age < 1200) {
-            if (dragonMgr.putOnShoulder(looked)) {
-                addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
+    // Right-click on a baby dragon with meat to feed it (+1 min age)
+    if (dragonMgr && placeHoldTime < 0.05) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.state === 'alive') {
+                looked.age += 60; // 1 minute
+                removeFromInventory(held);
+                refreshUI();
+                addChatMessage(`Fed ${looked.dragonName || 'dragon'}! (+1 min)`, 'rgba(180,255,180,0.9)');
                 return false;
+            }
+        }
+    }
+
+    // Right-click on a baby dragon to put it on shoulder (not while holding meat)
+    if (dragonMgr && placeHoldTime < 0.05 && !dragonMgr.getShoulderDragon()) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (!isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.age < 1200) {
+                if (dragonMgr.putOnShoulder(looked)) {
+                    addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
+                    return false;
+                }
             }
         }
     }
