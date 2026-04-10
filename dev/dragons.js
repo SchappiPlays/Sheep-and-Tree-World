@@ -1034,7 +1034,9 @@ export class DragonManager {
                         }
                     } else {
                         const egg = this.heldEgg;
-                        if (this.removeFromInventory) this.removeFromInventory('egg_' + egg._idx);
+                        const eggKey = 'egg_' + egg._idx;
+                        if (this.removeFromInventory) this.removeFromInventory(eggKey);
+                        if (this.onEggHatched) this.onEggHatched(eggKey);
                         const hy = this.getHeight(px, pz);
                         const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
                         this.scene.add(bd.group);

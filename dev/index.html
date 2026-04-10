@@ -4574,6 +4574,14 @@ function startGame(loadSlotName) {
     dragonMgr.buildCarriedEgg(player.spine);
     dragonMgr.addToInventory = addToInventory;
     dragonMgr.removeFromInventory = removeFromInventory;
+    dragonMgr.onEggHatched = (eggKey) => {
+        delete eggItems[eggKey];
+        // Clear from hotbar if still referenced
+        for (let i = 0; i < hotbarSlots.length; i++) {
+            if (hotbarSlots[i] === eggKey) hotbarSlots[i] = 0;
+        }
+        refreshUI();
+    };
     dragonMgr.getHeldItem = () => {
         const bt = hotbarSlots[selectedSlot];
         if (typeof bt === 'string' && bt.startsWith('egg_') && inventory[bt] > 0) {
