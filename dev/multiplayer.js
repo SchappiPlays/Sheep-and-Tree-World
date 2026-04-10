@@ -90,16 +90,34 @@ export class Multiplayer {
         this._sentTypes = {};
 
         const _typeCounts = {};
-        // Grab the raw RTCDataChannel underneath PeerJS so we can bypass its
-        // send/recv layer entirely (which has been silently dropping messages).
+        // Grab the raw RTCDataChannel underneath PeerJS and use it directly.
+        // We DISABLE PeerJS's internal data handling entirely (it errors on
+        // every message because of serializer mismatch, which throttles the
+        // channel and bloats the host's send buffer).
         const dc = conn.dataChannel || conn._dc;
         if (dc) {
             console.log('[mp] using raw RTCDataChannel for', pid);
             this.connections.get(pid).rawDc = dc;
+
+            // Block PeerJS from processing messages — we're handling them ourselves
+            try {
+                conn._handleDataMessage = function () {};
+                if (conn._handleMessage) conn._handleMessage = function () {};
+            } catch (e) {}
+
             dc.addEventListener('message', e => {
+                let text;
+                if (typeof e.data === 'string') text = e.data;
+                else if (e.data instanceof ArrayBuffer) {
+                    try { text = new TextDecoder().decode(e.data); }
+                    catch (err) { return; }
+                } else if (e.data && e.data.byteLength !== undefined) {
+                    try { text = new TextDecoder().decode(new Uint8Array(e.data)); }
+                    catch (err) { return; }
+                } else return;
                 let data;
-                try { data = JSON.parse(e.data); }
-                catch (err) { console.warn('[mp] raw parse failed', err); return; }
+                try { data = JSON.parse(text); }
+                catch (err) { return; }
                 const t = data && data.type;
                 if (t) {
                     _typeCounts[t] = (_typeCounts[t] || 0) + 1;
@@ -112,9 +130,6 @@ export class Multiplayer {
             });
         } else {
             console.warn('[mp] no raw dataChannel available, falling back to PeerJS send/recv');
-        }
-        // Fallback PeerJS handler — only used if raw dataChannel isn't available
-        if (!dc) {
             conn.on('data', data => {
                 const t = data && data.type;
                 if (t) {
@@ -192,6 +207,18 @@ export class Multiplayer {
     // Send to a specific peer using raw RTCDataChannel if available, falling back to PeerJS conn
     _sendTo(c, data) {
         if (c.rawDc && c.rawDc.readyState === 'open') {
+            // Backpressure: drop non-critical messages when send buffer is filling up
+            if (c.rawDc.bufferedAmount > 65536) {
+                const t = data && data.type;
+                // Always send small critical messages; drop bulky periodic syncs when overloaded
+                if (t === 'state' || t === 'cc' || t === 'block' || t === 'attack' || t === 'pvp' ||
+                    t === 'egg_pickup' || t === 'chest_loot' || t === 'sword_pickup' ||
+                    t === 'boss_killed' || t === 'chat' || t === 'tod') {
+                    // OK — small message, send anyway
+                } else {
+                    return false; // drop creatures/dragons/horses/villagers/world_state when backed up
+                }
+            }
             try { c.rawDc.send(JSON.stringify(data)); return true; }
             catch (e) { console.warn('[mp] raw send failed', e); }
         }
