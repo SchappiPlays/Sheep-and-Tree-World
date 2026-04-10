@@ -2862,6 +2862,11 @@ function startGame(loadSlotName) {
                 c.x = r.x; c.z = r.z;
                 c.group.rotation.y = r.ry;
                 c.walking = !!r.w;
+                if (r.h !== undefined) c.hostile = !!r.h;
+                if (r.tm !== undefined) c._tamed = !!r.tm;
+                if (r.wp !== undefined) c._waitingAtPost = !!r.wp;
+                if (r.np !== undefined) c._necProvoked = !!r.np;
+                if (r.hp !== null && r.hp !== undefined) c.hp = r.hp;
                 if (r.d && !c.dead) { c.dead = true; c.deathTimer = 0; c.hp = 0; }
             }
         }
@@ -2921,6 +2926,18 @@ function startGame(loadSlotName) {
                 }
             }
         }
+        // Killed bosses
+        if (state.bosses) {
+            for (const b of state.bosses) killedBosses.add(b);
+        }
+    };
+    // Boss killed by another peer — add to local set
+    mp.onBossKilled = (name) => {
+        killedBosses.add(name);
+    };
+    // Chat from another peer
+    mp.onChat = (text, name, color) => {
+        addChatMessage(`<${name || 'Player'}> ${text}`, color);
     };
     // Time of day — clients adopt host's time
     mp.onTimeOfDay = (t) => {
@@ -6060,7 +6077,10 @@ function spellDamage(c, dmg) {
     if (c.hp <= 0) {
         c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0;
         if (c._isBoss) {
-            if (c._bossName) killedBosses.add(c._bossName);
+            if (c._bossName) {
+                killedBosses.add(c._bossName);
+                if (mp.active) mp.sendBossKilled(c._bossName);
+            }
             if (c._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(c);
             else if (c._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(c);
             else if (c._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(c);
@@ -6695,7 +6715,10 @@ function updateProjectiles(dt) {
                         sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0;
                         // Trigger boss death handlers for projectile kills
                         if (sh._isBoss) {
-                            if (sh._bossName) killedBosses.add(sh._bossName);
+                            if (sh._bossName) {
+                                killedBosses.add(sh._bossName);
+                                if (mp.active) mp.sendBossKilled(sh._bossName);
+                            }
                             if (sh._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(sh);
                             else if (sh._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(sh);
                             else if (sh._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(sh);
@@ -12375,7 +12398,8 @@ function animate() {
                 const pickedSwords = allSwordIds.filter(id => !remaining.has(id));
                 const lootedChests = world._lootedChestKeys ? Array.from(world._lootedChestKeys) : [];
                 const pickedEggs = dragonMgr ? dragonMgr.eggs.map((e, i) => e.pickedUp ? i : -1).filter(i => i >= 0) : [];
-                mp.sendWorldState({ swords: pickedSwords, chests: lootedChests, eggs: pickedEggs });
+                const bossNames = Array.from(killedBosses);
+                mp.sendWorldState({ swords: pickedSwords, chests: lootedChests, eggs: pickedEggs, bosses: bossNames });
             }
         }
         // Every peer syncs their owned dragons (host relays)
@@ -13676,9 +13700,11 @@ function executeCommand(input) {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // Regular chat message
+    // Regular chat message — broadcast to all peers
     if (!trimmed.startsWith('/')) {
-        addChatMessage(`<${charColors.name || 'Player'}> ${trimmed}`);
+        const name = charColors.name || 'Player';
+        addChatMessage(`<${name}> ${trimmed}`);
+        if (mp.active) mp.sendChat(trimmed, name, 'rgba(220,210,180,0.9)');
         return;
     }
 

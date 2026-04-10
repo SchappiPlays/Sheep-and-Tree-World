@@ -116,6 +116,12 @@ export class Multiplayer {
                 if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'world_state') {
                 if (this.onWorldStateSync) this.onWorldStateSync(data);
+            } else if (data.type === 'boss_killed') {
+                if (this.onBossKilled) this.onBossKilled(data.name);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'chat') {
+                if (this.onChat) this.onChat(data.text, data.name, data.color);
+                if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
@@ -194,6 +200,11 @@ export class Multiplayer {
             ry: +c.group.rotation.y.toFixed(2),
             w: c.walking ? 1 : 0, d: c.dead ? 1 : 0,
             t: c.type,
+            h: c.hostile ? 1 : 0,
+            tm: c._tamed ? 1 : 0,
+            wp: c._waitingAtPost ? 1 : 0,
+            np: c._necProvoked ? 1 : 0,
+            hp: c.hp != null ? +c.hp.toFixed(0) : null,
         }));
         this._broadcast({ type: 'creatures', list });
     }
@@ -244,6 +255,18 @@ export class Multiplayer {
     sendWorldState(state) {
         if (!this.active || !this.isHost) return;
         this._broadcast({ type: 'world_state', ...state });
+    }
+
+    // Broadcast a boss kill so all peers add it to their killedBosses set
+    sendBossKilled(name) {
+        if (!this.active) return;
+        this._broadcast({ type: 'boss_killed', name, fromPid: this.myId });
+    }
+
+    // Broadcast a chat message
+    sendChat(text, name, color) {
+        if (!this.active) return;
+        this._broadcast({ type: 'chat', text, name, color, fromPid: this.myId });
     }
 
     _broadcast(data) {
