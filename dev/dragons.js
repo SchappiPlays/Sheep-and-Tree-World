@@ -1406,27 +1406,42 @@ export class DragonManager {
             if (!bd._grabTilt) bd._grabTilt = 0;
             bd._grabTilt += (-0.45 - bd._grabTilt) * 4 * dt;
             bd.group.rotation.x = (bd._flyTilt || 0) + bd._grabTilt;
-            // Check for creatures near the rear feet to grab
-            if (!bd._grabbedCreature && this._creatureMgr) {
-                // Rear leg world positions (legs 2,3 are rear)
+            // Check for creatures or players near the rear feet to grab
+            if (!bd._grabbedCreature && !bd._grabbedPlayer) {
                 bd.group.updateMatrixWorld(true);
                 const footWorld = new THREE.Vector3();
                 const S = 2.55;
-                // Average of both rear feet
                 footWorld.set(0, -0.7 * S * gs, -0.7 * S * gs);
                 footWorld.applyMatrix4(bd.group.matrixWorld);
                 const grabR = 2.5 * gs;
-                let closest = null, closestDist = grabR * grabR;
-                for (const c of this._creatureMgr.creatures) {
-                    if (c.dead) continue;
-                    if (c.type === 'dragon' || c.type === 'babyDragon') continue;
-                    const cdx = c.x - footWorld.x, cdz = c.z - footWorld.z;
-                    const d2 = cdx * cdx + cdz * cdz;
-                    if (d2 < closestDist) { closestDist = d2; closest = c; }
+                const grabR2 = grabR * grabR;
+                // Check creatures
+                let closest = null, closestDist = grabR2;
+                if (this._creatureMgr) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead) continue;
+                        if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+                        const cdx = c.x - footWorld.x, cdz = c.z - footWorld.z;
+                        const d2 = cdx * cdx + cdz * cdz;
+                        if (d2 < closestDist) { closestDist = d2; closest = c; }
+                    }
                 }
                 if (closest) {
                     bd._grabbedCreature = closest;
                     bd._grabStartY = closest.group.position.y;
+                } else if (this._mp && this._mp.remotePlayers) {
+                    // Check remote players (not riding their own dragon)
+                    for (const [pid, rp] of this._mp.remotePlayers) {
+                        if (!rp._hasReceived || rp._riding) continue;
+                        const rpx = rp.group.position.x, rpz = rp.group.position.z;
+                        const cdx = rpx - footWorld.x, cdz = rpz - footWorld.z;
+                        const d2 = cdx * cdx + cdz * cdz;
+                        if (d2 < grabR2) {
+                            bd._grabbedPlayer = pid;
+                            this._mp._send({ t: 'dragon_grab', targetPid: pid });
+                            break;
+                        }
+                    }
                 }
             }
             // Hold grabbed creature at foot position
@@ -1445,8 +1460,20 @@ export class DragonManager {
                     c.speed = 0;
                 }
             }
+            // Hold grabbed remote player at foot position
+            if (bd._grabbedPlayer && this._mp && this._mp.remotePlayers) {
+                const rp = this._mp.remotePlayers.get(bd._grabbedPlayer);
+                if (rp) {
+                    bd.group.updateMatrixWorld(true);
+                    const S = 2.55;
+                    const footWorld = new THREE.Vector3(0, -0.95 * S * gs, -0.5 * S * gs);
+                    footWorld.applyMatrix4(bd.group.matrixWorld);
+                    // Send position override to grabbed player
+                    this._mp._send({ t: 'dragon_hold', targetPid: bd._grabbedPlayer, x: +footWorld.x.toFixed(2), y: +footWorld.y.toFixed(2), z: +footWorld.z.toFixed(2) });
+                }
+            }
         } else if (bd._grabbing) {
-            // Released G — drop the creature, let it fall with gravity
+            // Released G — drop creature/player
             bd._grabbing = false;
             if (bd._grabbedCreature) {
                 const c = bd._grabbedCreature;
@@ -1456,6 +1483,10 @@ export class DragonManager {
                     c._fallStartY = c.group.position.y;
                 }
                 bd._grabbedCreature = null;
+            }
+            if (bd._grabbedPlayer && this._mp) {
+                this._mp._send({ t: 'dragon_drop', targetPid: bd._grabbedPlayer, y: 0 });
+                bd._grabbedPlayer = null;
             }
             bd._grabTilt = 0;
         }

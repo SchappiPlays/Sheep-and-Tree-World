@@ -2851,6 +2851,29 @@ function startGame(loadSlotName) {
         addChatMessage('You were hit by another player!', 'rgba(255,100,100,0.9)');
     };
 
+    // Dragon grab — another player's dragon grabbed you
+    mp.onDragonGrab = (fromPid) => {
+        player._dragonGrabbed = true;
+        player._dragonGrabPid = fromPid;
+        addChatMessage('A dragon grabbed you!', 'rgba(255,150,100,0.9)');
+    };
+    mp.onDragonHold = (x, y, z) => {
+        if (player._dragonGrabbed) {
+            player.position.set(x, y, z);
+            player.group.position.set(x, y, z);
+            player.jumpVel = 0;
+            player.speed = 0;
+        }
+    };
+    mp.onDragonDrop = () => {
+        if (player._dragonGrabbed) {
+            player._dragonGrabbed = false;
+            player._dragonGrabPid = null;
+            player.jumpVel = 0; // start falling from current position via normal gravity
+            addChatMessage('You were dropped!', 'rgba(255,200,100,0.9)');
+        }
+    };
+
     // Receive creature sync from host — match by cid
     mp.onCreatureSync = (list) => {
         const byId = new Map();
@@ -2883,6 +2906,7 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
+    dragonMgr._mp = mp;
     creatures._dragonMgr = dragonMgr;
     // Bidirectional dragon sync — every peer broadcasts their own dragons
     mp.onDragonSync = (list, fromPid) => {
@@ -11700,7 +11724,12 @@ function animate() {
                 }
             }
         }
-        player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
+        if (!player._dragonGrabbed) {
+            player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
+        } else {
+            // While grabbed, just update group position to match
+            player.group.position.copy(player.position);
+        }
     }
     dragonMgr.applyPlayerPose(player);
 
