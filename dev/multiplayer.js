@@ -90,74 +90,43 @@ export class Multiplayer {
         this._sentTypes = {};
 
         const _typeCounts = {};
-        conn.on('data', data => {
-            // PeerJS handles JSON serialization (set on connect)
-            // Log first 3 incoming messages PER TYPE so we can see state messages arriving
-            const t = data && data.type;
-            if (t) {
-                _typeCounts[t] = (_typeCounts[t] || 0) + 1;
-                if (_typeCounts[t] <= 3) {
-                    console.log('[mp] recv', t, 'from', pid, '#' + _typeCounts[t]);
+        // Grab the raw RTCDataChannel underneath PeerJS so we can bypass its
+        // send/recv layer entirely (which has been silently dropping messages).
+        const dc = conn.dataChannel || conn._dc;
+        if (dc) {
+            console.log('[mp] using raw RTCDataChannel for', pid);
+            this.connections.get(pid).rawDc = dc;
+            dc.addEventListener('message', e => {
+                let data;
+                try { data = JSON.parse(e.data); }
+                catch (err) { console.warn('[mp] raw parse failed', err); return; }
+                const t = data && data.type;
+                if (t) {
+                    _typeCounts[t] = (_typeCounts[t] || 0) + 1;
+                    if (_typeCounts[t] <= 3) {
+                        console.log('[mp] [raw] recv', t, 'from', pid, '#' + _typeCounts[t]);
+                    }
                 }
-            }
-            try {
-            if (data.type === 'state') {
-                this._applyRemoteState(pid, data);
-                // Host relays player state to other clients so everyone sees each other
-                if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: pid });
-            } else if (data.type === 'cc') {
-                this._applyRemoteCC(data._fromPid || pid, data);
-                if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: data._fromPid || pid });
-            } else if (data.type === 'block') {
-                if (this.onBlockChange) this.onBlockChange(data.bx, data.by, data.bz, data.b);
-                // Host relays to other clients
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'creatures') {
-                if (this.onCreatureSync) this.onCreatureSync(data.list);
-            } else if (data.type === 'dragons') {
-                if (this.onDragonSync) this.onDragonSync(data.list, data.fromPid || pid);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'egg_pickup') {
-                if (this.onEggPickup) this.onEggPickup(data.idx);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'dragon_hatch') {
-                if (this.onDragonHatch) this.onDragonHatch(data);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'chest_loot') {
-                if (this.onChestLoot) this.onChestLoot(data.key);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'tod') {
-                if (this.onTimeOfDay) this.onTimeOfDay(data.t);
-            } else if (data.type === 'horses') {
-                if (this.onHorseSync) this.onHorseSync(data.list);
-            } else if (data.type === 'sword_pickup') {
-                if (this.onSwordPickup) this.onSwordPickup(data.id);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'world_state') {
-                if (this.onWorldStateSync) this.onWorldStateSync(data);
-            } else if (data.type === 'boss_killed') {
-                if (this.onBossKilled) this.onBossKilled(data.name);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'chat') {
-                if (this.onChat) this.onChat(data.text, data.name, data.color);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'villagers') {
-                if (this.onVillagerSync) this.onVillagerSync(data.list);
-            } else if (data.type === 'attack') {
-                // Relay attack events
-                if (this.onAttack) this.onAttack(data);
-                if (this.isHost) this._relayToOthers(pid, data);
-            } else if (data.type === 'pvp') {
-                // Direct PvP damage targeting a specific player
-                if (data.targetPid === this.myId && this.onPvpHit) {
-                    this.onPvpHit(data.damage, data.fromPid);
+                try { this._dispatchMessage(pid, data); }
+                catch (err) { console.warn('[mp] dispatch error', err); }
+            });
+        } else {
+            console.warn('[mp] no raw dataChannel available, falling back to PeerJS send/recv');
+        }
+        // Fallback PeerJS handler — only used if raw dataChannel isn't available
+        if (!dc) {
+            conn.on('data', data => {
+                const t = data && data.type;
+                if (t) {
+                    _typeCounts[t] = (_typeCounts[t] || 0) + 1;
+                    if (_typeCounts[t] <= 3) {
+                        console.log('[mp] [peerjs] recv', t, 'from', pid, '#' + _typeCounts[t]);
+                    }
                 }
-                if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
-            }
-            } catch (err) {
-                console.warn('[mp] error handling message', data && data.type, err);
-            }
-        });
+                try { this._dispatchMessage(pid, data); }
+                catch (err) { console.warn('[mp] dispatch error', err); }
+            });
+        }
 
         conn.on('close', () => {
             this._removeRemotePlayer(pid);
@@ -166,10 +135,77 @@ export class Multiplayer {
         });
     }
 
+    // Central message dispatch — called by both raw RTCDataChannel and PeerJS handlers
+    _dispatchMessage(pid, data) {
+        if (!data || !data.type) return;
+        if (data.type === 'state') {
+            this._applyRemoteState(pid, data);
+            if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: pid });
+        } else if (data.type === 'cc') {
+            this._applyRemoteCC(data._fromPid || pid, data);
+            if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: data._fromPid || pid });
+        } else if (data.type === 'block') {
+            if (this.onBlockChange) this.onBlockChange(data.bx, data.by, data.bz, data.b);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'creatures') {
+            if (this.onCreatureSync) this.onCreatureSync(data.list);
+        } else if (data.type === 'dragons') {
+            if (this.onDragonSync) this.onDragonSync(data.list, data.fromPid || pid);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'egg_pickup') {
+            if (this.onEggPickup) this.onEggPickup(data.idx);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'dragon_hatch') {
+            if (this.onDragonHatch) this.onDragonHatch(data);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'chest_loot') {
+            if (this.onChestLoot) this.onChestLoot(data.key);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'tod') {
+            if (this.onTimeOfDay) this.onTimeOfDay(data.t);
+        } else if (data.type === 'horses') {
+            if (this.onHorseSync) this.onHorseSync(data.list);
+        } else if (data.type === 'sword_pickup') {
+            if (this.onSwordPickup) this.onSwordPickup(data.id);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'world_state') {
+            if (this.onWorldStateSync) this.onWorldStateSync(data);
+        } else if (data.type === 'boss_killed') {
+            if (this.onBossKilled) this.onBossKilled(data.name);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'chat') {
+            if (this.onChat) this.onChat(data.text, data.name, data.color);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'villagers') {
+            if (this.onVillagerSync) this.onVillagerSync(data.list);
+        } else if (data.type === 'attack') {
+            if (this.onAttack) this.onAttack(data);
+            if (this.isHost) this._relayToOthers(pid, data);
+        } else if (data.type === 'pvp') {
+            if (data.targetPid === this.myId && this.onPvpHit) {
+                this.onPvpHit(data.damage, data.fromPid);
+            }
+            if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
+        }
+    }
+
+    // Send to a specific peer using raw RTCDataChannel if available, falling back to PeerJS conn
+    _sendTo(c, data) {
+        if (c.rawDc && c.rawDc.readyState === 'open') {
+            try { c.rawDc.send(JSON.stringify(data)); return true; }
+            catch (e) { console.warn('[mp] raw send failed', e); }
+        }
+        if (c.conn && c.conn.open) {
+            try { c.conn.send(data); return true; }
+            catch (e) { console.warn('[mp] peerjs send failed', e); }
+        }
+        return false;
+    }
+
     _relayToOthers(fromPid, data) {
         for (const [pid, c] of this.connections) {
-            if (pid !== fromPid && c.conn.open) {
-                c.conn.send(data);
+            if (pid !== fromPid) {
+                this._sendTo(c, data);
             }
         }
     }
@@ -318,11 +354,7 @@ export class Multiplayer {
     _broadcast(data) {
         let sent = 0;
         for (const [pid, c] of this.connections) {
-            if (c.conn.open) {
-                try { c.conn.send(data); sent++; } catch(e) {
-                    console.warn('[mp] send failed to', pid, e);
-                }
-            }
+            if (this._sendTo(c, data)) sent++;
         }
         // Log first 3 broadcasts of each type so we can see if outgoing works
         if (data && data.type) {
