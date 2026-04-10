@@ -84,13 +84,18 @@ export class Multiplayer {
         // Create remote player model
         this._createRemotePlayer(pid);
         console.log('[mp] connected to peer', pid, '— total peers:', this.connections.size, '— I am', this.isHost ? 'HOST' : 'CLIENT', 'myId=', this.myId);
+        // Reset send counters so we see the first sends to this new peer
+        this._sentTypes = {};
 
-        let _dataCount = 0;
+        const _typeCounts = {};
         conn.on('data', data => {
-            // Log first 5 incoming messages so we can see if data is arriving at all
-            if (_dataCount < 5) {
-                console.log('[mp] recv', data.type, 'from', pid, '#' + (_dataCount + 1));
-                _dataCount++;
+            // Log first 3 incoming messages PER TYPE so we can see state messages arriving
+            const t = data && data.type;
+            if (t) {
+                _typeCounts[t] = (_typeCounts[t] || 0) + 1;
+                if (_typeCounts[t] <= 3) {
+                    console.log('[mp] recv', t, 'from', pid, '#' + _typeCounts[t]);
+                }
             }
             try {
             if (data.type === 'state') {
@@ -398,7 +403,13 @@ export class Multiplayer {
     _applyRemoteState(pid, s) {
         // If this is relayed state from another client, use their pid
         const actualPid = s._fromPid || pid;
-        if (actualPid === this.myId) return; // don't render self
+        if (actualPid === this.myId) {
+            if (!this._selfStateLogged) {
+                this._selfStateLogged = true;
+                console.warn('[mp] _applyRemoteState got self state — skipping. actualPid=', actualPid, 'myId=', this.myId);
+            }
+            return; // don't render self
+        }
         if (!this.remotePlayers.has(actualPid)) this._createRemotePlayer(actualPid);
         const rp = this.remotePlayers.get(actualPid);
         if (!rp) return;
