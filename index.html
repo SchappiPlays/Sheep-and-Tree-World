@@ -1280,7 +1280,7 @@ function collectSaveData() {
         dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian && !bd._stationary).map(bd => ({
             x: bd.x, z: bd.z, age: bd.age, angle: bd.angle,
             eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
-            dragonName: bd.dragonName, hp: bd.hp, iceBreath: !!bd._iceBreath,
+            dragonName: bd.dragonName, hp: bd.hp,
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
@@ -2836,12 +2836,6 @@ function startGame(loadSlotName) {
         }
     };
 
-    // PvP — receive damage from another player
-    mp.onPvpHit = (damage, fromPid) => {
-        playerTakeDamage(damage);
-        addChatMessage('You were hit by another player!', 'rgba(255,100,100,0.9)');
-    };
-
     // Receive creature sync from host — match by cid
     mp.onCreatureSync = (list) => {
         const byId = new Map();
@@ -2862,11 +2856,6 @@ function startGame(loadSlotName) {
                 c.x = r.x; c.z = r.z;
                 c.group.rotation.y = r.ry;
                 c.walking = !!r.w;
-                if (r.h !== undefined) c.hostile = !!r.h;
-                if (r.tm !== undefined) c._tamed = !!r.tm;
-                if (r.wp !== undefined) c._waitingAtPost = !!r.wp;
-                if (r.np !== undefined) c._necProvoked = !!r.np;
-                if (r.hp !== null && r.hp !== undefined) c.hp = r.hp;
                 if (r.d && !c.dead) { c.dead = true; c.deathTimer = 0; c.hp = 0; }
             }
         }
@@ -2874,102 +2863,6 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
-    creatures._dragonMgr = dragonMgr;
-    // Bidirectional dragon sync — every peer broadcasts their own dragons
-    mp.onDragonSync = (list, fromPid) => {
-        if (dragonMgr) dragonMgr.applyDragonSync(list, fromPid);
-    };
-    mp.onEggPickup = (idx) => {
-        if (dragonMgr && dragonMgr.eggs[idx] && !dragonMgr.eggs[idx].pickedUp) {
-            dragonMgr.eggs[idx].pickedUp = true;
-            dragonMgr.eggs[idx].group.visible = false;
-        }
-    };
-    mp.onPeerDisconnect = (pid) => {
-        if (dragonMgr) dragonMgr.removeDragonsForPeer(pid);
-    };
-    // When the local player picks up an egg, broadcast it
-    dragonMgr.onEggPickedUp = (idx) => {
-        if (mp.active) mp.sendEggPickup(idx);
-    };
-    // Chest loot — when another peer loots a chest, mirror locally
-    mp.onChestLoot = (key) => {
-        if (chestData[key]) delete chestData[key];
-        if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
-        world._lootedChestKeys.add(key);
-    };
-    // Authoritative world snapshot from host (handles late joiners)
-    mp.onWorldStateSync = (state) => {
-        if (mp.isHost) return;
-        // Picked-up swords
-        if (state.swords && world._fortressSwordMeshes) {
-            const claimed = new Set(state.swords);
-            for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
-                const fs = world._fortressSwordMeshes[fi];
-                if (claimed.has(fs.id)) {
-                    scene.remove(fs.mesh);
-                    world._fortressSwordMeshes.splice(fi, 1);
-                }
-            }
-        }
-        // Looted chests
-        if (state.chests) {
-            for (const k of state.chests) delete chestData[k];
-        }
-        // Picked eggs
-        if (state.eggs && dragonMgr) {
-            for (const idx of state.eggs) {
-                const e = dragonMgr.eggs[idx];
-                if (e && !e.pickedUp) {
-                    e.pickedUp = true;
-                    if (e.group) e.group.visible = false;
-                }
-            }
-        }
-        // Killed bosses
-        if (state.bosses) {
-            for (const b of state.bosses) killedBosses.add(b);
-        }
-    };
-    // Boss killed by another peer — add to local set
-    mp.onBossKilled = (name) => {
-        killedBosses.add(name);
-    };
-    // Chat from another peer
-    mp.onChat = (text, name, color) => {
-        addChatMessage(`<${name || 'Player'}> ${text}`, color);
-    };
-    // Time of day — clients adopt host's time
-    mp.onTimeOfDay = (t) => {
-        if (!mp.isHost) timeOfDay = t;
-    };
-    // Fortress sword pickup — when another peer claims a sword, remove it locally
-    mp.onSwordPickup = (id) => {
-        if (!world._fortressSwordMeshes) return;
-        for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
-            const fs = world._fortressSwordMeshes[fi];
-            if (fs.id === id) {
-                scene.remove(fs.mesh);
-                world._fortressSwordMeshes.splice(fi, 1);
-                break;
-            }
-        }
-    };
-    // Horses — clients update phantoms from host's broadcast
-    mp.onHorseSync = (list) => {
-        if (mp.isHost || !horseMgr) return;
-        for (const r of list) {
-            const h = horseMgr.horses[r.i];
-            if (h) {
-                h.x = r.x; h.z = r.z;
-                if (h.group) {
-                    h.group.position.set(r.x, r.y, r.z);
-                    h.group.rotation.y = r.ry;
-                }
-                h.walking = !!r.w;
-            }
-        }
-    };
     player = new Player(scene, world);
     // Apply stat bonuses to player
     player.walkSpeed = 3.6 * getStatSpeedMult();
@@ -3060,157 +2953,6 @@ function startGame(loadSlotName) {
             scene.add(sm);
             world._fortressSwordMeshes.push({ id: fs.id, mesh: sm, wx: fs.wx, wz: fs.wz });
         }
-    }
-
-    // === Ice Dragon Nest — far north ===
-    {
-        const nestX = -343, nestZ = -1250;
-        const nestY = getTerrainHeight(nestX, nestZ);
-        const yOff = 128;
-        const BS = BLOCK_SIZE;
-
-        // Materials for decorative stone rim
-        const iceStoneMat = new THREE.MeshStandardMaterial({ color: 0xc8d8e8, roughness: 0.7, metalness: 0.15 });
-        const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x6a7888, roughness: 0.85 });
-        const iceMat = new THREE.MeshStandardMaterial({ color: 0xddeeff, roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.85 });
-
-        const nestGrp = new THREE.Group();
-        nestGrp.position.set(nestX, nestY, nestZ);
-        // Nest rim — ring of stones
-        for (let a = 0; a < 36; a++) {
-            const ang = (a / 36) * Math.PI * 2;
-            const r = 12 + (Math.random() - 0.5) * 1.5;
-            const sx = Math.cos(ang) * r;
-            const sz = Math.sin(ang) * r;
-            const sw = 1.6 + Math.random() * 1.0;
-            const sh = 1.4 + Math.random() * 1.6;
-            const mat = (a % 3 === 0) ? iceMat : ((a % 3 === 1) ? iceStoneMat : darkStoneMat);
-            const stone = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sw), mat);
-            stone.position.set(sx, sh / 2, sz);
-            stone.rotation.y = Math.random() * Math.PI;
-            stone.castShadow = true; stone.receiveShadow = true;
-            nestGrp.add(stone);
-        }
-        // Inner low rim
-        for (let a = 0; a < 24; a++) {
-            const ang = (a / 24) * Math.PI * 2 + 0.05;
-            const r = 8;
-            const stone = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), iceStoneMat);
-            stone.position.set(Math.cos(ang) * r, 0.35, Math.sin(ang) * r);
-            stone.castShadow = true; nestGrp.add(stone);
-        }
-
-        scene.add(nestGrp);
-        world._iceDragonNest = nestGrp;
-
-        // 6 real ice dragon eggs — pickable & hatchable, pushed to dragonMgr.eggs
-        const iceEggDefs = [
-            { dx: -3,  dz:  1, color: 0xddeeff, emissive: 0x224466, veinColor: 0x88ccee, wingColor: 0xa8c8e8, isWyvern: true, isIce: true, name: 'White Ice Dragon' },
-            { dx:  3,  dz:  1, color: 0xc8e0f5, emissive: 0x1a3a5a, veinColor: 0x66aacc, wingColor: 0x88b8d8, isWyvern: true, isIce: true, name: 'Pale Blue Ice Dragon' },
-            { dx:  0,  dz:  3, color: 0xeaf3ff, emissive: 0x33557a, veinColor: 0xaaddff, wingColor: 0xb8d4ee, isWyvern: true, isIce: true, name: 'Snow Ice Dragon' },
-            { dx: -2,  dz: -3, color: 0xb0d0e8, emissive: 0x224a6a, veinColor: 0x55aadd, wingColor: 0x99c2e0, isWyvern: true, isIce: true, name: 'Steel Blue Ice Dragon' },
-            { dx:  2,  dz: -3, color: 0xd0e8f8, emissive: 0x2a4a6a, veinColor: 0x77bbee, wingColor: 0xa0c8e6, isWyvern: true, isIce: true, name: 'Powder Blue Ice Dragon' },
-            { dx:  0,  dz:  0, color: 0xf0f8ff, emissive: 0x4466aa, veinColor: 0xbbddff, wingColor: 0xc4dcf0, isWyvern: true, isIce: true, name: 'Crystal Ice Dragon' },
-        ];
-        const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
-        const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
-        const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x4a4a52, roughness: 0.95 });
-        const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
-        for (const ed of iceEggDefs) {
-            const ex = nestX + ed.dx, ez = nestZ + ed.dz;
-            const ey = getTerrainHeight(ex, ez);
-            const eggGrp = new THREE.Group();
-            for (let ni = 0; ni < 8; ni++) {
-                const na = (ni / 8) * Math.PI * 2;
-                const nrs = 0.15 + Math.random() * 0.15;
-                const nr = new THREE.Mesh(nestRockGeo, nestRockMat);
-                nr.scale.setScalar(nrs / 0.2);
-                nr.position.set(Math.cos(na) * 0.6, nrs * 0.4, Math.sin(na) * 0.6);
-                nr.rotation.set(Math.random(), Math.random(), Math.random());
-                eggGrp.add(nr);
-            }
-            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.25, emissive: ed.emissive, emissiveIntensity: 0.15 });
-            const eggMesh = new THREE.Mesh(eggGeo, eggMat);
-            eggMesh.scale.set(1.0, 1.35, 1.0);
-            eggMesh.position.y = 0.3;
-            eggGrp.add(eggMesh);
-            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.2, roughness: 0.2 });
-            for (let vi = 0; vi < 5; vi++) {
-                const va = (vi / 5) * Math.PI * 2;
-                const vein = new THREE.Mesh(veinGeo, veinMat);
-                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
-                vein.rotation.z = (Math.random() - 0.5) * 0.4;
-                eggGrp.add(vein);
-            }
-            eggGrp.position.set(ex, ey, ez);
-            scene.add(eggGrp);
-            dragonMgr.eggs.push({
-                group: eggGrp, x: ex, z: ez, pickedUp: false,
-                color: ed.color, emissive: ed.emissive, veinColor: ed.veinColor,
-                wingColor: ed.wingColor || null,
-                isWyvern: !!ed.isWyvern, name: ed.name || 'Ice Dragon',
-            });
-        }
-
-        // Real ore blocks scattered around the nest interior
-        const oreSpots = [
-            { dx: -4, dz:  4, type: BLOCK.SAPPHIRE_ORE },
-            { dx:  4, dz:  4, type: BLOCK.DIAMOND_ORE },
-            { dx: -5, dz: -2, type: BLOCK.DIAMOND_ORE },
-            { dx:  5, dz: -1, type: BLOCK.SAPPHIRE_ORE },
-            { dx: -6, dz:  3, type: BLOCK.IRON_ORE },
-            { dx:  6, dz:  2, type: BLOCK.IRON_ORE },
-            { dx: -4, dz: -5, type: BLOCK.GOLD_ORE },
-            { dx:  4, dz: -5, type: BLOCK.GOLD_ORE },
-            { dx: -7, dz:  0, type: BLOCK.EMERALD_ORE },
-            { dx:  7, dz:  0, type: BLOCK.RUBY_ORE },
-            { dx:  0, dz:  6, type: BLOCK.DIAMOND_ORE },
-            { dx:  0, dz: -7, type: BLOCK.SAPPHIRE_ORE },
-        ];
-        for (const o of oreSpots) {
-            const owx = nestX + o.dx, owz = nestZ + o.dz;
-            const obx = Math.round(owx / BS), obz = Math.round(owz / BS);
-            const oby = Math.floor(getTerrainHeight(owx, owz) / BS) + yOff;
-            world.setBlock(obx, oby + 1, obz, o.type);
-        }
-
-        // Real treasure chest with rich loot
-        {
-            const cwx = nestX + 0.5, cwz = nestZ - 6;
-            const cbx = Math.round(cwx / BS), cbz = Math.round(cwz / BS);
-            const cby = Math.floor(getTerrainHeight(cwx, cwz) / BS) + yOff;
-            for (let dx = 0; dx <= 1; dx++)
-                for (let dy = 0; dy <= 1; dy++)
-                    for (let dz = 0; dz <= 1; dz++)
-                        world.setBlock(cbx+dx, cby+1+dy, cbz+dz, BLOCK.CHEST);
-            const ckey = _chestKey(cbx, cby+1, cbz);
-            chestData[ckey] = { items: {
-                'diamond': 8, 'sapphire': 12, 'emerald': 4, 'ruby': 4,
-                'gold_ingot': 10, 'iron_ingot': 16, 'steel_ingot': 4,
-                'dragonsteel_ingot': 2,
-            }};
-        }
-
-        // Spawn the giant ice dragon at the nest
-        const iceDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0xddeeff, 0xa8c8e8, true);
-        iceDragon.age = 7200;
-        iceDragon.growthScale = 2.0;
-        iceDragon.group.scale.setScalar(iceDragon.growthScale);
-        iceDragon.footOffset = 0.95 * 2.55 * iceDragon.growthScale;
-        iceDragon.state = 'alive';
-        iceDragon.dragonName = 'Frostfang the Glacial';
-        iceDragon._iceDragon = true;
-        iceDragon._stationary = true; // exclude from save
-        iceDragon._unrideable = true;
-        iceDragon._nestX = nestX;
-        iceDragon._nestZ = nestZ;
-        iceDragon._iceState = 'idle';
-        iceDragon.maxHP = 250; iceDragon.hp = 250;
-        iceDragon.x = nestX; iceDragon.z = nestZ;
-        iceDragon.group.position.set(nestX, nestY + iceDragon.footOffset, nestZ);
-        scene.add(iceDragon.group);
-        dragonMgr.dragons.push(iceDragon);
-        world._iceDragon = iceDragon;
     }
 
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
@@ -4588,16 +4330,6 @@ function startGame(loadSlotName) {
             player.group.rotation.y = s.player.ry || 0;
             // Restore inventory
             Object.assign(inventory, s.inventory || {});
-            // Remove fortress sword meshes the player already collected
-            if (world._fortressSwordMeshes) {
-                for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
-                    const fs = world._fortressSwordMeshes[fi];
-                    if (inventory[fs.id]) {
-                        scene.remove(fs.mesh);
-                        world._fortressSwordMeshes.splice(fi, 1);
-                    }
-                }
-            }
             for (let i = 0; i < 9; i++) hotbarSlots[i] = s.hotbarSlots?.[i] || 0;
             selectedSlot = s.selectedSlot || 0;
             Object.assign(eggItems, s.eggItems || {});
@@ -4708,14 +4440,9 @@ function startGame(loadSlotName) {
                     }
                 }
             }
-            // Restore dragons (skip stale fortress entities from old saves)
+            // Restore dragons
             if (s.dragons) {
                 for (const dd of s.dragons) {
-                    // Skip silver wyvern, fortress dragon, and other named fortress entities
-                    if (dd.dragonName === 'The Silver Wyvern' || dd.dragonName === 'Kaelthrazor the Ancient') continue;
-                    // Skip dragons at known fortress positions
-                    if (Math.abs(dd.x - (-505)) < 2 && Math.abs(dd.z - (-335)) < 2) continue; // ruined fortress
-                    if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
                     const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern);
                     bd.age = dd.age || 0;
@@ -4723,7 +4450,6 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
-                    if (dd.iceBreath) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
@@ -5257,7 +4983,6 @@ window._mpHost = () => {
     if (statusEl) statusEl.textContent = 'Creating room...';
     mp.host(code => {
         if (statusEl) statusEl.textContent = '';
-        if (dragonMgr) dragonMgr.setMyPid(mp.myId);
         updateMpPanel();
     });
 };
@@ -5269,11 +4994,6 @@ window._mpJoin = () => {
     if (statusEl) statusEl.textContent = 'Joining...';
     mp.join(code, id => {
         if (id) {
-            if (dragonMgr) {
-                dragonMgr.setMyPid(mp.myId);
-                // Drop world dragons; host's sync will repopulate them as phantoms
-                dragonMgr.removeWorldDragons();
-            }
             updateMpPanel();
         } else {
             if (statusEl) statusEl.textContent = 'Failed to connect';
@@ -5281,7 +5001,6 @@ window._mpJoin = () => {
     });
 };
 window._mpDisconnect = () => {
-    if (dragonMgr) dragonMgr.setMyPid('');
     mp.disconnect();
     updateMpPanel();
 };
@@ -5669,7 +5388,6 @@ deathScreen.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%
 deathScreen.innerHTML = '<div style="color:#ff4444;font:bold 48px monospace;text-shadow:0 0 20px #ff0000;">You Died</div><div style="color:#cc8888;font:14px monospace;margin-top:16px;">Respawning...</div>';
 document.body.appendChild(deathScreen);
 
-window.playerTakeDamage = playerTakeDamage;
 function playerTakeDamage(dmg) {
     if (playerDead || creativeMode) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
@@ -6077,10 +5795,7 @@ function spellDamage(c, dmg) {
     if (c.hp <= 0) {
         c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0;
         if (c._isBoss) {
-            if (c._bossName) {
-                killedBosses.add(c._bossName);
-                if (mp.active) mp.sendBossKilled(c._bossName);
-            }
+            if (c._bossName) killedBosses.add(c._bossName);
             if (c._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(c);
             else if (c._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(c);
             else if (c._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(c);
@@ -6715,10 +6430,7 @@ function updateProjectiles(dt) {
                         sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0;
                         // Trigger boss death handlers for projectile kills
                         if (sh._isBoss) {
-                            if (sh._bossName) {
-                                killedBosses.add(sh._bossName);
-                                if (mp.active) mp.sendBossKilled(sh._bossName);
-                            }
+                            if (sh._bossName) killedBosses.add(sh._bossName);
                             if (sh._isDarkKnight && creatures._onDarkKnightDeath) creatures._onDarkKnightDeath(sh);
                             else if (sh._isEmberLord && creatures._onEmberLordDeath) creatures._onEmberLordDeath(sh);
                             else if (sh._isNecromancer && creatures._onNecromancerDeath) creatures._onNecromancerDeath(sh);
@@ -8837,24 +8549,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
             if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
             if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
-            if (mp.active) {
-                mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
-                // PvP — check for remote players in front of us
-                const sinA = Math.sin(player.group.rotation.y);
-                const cosA = Math.cos(player.group.rotation.y);
-                for (const [pid, rp] of mp.remotePlayers) {
-                    if (!rp || !rp.group) continue;
-                    const rpx = rp.group.position.x, rpz = rp.group.position.z;
-                    const dx = rpx - player.position.x, dz = rpz - player.position.z;
-                    const dist = Math.sqrt(dx*dx + dz*dz);
-                    if (dist > 3 || dist < 0.1) continue;
-                    const dot = (dx * sinA + dz * cosA) / dist;
-                    if (dot < 0.3) continue;
-                    mp.sendPvpHit(pid, finalSwordDmg);
-                    addChatMessage('Hit player for ' + finalSwordDmg + ' damage', 'rgba(255,150,150,0.9)');
-                    break;
-                }
-            }
+            if (mp.active) mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
         } else {
             // Buffer combo swing even during cooldown
             player.triggerSwing();
@@ -9024,10 +8719,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                 inventory[item] = (inventory[item] || 0) + count;
             }
             delete chestData[ck];
-            if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
-            world._lootedChestKeys.add(ck);
             updateHotbar();
-            if (mp.active) mp.sendChestLoot(ck);
         }
     }
 
@@ -12359,9 +12051,9 @@ function animate() {
         if (mp._sendAccum >= 0.05) { // 20Hz position updates
             mp._sendAccum = 0;
             const held = hotbarSlots[selectedSlot];
-            mp.sendState(player, held, player.swingTimer, charColors, dragonMgr && dragonMgr.ridingDragon);
+            mp.sendState(player, held, player.swingTimer, charColors);
         }
-        // Host syncs creatures + villagers + horses + time of day at 5Hz
+        // Host syncs creatures + villagers at 5Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
             if (mp._creatureSendAccum >= 0.2) {
@@ -12376,38 +12068,6 @@ function animate() {
                     }));
                     mp._broadcast({ type: 'villagers', list: vList });
                 }
-                // Horse sync
-                if (horseMgr && horseMgr.horses && horseMgr.horses.length > 0) {
-                    const hList = horseMgr.horses.map((h, i) => ({
-                        i, x: +h.x.toFixed(2), z: +h.z.toFixed(2),
-                        y: +(h.group ? h.group.position.y : 0).toFixed(2),
-                        ry: +(h.group ? h.group.rotation.y : 0).toFixed(2),
-                        w: h.walking ? 1 : 0,
-                    }));
-                    mp.sendHorseState(hList);
-                }
-                // Time of day sync
-                mp.sendTimeOfDay(timeOfDay);
-            }
-            // Lower-frequency authoritative world snapshot for late joiners
-            mp._worldStateAccum = (mp._worldStateAccum || 0) + dt;
-            if (mp._worldStateAccum >= 2.0) {
-                mp._worldStateAccum = 0;
-                const allSwordIds = world._fortressSwords ? world._fortressSwords.map(fs => fs.id) : [];
-                const remaining = new Set((world._fortressSwordMeshes || []).map(m => m.id));
-                const pickedSwords = allSwordIds.filter(id => !remaining.has(id));
-                const lootedChests = world._lootedChestKeys ? Array.from(world._lootedChestKeys) : [];
-                const pickedEggs = dragonMgr ? dragonMgr.eggs.map((e, i) => e.pickedUp ? i : -1).filter(i => i >= 0) : [];
-                const bossNames = Array.from(killedBosses);
-                mp.sendWorldState({ swords: pickedSwords, chests: lootedChests, eggs: pickedEggs, bosses: bossNames });
-            }
-        }
-        // Every peer syncs their owned dragons (host relays)
-        if (mp.active && dragonMgr) {
-            mp._dragonSendAccum = (mp._dragonSendAccum || 0) + dt;
-            if (mp._dragonSendAccum >= 0.15) {
-                mp._dragonSendAccum = 0;
-                mp.sendDragonState(dragonMgr.serializeDragonsForSync());
             }
         }
     }
@@ -12489,11 +12149,7 @@ function animate() {
     villageMgr.update(dt, player.position.x, player.position.z);
 
     // Dragons
-    player._lookPitch = fpPitch;
-    player._lookYaw = fpYaw;
-    dragonMgr._timeOfDay = timeOfDay;
     dragonMgr.update(dt, player, keys);
-    if (mp.active) dragonMgr.updateRemoteDragons(dt);
 
     // Process smelt queue
     for (let si = smeltQueue.length - 1; si >= 0; si--) {
@@ -13219,7 +12875,6 @@ function animate() {
                     scene.remove(fs.mesh);
                     world._fortressSwordMeshes.splice(fi, 1);
                     addChatMessage('You draw ' + sName + ' from the ancient stone.', 'rgba(255,200,100,0.9)');
-                    if (mp.active) mp.sendSwordPickup(fs.id);
                     keys['KeyE'] = false;
                 }
                 break;
@@ -13700,11 +13355,9 @@ function executeCommand(input) {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // Regular chat message — broadcast to all peers
+    // Regular chat message
     if (!trimmed.startsWith('/')) {
-        const name = charColors.name || 'Player';
-        addChatMessage(`<${name}> ${trimmed}`);
-        if (mp.active) mp.sendChat(trimmed, name, 'rgba(220,210,180,0.9)');
+        addChatMessage(`<${charColors.name || 'Player'}> ${trimmed}`);
         return;
     }
 
