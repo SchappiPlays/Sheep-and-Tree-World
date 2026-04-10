@@ -2950,7 +2950,7 @@ function startGame(loadSlotName) {
     };
     // Time of day — clients adopt host's time
     mp.onTimeOfDay = (t) => {
-        if (!mp.isHost) timeOfDay = t;
+        timeOfDay = t;
     };
     // Fortress sword pickup — when another peer claims a sword, remove it locally
     mp.onSwordPickup = (id) => {
@@ -12017,8 +12017,8 @@ function animate() {
         }
     }
 
-    // Day/night cycle
-    timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
+    // Day/night cycle — server is authoritative when connected
+    if (!mp.active) timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
     const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
     const isDusk = timeOfDay > 0.72 && timeOfDay <= 0.78;
     const isDawn = timeOfDay >= 0.22 && timeOfDay < 0.28;
