@@ -61,6 +61,7 @@ export class Multiplayer {
     // ── Connection lifecycle ──
 
     _connect(callback) {
+        this._intentionalDisconnect = false;
         const wsUrl = _resolveWsUrl();
         console.log('[mp] connecting to', wsUrl);
         try {
@@ -89,10 +90,19 @@ export class Multiplayer {
         };
         this.ws.onclose = () => {
             console.log('[mp] WebSocket disconnected');
+            const wasActive = this.active;
             this.active = false;
             for (const [pid] of this.remotePlayers) this._removeRemotePlayer(pid);
             this.remotePlayers.clear();
             this.connections.clear();
+            // Auto-reconnect if we were actively connected
+            if (wasActive && !this._intentionalDisconnect) {
+                console.log('[mp] reconnecting in 2s...');
+                setTimeout(() => this._connect(id => {
+                    if (id) console.log('[mp] reconnected as', id);
+                    else console.log('[mp] reconnect failed');
+                }), 2000);
+            }
         };
     }
 
@@ -101,6 +111,7 @@ export class Multiplayer {
     join(_code, callback) { this._connect(callback); }
 
     disconnect() {
+        this._intentionalDisconnect = true;
         if (this.ws) try { this.ws.close(); } catch (e) {}
         this.ws = null;
         this.active = false;

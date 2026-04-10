@@ -129,6 +129,21 @@ function broadcast(data, exceptPid) {
     }
 }
 
+// Ping all clients every 25s to keep connections alive (Render kills idle sockets)
+setInterval(() => {
+    for (const [pid, c] of clients) {
+        if (c.ws.readyState !== 1) continue;
+        if (c._pongPending) {
+            // Missed last pong — connection is dead
+            console.log('[satw-server]', pid, 'missed pong, terminating');
+            c.ws.terminate();
+            continue;
+        }
+        c._pongPending = true;
+        c.ws.ping();
+    }
+}, 25000);
+
 wss.on('connection', (ws) => {
     const pid = String(++nextPid);
     const isFirst = hostPid === null;
@@ -164,6 +179,8 @@ wss.on('connection', (ws) => {
             send(ws, { t: 'cc', pid: hostPid, ...host.charColors });
         }
     }
+
+    ws.on('pong', () => { client._pongPending = false; });
 
     ws.on('message', (raw) => {
         let msg;
