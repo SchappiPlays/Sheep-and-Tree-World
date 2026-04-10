@@ -95,18 +95,52 @@ export class Multiplayer {
                 if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'creatures') {
                 if (this.onCreatureSync) this.onCreatureSync(data.list);
+            } else if (data.type === 'dragons') {
+                if (this.onDragonSync) this.onDragonSync(data.list, data.fromPid || pid);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'egg_pickup') {
+                if (this.onEggPickup) this.onEggPickup(data.idx);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'dragon_hatch') {
+                if (this.onDragonHatch) this.onDragonHatch(data);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'chest_loot') {
+                if (this.onChestLoot) this.onChestLoot(data.key);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'tod') {
+                if (this.onTimeOfDay) this.onTimeOfDay(data.t);
+            } else if (data.type === 'horses') {
+                if (this.onHorseSync) this.onHorseSync(data.list);
+            } else if (data.type === 'sword_pickup') {
+                if (this.onSwordPickup) this.onSwordPickup(data.id);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'world_state') {
+                if (this.onWorldStateSync) this.onWorldStateSync(data);
+            } else if (data.type === 'boss_killed') {
+                if (this.onBossKilled) this.onBossKilled(data.name);
+                if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'chat') {
+                if (this.onChat) this.onChat(data.text, data.name, data.color);
+                if (this.isHost) this._relayToOthers(pid, data);
             } else if (data.type === 'villagers') {
                 if (this.onVillagerSync) this.onVillagerSync(data.list);
             } else if (data.type === 'attack') {
                 // Relay attack events
                 if (this.onAttack) this.onAttack(data);
                 if (this.isHost) this._relayToOthers(pid, data);
+            } else if (data.type === 'pvp') {
+                // Direct PvP damage targeting a specific player
+                if (data.targetPid === this.myId && this.onPvpHit) {
+                    this.onPvpHit(data.damage, data.fromPid);
+                }
+                if (this.isHost && data.targetPid !== this.myId) this._relayToOthers(pid, data);
             }
         });
 
         conn.on('close', () => {
             this._removeRemotePlayer(pid);
             this.connections.delete(pid);
+            if (this.onPeerDisconnect) this.onPeerDisconnect(pid);
         });
     }
 
@@ -119,7 +153,7 @@ export class Multiplayer {
     }
 
     // Send local player state
-    sendState(player, heldItem, swingTimer, charColors) {
+    sendState(player, heldItem, swingTimer, charColors, riding) {
         if (!this.active) return;
         const state = {
             type: 'state',
@@ -135,6 +169,7 @@ export class Multiplayer {
             sw: +(swingTimer >= 0 ? swingTimer : -1).toFixed(2),
             tool: heldItem || '',
             cc: charColors || null,
+            rd: riding ? 1 : 0,
         };
         this._broadcast(state);
     }
@@ -151,6 +186,12 @@ export class Multiplayer {
         this._broadcast({ type: 'attack', x, z, angle, damage, pid: this.myId });
     }
 
+    // Send a direct PvP hit to a specific player
+    sendPvpHit(targetPid, damage) {
+        if (!this.active) return;
+        this._broadcast({ type: 'pvp', targetPid, damage, fromPid: this.myId });
+    }
+
     // Host sends creature state
     sendCreatureState(creatureList) {
         if (!this.active || !this.isHost) return;
@@ -159,8 +200,73 @@ export class Multiplayer {
             ry: +c.group.rotation.y.toFixed(2),
             w: c.walking ? 1 : 0, d: c.dead ? 1 : 0,
             t: c.type,
+            h: c.hostile ? 1 : 0,
+            tm: c._tamed ? 1 : 0,
+            wp: c._waitingAtPost ? 1 : 0,
+            np: c._necProvoked ? 1 : 0,
+            hp: c.hp != null ? +c.hp.toFixed(0) : null,
         }));
         this._broadcast({ type: 'creatures', list });
+    }
+
+    // Any peer broadcasts the dragons it owns; host relays to other clients
+    sendDragonState(dragonList) {
+        if (!this.active) return;
+        this._broadcast({ type: 'dragons', list: dragonList, fromPid: this.myId });
+    }
+
+    // Broadcast that an egg was picked up by this peer
+    sendEggPickup(idx) {
+        if (!this.active) return;
+        this._broadcast({ type: 'egg_pickup', idx, fromPid: this.myId });
+    }
+
+    // Broadcast a fresh hatch (so other peers can spawn the same dragon immediately)
+    sendDragonHatch(info) {
+        if (!this.active) return;
+        this._broadcast({ type: 'dragon_hatch', ...info, fromPid: this.myId });
+    }
+
+    // Broadcast that a chest was looted (any peer)
+    sendChestLoot(key) {
+        if (!this.active) return;
+        this._broadcast({ type: 'chest_loot', key, fromPid: this.myId });
+    }
+
+    // Host broadcasts time of day
+    sendTimeOfDay(t) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'tod', t: +t.toFixed(4) });
+    }
+
+    // Host broadcasts horses
+    sendHorseState(list) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'horses', list });
+    }
+
+    // Broadcast a fortress sword pickup
+    sendSwordPickup(id) {
+        if (!this.active) return;
+        this._broadcast({ type: 'sword_pickup', id, fromPid: this.myId });
+    }
+
+    // Host broadcasts authoritative world state snapshot (low frequency)
+    sendWorldState(state) {
+        if (!this.active || !this.isHost) return;
+        this._broadcast({ type: 'world_state', ...state });
+    }
+
+    // Broadcast a boss kill so all peers add it to their killedBosses set
+    sendBossKilled(name) {
+        if (!this.active) return;
+        this._broadcast({ type: 'boss_killed', name, fromPid: this.myId });
+    }
+
+    // Broadcast a chat message
+    sendChat(text, name, color) {
+        if (!this.active) return;
+        this._broadcast({ type: 'chat', text, name, color, fromPid: this.myId });
     }
 
     _broadcast(data) {
@@ -277,6 +383,7 @@ export class Multiplayer {
         rp._targetRY = s.ry; rp._targetRX = s.rx || 0;
         rp._wp = s.wp; rp._wb = s.wb; rp._sb = s.sb; rp._sw = s.sw;
         rp._tool = s.tool || '';
+        rp._riding = !!s.rd;
         rp._lastUpdate = performance.now();
 
         // Snap on first receive so player doesn't lerp from (0,0,0)
@@ -343,6 +450,23 @@ export class Multiplayer {
             const p = rp._wp, b = rp._wb, sp = rp._sb;
             const mix = (a, bv, t) => a + (bv - a) * t;
 
+            // Riding pose overrides walk animation entirely
+            if (rp._riding) {
+                rp.body.position.y = 0.95 * (rp._heightScale || 1);
+                rp.body.position.x = 0;
+                rp.leftLeg.hip.rotation.set(-1.5, 0, -0.2);
+                rp.rightLeg.hip.rotation.set(-1.5, 0, 0.2);
+                rp.leftLeg.knee.rotation.x = 0.15;
+                rp.rightLeg.knee.rotation.x = 0.15;
+                rp.leftArm.shoulder.rotation.set(-0.5, 0, 0.3);
+                rp.rightArm.shoulder.rotation.set(-0.5, 0, -0.3);
+                rp.leftArm.elbow.rotation.x = -0.8;
+                rp.rightArm.elbow.rotation.x = -0.8;
+                rp.spine.rotation.set(0.15, 0, 0);
+                rp.torso.rotation.y = 0;
+                rp.headGroup.rotation.x = -0.1;
+            } else {
+
             // Body bob
             rp.body.position.y = 0.95 * (rp._heightScale || 1) + Math.cos(p * 2) * mix(0.025, 0.055, sp) * b;
             rp.body.position.x = Math.sin(p) * mix(0.018, 0.008, sp) * b;
@@ -395,6 +519,7 @@ export class Multiplayer {
                 rp.spine.rotation.x += swSpineX;
                 rp.spine.rotation.y += swSpineY;
             }
+            } // end else (not riding)
 
             // Hide remote player if no updates for 5 seconds (disconnected)
             if (performance.now() - rp._lastUpdate > 5000) {
