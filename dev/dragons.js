@@ -1868,24 +1868,37 @@ export class DragonManager {
             }
         }
 
-        // Wings stretched out like flying but tilted slightly down
+        // Wings stretched out like flying but tilted slightly down, with membranes
         for (const w of bd.wings) {
             const si = w._s;
             w.rotation.set(
                 lerp(w.rotation.x, 0),
-                lerp(w.rotation.y, si * 0.15),  // spread out like flight
-                lerp(w.rotation.z, si * 0.25)   // tilted slightly down
+                lerp(w.rotation.y, si * 0.15),   // spread like flight
+                lerp(w.rotation.z, si * -0.35)   // tilted down toward ground
             );
             if (w._elbow) w._elbow.rotation.set(
                 lerp(w._elbow.rotation.x, 0),
                 lerp(w._elbow.rotation.y, si * -0.25),
-                lerp(w._elbow.rotation.z, si * 0.15)  // slightly drooped
+                lerp(w._elbow.rotation.z, si * -0.2)  // drooped down
             );
             if (w._hand) w._hand.rotation.set(
                 lerp(w._hand.rotation.x, 0),
                 lerp(w._hand.rotation.y, 0),
                 lerp(w._hand.rotation.z, 0)
             );
+            // Use flying finger positions and membrane
+            if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
+            if (w._flyFRots) applyFingerRots(w, w._flyFRots);
+            if (w._patMesh) w._patMesh.visible = true;
+            if (w._afOrigBodyPt) w._afBodyPt = w._afOrigBodyPt;
+            if (w._patP0) {
+                const S = 2.55;
+                w.updateMatrix();
+                _afInvMat.copy(w.matrix).invert();
+                _afv.set(0, 0, -0.3 * S).applyMatrix4(_afInvMat);
+                w._patP0[0] = _afv.x; w._patP0[1] = _afv.y; w._patP0[2] = _afv.z;
+            }
+            updateWyvernMembrane(w);
         }
 
         // Tail curves to same side as head (right)
