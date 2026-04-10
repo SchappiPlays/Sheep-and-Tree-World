@@ -12361,15 +12361,15 @@ function animate() {
         mp.updateRemotePlayers();
 
         mp._sendAccum += dt;
-        if (mp._sendAccum >= 0.05) { // 20Hz position updates
+        if (mp._sendAccum >= 0.1) { // 10Hz position updates (reduced from 20Hz to ease backpressure)
             mp._sendAccum = 0;
             const held = hotbarSlots[selectedSlot];
             mp.sendState(player, held, player.swingTimer, charColors, dragonMgr && dragonMgr.ridingDragon);
         }
-        // Host syncs creatures + villagers + horses + time of day at 5Hz
+        // Host syncs creatures + villagers + horses + time of day at ~3Hz
         if (mp.isHost) {
             mp._creatureSendAccum += dt;
-            if (mp._creatureSendAccum >= 0.2) {
+            if (mp._creatureSendAccum >= 0.33) {
                 mp._creatureSendAccum = 0;
                 mp.sendCreatureState(creatures.creatures);
                 // Villager sync
@@ -12410,7 +12410,7 @@ function animate() {
         // Every peer syncs their owned dragons (host relays)
         if (mp.active && dragonMgr) {
             mp._dragonSendAccum = (mp._dragonSendAccum || 0) + dt;
-            if (mp._dragonSendAccum >= 0.15) {
+            if (mp._dragonSendAccum >= 0.33) { // ~3Hz
                 mp._dragonSendAccum = 0;
                 mp.sendDragonState(dragonMgr.serializeDragonsForSync());
             }

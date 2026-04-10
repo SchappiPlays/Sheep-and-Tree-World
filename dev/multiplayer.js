@@ -63,7 +63,9 @@ export class Multiplayer {
         this.isHost = false;
         this.peer.on('open', id => {
             this.myId = id;
-            const conn = this.peer.connect(code, { reliable: true });
+            // serialization 'none' = raw strings/bytes; we encode JSON manually to
+            // avoid PeerJS BinaryPack which silently drops messages with certain shapes
+            const conn = this.peer.connect(code, { reliable: true, serialization: 'none' });
             conn.on('open', () => {
                 this.hostConn = conn;
                 this.active = true;
@@ -88,7 +90,14 @@ export class Multiplayer {
         this._sentTypes = {};
 
         const _typeCounts = {};
-        conn.on('data', data => {
+        conn.on('data', raw => {
+            // Decode JSON string (sent via serialization='none')
+            let data;
+            if (typeof raw === 'string') {
+                try { data = JSON.parse(raw); } catch (e) { console.warn('[mp] JSON parse failed', e); return; }
+            } else {
+                data = raw; // legacy / compatibility — shouldn't happen with serialization='none'
+            }
             // Log first 3 incoming messages PER TYPE so we can see state messages arriving
             const t = data && data.type;
             if (t) {
@@ -314,9 +323,14 @@ export class Multiplayer {
 
     _broadcast(data) {
         let sent = 0;
+        // Serialize manually to JSON string. PeerJS conn was opened with
+        // serialization='none' so it will pass the string straight through.
+        let payload;
+        try { payload = JSON.stringify(data); }
+        catch (e) { console.warn('[mp] JSON encode failed', data && data.type, e); return; }
         for (const [pid, c] of this.connections) {
             if (c.conn.open) {
-                try { c.conn.send(data); sent++; } catch(e) {
+                try { c.conn.send(payload); sent++; } catch(e) {
                     console.warn('[mp] send failed to', pid, e);
                 }
             }
