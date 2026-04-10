@@ -424,8 +424,12 @@ export class Multiplayer {
         g.add(label);
 
         g.rotation.order = 'YXZ';
-        g.visible = false; // hidden until first state arrives so they don't appear at (0,0,0)
+        // Position at world spawn so the player is at least visible somewhere
+        // until their first state message arrives
+        g.position.set(0, 5, 0);
+        g.visible = true;
         this.scene.add(g);
+        console.log('[mp] created remote player slot for', pid, '— scene now has', this.remotePlayers.size, 'remote(s)');
 
         const rp = {
             group: g, body, spine, headGroup, torso,
@@ -452,6 +456,13 @@ export class Multiplayer {
                 console.warn('[mp] _applyRemoteState got self state — skipping. actualPid=', actualPid, 'myId=', this.myId);
             }
             return; // don't render self
+        }
+        if (!this._applyStateLogged) {
+            this._applyStateLogged = 0;
+        }
+        if (this._applyStateLogged < 3) {
+            this._applyStateLogged++;
+            console.log('[mp] _applyRemoteState #' + this._applyStateLogged, 'actualPid=', actualPid, 'pos=', s.x, s.y, s.z, 'remotePlayers has it?', this.remotePlayers.has(actualPid));
         }
         if (!this.remotePlayers.has(actualPid)) this._createRemotePlayer(actualPid);
         const rp = this.remotePlayers.get(actualPid);
