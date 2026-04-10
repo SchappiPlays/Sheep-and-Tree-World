@@ -1171,7 +1171,7 @@ export class DragonManager {
             }
 
             // Default to following the player
-            if (bd._followingPlayer === undefined) bd._followingPlayer = true;
+            if (bd._followingPlayer === undefined) { bd._followingPlayer = true; bd._followMode = 'follow'; }
 
             // ── Sleep at night (if not following player) ──
             const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
@@ -1278,8 +1278,8 @@ export class DragonManager {
             const bdx = px - bd.x, bdz = pz - bd.z;
             const bDist = Math.sqrt(bdx * bdx + bdz * bdz);
 
-            // Only follow if flag is set
-            if (!bd._followingPlayer) {
+            // ── Stay mode — just idle ──
+            if (bd._followMode === 'stay') {
                 bd.walking = false;
                 const tY = this.getHeight(bd.x, bd.z);
                 bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
@@ -1287,8 +1287,120 @@ export class DragonManager {
                 continue;
             }
 
-            // Teleport if too far
-            if (bDist > 50) {
+            // ── Wander mode — roam within 100u of home, occasionally grab sheep ──
+            if (bd._followMode === 'wander') {
+                const homeX = bd._wanderHomeX || bd.x;
+                const homeZ = bd._wanderHomeZ || bd.z;
+                bd._wanderTimer = (bd._wanderTimer || 0) - dt;
+
+                // Pick new wander target when timer expires
+                if (bd._wanderTimer <= 0) {
+                    bd._wanderTimer = 5 + Math.random() * 10;
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 10 + Math.random() * 60;
+                    bd._wanderTargetX = homeX + Math.sin(angle) * dist;
+                    bd._wanderTargetZ = homeZ + Math.cos(angle) * dist;
+                    // Clamp to within 100u of home
+                    const wdx = bd._wanderTargetX - homeX, wdz = bd._wanderTargetZ - homeZ;
+                    const wd = Math.sqrt(wdx * wdx + wdz * wdz);
+                    if (wd > 100) {
+                        bd._wanderTargetX = homeX + (wdx / wd) * 100;
+                        bd._wanderTargetZ = homeZ + (wdz / wd) * 100;
+                    }
+                }
+
+                // Move toward wander target
+                const wtdx = bd._wanderTargetX - bd.x, wtdz = bd._wanderTargetZ - bd.z;
+                const wtDist = Math.sqrt(wtdx * wtdx + wtdz * wtdz);
+                if (wtDist > 2) {
+                    const targetAngle = Math.atan2(wtdx, wtdz);
+                    let da = targetAngle - bd.angle;
+                    while (da > Math.PI) da -= Math.PI * 2;
+                    while (da < -Math.PI) da += Math.PI * 2;
+                    bd.angle += da * Math.min(dt * 3, 1);
+                    bd.group.rotation.y = bd.angle;
+                    const spd = Math.min(wtDist, 4 + gs * 2) * dt;
+                    bd.x += Math.sin(bd.angle) * spd;
+                    bd.z += Math.cos(bd.angle) * spd;
+                    bd.walking = true;
+                } else {
+                    bd.walking = false;
+                }
+
+                // Drift back if too far from home
+                const hdx = bd.x - homeX, hdz = bd.z - homeZ;
+                if (hdx * hdx + hdz * hdz > 10000) { // > 100u
+                    bd._wanderTargetX = homeX;
+                    bd._wanderTargetZ = homeZ;
+                    bd._wanderTimer = 0;
+                }
+
+                // Occasionally grab a nearby sheep in talons
+                bd._wanderGrabTimer = (bd._wanderGrabTimer || 30) - dt;
+                if (bd._wanderGrabTimer <= 0 && !bd._grabbedCreature && this._creatureMgr) {
+                    bd._wanderGrabTimer = 40 + Math.random() * 80;
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead || (c.type !== 'sheep' && c.type !== 'pig')) continue;
+                        const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                        if (cdx * cdx + cdz * cdz < 25 * gs) {
+                            bd._grabbedCreature = c;
+                            bd._wanderDropTimer = 5 + Math.random() * 10;
+                            break;
+                        }
+                    }
+                }
+                // Hold grabbed creature at feet, drop after timer
+                if (bd._grabbedCreature) {
+                    const c = bd._grabbedCreature;
+                    if (c.dead) { bd._grabbedCreature = null; }
+                    else {
+                        c.x = bd.x; c.z = bd.z;
+                        c.group.position.set(bd.x, bd.group.position.y - bd.footOffset * 0.5, bd.z);
+                        c.walking = false; c.speed = 0;
+                        bd._wanderDropTimer = (bd._wanderDropTimer || 5) - dt;
+                        if (bd._wanderDropTimer <= 0) {
+                            bd._grabbedCreature = null;
+                        }
+                    }
+                }
+
+                const tY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                this._animateDragon(dt, bd);
+                continue;
+            }
+
+            // ── Follow mode — fly back if returning from wander ──
+            if (bd._flyingBack) {
+                if (bDist < 15) {
+                    bd._flyingBack = false;
+                    if (bd.flying && bDist < 8) {
+                        bd.flying = false;
+                        bd.flyHeight = 0;
+                    }
+                } else if (bd.flying) {
+                    // Fly toward player
+                    const targetAngle = Math.atan2(bdx, bdz);
+                    let da = targetAngle - bd.angle;
+                    while (da > Math.PI) da -= Math.PI * 2;
+                    while (da < -Math.PI) da += Math.PI * 2;
+                    bd.angle += da * Math.min(dt * 4, 1);
+                    bd.group.rotation.y = bd.angle;
+                    const flySpd = (20 + gs * 15) * dt;
+                    bd.x += Math.sin(bd.angle) * flySpd;
+                    bd.z += Math.cos(bd.angle) * flySpd;
+                    // Adjust height toward player
+                    const targetH = Math.max(py + 10, this.getHeight(bd.x, bd.z) + bd.footOffset + 8);
+                    bd.flyHeight += (targetH - bd.flyHeight) * 2 * dt;
+                    bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                    bd.walking = false;
+                    this._animateDragon(dt, bd);
+                    continue;
+                }
+            }
+
+            // Don't teleport — let dragon walk/fly back naturally
+            if (bDist > 50 && !bd._flyingBack) {
                 bd.x = px - Math.sin(player.group.rotation.y) * 3;
                 bd.z = pz - Math.cos(player.group.rotation.y) * 3;
             }
@@ -2284,11 +2396,32 @@ export class DragonManager {
         return best;
     }
 
-    toggleFollow(bd) {
-        if (!bd) return;
-        if (bd._followingPlayer === undefined) bd._followingPlayer = true;
-        bd._followingPlayer = !bd._followingPlayer;
-        return bd._followingPlayer;
+    toggleFollow(bd, playerX, playerZ) {
+        if (!bd) return 'follow';
+        // Cycle: follow → stay → wander → follow
+        if (bd._followMode === undefined || bd._followMode === 'follow') {
+            bd._followMode = 'stay';
+            bd._followingPlayer = false;
+        } else if (bd._followMode === 'stay') {
+            bd._followMode = 'wander';
+            bd._followingPlayer = false;
+            bd._wanderHomeX = bd.x;
+            bd._wanderHomeZ = bd.z;
+            bd._wanderTargetX = bd.x;
+            bd._wanderTargetZ = bd.z;
+            bd._wanderTimer = 0;
+            bd._wanderGrabTimer = 30 + Math.random() * 60;
+        } else {
+            bd._followMode = 'follow';
+            bd._followingPlayer = true;
+            // Fly back instead of teleporting
+            bd._flyingBack = true;
+            if (!bd.flying) {
+                bd.flying = true;
+                bd.flyHeight = bd.group.position.y + 5;
+            }
+        }
+        return bd._followMode;
     }
 
     putOnShoulder(bd) {

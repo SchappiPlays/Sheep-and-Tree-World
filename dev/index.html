@@ -6932,8 +6932,9 @@ document.addEventListener('keydown', e => {
     if (e.code === 'KeyF' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
         const looked = dragonMgr.getLookedAtDragon(player);
         if (looked) {
-            const following = dragonMgr.toggleFollow(looked);
-            addChatMessage(`${looked.dragonName || 'Dragon'} is now ${following ? 'following' : 'staying'}`, 'rgba(180,200,255,0.9)');
+            const mode = dragonMgr.toggleFollow(looked, player.position.x, player.position.z);
+            const modeText = mode === 'follow' ? 'following you' : mode === 'stay' ? 'staying' : 'wandering freely';
+            addChatMessage(`${looked.dragonName || 'Dragon'} is now ${modeText}`, 'rgba(180,200,255,0.9)');
         }
     }
 });
