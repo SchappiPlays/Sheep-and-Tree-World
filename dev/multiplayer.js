@@ -48,8 +48,6 @@ export class Multiplayer {
         });
         this.peer.on('connection', conn => {
             if (this.connections.size >= 4) { conn.close(); return; }
-            // Force JSON serialization (binary/binarypack has known stall bugs with nested objects)
-            conn.serialization = 'json';
             // Connection may already be open or open later
             const doSetup = () => this._setupConnection(conn);
             if (conn.open) doSetup();
@@ -65,8 +63,7 @@ export class Multiplayer {
         this.isHost = false;
         this.peer.on('open', id => {
             this.myId = id;
-            // Force JSON serialization on the outgoing connection
-            const conn = this.peer.connect(code, { reliable: true, serialization: 'json' });
+            const conn = this.peer.connect(code, { reliable: true });
             conn.on('open', () => {
                 this.hostConn = conn;
                 this.active = true;
@@ -105,6 +102,9 @@ export class Multiplayer {
                 this._applyRemoteState(pid, data);
                 // Host relays player state to other clients so everyone sees each other
                 if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: pid });
+            } else if (data.type === 'cc') {
+                this._applyRemoteCC(data._fromPid || pid, data);
+                if (this.isHost) this._relayToOthers(pid, { ...data, _fromPid: data._fromPid || pid });
             } else if (data.type === 'block') {
                 if (this.onBlockChange) this.onBlockChange(data.bx, data.by, data.bz, data.b);
                 // Host relays to other clients
@@ -171,7 +171,8 @@ export class Multiplayer {
         }
     }
 
-    // Send local player state
+    // Send local player state — flat primitives only (no nested objects)
+    // to avoid PeerJS BinaryPack stalling on the cc charColors object.
     sendState(player, heldItem, swingTimer, charColors, riding) {
         if (!this.active) return;
         const state = {
@@ -187,10 +188,29 @@ export class Multiplayer {
             sb: +(player.sprintBlend || 0).toFixed(2),
             sw: +(swingTimer >= 0 ? swingTimer : -1).toFixed(2),
             tool: heldItem || '',
-            cc: charColors || null,
             rd: riding ? 1 : 0,
         };
         this._broadcast(state);
+        // Send charColors as a separate one-shot message (and re-send periodically in case packets are lost)
+        if (charColors) {
+            this._ccLastSend = (this._ccLastSend || 0) + 1;
+            if (!this._ccSent || this._ccLastSend > 200) {
+                this._ccSent = true;
+                this._ccLastSend = 0;
+                this._broadcast({
+                    type: 'cc',
+                    pid: this.myId,
+                    shirt: charColors.shirt || '',
+                    pants: charColors.pants || '',
+                    skin: charColors.skin || '',
+                    hair: charColors.hair || '',
+                    shoes: charColors.shoes || '',
+                    name: charColors.name || 'Player',
+                    hairStyle: charColors.hairStyle || 'short',
+                    height: +(charColors.height || 1),
+                });
+            }
+        }
     }
 
     // Send block change
@@ -447,35 +467,38 @@ export class Multiplayer {
             console.log('[mp] first state from', actualPid, 'at', s.x, s.y, s.z);
         }
 
-        // Apply character colors and name from remote player
-        if (s.cc && !rp._colorsApplied) {
-            rp._colorsApplied = true;
-            if (s.cc.shirt) rp._shirtMat.color.set(s.cc.shirt);
-            if (s.cc.pants) rp._pantsMat.color.set(s.cc.pants);
-            if (s.cc.skin) rp._skinMat.color.set(s.cc.skin);
-            if (s.cc.hair) rp._hairMat.color.set(s.cc.hair);
-            if (s.cc.shoes) rp._shoeMat.color.set(s.cc.shoes);
-            if (s.cc.height && rp.setHeight) { rp.setHeight(s.cc.height); rp._heightScale = s.cc.height; }
-            // Update hairstyle
-            if (s.cc.hairStyle && rp._hairGroup) {
-                const hg = rp._hairGroup;
-                while (hg.children.length) hg.remove(hg.children[0]);
-                const hm = rp._hairMat;
-                const hs = s.cc.hairStyle;
-                if (hs === 'short') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); h.position.y = 0.13; hg.add(h); }
-                else if (hs === 'flat') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.04,0.24), hm); h.position.y = 0.14; hg.add(h); const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.26), hm); s2.position.y = 0.10; hg.add(s2); }
-                else if (hs === 'long') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); t.position.y = 0.13; hg.add(t); const b = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.28,0.06), hm); b.position.set(0,-0.02,-0.12); hg.add(b); }
-                else if (hs === 'mohawk') { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.22), hm); r.position.y = 0.18; hg.add(r); }
-                else if (hs === 'messy') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.10,0.26), hm); t.position.y = 0.14; hg.add(t); }
-            }
-            // Update name label
-            if (s.cc.name && rp._labelCanvas) {
-                const ctx = rp._labelCanvas.getContext('2d');
-                ctx.clearRect(0, 0, 128, 32);
-                ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
-                ctx.fillText(s.cc.name, 64, 20);
-                rp._labelTex.needsUpdate = true;
-            }
+    }
+
+    // Apply character colors received from a peer (sent as a separate message)
+    _applyRemoteCC(pid, cc) {
+        if (pid === this.myId) return;
+        if (!this.remotePlayers.has(pid)) this._createRemotePlayer(pid);
+        const rp = this.remotePlayers.get(pid);
+        if (!rp || rp._colorsApplied) return;
+        rp._colorsApplied = true;
+        if (cc.shirt) rp._shirtMat.color.set(cc.shirt);
+        if (cc.pants) rp._pantsMat.color.set(cc.pants);
+        if (cc.skin) rp._skinMat.color.set(cc.skin);
+        if (cc.hair) rp._hairMat.color.set(cc.hair);
+        if (cc.shoes) rp._shoeMat.color.set(cc.shoes);
+        if (cc.height && rp.setHeight) { rp.setHeight(cc.height); rp._heightScale = cc.height; }
+        if (cc.hairStyle && rp._hairGroup) {
+            const hg = rp._hairGroup;
+            while (hg.children.length) hg.remove(hg.children[0]);
+            const hm = rp._hairMat;
+            const hs = cc.hairStyle;
+            if (hs === 'short') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); h.position.y = 0.13; hg.add(h); }
+            else if (hs === 'flat') { const h = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.04,0.24), hm); h.position.y = 0.14; hg.add(h); const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.26), hm); s2.position.y = 0.10; hg.add(s2); }
+            else if (hs === 'long') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.24), hm); t.position.y = 0.13; hg.add(t); const b = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.28,0.06), hm); b.position.set(0,-0.02,-0.12); hg.add(b); }
+            else if (hs === 'mohawk') { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.22), hm); r.position.y = 0.18; hg.add(r); }
+            else if (hs === 'messy') { const t = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.10,0.26), hm); t.position.y = 0.14; hg.add(t); }
+        }
+        if (cc.name && rp._labelCanvas) {
+            const ctx = rp._labelCanvas.getContext('2d');
+            ctx.clearRect(0, 0, 128, 32);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+            ctx.fillText(cc.name, 64, 20);
+            rp._labelTex.needsUpdate = true;
         }
     }
 
