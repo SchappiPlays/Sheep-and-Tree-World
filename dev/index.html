@@ -1339,7 +1339,31 @@ document.getElementById('newGameBtn').addEventListener('click', async () => {
     await showStatAllocation();
     startGame(null);
 });
-document.getElementById('hostBtn').addEventListener('click', () => {
+// Persisted MP stats so first-time host/join shows allocation, subsequent times don't
+const MP_STATS_KEY = 'satw_mpStats';
+function _loadMpStats() {
+    try {
+        const s = JSON.parse(localStorage.getItem(MP_STATS_KEY) || 'null');
+        if (s && typeof s === 'object') return s;
+    } catch (e) {}
+    return null;
+}
+function _saveMpStats() {
+    try { localStorage.setItem(MP_STATS_KEY, JSON.stringify(playerStats)); } catch (e) {}
+}
+async function _ensureMpStats() {
+    const saved = _loadMpStats();
+    if (saved) {
+        Object.assign(playerStats, saved);
+        return;
+    }
+    // First time → prompt
+    await showStatAllocation();
+    _saveMpStats();
+}
+
+document.getElementById('hostBtn').addEventListener('click', async () => {
+    await _ensureMpStats();
     document.getElementById('mpStatus').textContent = 'Creating room...';
     mp.host(code => {
         document.getElementById('mpStatus').textContent = 'Room: ' + code + ' (waiting for players)';
@@ -1347,9 +1371,10 @@ document.getElementById('hostBtn').addEventListener('click', () => {
         startGame(null);
     });
 });
-document.getElementById('joinBtn').addEventListener('click', () => {
+document.getElementById('joinBtn').addEventListener('click', async () => {
     const code = document.getElementById('joinCode').value.trim().toUpperCase();
     if (!code) return;
+    await _ensureMpStats();
     document.getElementById('mpStatus').textContent = 'Joining...';
     mp.join(code, id => {
         if (id) {
