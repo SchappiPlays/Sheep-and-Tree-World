@@ -12808,6 +12808,11 @@ function animate() {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5 * getManaRegenMult());
         updateManaUI();
     }
+    // Health regeneration — passive 0.5 HP/s
+    if (playerHP < playerMaxHP) {
+        playerHP = Math.min(playerMaxHP, playerHP + dt * 0.5);
+        updateHeartsUI();
+    }
     // Hold right-click to channel mana (2/s extra regen)
     const rightMouseHeld = placingHeld || shieldRaised;
     if (rightMouseHeld && !staffShielding && playerMana < playerMaxMana) {
