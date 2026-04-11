@@ -10466,9 +10466,8 @@ const _origSwordDmg = Object.assign({}, SWORD_DAMAGE);
 const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight', 'Grokthak the Warchief', 'The Necromancer'];
 const _getSwordDamage = (held) => {
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
-        let dmg = window._customSwords[held].damage || 6;
-        if (window._customSwords[held].tier === 'dragonsteel') dmg = _getDragonsteelDmg(dmg);
-        return dmg;
+        if (window._customSwords[held].tier === 'dragonsteel') return _getDragonsteelDmg(5);
+        return window._customSwords[held].damage || 6;
     }
     if (held === 'dragonsteel_sword') return _getDragonsteelDmg(5);
     if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
