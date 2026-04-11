@@ -4876,6 +4876,11 @@ function startGame(loadSlotName) {
     dragonMgr.buildCarriedEgg(player.spine);
     dragonMgr.addToInventory = addToInventory;
     dragonMgr.removeFromInventory = removeFromInventory;
+    dragonMgr.onDragonHatched = (bd) => {
+        const name = prompt('Name your dragon:', bd.dragonName || '');
+        if (name && name.trim()) bd.dragonName = name.trim();
+        addChatMessage(`${bd.dragonName || 'Dragon'} has hatched!`, 'rgba(180,255,180,0.9)');
+    };
     dragonMgr.onEggHatched = (eggKey) => {
         delete eggItems[eggKey];
         // Clear from hotbar if still referenced
@@ -7202,7 +7207,12 @@ function updateWhistleDragonList() {
         if (age >= 3600) stage = 'Elder';
         else if (age >= 2400) stage = 'Adult';
         else if (age >= 1200) stage = 'Teen';
-        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel} | ${hostile}</span>`;
+        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel} | ${hostile}</span><span class="wd-rename" style="font-size:10px;color:rgba(140,170,200,0.7);cursor:pointer;padding:2px 5px;margin-left:4px;">✎</span>`;
+        row.querySelector('.wd-rename').onclick = (ev) => {
+            ev.stopPropagation();
+            const newName = prompt('Rename dragon:', bd.dragonName || '');
+            if (newName && newName.trim()) { bd.dragonName = newName.trim(); updateWhistleDragonList(); }
+        };
         row.onclick = () => {
             if (whistleSelectedDragons.has(bd)) whistleSelectedDragons.delete(bd);
             else whistleSelectedDragons.add(bd);

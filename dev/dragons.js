@@ -1041,9 +1041,11 @@ export class DragonManager {
                         const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
-                        bd.dragonName = egg.name;
+                        bd.dragonName = egg.name || '';
                         if (egg.isIce || (egg.name && egg.name.toLowerCase().includes('ice'))) bd._iceBreath = true;
                         this.heldEgg = null;
+                        // Prompt player to name the dragon
+                        if (this.onDragonHatched) this.onDragonHatched(bd);
                     }
                 }
             } else {
