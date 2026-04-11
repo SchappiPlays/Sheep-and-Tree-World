@@ -563,6 +563,17 @@ moonGlow.renderOrder = -10;
 moonGlow.visible = false;
 scene.add(moonGlow);
 
+// ── Night Sky Dome ──
+const _skyTex = new THREE.TextureLoader().load('sky.png');
+_skyTex.mapping = THREE.EquirectangularReflectionMapping;
+const nightSkyMat = new THREE.MeshBasicMaterial({
+    map: _skyTex, side: THREE.BackSide, fog: false,
+    transparent: true, opacity: 0, depthWrite: false
+});
+const nightSkyDome = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 16), nightSkyMat);
+nightSkyDome.renderOrder = -20;
+scene.add(nightSkyDome);
+
 // ── Clouds ──
 const clouds = [];
 const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, fog: false });
@@ -12382,6 +12393,17 @@ function animate() {
         player.position.z + Math.abs(Math.sin(moonAngle)) * sunSkyDist * 0.3
     );
     moonGlow.position.copy(moonSphere.position);
+
+    // Night sky dome — fade in at dusk, full at night, fade out at dawn
+    nightSkyDome.position.set(player.position.x, 0, player.position.z);
+    let skyDomeAlpha = 0;
+    if (isNight) skyDomeAlpha = 1;
+    else if (isDusk) skyDomeAlpha = (timeOfDay - 0.72) / 0.06; // 0.72→0 to 0.78→1
+    else if (isDawn) skyDomeAlpha = 1 - (timeOfDay - 0.22) / 0.06; // 0.22→1 to 0.28→0
+    else if (timeOfDay > 0.78 && timeOfDay <= 0.82) skyDomeAlpha = 1; // just after dusk
+    else if (timeOfDay >= 0.18 && timeOfDay < 0.22) skyDomeAlpha = 1; // just before dawn
+    nightSkyMat.opacity = Math.max(0, Math.min(1, skyDomeAlpha));
+    nightSkyDome.visible = nightSkyMat.opacity > 0.01;
 
     // ── Shooting Stars (nighttime only) ──
     if (isNight) {
