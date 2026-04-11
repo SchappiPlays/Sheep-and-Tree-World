@@ -1428,46 +1428,59 @@ export class DragonManager {
                 bd.z = pz - Math.cos(player.group.rotation.y) * 3;
             }
 
-            // Occasionally take off / land while following (teens+)
-            if (bd.age >= 6200 && !target) {
+            // Occasionally take off / land while following (all ages)
+            if (!target) {
                 bd._followFlyTimer = (bd._followFlyTimer || 10 + Math.random() * 20) - dt;
                 if (bd._followFlyTimer <= 0) {
                     bd._followFlyTimer = 12 + Math.random() * 25;
                     if (!bd.flying && Math.random() < 0.35) {
                         bd.flying = true;
-                        bd.flyHeight = bd.group.position.y + 8 + Math.random() * 15;
+                        bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
                     } else if (bd.flying && Math.random() < 0.4) {
                         bd.flying = false;
                         bd.flyHeight = 0;
                     }
                 }
             }
-            // Fly during combat (teens+)
-            if (target && bd.age >= 6200 && !bd.flying && targetDist < 20) {
+            // Fly during combat (all ages)
+            if (target && !bd.flying && targetDist < 20) {
                 bd.flying = true;
-                bd.flyHeight = bd.group.position.y + 5 + Math.random() * 10;
+                bd.flyHeight = bd.group.position.y + 3 + Math.random() * 8 * gs;
             }
 
             const maxSpd = 8 + gs * 6;
-            if (bDist > bd.followDist) {
-                const targetAngle = Math.atan2(bdx, bdz);
-                let da = targetAngle - bd.angle;
-                while (da > Math.PI) da -= Math.PI * 2;
-                while (da < -Math.PI) da += Math.PI * 2;
-                bd.angle += da * Math.min(dt * 5, 1);
-                bd.group.rotation.y = bd.angle;
-                if (bd.flying) {
-                    const flySpd = (14 + gs * 10) * dt;
+            const targetAngle = Math.atan2(bdx, bdz);
+            let da = targetAngle - bd.angle;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            bd.angle += da * Math.min(dt * 5, 1);
+            bd.group.rotation.y = bd.angle;
+            if (bd.flying) {
+                // Always move when flying — orbit near player instead of stopping
+                const flySpd = (14 + gs * 10) * dt;
+                if (bDist > bd.followDist) {
                     bd.x += Math.sin(bd.angle) * flySpd;
                     bd.z += Math.cos(bd.angle) * flySpd;
-                    const targetH = Math.max(py + 6, this.getHeight(bd.x, bd.z) + bd.footOffset + 10 + Math.sin((bd._followFlyTimer || 0) * 0.4) * 5);
-                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
                 } else {
-                    const spd = Math.min(bDist * 1.5, maxSpd) * dt;
-                    bd.x += Math.sin(bd.angle) * spd;
-                    bd.z += Math.cos(bd.angle) * spd;
+                    // Circle around player when close
+                    const orbitAngle = bd.angle + Math.PI * 0.5;
+                    bd.x += Math.sin(orbitAngle) * flySpd * 0.4;
+                    bd.z += Math.cos(orbitAngle) * flySpd * 0.4;
                 }
-                bd.walking = !bd.flying;
+                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin((bd._followFlyTimer || 0) * 0.4) * 4 * gs);
+                bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                bd.walking = false;
+            } else if (bDist > bd.followDist) {
+                const spd = Math.min(bDist * 1.5, maxSpd) * dt;
+                bd.x += Math.sin(bd.angle) * spd;
+                bd.z += Math.cos(bd.angle) * spd;
+                bd.walking = true;
+            } else if (bDist > bd.followDist * 0.5) {
+                // Slow approach instead of dead stop — prevents stutter
+                const spd = Math.min(bDist * 0.5, maxSpd * 0.3) * dt;
+                bd.x += Math.sin(bd.angle) * spd;
+                bd.z += Math.cos(bd.angle) * spd;
+                bd.walking = true;
             } else {
                 bd.walking = false;
             }
