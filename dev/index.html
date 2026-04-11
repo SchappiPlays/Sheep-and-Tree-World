@@ -7268,8 +7268,9 @@ document.addEventListener('keydown', e => {
     }
     // F key — tap to cycle all dragons, hold to open whistle menu
     if (e.code === 'KeyF') {
+        if (e.repeat) return; // ignore held key repeats
         if (whistleMenuOpen) { closeWhistleMenu(); e.preventDefault(); return; }
-        if (!e.repeat && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
+        if (gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
             if (!_fHoldTimer) {
                 _fHoldFired = false;
                 console.log('WHISTLE: timer started');
