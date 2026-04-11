@@ -480,7 +480,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -844,7 +844,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             if (_hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > 0.05) continue;
             const h = getTerrainHeight(wx, wz);
             if (h < 1 || h > 60) continue;
-            const mtn = getMountainBlend(wx,wz)+getNWMountainBlend(wx,wz)+getSWMountainBlend(wx,wz)+getNEMountainBlend(wx,wz)+getSEMountainBlend(wx,wz)+getFarEastMountainBlend(wx,wz)+getFrozenMountainBlend(wx,wz);
+            const mtn = getMountainBlend(wx,wz)+getNWMountainBlend(wx,wz)+getSWMountainBlend(wx,wz)+getNEMountainBlend(wx,wz)+getSEMountainBlend(wx,wz)+getFarEastMountainBlend(wx,wz)+getFrozenMountainBlend(wx,wz)+getDeepNorthBlend(wx,wz);
             if (mtn > 0.5) continue;
             const trunkH = 6 + Math.floor(_hash(bx*1.3, bz*2.1) * 5);
             const canopyStartH = 2 + Math.floor(_hash(bx*0.9, bz*1.7) * 2);
@@ -7655,6 +7655,10 @@ function drawWorldMap() {
         drawMountain(730, -95, 'NE Ridge', 6);
         drawMountain(735, 40, 'SE Ridge', 6);
         drawMountain(-30, -1050, 'Frozen Mountains', 14);
+        drawMountain(-250, -1350, 'Frostfang Ridge', 9);
+        drawMountain(200, -1300, 'Icespire Peaks', 8);
+        drawMountain(50, -1400, 'Pale Spine', 7);
+        drawMountain(0, -1500, 'The North Wall', 10);
 
         // Villages
         drawVillage(80, 16, 'Meadow Village');

@@ -98,6 +98,24 @@ function getFrozenMountainBlend(x, z) {
     const t = 1 - Math.min(1, ringDist / (halfW + 30));
     return t * t;
 }
+function getDeepNorthBlend(x, z) {
+    // Returns > 0 if in any deep north mountain range
+    const nwr_dx = (x - (-250)) / 120, nwr_dz = (z - (-1350)) / 45;
+    const nwr = nwr_dx*nwr_dx + nwr_dz*nwr_dz;
+    if (nwr < 1) { const t = 1 - nwr; return t * t; }
+    const nep_dx = (x - 200) / 100, nep_dz = (z - (-1300)) / 80;
+    const nep = nep_dx*nep_dx + nep_dz*nep_dz;
+    if (nep < 1) { const t = 1 - nep; return t * t; }
+    const cns_dx = (x - 50) / 40, cns_dz = (z - (-1400)) / 120;
+    const cns = cns_dx*cns_dx + cns_dz*cns_dz;
+    if (cns < 1) { const t = 1 - cns; return t * t; }
+    if (Math.abs(x) < 400) {
+        const fnw_dz = (z - (-1500)) / 50;
+        const fnw = fnw_dz * fnw_dz;
+        if (fnw < 1) { const xb = 1 - Math.abs(x)/400; const t = (1-fnw)*Math.min(1,xb*2); return t * t; }
+    }
+    return 0;
+}
 function getFrozenBasinBlend(x, z) {
     const dx = x - FM_CX, dz = z - FM_CZ;
     const dist = Math.sqrt(dx * dx + dz * dz);
@@ -275,7 +293,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -488,6 +506,68 @@ function getTerrainHeight(x, z) {
     const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
+    // ── Deep North Highlands — terrain rises sharply past z=-1275 ──
+    if (z < -1200) {
+        const nht = Math.min(1, (z - (-1200)) / (-1350 - (-1200))); // 0 at -1200, 1 at -1350
+        const highlandH = nht * nht * 35; // raised plateau up to 35
+        h += highlandH;
+        // Rugged highland noise
+        h += nht * (Math.sin(x * 0.04 + z * 0.035) * 8 + Math.cos(x * 0.06 - z * 0.05) * 6);
+        h += nht * Math.abs(Math.sin(x * 0.03 + z * 0.02)) * 10;
+    }
+
+    // ── Deep North Mountain Ranges ──
+    // NW frozen ridge — long east-west range
+    const nwr_dx = (x - (-250)) / 120, nwr_dz = (z - (-1350)) / 45;
+    const nwr_d = nwr_dx*nwr_dx + nwr_dz*nwr_dz;
+    if (nwr_d < 1) {
+        const t = 1 - nwr_d;
+        let mh = t * t * 55;
+        mh += Math.abs(Math.sin((x + 250) * 0.07)) * 18 * t;
+        mh += Math.sin((x + 250) * 0.1) * Math.cos((z + 1350) * 0.12) * 10 * t;
+        // 4 peaks
+        const nwrPks = [[-310,-1350,25,35],[-220,-1345,30,30],[-170,-1355,22,32],[-290,-1340,18,28]];
+        for (const p of nwrPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
+        h += mh;
+    }
+
+    // NE frozen peaks — cluster of sharp peaks
+    const nep_dx = (x - 200) / 100, nep_dz = (z - (-1300)) / 80;
+    const nep_d = nep_dx*nep_dx + nep_dz*nep_dz;
+    if (nep_d < 1) {
+        const t = 1 - nep_d;
+        let mh = t * t * 50;
+        mh += Math.abs(Math.sin((x - 200) * 0.08 + (z + 1300) * 0.06)) * 15 * t;
+        const nepPks = [[160,-1280,28,30],[230,-1310,32,28],[190,-1340,24,32],[250,-1270,20,25],[140,-1330,26,30]];
+        for (const p of nepPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
+        h += mh;
+    }
+
+    // Central north spine — narrow ridge running north-south
+    const cns_dx = (x - 50) / 40, cns_dz = (z - (-1400)) / 120;
+    const cns_d = cns_dx*cns_dx + cns_dz*cns_dz;
+    if (cns_d < 1) {
+        const t = 1 - cns_d;
+        let mh = t * t * 45;
+        mh += Math.abs(Math.cos((z + 1400) * 0.05)) * 20 * t;
+        mh += Math.sin((x - 50) * 0.15) * 8 * t;
+        const cnsPks = [[50,-1320,25,28],[45,-1420,30,26],[55,-1480,22,30],[40,-1380,28,25]];
+        for (const p of cnsPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
+        h += mh;
+    }
+
+    // Far north wall — massive east-west barrier near the edge
+    const fnw_dz = (z - (-1500)) / 50;
+    const fnw_d = fnw_dz * fnw_dz;
+    if (fnw_d < 1 && Math.abs(x) < 400) {
+        const xBlend = 1 - (Math.abs(x) / 400); // fade at edges
+        const t = (1 - fnw_d) * Math.min(1, xBlend * 2);
+        let mh = t * t * 60;
+        mh += Math.abs(Math.sin(x * 0.04)) * 15 * t;
+        mh += Math.sin(x * 0.08) * Math.cos((z + 1500) * 0.1) * 8 * t;
+        h += mh;
+    }
+
     // Rivers
     for (const riv of riverDefs) {
         const rb = getRiverBlend(x, z, riv);
@@ -552,7 +632,7 @@ export class World {
         const scorched = getScorchedBlend(wx, wz);
         const glacial = getFrozenBasinBlend(wx, wz);
         if (glacial > 0.05) return 'glacial';
-        const mtn = getMountainBlend(wx,wz) + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
+        const mtn = getMountainBlend(wx,wz) + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz) + getDeepNorthBlend(wx,wz);
         if (scorched > 0.1) return 'scorched';
         if (snow > 0.5) return 'snow';
         if (desert > 0.5) return 'desert';
