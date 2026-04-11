@@ -1295,15 +1295,26 @@ export class DragonManager {
                 if (bd._wanderTimer <= 0) {
                     bd._wanderTimer = 5 + Math.random() * 10;
                     const angle = Math.random() * Math.PI * 2;
-                    const dist = 10 + Math.random() * 60;
+                    const dist = 10 + Math.random() * 80;
                     bd._wanderTargetX = homeX + Math.sin(angle) * dist;
                     bd._wanderTargetZ = homeZ + Math.cos(angle) * dist;
-                    // Clamp to within 100u of home
+                    // Clamp to within 120u of home
                     const wdx = bd._wanderTargetX - homeX, wdz = bd._wanderTargetZ - homeZ;
                     const wd = Math.sqrt(wdx * wdx + wdz * wdz);
-                    if (wd > 100) {
-                        bd._wanderTargetX = homeX + (wdx / wd) * 100;
-                        bd._wanderTargetZ = homeZ + (wdz / wd) * 100;
+                    if (wd > 120) {
+                        bd._wanderTargetX = homeX + (wdx / wd) * 120;
+                        bd._wanderTargetZ = homeZ + (wdz / wd) * 120;
+                    }
+                    // Teens+ sometimes take off to fly to target
+                    if (bd.age >= 1550 && !bd.flying && Math.random() < 0.4) {
+                        bd.flying = true;
+                        bd.flyHeight = bd.group.position.y + 15 + Math.random() * 25;
+                        bd._wanderTimer = 8 + Math.random() * 15; // fly longer
+                    }
+                    // Flying dragons sometimes land
+                    if (bd.flying && Math.random() < 0.25) {
+                        bd.flying = false;
+                        bd.flyHeight = 0;
                     }
                 }
 
@@ -1317,10 +1328,22 @@ export class DragonManager {
                     while (da < -Math.PI) da += Math.PI * 2;
                     bd.angle += da * Math.min(dt * 3, 1);
                     bd.group.rotation.y = bd.angle;
-                    const spd = Math.min(wtDist, 4 + gs * 2) * dt;
-                    bd.x += Math.sin(bd.angle) * spd;
-                    bd.z += Math.cos(bd.angle) * spd;
-                    bd.walking = true;
+                    if (bd.flying) {
+                        // Fly toward target
+                        const flySpd = (12 + gs * 8) * dt;
+                        bd.x += Math.sin(bd.angle) * flySpd;
+                        bd.z += Math.cos(bd.angle) * flySpd;
+                        // Gently vary height
+                        const targetH = this.getHeight(bd.x, bd.z) + bd.footOffset + 15 + Math.sin(bd._wanderTimer * 0.5) * 8;
+                        bd.flyHeight += (targetH - bd.flyHeight) * dt * 1.5;
+                        bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                        bd.walking = false;
+                    } else {
+                        const spd = Math.min(wtDist, 4 + gs * 2) * dt;
+                        bd.x += Math.sin(bd.angle) * spd;
+                        bd.z += Math.cos(bd.angle) * spd;
+                        bd.walking = true;
+                    }
                 } else {
                     bd.walking = false;
                 }
