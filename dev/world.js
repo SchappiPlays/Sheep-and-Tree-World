@@ -330,6 +330,21 @@ function getTerrainHeight(x, z) {
         if (d < p.radius + 3) { const t = Math.max(0, 1 - d / (p.radius + 3)); h *= (1 - t * 0.9); }
     }
 
+    // Western Bay — large natural inlet
+    const bayPts = [
+        { x: -580, z: 30, rx: 50, rz: 40 },   // inner basin
+        { x: -620, z: 20, rx: 45, rz: 35 },    // middle
+        { x: -660, z: 10, rx: 40, rz: 30 },    // toward coast
+        { x: -545, z: 55, rx: 32, rz: 28 },    // northern arm
+        { x: -555, z: -5, rx: 32, rz: 25 },    // southern arm
+        { x: -700, z: 5, rx: 35, rz: 28 },     // mouth to ocean
+    ];
+    for (const b of bayPts) {
+        const bdx = (x - b.x) / b.rx, bdz = (z - b.z) / b.rz;
+        const bd = bdx * bdx + bdz * bdz;
+        if (bd < 1) { const t = 1 - bd; const s = t * t; h = h * (1 - s) + (-2) * s; }
+    }
+
     // East mountains
     const mtn = getMountainBlend(x, z);
     if (mtn > 0) {
