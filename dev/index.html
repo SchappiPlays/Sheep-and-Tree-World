@@ -563,15 +563,133 @@ moonGlow.renderOrder = -10;
 moonGlow.visible = false;
 scene.add(moonGlow);
 
-// ── Night Sky Dome ──
-const _skyTex = new THREE.TextureLoader().load('sky.png');
-const nightSkyMat = new THREE.MeshBasicMaterial({
-    map: _skyTex, side: THREE.BackSide, fog: false,
-    transparent: true, opacity: 0, depthWrite: false
+// ── Night Sky — procedural stars + milky way ──
+const _nightSkyGroup = new THREE.Group();
+_nightSkyGroup.renderOrder = -20;
+scene.add(_nightSkyGroup);
+
+// Stars — scattered points on a sphere
+const _starCount = 1800;
+const _starPos = new Float32Array(_starCount * 3);
+const _starSizes = new Float32Array(_starCount);
+const _starColors = new Float32Array(_starCount * 3);
+const _starR = 4500;
+for (let i = 0; i < _starCount; i++) {
+    // Uniform distribution on sphere (above horizon only)
+    const u = Math.random(), v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    // Bias toward upper hemisphere — skip stars below y=−0.1
+    const y = Math.cos(phi);
+    if (y < -0.1) { _starPos[i*3]=0; _starPos[i*3+1]=-9999; _starPos[i*3+2]=0; _starSizes[i]=0; continue; }
+    _starPos[i*3]   = Math.sin(phi) * Math.cos(theta) * _starR;
+    _starPos[i*3+1] = y * _starR;
+    _starPos[i*3+2] = Math.sin(phi) * Math.sin(theta) * _starR;
+    // Vary size — mostly small, a few bright ones
+    const rnd = Math.random();
+    _starSizes[i] = rnd < 0.92 ? 1.5 + Math.random() * 2 : 3.5 + Math.random() * 4;
+    // Slight color variation — white, bluish, yellowish
+    const tint = Math.random();
+    if (tint < 0.6) { _starColors[i*3]=1; _starColors[i*3+1]=1; _starColors[i*3+2]=1; }
+    else if (tint < 0.8) { _starColors[i*3]=0.7; _starColors[i*3+1]=0.8; _starColors[i*3+2]=1; }
+    else if (tint < 0.95) { _starColors[i*3]=1; _starColors[i*3+1]=0.95; _starColors[i*3+2]=0.7; }
+    else { _starColors[i*3]=1; _starColors[i*3+1]=0.6; _starColors[i*3+2]=0.4; } // rare reddish
+}
+const _starGeo = new THREE.BufferGeometry();
+_starGeo.setAttribute('position', new THREE.BufferAttribute(_starPos, 3));
+_starGeo.setAttribute('size', new THREE.BufferAttribute(_starSizes, 1));
+_starGeo.setAttribute('color', new THREE.BufferAttribute(_starColors, 3));
+const _starMat = new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0 }, twinkleTime: { value: 0 } },
+    vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        varying float vId;
+        void main() {
+            vColor = color;
+            vId = position.x * 0.01 + position.z * 0.013;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (300.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+        }
+    `,
+    fragmentShader: `
+        uniform float opacity;
+        uniform float twinkleTime;
+        varying vec3 vColor;
+        varying float vId;
+        void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float glow = 1.0 - d * 2.0;
+            glow = glow * glow;
+            float twinkle = 0.7 + 0.3 * sin(twinkleTime * 1.5 + vId * 100.0);
+            gl_FragColor = vec4(vColor * glow * twinkle, opacity * glow);
+        }
+    `,
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending
 });
-const nightSkyDome = new THREE.Mesh(new THREE.SphereGeometry(4800, 64, 32), nightSkyMat);
-nightSkyDome.renderOrder = -20;
-scene.add(nightSkyDome);
+const _starPoints = new THREE.Points(_starGeo, _starMat);
+_nightSkyGroup.add(_starPoints);
+
+// Milky way band — faint glowing strip of clustered dim points
+const _mwCount = 2400;
+const _mwPos = new Float32Array(_mwCount * 3);
+const _mwSizes = new Float32Array(_mwCount);
+const _mwColors = new Float32Array(_mwCount * 3);
+for (let i = 0; i < _mwCount; i++) {
+    // Band along a great circle tilted ~30 degrees
+    const t = Math.random() * Math.PI * 2;
+    const spread = (Math.random() - 0.5) * 0.35; // width of band in radians
+    const tilt = 0.5; // tilt angle
+    let x = Math.cos(t) * _starR;
+    let y = (Math.sin(t) * Math.cos(tilt) + spread * Math.sin(tilt)) * _starR;
+    let z = (Math.sin(t) * Math.sin(tilt) + spread * Math.cos(tilt)) * _starR;
+    // Normalize to sphere
+    const len = Math.sqrt(x*x+y*y+z*z);
+    x = x/len*_starR; y = y/len*_starR; z = z/len*_starR;
+    if (y < -500) { y = -9999; } // hide below horizon
+    _mwPos[i*3]=x; _mwPos[i*3+1]=y; _mwPos[i*3+2]=z;
+    _mwSizes[i] = 2 + Math.random() * 5;
+    // Bluish-white milky way color
+    const b = 0.5 + Math.random() * 0.5;
+    _mwColors[i*3]=0.6*b; _mwColors[i*3+1]=0.7*b; _mwColors[i*3+2]=1.0*b;
+}
+const _mwGeo = new THREE.BufferGeometry();
+_mwGeo.setAttribute('position', new THREE.BufferAttribute(_mwPos, 3));
+_mwGeo.setAttribute('size', new THREE.BufferAttribute(_mwSizes, 1));
+_mwGeo.setAttribute('color', new THREE.BufferAttribute(_mwColors, 3));
+const _mwMat = new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0 } },
+    vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        void main() {
+            vColor = color;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (300.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+        }
+    `,
+    fragmentShader: `
+        uniform float opacity;
+        varying vec3 vColor;
+        void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float glow = 1.0 - d * 2.0;
+            glow = pow(glow, 1.5);
+            gl_FragColor = vec4(vColor * glow * 0.4, opacity * glow * 0.35);
+        }
+    `,
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending
+});
+const _mwPoints = new THREE.Points(_mwGeo, _mwMat);
+_nightSkyGroup.add(_mwPoints);
+
+let _nightSkyAlpha = 0;
 
 // ── Clouds ──
 const clouds = [];
@@ -12393,16 +12511,19 @@ function animate() {
     );
     moonGlow.position.copy(moonSphere.position);
 
-    // Night sky dome — fade in at dusk, full at night, fade out at dawn
-    nightSkyDome.position.set(player.position.x, 0, player.position.z);
+    // Night sky — fade in at dusk, full at night, fade out at dawn
+    _nightSkyGroup.position.set(player.position.x, 0, player.position.z);
     let skyDomeAlpha = 0;
     if (isNight) skyDomeAlpha = 1;
-    else if (isDusk) skyDomeAlpha = (timeOfDay - 0.72) / 0.06; // 0.72→0 to 0.78→1
-    else if (isDawn) skyDomeAlpha = 1 - (timeOfDay - 0.22) / 0.06; // 0.22→1 to 0.28→0
-    else if (timeOfDay > 0.78 && timeOfDay <= 0.82) skyDomeAlpha = 1; // just after dusk
-    else if (timeOfDay >= 0.18 && timeOfDay < 0.22) skyDomeAlpha = 1; // just before dawn
-    nightSkyMat.opacity = Math.max(0, Math.min(1, skyDomeAlpha));
-    nightSkyDome.visible = nightSkyMat.opacity > 0.01;
+    else if (isDusk) skyDomeAlpha = (timeOfDay - 0.72) / 0.06;
+    else if (isDawn) skyDomeAlpha = 1 - (timeOfDay - 0.22) / 0.06;
+    else if (timeOfDay > 0.78 && timeOfDay <= 0.82) skyDomeAlpha = 1;
+    else if (timeOfDay >= 0.18 && timeOfDay < 0.22) skyDomeAlpha = 1;
+    _nightSkyAlpha = Math.max(0, Math.min(1, skyDomeAlpha));
+    _starMat.uniforms.opacity.value = _nightSkyAlpha;
+    _starMat.uniforms.twinkleTime.value += dt;
+    _mwMat.uniforms.opacity.value = _nightSkyAlpha;
+    _nightSkyGroup.visible = _nightSkyAlpha > 0.01;
 
     // ── Shooting Stars (nighttime only) ──
     if (isNight) {
