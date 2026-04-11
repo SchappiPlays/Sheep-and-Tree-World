@@ -196,7 +196,6 @@ function getScorchedBlend(x, z) {
 const riverDefs = [
     { name: 'East River', width: 4, pts: [[650,-50],[700,-30],[760,-10],[830,5],[910,10],[1000,15],[1100,20],[1200,25],[1280,28]] },
     { name: 'South River', width: 3, pts: [[80,150],[65,250],[50,350],[40,450],[30,550],[20,650],[10,780],[5,900],[0,1050]] },
-    { name: 'North River', width: 3, pts: [[250,-160],[220,-260],[190,-360],[160,-460],[130,-560],[100,-680],[70,-800],[40,-950],[10,-1080]] },
 ];
 for (const riv of riverDefs) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
