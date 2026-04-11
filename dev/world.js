@@ -330,22 +330,10 @@ function getTerrainHeight(x, z) {
         if (d < p.radius + 3) { const t = Math.max(0, 1 - d / (p.radius + 3)); h *= (1 - t * 0.9); }
     }
 
-    // Western Bay — large inlet reaching from coast inland
-    const bayPts = [
-        { x: -800, z: 20, rx: 120, rz: 90 },   // main basin — huge
-        { x: -900, z: 10, rx: 80, rz: 70 },     // outer basin toward coast
-        { x: -980, z: 0, rx: 60, rz: 55 },      // mouth to ocean
-        { x: -720, z: 60, rx: 70, rz: 55 },     // northern reach
-        { x: -730, z: -40, rx: 65, rz: 50 },    // southern reach
-        { x: -650, z: 30, rx: 50, rz: 40 },     // inner finger
-        { x: -850, z: 70, rx: 55, rz: 40 },     // NW cove
-        { x: -860, z: -50, rx: 50, rz: 38 },    // SW cove
-    ];
-    for (const b of bayPts) {
-        const bdx = (x - b.x) / b.rx, bdz = (z - b.z) / b.rz;
-        const bd = bdx * bdx + bdz * bdz;
-        if (bd < 1) { const t = 1 - bd; const s = t * t; h = h * (1 - s) + (-2) * s; }
-    }
+    // Western Bay — single large elliptical inlet at the coast
+    const bayDx = (x - (-950)) / 160, bayDz = (z - 15) / 110;
+    const bayD = bayDx * bayDx + bayDz * bayDz;
+    if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-3) * s; }
 
     // East mountains
     const mtn = getMountainBlend(x, z);
