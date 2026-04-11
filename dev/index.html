@@ -1223,7 +1223,7 @@ function buildFarTerrain(centerX, centerZ) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colArr.subarray(0, vi * 3), 3));
     geo.setIndex(new THREE.BufferAttribute(idxArr.subarray(0, ii), 1));
     geo.computeVertexNormals();
-    const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0 });
+    const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     // Shader hack: discard fragments within a radius of the player (dynamic cutout)
     farMat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
@@ -1394,7 +1394,7 @@ function buildFarTerrain(centerX, centerZ) {
         waterMat._shader = shader;
     };
     farWater = new THREE.Mesh(farWaterGeo, waterMat);
-    farWater.position.y = -0.1;
+    farWater.position.y = -0.5;
     farWater.renderOrder = -2;
     scene.add(farWater);
 }
