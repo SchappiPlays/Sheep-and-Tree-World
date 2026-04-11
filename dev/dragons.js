@@ -1436,7 +1436,7 @@ export class DragonManager {
                     if (!bd.flying && Math.random() < 0.55) {
                         bd.flying = true;
                         bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
-                    } else if (bd.flying && Math.random() < 0.2) {
+                    } else if (bd.flying && Math.random() < 0.3) {
                         bd.flying = false;
                         bd.flyHeight = 0;
                     }
@@ -1461,12 +1461,12 @@ export class DragonManager {
             let moveX = 0, moveZ = 0;
             if (bd.flying) {
                 const flySpd = (14 + gs * 10) * dt;
-                if (bDist > bd.followDist * 2.5) {
-                    // Far from player — fly straight toward them
+                if (bDist > 8) {
+                    // Far from player — fly toward them
                     moveX = bdx / bDist * flySpd;
                     moveZ = bdz / bDist * flySpd;
                 } else {
-                    // Near player — drift toward wandering goal point
+                    // Close to player — circle and drift around goal point
                     moveX = (gDx / (gDist || 1)) * flySpd * 0.6;
                     moveZ = (gDz / (gDist || 1)) * flySpd * 0.6;
                 }
@@ -1499,7 +1499,6 @@ export class DragonManager {
                 bd.angle += da * Math.min(dt * 5, 1);
             }
             bd.group.rotation.y = bd.angle;
-            }
 
             if (bd.flying) {
                 bd.group.position.set(bd.x, bd.flyHeight, bd.z);
@@ -2517,6 +2516,8 @@ export class DragonManager {
             }
         } else if (mode === 'stay') {
             bd._followingPlayer = false;
+            bd.flying = false;
+            bd.flyHeight = 0;
         } else {
             bd._followingPlayer = false;
             bd._wanderHomeX = bd.x; bd._wanderHomeZ = bd.z;
