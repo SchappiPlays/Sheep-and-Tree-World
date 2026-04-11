@@ -9,7 +9,7 @@ export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
-    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32, PATH: 33, PINE_WOOD: 34, PINE_LEAVES: 35,
+    SNOW: 6, BEDROCK: 7, GRAVEL: 8, CLAY: 9, WOOD: 10, LEAVES: 11, PLANKS: 12, CRAFTING: 13, IRON_ORE: 14, FURNACE: 15, COAL_ORE: 16, DIAMOND_ORE: 17, GOLD_ORE: 18, ANVIL: 19, BLAST_FURNACE: 20, RUBY_ORE: 21, SAPPHIRE_ORE: 22, EMERALD_ORE: 23, TOPAZ_ORE: 24, DARK_STONE: 25, CAMPFIRE: 26, CHEST: 27, COPPER_ORE: 28, FLOWER_RED: 29, FLOWER_YELLOW: 30, FLOWER_BLUE: 31, FLOWER_WHITE: 32, PATH: 33, PINE_WOOD: 34, PINE_LEAVES: 35, ICE: 36,
 };
 
 export const BLOCK_COLORS = {
@@ -18,6 +18,7 @@ export const BLOCK_COLORS = {
     [BLOCK.BEDROCK]: 0x333333, [BLOCK.GRAVEL]: 0x777770, [BLOCK.CLAY]: 0x9a8b7a,
     [BLOCK.WOOD]: 0x6B4226, [BLOCK.LEAVES]: 0x3a8a3a, [BLOCK.PLANKS]: 0x9a7a4a, [BLOCK.CRAFTING]: 0x8a6a3a, [BLOCK.IRON_ORE]: 0x8a8580, [BLOCK.FURNACE]: 0x6a6a6a, [BLOCK.COAL_ORE]: 0x3a3a3a, [BLOCK.DIAMOND_ORE]: 0x4ae8e8, [BLOCK.GOLD_ORE]: 0xdaa520, [BLOCK.ANVIL]: 0x555555, [BLOCK.BLAST_FURNACE]: 0x4a4a50, [BLOCK.RUBY_ORE]: 0xcc3344, [BLOCK.DARK_STONE]: 0x3a3a3e, [BLOCK.CAMPFIRE]: 0x8a4a1a, [BLOCK.SAPPHIRE_ORE]: 0x2244cc, [BLOCK.EMERALD_ORE]: 0x22cc44, [BLOCK.TOPAZ_ORE]: 0xddaa22, [BLOCK.CHEST]: 0x8a6535, [BLOCK.COPPER_ORE]: 0xb87333, [BLOCK.PATH]: 0x8a7a5a, [BLOCK.FLOWER_RED]: 0xdd3333, [BLOCK.FLOWER_YELLOW]: 0xddcc33, [BLOCK.FLOWER_BLUE]: 0x4466dd, [BLOCK.FLOWER_WHITE]: 0xeeeeff,
     [BLOCK.PINE_WOOD]: 0x4a3020, [BLOCK.PINE_LEAVES]: 0x1a4a2a,
+    [BLOCK.ICE]: 0x8ac8e8,
 };
 
 // ── Terrain functions ported EXACTLY from game.html ──
@@ -82,9 +83,22 @@ function getFarEastMountainBlend(x, z) {
     const t = 1 - d; return t * t;
 }
 function getFrozenMountainBlend(x, z) {
-    const mx = (x - (-50)) / 200, mz = (z - (-450)) / 70;
-    const d = mx * mx + mz * mz; if (d > 1) return 0;
-    const t = 1 - d; return t * t;
+    // Ring shape — blend is high on the ring, low in center and outside
+    const cx = -50, cz = -620, outerR = 140, ringW = 55;
+    const dx = (x - cx), dz = (z - cz);
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist > outerR + 20) return 0; // outside
+    const innerR = outerR - ringW;
+    // Distance from the ring centerline
+    const ringDist = Math.abs(dist - (innerR + ringW / 2));
+    const halfW = ringW / 2;
+    if (ringDist > halfW + 20) {
+        // Inside the basin — small blend for raised ground
+        if (dist < innerR) { const t = 1 - dist / innerR; return t * t * 0.15; }
+        return 0;
+    }
+    const t = 1 - Math.min(1, ringDist / (halfW + 20));
+    return t * t;
 }
 function getCentralValleyBlend(x, z) {
     const vx = (x - 545) / 35, vz = (z - (-90)) / 40;
@@ -360,25 +374,50 @@ function getTerrainHeight(x, z) {
         h += mh;
     }
 
-    // Frozen mountains (north)
+    // Frozen mountains (north) — ring shape with raised basin
+    const frCx = -50, frCz = -620, frOuterR = 140, frRingW = 55;
+    const frDx = x - frCx, frDz = z - frCz;
+    const frDist = Math.sqrt(frDx * frDx + frDz * frDz);
     const frMtn = getFrozenMountainBlend(x, z);
     if (frMtn > 0) {
-        let mh = frMtn * 70;
-        // Main ridge peaks — 5 sub-peaks along the east-west ridge
-        const pk1Dx=(x-(-120))/40,pk1Dz=(z-(-450))/30,pk1D=pk1Dx*pk1Dx+pk1Dz*pk1Dz;
-        if(pk1D<1){const t=1-pk1D;mh+=t*t*45;}
-        const pk2Dx=(x-(-40))/35,pk2Dz=(z-(-460))/28,pk2D=pk2Dx*pk2Dx+pk2Dz*pk2Dz;
-        if(pk2D<1){const t=1-pk2D;mh+=t*t*55;} // tallest peak
-        const pk3Dx=(x-50)/38,pk3Dz=(z-(-440))/32,pk3D=pk3Dx*pk3Dx+pk3Dz*pk3Dz;
-        if(pk3D<1){const t=1-pk3D;mh+=t*t*40;}
-        const pk4Dx=(x-130)/42,pk4Dz=(z-(-455))/30,pk4D=pk4Dx*pk4Dx+pk4Dz*pk4Dz;
-        if(pk4D<1){const t=1-pk4D;mh+=t*t*35;}
-        const pk5Dx=(x-(-180))/35,pk5Dz=(z-(-445))/26,pk5D=pk5Dx*pk5Dx+pk5Dz*pk5Dz;
-        if(pk5D<1){const t=1-pk5D;mh+=t*t*30;}
-        // Jagged noise — sharp ridgelines
-        mh += (Math.sin((x+50)*0.08)*Math.cos((z+450)*0.1)*20 + Math.cos((x+30)*0.12)*Math.sin((z+440)*0.09)*15) * frMtn;
-        mh += Math.abs(Math.sin((x+z*0.7)*0.06)) * 18 * frMtn; // sharp ridges
-        mh += (Math.sin(x*0.25+z*0.3)*3 + Math.cos(x*0.2-z*0.22)*2.5) * frMtn; // fine detail
+        const frInnerR = frOuterR - frRingW;
+        const ringCenter = frInnerR + frRingW / 2;
+        const ringDist = Math.abs(frDist - ringCenter);
+        const onRing = ringDist < frRingW / 2 + 10;
+        let mh = 0;
+        if (onRing) {
+            // Ring wall height
+            const ringT = 1 - Math.min(1, ringDist / (frRingW / 2 + 10));
+            mh = ringT * ringT * 65;
+            // 8 peaks around the ring
+            const ang = Math.atan2(frDz, frDx);
+            const peaks = [
+                { a: 0, h: 50, r: 30 },       // east
+                { a: 0.8, h: 60, r: 28 },      // NE — tallest
+                { a: 1.6, h: 45, r: 32 },      // north
+                { a: 2.4, h: 55, r: 26 },      // NW
+                { a: 3.14, h: 40, r: 30 },     // west
+                { a: 3.9, h: 50, r: 28 },      // SW
+                { a: 4.7, h: 45, r: 32 },      // south
+                { a: 5.5, h: 35, r: 30 },      // SE
+            ];
+            for (const pk of peaks) {
+                const px = frCx + Math.cos(pk.a) * ringCenter;
+                const pz = frCz + Math.sin(pk.a) * ringCenter;
+                const pdx = (x - px) / pk.r, pdz = (z - pz) / pk.r;
+                const pd = pdx * pdx + pdz * pdz;
+                if (pd < 1) { const t = 1 - pd; mh += t * t * pk.h; }
+            }
+            // Jagged noise
+            mh += Math.abs(Math.sin((x + z * 0.7) * 0.06)) * 15 * ringT;
+            mh += (Math.sin((x + 50) * 0.08) * Math.cos((z + 620) * 0.1) * 12 + Math.cos((x + 30) * 0.12) * Math.sin((z + 600) * 0.09) * 10) * ringT;
+        }
+        // Raised basin inside the ring
+        if (frDist < frInnerR) {
+            const basinT = 1 - frDist / frInnerR;
+            mh = 12 + basinT * 8 + Math.sin(x * 0.15 + z * 0.12) * 2 + Math.cos(x * 0.1 - z * 0.13) * 1.5;
+        }
+        mh += (Math.sin(x * 0.25 + z * 0.3) * 2.5 + Math.cos(x * 0.2 - z * 0.22) * 2) * frMtn;
         h += mh;
     }
 
@@ -389,9 +428,12 @@ function getTerrainHeight(x, z) {
     if (afHill > 0) { h += afHill * 40 + afHill * Math.sin(x*0.08+z*0.06)*6 + afHill * Math.cos(x*0.05-z*0.07+1)*4; }
 
     // Mountain passes
-    // Frozen mountain pass (path to ice castle)
-    const fpDx=(x-5)/22,fpDz=(z-(-450))/20,fpD=fpDx*fpDx+fpDz*fpDz;
-    if(fpD<1){const t=1-fpD;h-=t*t*45;h=Math.max(2,h);}
+    // Frozen mountain pass — south side of ring (path to ice castle)
+    const fpDx=(x-(-50))/25,fpDz=(z-(-530))/20,fpD=fpDx*fpDx+fpDz*fpDz;
+    if(fpD<1){const t=1-fpD;h-=t*t*55;h=Math.max(2,h);}
+    // North pass
+    const fp2Dx=(x-(-50))/22,fp2Dz=(z-(-710))/18,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
+    if(fp2D<1){const t=1-fp2D;h-=t*t*50;h=Math.max(2,h);}
     const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
     if(npD<1){const t=1-npD;h-=t*t*10;h=Math.max(0.5,h);}
     const spDx2=(x-555)/18,spDz2=(z+95)/14,spD2=spDx2*spDx2+spDz2*spDz2;
@@ -614,7 +656,12 @@ export class World {
                     } else if (y === surfaceBlock) {
                         if (inPond) block = BLOCK.CLAY;
                         else if (inRiver) block = BLOCK.SAND;
-                        else if (biome === 'snow') block = BLOCK.SNOW;
+                        else if (biome === 'snow') {
+                            const frMtnB = getFrozenMountainBlend(wx, wz);
+                            if (frMtnB > 0.3 && h > 30) block = BLOCK.ICE;
+                            else if (frMtnB > 0.1 && this._hash(bx*2.3,bz*1.9) > 0.5) block = BLOCK.ICE;
+                            else block = BLOCK.SNOW;
+                        }
                         else if (biome === 'snow_transition') block = this._hash(bx*3.1,bz*2.7) > 0.5 ? BLOCK.SNOW : BLOCK.GRASS;
                         else if (biome === 'desert') block = BLOCK.SAND;
                         else if (biome === 'desert_transition') block = this._hash(bx*2.1,bz*3.7) > 0.5 ? BLOCK.SAND : BLOCK.GRASS;
