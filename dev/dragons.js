@@ -1449,40 +1449,56 @@ export class DragonManager {
             }
 
             const maxSpd = 8 + gs * 6;
-            const targetAngle = Math.atan2(bdx, bdz);
-            let da = targetAngle - bd.angle;
-            while (da > Math.PI) da -= Math.PI * 2;
-            while (da < -Math.PI) da += Math.PI * 2;
-            bd.angle += da * Math.min(dt * 5, 1);
-            bd.group.rotation.y = bd.angle;
+            // Follow offset — each dragon gets a unique wandering offset from the player
+            bd._followOffPhase = (bd._followOffPhase || Math.random() * Math.PI * 2) + dt * 0.3;
+            const offR = bd.followDist + 3 + Math.sin(bd._followOffPhase * 0.7) * 4;
+            const offAngle = bd._followOffPhase + (bd.eggColor || 0) * 0.001; // unique per dragon
+            const goalX = px + Math.sin(offAngle) * offR;
+            const goalZ = pz + Math.cos(offAngle) * offR;
+            const gDx = goalX - bd.x, gDz = goalZ - bd.z;
+            const gDist = Math.sqrt(gDx * gDx + gDz * gDz);
+
+            let moveX = 0, moveZ = 0;
             if (bd.flying) {
-                // Always move when flying — orbit near player instead of stopping
                 const flySpd = (14 + gs * 10) * dt;
-                if (bDist > bd.followDist) {
-                    bd.x += Math.sin(bd.angle) * flySpd;
-                    bd.z += Math.cos(bd.angle) * flySpd;
+                if (bDist > bd.followDist * 2.5) {
+                    // Far from player — fly straight toward them
+                    moveX = bdx / bDist * flySpd;
+                    moveZ = bdz / bDist * flySpd;
                 } else {
-                    // Circle around player when close
-                    const orbitAngle = bd.angle + Math.PI * 0.5;
-                    bd.x += Math.sin(orbitAngle) * flySpd * 0.4;
-                    bd.z += Math.cos(orbitAngle) * flySpd * 0.4;
+                    // Near player — drift toward wandering goal point
+                    moveX = (gDx / (gDist || 1)) * flySpd * 0.6;
+                    moveZ = (gDz / (gDist || 1)) * flySpd * 0.6;
                 }
-                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin((bd._followFlyTimer || 0) * 0.4) * 4 * gs);
+                bd.x += moveX; bd.z += moveZ;
+                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin(bd._followOffPhase * 0.8) * 4 * gs);
                 bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
                 bd.walking = false;
             } else if (bDist > bd.followDist) {
                 const spd = Math.min(bDist * 1.5, maxSpd) * dt;
-                bd.x += Math.sin(bd.angle) * spd;
-                bd.z += Math.cos(bd.angle) * spd;
+                moveX = bdx / bDist * spd;
+                moveZ = bdz / bDist * spd;
+                bd.x += moveX; bd.z += moveZ;
                 bd.walking = true;
-            } else if (bDist > bd.followDist * 0.5) {
-                // Slow approach instead of dead stop — prevents stutter
-                const spd = Math.min(bDist * 0.5, maxSpd * 0.3) * dt;
-                bd.x += Math.sin(bd.angle) * spd;
-                bd.z += Math.cos(bd.angle) * spd;
+            } else if (gDist > 2) {
+                // Wander toward offset goal instead of standing still
+                const spd = Math.min(gDist * 0.8, maxSpd * 0.4) * dt;
+                moveX = gDx / gDist * spd;
+                moveZ = gDz / gDist * spd;
+                bd.x += moveX; bd.z += moveZ;
                 bd.walking = true;
             } else {
                 bd.walking = false;
+            }
+            // Face movement direction
+            if (moveX * moveX + moveZ * moveZ > 0.0001) {
+                const moveAngle = Math.atan2(moveX, moveZ);
+                let da = moveAngle - bd.angle;
+                while (da > Math.PI) da -= Math.PI * 2;
+                while (da < -Math.PI) da += Math.PI * 2;
+                bd.angle += da * Math.min(dt * 5, 1);
+            }
+            bd.group.rotation.y = bd.angle;
             }
 
             if (bd.flying) {
