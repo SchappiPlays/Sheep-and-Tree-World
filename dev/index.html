@@ -4989,30 +4989,45 @@ function startGame(loadSlotName) {
                     const ck = mcx + ',' + mcz;
                     if (!world._modsByChunk.has(ck)) world._modsByChunk.set(ck, []);
                     world._modsByChunk.get(ck).push({ lx: mlx, y: mby, lz: mlz, block: val });
-                    // Track anvil blocks — snap to 2x2x2 origin
-                    if (val === BLOCK.ANVIL) {
-                        const ox = mbx - (((mbx % 2) + 2) % 2);
-                        const oy = mby - (((mby % 2) + 2) % 2);
-                        const oz = mbz - (((mbz % 2) + 2) % 2);
-                        anvilOrigins.add(ox + ',' + oy + ',' + oz);
-                    }
-                    // Track campfire blocks — snap to 2x1x2 origin
-                    if (val === BLOCK.CAMPFIRE) {
-                        const ox = mbx - (((mbx % 2) + 2) % 2);
-                        const oz = mbz - (((mbz % 2) + 2) % 2);
-                        campfireOrigins.add(ox + ',' + mby + ',' + oz);
-                    }
+                    // Collect anvil/campfire block positions for clustering after loop
+                    if (val === BLOCK.ANVIL) anvilOrigins.add(mbx + ',' + mby + ',' + mbz);
+                    if (val === BLOCK.CAMPFIRE) campfireOrigins.add(mbx + ',' + mby + ',' + mbz);
                 }
+                // Cluster anvil blocks into 2x2x2 origins, campfires into 2x1x2
+                const _clusterOrigins = (blockSet, dy) => {
+                    const origins = new Set();
+                    const used = new Set();
+                    for (const key of blockSet) {
+                        if (used.has(key)) continue;
+                        const [bx, by, bz] = key.split(',').map(Number);
+                        // Find minimum corner of this group
+                        let minX = bx, minY = by, minZ = bz;
+                        for (const other of blockSet) {
+                            const [ox, oy, oz] = other.split(',').map(Number);
+                            if (Math.abs(ox - bx) <= 1 && Math.abs(oy - by) <= dy && Math.abs(oz - bz) <= 1) {
+                                minX = Math.min(minX, ox); minY = Math.min(minY, oy); minZ = Math.min(minZ, oz);
+                            }
+                        }
+                        const originKey = minX + ',' + minY + ',' + minZ;
+                        if (!origins.has(originKey)) {
+                            origins.add(originKey);
+                            // Mark all blocks in this group as used
+                            for (const other of blockSet) {
+                                const [ox, oy, oz] = other.split(',').map(Number);
+                                if (ox >= minX && ox <= minX+1 && oy >= minY && oy <= minY+dy && oz >= minZ && oz <= minZ+1) used.add(other);
+                            }
+                        }
+                    }
+                    return origins;
+                };
                 // Clear existing anvil models before recreating
                 for (const [k, m] of anvilModels) scene.remove(m);
                 anvilModels.clear();
-                // Recreate anvil 3D models
-                for (const key of anvilOrigins) {
+                for (const key of _clusterOrigins(anvilOrigins, 1)) {
                     const [ax, ay, az] = key.split(',').map(Number);
                     placeAnvilModel(ax, ay, az);
                 }
-                // Recreate campfire 3D models
-                for (const key of campfireOrigins) {
+                for (const key of _clusterOrigins(campfireOrigins, 0)) {
                     const [cx, cy, cz] = key.split(',').map(Number);
                     placeCampfireModel(cx, cy, cz);
                 }
