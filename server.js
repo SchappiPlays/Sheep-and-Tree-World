@@ -11,6 +11,7 @@
 
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import https from 'https';
 import { readFile, stat } from 'fs/promises';
 import { resolve, extname } from 'path';
 import { fileURLToPath } from 'url';
@@ -85,6 +86,73 @@ let nextPid = 0;
 const clients = new Map(); // pid → { ws, name, charColors, lastState, isHost }
 let hostPid = null; // designated host for creature/villager/horse AI broadcasts
 
+// ── Supabase persistence ──
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);
+console.log('[satw-server] Supabase:', SUPABASE_ENABLED ? 'ENABLED' : 'DISABLED');
+
+function _sbRequest(method, urlPath, body) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(SUPABASE_URL + urlPath);
+        const postData = body ? JSON.stringify(body) : null;
+        const opts = {
+            method, hostname: url.hostname, path: url.pathname + url.search,
+            headers: {
+                'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+            },
+        };
+        if (method === 'POST') opts.headers['Prefer'] = 'resolution=merge-duplicates,return=minimal';
+        if (postData) opts.headers['Content-Length'] = Buffer.byteLength(postData);
+        const req = https.request(opts, res => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => {
+                if (res.statusCode >= 400) console.error('[supabase]', method, urlPath, res.statusCode, data);
+                resolve({ status: res.statusCode, data });
+            });
+        });
+        req.on('error', e => { console.error('[supabase] error:', e.message); reject(e); });
+        if (postData) req.write(postData);
+        req.end();
+    });
+}
+
+async function saveToSupabase() {
+    if (!SUPABASE_ENABLED) return;
+    try {
+        const data = {
+            pickedEggs: [...world.pickedEggs],
+            lootedChests: [...world.lootedChests],
+            pickedSwords: [...world.pickedSwords],
+            killedBosses: [...world.killedBosses],
+            timeOfDay: world.timeOfDay,
+        };
+        await _sbRequest('POST', '/rest/v1/world_saves', { id: 'world', data, updated_at: new Date().toISOString() });
+        console.log('[satw-server] Saved world to Supabase');
+    } catch (e) { console.error('[satw-server] Supabase save failed:', e.message); }
+}
+
+async function loadFromSupabase() {
+    if (!SUPABASE_ENABLED) return false;
+    try {
+        const res = await _sbRequest('GET', '/rest/v1/world_saves?id=eq.world&select=data');
+        const rows = JSON.parse(res.data);
+        if (rows && rows.length > 0 && rows[0].data) {
+            const d = rows[0].data;
+            if (d.pickedEggs) d.pickedEggs.forEach(e => world.pickedEggs.add(e));
+            if (d.lootedChests) d.lootedChests.forEach(e => world.lootedChests.add(e));
+            if (d.pickedSwords) d.pickedSwords.forEach(e => world.pickedSwords.add(e));
+            if (d.killedBosses) d.killedBosses.forEach(e => world.killedBosses.add(e));
+            if (d.timeOfDay !== undefined) world.timeOfDay = d.timeOfDay;
+            console.log('[satw-server] Loaded world from Supabase');
+            return true;
+        }
+    } catch (e) { console.error('[satw-server] Supabase load failed:', e.message); }
+    return false;
+}
+
 // Authoritative persistent world state
 const world = {
     pickedEggs: new Set(),
@@ -93,6 +161,9 @@ const world = {
     killedBosses: new Set(),
     timeOfDay: 0.35,
 };
+
+// Load saved state on startup
+loadFromSupabase();
 
 // Server tick — advance time of day
 let lastTick = Date.now();
@@ -223,6 +294,10 @@ wss.on('connection', (ws) => {
         }
         broadcast({ t: 'player_leave', pid });
         console.log('[satw-server]', pid, 'disconnected, total:', clients.size);
+        if (clients.size === 0) {
+            console.log('[satw-server] All players left — saving to Supabase');
+            saveToSupabase();
+        }
     });
 
     ws.on('error', (err) => {
