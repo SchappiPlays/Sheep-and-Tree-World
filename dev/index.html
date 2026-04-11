@@ -7449,7 +7449,7 @@ function drawWorldMap() {
 
         // Draw contour lines — interval scales with zoom (finer when zoomed in)
         // mapViewSize=1200 (zoomed out) → interval=10, mapViewSize=100 (zoomed in) → interval=1
-        const contourInterval = Math.max(1, Math.min(10, mapViewSize / 120));
+        const contourInterval = Math.max(0.5, Math.min(5, mapViewSize / 200));
         const majorMult = contourInterval <= 2 ? 5 : 3; // major line every 3rd or 5th
         const inkR = 70, inkG = 45, inkB = 25;
 
