@@ -13033,6 +13033,7 @@ function animate() {
     player._lookPitch = fpPitch;
     player._lookYaw = fpYaw;
     dragonMgr._timeOfDay = timeOfDay;
+    dragonMgr._playerRiding = !!(dragonMgr.ridingDragon || (horseMgr && horseMgr.ridingHorse));
     dragonMgr.update(dt, player, keys);
     if (mp.active) dragonMgr.updateRemoteDragons(dt);
 
