@@ -1372,10 +1372,8 @@ export class DragonManager {
             if (bd._flyingBack) {
                 if (bDist < 15) {
                     bd._flyingBack = false;
-                    if (bd.flying && bDist < 8) {
-                        bd.flying = false;
-                        bd.flyHeight = 0;
-                    }
+                    bd.flying = false;
+                    bd.flyHeight = 0;
                 } else if (bd.flying) {
                     // Fly toward player
                     const targetAngle = Math.atan2(bdx, bdz);
