@@ -5239,7 +5239,7 @@ function saveSettings() {
 const STAT_DEFS = [
     { key: 'strength',  label: 'Strength',  desc: 'Attack damage (0 = very weak)', icon: '\u2694' },
     { key: 'agility',   label: 'Agility',   desc: 'Movement speed (0 = very slow)', icon: '\u27A4' },
-    { key: 'fortitude', label: 'Fortitude', desc: 'Max health (0 = 2 hearts)', icon: '\u2665' },
+    { key: 'fortitude', label: 'Fortitude', desc: 'Max health, diminishing returns (0 = 2 hearts)', icon: '\u2665' },
     { key: 'dexterity', label: 'Dexterity', desc: 'Mining speed (0 = very slow)', icon: '\u26CF' },
     { key: 'wisdom',    label: 'Wisdom',    desc: 'Mana pool (0 = no mana)', icon: '\u2605' },
 ];
@@ -5254,7 +5254,20 @@ function getStatPointsUsed() {
 
 function getStatDmgMult()   { return 0.4 + playerStats.strength * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
 function getStatSpeedMult() { return 0.6 + playerStats.agility * 0.08; }   // 0pts=0.6x, 5pts=1.0x, 10pts=1.4x
-function getStatHPBonus()   { return -4 + playerStats.fortitude * 2; }     // 0pts=6HP(3hearts), 3pts=12HP, 10pts=26HP
+function getStatHPBonus() { // diminishing: first points worth more, later points worth less
+    const f = playerStats.fortitude;
+    if (f <= 0) return -4; // 0pts = 6HP
+    // Each point gives: 2, 2, 1.5, 1.5, 1, 1, 0.75, 0.75, 0.5, 0.5
+    let bonus = -4;
+    for (let i = 1; i <= f; i++) {
+        if (i <= 2) bonus += 2;
+        else if (i <= 4) bonus += 1.5;
+        else if (i <= 6) bonus += 1;
+        else if (i <= 8) bonus += 0.75;
+        else bonus += 0.5;
+    }
+    return bonus; // 0pts=6HP, 3pts=11.5HP, 5pts=13.5HP, 10pts=17.5HP
+}
 function getStatBreakMult() { return Math.max(0.4, 3.5 - playerStats.dexterity * 0.31); } // 0pts=3.5x slower, 5pts=1.95x, 10pts=0.4x fast
 function getStatManaMult()  { return playerStats.wisdom * 0.2; }           // 0pts=0 mana, 5pts=1.0x, 10pts=2.0x
 
