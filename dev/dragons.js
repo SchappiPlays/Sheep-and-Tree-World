@@ -1192,8 +1192,35 @@ export class DragonManager {
             if (bd.age >= 9600) dragonFireDmg = 2;
             if (bd.age >= 14400) dragonFireDmg = 3;
 
+            // Flee when low HP (< 25%) — fly away from threats
+            const lowHP = bd.hp < bd.maxHP * 0.25;
+            if (lowHP && this._creatureMgr) {
+                let fleeX = 0, fleeZ = 0, threatCount = 0;
+                for (const c of this._creatureMgr.creatures) {
+                    if (c.dead || !c.hostile) continue;
+                    const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                    if (cdx * cdx + cdz * cdz < 900) { fleeX -= cdx; fleeZ -= cdz; threatCount++; }
+                }
+                if (threatCount > 0) {
+                    const fd = Math.sqrt(fleeX * fleeX + fleeZ * fleeZ) || 1;
+                    if (!bd.flying) { bd.flying = true; bd.flyHeight = bd.group.position.y + 10 + gs * 8; }
+                    const fleeSpd = (16 + gs * 10) * dt;
+                    bd.x += (fleeX / fd) * fleeSpd;
+                    bd.z += (fleeZ / fd) * fleeSpd;
+                    bd.angle = Math.atan2(fleeX / fd, fleeZ / fd);
+                    bd.group.rotation.y = bd.angle;
+                    const targetH = this.getHeight(bd.x, bd.z) + bd.footOffset + 15 + gs * 10;
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                    bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                    bd.walking = false;
+                    bd._breathingFire = false;
+                    this._animateDragon(dt, bd);
+                    continue;
+                }
+            }
+
             let target = null, targetDist = 25;
-            if (this._creatureMgr && !bd._passive) {
+            if (this._creatureMgr && !bd._passive && !lowHP) {
                 // Priority 1: attack whatever the player is attacking
                 if (this._playerTarget && !this._playerTarget.dead) {
                     const pt = this._playerTarget;
