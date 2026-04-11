@@ -3211,6 +3211,23 @@ function startGame(loadSlotName) {
     };
     // Authoritative world snapshot from host (handles late joiners)
     mp.onWorldStateSync = (state) => {
+        // Blocks should always be restored, even for host
+        if (state.blocks) {
+            for (const [key, blockType] of Object.entries(state.blocks)) {
+                const [bx, by, bz] = key.split(',').map(Number);
+                world.setBlock(bx, by, bz, blockType);
+            }
+            const rebuiltChunks = new Set();
+            for (const key of Object.keys(state.blocks)) {
+                const [bx, , bz] = key.split(',').map(Number);
+                const ck = Math.floor(bx / CHUNK_SIZE) + ',' + Math.floor(bz / CHUNK_SIZE);
+                if (!rebuiltChunks.has(ck)) {
+                    rebuiltChunks.add(ck);
+                    if (chunkManager) chunkManager.rebuildChunkAt(bx, bz);
+                }
+            }
+            console.log('[mp] Restored', Object.keys(state.blocks).length, 'blocks from server');
+        }
         if (mp.isHost) return;
         // Picked-up swords
         if (state.swords && world._fortressSwordMeshes) {
@@ -3240,25 +3257,6 @@ function startGame(loadSlotName) {
         // Killed bosses
         if (state.bosses) {
             for (const b of state.bosses) killedBosses.add(b);
-        }
-        // Placed/broken blocks from server
-        if (state.blocks) {
-            const yOff = 128;
-            for (const [key, blockType] of Object.entries(state.blocks)) {
-                const [bx, by, bz] = key.split(',').map(Number);
-                world.setBlock(bx, by, bz, blockType);
-            }
-            // Rebuild affected chunks
-            const rebuiltChunks = new Set();
-            for (const key of Object.keys(state.blocks)) {
-                const [bx, , bz] = key.split(',').map(Number);
-                const cx = Math.floor(bx / CHUNK_SIZE), cz = Math.floor(bz / CHUNK_SIZE);
-                const ck = cx + ',' + cz;
-                if (!rebuiltChunks.has(ck)) {
-                    rebuiltChunks.add(ck);
-                    if (chunkManager) chunkManager.rebuildChunkAt(bx, bz);
-                }
-            }
         }
     };
     // Boss killed by another peer — add to local set

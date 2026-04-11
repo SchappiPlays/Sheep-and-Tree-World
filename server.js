@@ -281,6 +281,7 @@ wss.on('connection', (ws) => {
             const key = msg.bx + ',' + msg.by + ',' + msg.bz;
             if (msg.b === 0) delete world.blocks[key];
             else world.blocks[key] = msg.b;
+            if (Object.keys(world.blocks).length % 10 === 0) console.log('[satw-server] blocks stored:', Object.keys(world.blocks).length);
         }
 
         // Tag with sender pid and broadcast to everyone else
