@@ -10589,23 +10589,27 @@ function updateChestUI() {
     const items = chest.items;
     let html = '<div style="color:#e0d8c0;font:bold 16px monospace;text-align:center;margin-bottom:10px;">Chest</div>';
 
+    // Helper to render a chest/inventory slot
+    const _chestSlot = (itemKey, count, onclick) => {
+        const info = itemKey ? getItemInfo(itemKey) : null;
+        const bg = info ? info.front : 'rgba(40,40,40,0.5)';
+        const border = itemKey ? 'rgba(180,160,100,0.4)' : 'rgba(80,80,80,0.3)';
+        const title = info ? info.name : '';
+        let inner = '';
+        if (info) {
+            inner = blockIconHTML(info);
+            if (count > 1) inner += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
+        }
+        return `<div title="${title}" style="width:40px;height:40px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" ${onclick ? `onclick="${onclick}"` : ''}>${inner}</div>`;
+    };
+
     // Chest contents
     html += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px;margin-bottom:12px;">';
     const keys = Object.keys(items);
     for (let i = 0; i < CHEST_SLOTS; i++) {
         const itemKey = keys[i];
         const count = itemKey ? items[itemKey] : 0;
-        const info = itemKey ? getItemInfo(itemKey) : null;
-        const bg = info ? info.front : 'rgba(40,40,40,0.5)';
-        const border = itemKey ? 'rgba(180,160,100,0.4)' : 'rgba(80,80,80,0.3)';
-        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
-        if (itemKey) html += `onclick="window._chestTakeItem('${itemKey}')"`;
-        html += '>';
-        if (info) {
-            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
-            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
-        }
-        html += '</div>';
+        html += _chestSlot(itemKey, count, itemKey ? `window._chestTakeItem('${itemKey}')` : '');
     }
     html += '</div>';
 
@@ -10616,17 +10620,7 @@ function updateChestUI() {
     for (let i = 0; i < 27; i++) {
         const itemKey = invKeys[i];
         const count = itemKey ? inventory[itemKey] : 0;
-        const info = itemKey ? getItemInfo(itemKey) : null;
-        const bg = info ? info.front : 'rgba(30,30,30,0.4)';
-        const border = itemKey ? 'rgba(100,140,100,0.4)' : 'rgba(60,60,60,0.3)';
-        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
-        if (itemKey) html += `onclick="window._chestDepositItem('${itemKey}')"`;
-        html += '>';
-        if (info) {
-            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
-            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
-        }
-        html += '</div>';
+        html += _chestSlot(itemKey, count, itemKey ? `window._chestDepositItem('${itemKey}')` : '');
     }
     html += '</div>';
 
