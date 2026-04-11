@@ -490,6 +490,20 @@ function getTerrainHeight(x, z) {
         else{const cliff=1-(plD-0.7)/0.6;const cs=cliff*cliff*(3-2*cliff);h=h+(plateauH-h)*cs;}
     }
 
+    // Sand dunes — rolling hills in the desert biome
+    const desB = getDesertBlend(z);
+    if (desB > 0.1) {
+        // Large rolling dunes
+        const dune1 = Math.max(0, Math.sin(x * 0.015 + z * 0.008 + 1.2)) * 12 * desB;
+        const dune2 = Math.max(0, Math.sin(x * 0.01 - z * 0.012 + 0.5)) * 8 * desB;
+        const dune3 = Math.max(0, Math.cos(x * 0.02 + z * 0.018 - 0.8)) * 6 * desB;
+        // Sharper ridgelines on dune crests
+        const ridge = Math.abs(Math.sin(x * 0.012 + z * 0.006)) * 5 * desB;
+        // Fine ripples
+        const ripple = Math.sin(x * 0.08 + z * 0.04) * 1.5 * desB;
+        h += dune1 + dune2 + dune3 + ridge + ripple;
+    }
+
     // Elevated terrain features — gradual rises
     // Northern coastal bluffs — high cliffs near north coast
     const nbDx = (x - (-200)) / 220, nbDz = (z - (-650)) / 150;

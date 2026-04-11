@@ -16,6 +16,10 @@ const cowNoseMat = new THREE.MeshStandardMaterial({ color: 0xD4A08A });
 // Pig materials
 const pigBodyMat = new THREE.MeshStandardMaterial({ color: 0xE8A0A0 });
 const pigNoseMat = new THREE.MeshStandardMaterial({ color: 0xD4807A });
+// Camel materials
+const camelBodyMat = new THREE.MeshStandardMaterial({ color: 0xC4A055 });
+const camelDarkMat = new THREE.MeshStandardMaterial({ color: 0x9A7A3A });
+const camelNoseMat = new THREE.MeshStandardMaterial({ color: 0xB08840 });
 
 // Shared geometries
 const bodyGeo  = new THREE.BoxGeometry(0.45, 0.38, 0.7);
@@ -200,6 +204,58 @@ function makePig(x, z, terrainY) {
         walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3 + 1,
         idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'pig',
         hp: 10, maxHP: 10, dead: false,
+    };
+}
+
+function makeCamel(x, z, terrainY) {
+    const g = new THREE.Group();
+    // Body — long and tall
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 1.2), camelBodyMat);
+    body.position.y = 1.05; body.castShadow = true; g.add(body);
+    // Hump
+    const hump = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.3, 0.35), camelDarkMat);
+    hump.position.set(0, 1.45, 0.1); hump.castShadow = true; g.add(hump);
+    // Neck — angled forward
+    const neckGrp = new THREE.Group();
+    neckGrp.position.set(0, 1.2, 0.55); g.add(neckGrp);
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.18), camelBodyMat);
+    neck.position.set(0, 0.25, 0.1); neck.rotation.x = -0.3; neckGrp.add(neck);
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.55, 0.2); neckGrp.add(headGrp);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.35), camelBodyMat);
+    headGrp.add(head);
+    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.12), camelNoseMat);
+    muzzle.position.set(0, -0.04, 0.2); headGrp.add(muzzle);
+    // Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
+    headGrp.add(new THREE.Mesh(eyeGeo, eyeMatS).translateX(-0.1).translateY(0.04).translateZ(0.1));
+    headGrp.add(new THREE.Mesh(eyeGeo, eyeMatS).translateX(0.1).translateY(0.04).translateZ(0.1));
+    // Ears
+    const earGeo = new THREE.BoxGeometry(0.06, 0.08, 0.04);
+    headGrp.add(new THREE.Mesh(earGeo, camelBodyMat).translateX(-0.1).translateY(0.12));
+    headGrp.add(new THREE.Mesh(earGeo, camelBodyMat).translateX(0.1).translateY(0.12));
+    // Legs — long and thin
+    const legs = [];
+    for (const [lx, ly, lz] of [[-0.18, 0.8, 0.4], [0.18, 0.8, 0.4], [-0.18, 0.8, -0.4], [0.18, 0.8, -0.4]]) {
+        const hip = new THREE.Group(); hip.position.set(lx, ly, lz); g.add(hip);
+        const legM = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), camelBodyMat);
+        legM.position.y = -0.35; hip.add(legM);
+        const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.14), camelDarkMat);
+        hoof.position.set(0, -0.72, 0.01); hip.add(hoof);
+        legs.push(hip);
+    }
+    // Tail
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.25, 0.04), camelDarkMat);
+    tail.position.set(0, 0.95, -0.62); tail.rotation.x = 0.4; g.add(tail);
+
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 5 + 2,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false, type: 'camel',
+        hp: 15, maxHP: 15, dead: false,
     };
 }
 
@@ -1074,13 +1130,16 @@ export class CreatureManager {
             const biome = this.world._getBiome(sx, sz);
             const terrainY = this.world.getHeight(sx, sz);
             if (terrainY < 0.5 || terrainY > 80) continue;
-            // Skip desert (no creatures there)
-            if (biome === 'desert') continue;
-
             // Pick creature type based on biome
             const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
             let creature;
-            if (biome === 'mountain' || biome === 'scorched') {
+
+            // Desert — camels
+            if (biome === 'desert' || biome === 'desert_transition') {
+                if (typeHash < 0.4) {
+                    creature = makeCamel(sx, sz, terrainY);
+                } else continue;
+            } else if (biome === 'mountain' || biome === 'scorched') {
                 // Goblins only spawn on NW peaks (510,-130) and SW peaks (510,80)
                 const nwDx = sx - 510, nwDz = sz - (-130);
                 const swDx = sx - 510, swDz = sz - 80;
