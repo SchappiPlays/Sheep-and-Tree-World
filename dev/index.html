@@ -480,7 +480,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -761,6 +761,8 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     const range = 150; // world units in each direction
     const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
     const _getBiome = (wx, wz) => {
+        const glacial = getFrozenBasinBlend(wx, wz);
+        if (glacial > 0.05) return 'glacial';
         const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx,wz), sc = getScorchedBlend(wx,wz);
         if (sc > 0.1) return 'scorched'; if (snow > 0.5) return 'snow'; if (desert > 0.5) return 'desert';
         if (mtn > 0.3) return 'mountain'; if (snow > 0) return 'snow_transition'; if (desert > 0) return 'desert_transition'; return 'grass';
@@ -783,7 +785,8 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             if (h < -0.5) continue;
             const biome = _getBiome(wx, wz);
             let color;
-            if (biome === 'scorched') color = 0x2a2018;
+            if (biome === 'glacial') color = 0x90c8e0;
+            else if (biome === 'scorched') color = 0x2a2018;
             else if (biome === 'snow') color = 0xe0e0e8;
             else if (biome === 'snow_transition') color = 0xb0c8b0;
             else if (biome === 'desert') color = 0xd4c07a;
@@ -1118,8 +1121,10 @@ function buildFarTerrain(centerX, centerZ) {
             // Biome color
             const snow = getSnowBlend(wz), desert = getDesertBlend(wz);
             const mtn = getMountainBlend(wx, wz), scorched = getScorchedBlend(wx, wz);
+            const glacial = getFrozenBasinBlend(wx, wz);
             let hex;
-            if (scorched > 0.3) hex = 0x2a2018;
+            if (glacial > 0.05) hex = 0x90c8e0;
+            else if (scorched > 0.3) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
             else if (snow > 0) hex = 0xb0c8b0;
             else if (desert > 0.5) hex = 0xd4c07a;
@@ -7649,7 +7654,7 @@ function drawWorldMap() {
         drawMountain(820, -40, 'Great Peak', 12);
         drawMountain(730, -95, 'NE Ridge', 6);
         drawMountain(735, 40, 'SE Ridge', 6);
-        drawMountain(-50, -620, 'Frozen Mountains', 11);
+        drawMountain(-30, -800, 'Frozen Mountains', 14);
 
         // Villages
         drawVillage(80, 16, 'Meadow Village');
