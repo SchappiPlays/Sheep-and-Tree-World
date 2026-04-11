@@ -7221,9 +7221,9 @@ function updateWhistleDragonList() {
         const name = bd.dragonName || (bd.isWyvern ? 'Wyvern' : 'Dragon');
         const age = bd.age || 0;
         let stage = 'Baby';
-        if (age >= 3600) stage = 'Elder';
-        else if (age >= 2400) stage = 'Adult';
-        else if (age >= 1200) stage = 'Teen';
+        if (age >= 14400) stage = 'Elder';
+        else if (age >= 9600) stage = 'Adult';
+        else if (age >= 4800) stage = 'Teen';
         row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel} | ${hostile}</span><span class="wd-rename" style="font-size:10px;color:rgba(140,170,200,0.7);cursor:pointer;padding:2px 5px;margin-left:4px;">✎</span>`;
         row.querySelector('.wd-rename').onclick = (ev) => {
             ev.stopPropagation();
@@ -11800,7 +11800,7 @@ function doPlace(e) {
         const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
         if (!isMeat) {
             const looked = dragonMgr.getLookedAtDragon(player);
-            if (looked && looked.age < 1200) {
+            if (looked && looked.age < 4800) {
                 if (dragonMgr.putOnShoulder(looked)) {
                     addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
                     return false;
@@ -11815,7 +11815,7 @@ function doPlace(e) {
         const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
         if (!isMeat) {
             const looked = dragonMgr.getLookedAtDragon(player);
-            if (looked && looked.state === 'alive' && looked.age >= 1150 && !looked._fortressGuardian && !looked._stationary) {
+            if (looked && looked.state === 'alive' && looked.age >= 4600 && !looked._fortressGuardian && !looked._stationary) {
                 dragonMgr.ridingDragon = true;
                 dragonMgr.ridingRef = looked;
                 dragonMgr._wakeFromSleep(looked);

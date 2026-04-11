@@ -278,10 +278,10 @@ function computeFlap(t) {
 }
 
 function getDragonMaxHP(age) {
-    if (age < 1200) return 40 + (age / 1200) * 20;
-    if (age < 2400) return 60 + ((age - 1200) / 1200) * 40;
-    if (age < 3600) return 100 + ((age - 2400) / 1200) * 50;
-    if (age < 7200) return 150 + ((age - 3600) / 3600) * 50;
+    if (age < 4800) return 40 + (age / 4800) * 20;
+    if (age < 9600) return 60 + ((age - 4800) / 4800) * 40;
+    if (age < 14400) return 100 + ((age - 9600) / 4800) * 50;
+    if (age < 28800) return 150 + ((age - 14400) / 14400) * 50;
     return 200;
 }
 
@@ -1068,7 +1068,7 @@ export class DragonManager {
                 // Check for nearby dragon to ride
                 if (!pickedEgg) {
                     for (const bd of this.dragons) {
-                        if (bd.state !== 'alive' || bd.age < 1150) continue;
+                        if (bd.state !== 'alive' || bd.age < 4600) continue;
                         const ddx = px - bd.x, ddz = pz - bd.z;
                         if (ddx * ddx + ddz * ddz < 6 * bd.growthScale + 4) {
                             this.ridingDragon = true;
@@ -1119,10 +1119,10 @@ export class DragonManager {
             // Growth
             bd.age += dt;
             let gs;
-            if (bd.age < 1200) gs = 0.04 + (bd.age / 1200) * (0.25 - 0.04);
-            else if (bd.age < 2400) gs = 0.25 + ((bd.age - 1200) / 1200) * (0.50 - 0.25);
-            else if (bd.age < 3600) gs = 0.50 + ((bd.age - 2400) / 1200) * (1.0 - 0.50);
-            else if (bd.age < 7200) gs = 1.0 + ((bd.age - 3600) / 3600) * (2.0 - 1.0);
+            if (bd.age < 4800) gs = 0.04 + (bd.age / 4800) * (0.25 - 0.04);
+            else if (bd.age < 9600) gs = 0.25 + ((bd.age - 4800) / 4800) * (0.50 - 0.25);
+            else if (bd.age < 14400) gs = 0.50 + ((bd.age - 9600) / 4800) * (1.0 - 0.50);
+            else if (bd.age < 28800) gs = 1.0 + ((bd.age - 14400) / 14400) * (2.0 - 1.0);
             else gs = 2.0;
             bd.growthScale = gs;
             bd.group.scale.setScalar(gs);
@@ -1195,9 +1195,9 @@ export class DragonManager {
             // ── Combat AI — find nearby hostile creature to fight ──
             // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
             let dragonFireDmg = 0.5;
-            if (bd.age >= 1200) dragonFireDmg = 1;
-            if (bd.age >= 2400) dragonFireDmg = 2;
-            if (bd.age >= 3600) dragonFireDmg = 3;
+            if (bd.age >= 9600) dragonFireDmg = 1;
+            if (bd.age >= 9600) dragonFireDmg = 2;
+            if (bd.age >= 14400) dragonFireDmg = 3;
 
             let target = null, targetDist = 25;
             if (this._creatureMgr && !bd._passive) {
@@ -1306,7 +1306,7 @@ export class DragonManager {
                         bd._wanderTargetZ = homeZ + (wdz / wd) * 120;
                     }
                     // Teens+ sometimes take off to fly to target
-                    if (bd.age >= 1550 && !bd.flying && Math.random() < 0.4) {
+                    if (bd.age >= 6200 && !bd.flying && Math.random() < 0.4) {
                         bd.flying = true;
                         bd.flyHeight = bd.group.position.y + 15 + Math.random() * 25;
                         bd._wanderTimer = 8 + Math.random() * 15; // fly longer
@@ -1640,7 +1640,7 @@ export class DragonManager {
         if (keys['KeyW'] || keys['ArrowUp']) wantDir = 1;
         if (keys['KeyS'] || keys['ArrowDown']) wantDir = -1;
 
-        const canFly = bd.age >= 1550;
+        const canFly = bd.age >= 6200;
         const speed = bd.flying ? flySpeed : walkSpeed;
 
         // Flight controls
@@ -2523,7 +2523,7 @@ export class DragonManager {
     putOnShoulder(bd) {
         if (!bd) return false;
         // Only baby dragons (age < 1200)
-        if (bd.age >= 1200) return false;
+        if (bd.age >= 9600) return false;
         bd._onShoulder = true;
         bd._followingPlayer = false;
         return true;
@@ -2565,7 +2565,7 @@ export class DragonManager {
             if (dx*dx + dz*dz < 4) return 'Press E to pick up dragon egg';
         }
         for (const bd of this.dragons) {
-            if (bd.state !== 'alive' || bd.age < 1150 || bd._unrideable) continue;
+            if (bd.state !== 'alive' || bd.age < 4600 || bd._unrideable) continue;
             const dx = px - bd.x, dz = pz - bd.z;
             if (dx*dx + dz*dz < 6 * bd.growthScale + 4) return 'Press E to ride ' + bd.dragonName;
         }
