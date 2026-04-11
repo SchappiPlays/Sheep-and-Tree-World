@@ -11561,6 +11561,7 @@ function doPlace(e) {
             if (looked && looked.state === 'alive' && looked.age >= 1150 && !looked._fortressGuardian && !looked._stationary) {
                 dragonMgr.ridingDragon = true;
                 dragonMgr.ridingRef = looked;
+                dragonMgr._wakeFromSleep(looked);
                 addChatMessage(`Mounted ${looked.dragonName || 'dragon'}!`, 'rgba(180,200,255,0.9)');
                 return false;
             }

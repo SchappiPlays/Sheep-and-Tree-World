@@ -1071,6 +1071,7 @@ export class DragonManager {
                         if (ddx * ddx + ddz * ddz < 6 * bd.growthScale + 4) {
                             this.ridingDragon = true;
                             this.ridingRef = bd;
+                            this._wakeFromSleep(bd);
                             break;
                         }
                     }
@@ -1187,24 +1188,7 @@ export class DragonManager {
                 this._animateDragonSleep(dt, bd);
                 continue;
             }
-            if (bd._sleeping) {
-                bd._sleeping = false;
-                bd._sleepBlend = 0;
-                // Reopen eyes
-                if (bd.eyes) for (const eye of bd.eyes) eye.scale.y = 1;
-                // Reset head roll and leg splay
-                bd.headGrp.rotation.z = 0;
-                bd.headGrp.rotation.order = 'XYZ';
-                bd.headGrp.rotation.y = 0;
-                bd.headGrp.rotation.x = 0;
-                if (bd.neckGrp) { bd.neckGrp.rotation.x = 0; bd.neckGrp.rotation.y = 0; }
-                if (bd.neckSegs) for (const seg of bd.neckSegs) { seg.rotation.x = 0; seg.rotation.y = 0; }
-                bd._neckBendT = 0;
-                bd._fireDirYaw = undefined;
-                bd._fireDirPitch = undefined;
-                for (const leg of bd.legs) leg.rotation.z = 0;
-                for (const seg of bd.tailSegs) seg.rotation.x = 0;
-            }
+            if (bd._sleeping) this._wakeFromSleep(bd);
 
             // ── Combat AI — find nearby hostile creature to fight ──
             // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
@@ -2391,6 +2375,24 @@ export class DragonManager {
         }
         bd.hp = Math.max(0, bd.hp - amount);
         return true;
+    }
+
+    _wakeFromSleep(bd) {
+        if (!bd._sleeping) return;
+        bd._sleeping = false;
+        bd._sleepBlend = 0;
+        if (bd.eyes) for (const eye of bd.eyes) eye.scale.y = 1;
+        bd.headGrp.rotation.z = 0;
+        bd.headGrp.rotation.order = 'XYZ';
+        bd.headGrp.rotation.y = 0;
+        bd.headGrp.rotation.x = 0;
+        if (bd.neckGrp) { bd.neckGrp.rotation.x = 0; bd.neckGrp.rotation.y = 0; }
+        if (bd.neckSegs) for (const seg of bd.neckSegs) { seg.rotation.x = 0; seg.rotation.y = 0; }
+        bd._neckBendT = 0;
+        bd._fireDirYaw = undefined;
+        bd._fireDirPitch = undefined;
+        for (const leg of bd.legs) leg.rotation.z = 0;
+        for (const seg of bd.tailSegs) seg.rotation.x = 0;
     }
 
     getOwnedDragons() {
