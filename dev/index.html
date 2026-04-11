@@ -10463,13 +10463,26 @@ getItemInfo = function(key) {
 
 // Custom swords do damage based on tier
 const _origSwordDmg = Object.assign({}, SWORD_DAMAGE);
+const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight', 'Grokthak the Warchief', 'The Necromancer'];
 const _getSwordDamage = (held) => {
-    if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
-        return window._customSwords[held].damage || 6;
+        let dmg = window._customSwords[held].damage || 6;
+        if (window._customSwords[held].tier === 'dragonsteel') dmg = _getDragonsteelDmg(dmg);
+        return dmg;
     }
+    if (held === 'dragonsteel_sword') return _getDragonsteelDmg(5);
+    if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
     return 0;
 };
+function _getDragonsteelDmg(base) {
+    let dmg = base;
+    dmg += playerLevel; // +1 per level
+    if (dragonMgr) dmg += dragonMgr.getOwnedDragons().length * 3; // +3 per dragon
+    let bossKills = 0;
+    for (const b of _gateBosses) if (killedBosses.has(b)) bossKills++;
+    dmg += bossKills; // +1 per gate boss killed
+    return dmg;
+}
 
 // ── Guide Book ──
 let guideBookOpen = false;
