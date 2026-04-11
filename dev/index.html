@@ -470,6 +470,10 @@ canvas { display: block; }
         <button class="whistle-btn" data-cmd="stay">Stay</button>
         <button class="whistle-btn" data-cmd="wander">Wander</button>
     </div>
+    <div id="whistleButtons2" style="margin-top:6px;">
+        <button class="whistle-btn" data-cmd="aggressive">Aggressive</button>
+        <button class="whistle-btn" data-cmd="passive">Passive</button>
+    </div>
     <div id="whistleHint">Click dragons to select/deselect | Press command button | F to close</div>
 </div>
 <div id="dragGhost"></div>
@@ -7160,13 +7164,14 @@ function updateWhistleDragonList() {
         row.className = 'whistle-dragon-row' + (sel ? ' selected' : '');
         const mode = bd._followMode || 'wander';
         const modeLabel = mode === 'follow' ? 'Following' : mode === 'stay' ? 'Staying' : 'Wandering';
+        const hostile = bd._passive ? 'Passive' : 'Aggressive';
         const name = bd.dragonName || (bd.isWyvern ? 'Wyvern' : 'Dragon');
         const age = bd.age || 0;
         let stage = 'Baby';
         if (age >= 3600) stage = 'Elder';
         else if (age >= 2400) stage = 'Adult';
         else if (age >= 1200) stage = 'Teen';
-        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel}</span>`;
+        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel} | ${hostile}</span>`;
         row.onclick = () => {
             if (whistleSelectedDragons.has(bd)) whistleSelectedDragons.delete(bd);
             else whistleSelectedDragons.add(bd);
@@ -7183,12 +7188,18 @@ document.querySelectorAll('.whistle-btn').forEach(btn => {
         if (!dragonMgr || whistleSelectedDragons.size === 0) return;
         const px = player.position.x, pz = player.position.z, py = player.position.y;
         let count = 0;
-        for (const bd of whistleSelectedDragons) {
-            dragonMgr.setFollowMode(bd, cmd, px, pz, py);
-            count++;
+        if (cmd === 'aggressive' || cmd === 'passive') {
+            const hostile = cmd === 'aggressive';
+            for (const bd of whistleSelectedDragons) { bd._passive = !hostile; count++; }
+            addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${hostile ? 'aggressive' : 'passive'}`, 'rgba(180,200,255,0.9)');
+        } else {
+            for (const bd of whistleSelectedDragons) {
+                dragonMgr.setFollowMode(bd, cmd, px, pz, py);
+                count++;
+            }
+            const modeText = cmd === 'follow' ? 'following you' : cmd === 'stay' ? 'staying' : 'wandering freely';
+            addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${modeText}`, 'rgba(180,200,255,0.9)');
         }
-        const modeText = cmd === 'follow' ? 'following you' : cmd === 'stay' ? 'staying' : 'wandering freely';
-        addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${modeText}`, 'rgba(180,200,255,0.9)');
         updateWhistleDragonList();
     });
 });

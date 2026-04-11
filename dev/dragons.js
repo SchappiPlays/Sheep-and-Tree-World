@@ -1198,7 +1198,7 @@ export class DragonManager {
             if (bd.age >= 3600) dragonFireDmg = 3;
 
             let target = null, targetDist = 25;
-            if (this._creatureMgr) {
+            if (this._creatureMgr && !bd._passive) {
                 for (const c of this._creatureMgr.creatures) {
                     if (c.dead || !c.hostile || c._tamed) continue;
                     if (c.type === 'babyDragon' || c.type === 'dragon') continue;
