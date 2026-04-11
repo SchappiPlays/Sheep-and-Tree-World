@@ -11815,7 +11815,7 @@ function doPlace(e) {
         const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
         if (!isMeat) {
             const looked = dragonMgr.getLookedAtDragon(player);
-            if (looked && looked.state === 'alive' && looked.age >= 4600 && !looked._fortressGuardian && !looked._stationary) {
+            if (looked && looked.state === 'alive' && looked.age >= 7200 && !looked._fortressGuardian && !looked._stationary) {
                 dragonMgr.ridingDragon = true;
                 dragonMgr.ridingRef = looked;
                 dragonMgr._wakeFromSleep(looked);

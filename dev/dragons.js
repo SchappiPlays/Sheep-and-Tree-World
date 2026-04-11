@@ -1068,7 +1068,7 @@ export class DragonManager {
                 // Check for nearby dragon to ride
                 if (!pickedEgg) {
                     for (const bd of this.dragons) {
-                        if (bd.state !== 'alive' || bd.age < 4600) continue;
+                        if (bd.state !== 'alive' || bd.age < 7200) continue;
                         const ddx = px - bd.x, ddz = pz - bd.z;
                         if (ddx * ddx + ddz * ddz < 6 * bd.growthScale + 4) {
                             this.ridingDragon = true;
@@ -1385,8 +1385,10 @@ export class DragonManager {
                     }
                 }
 
-                const tY = this.getHeight(bd.x, bd.z);
-                bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                if (!bd.flying) {
+                    const tY = this.getHeight(bd.x, bd.z);
+                    bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                }
                 this._animateDragon(dt, bd);
                 continue;
             }
@@ -2565,7 +2567,7 @@ export class DragonManager {
             if (dx*dx + dz*dz < 4) return 'Press E to pick up dragon egg';
         }
         for (const bd of this.dragons) {
-            if (bd.state !== 'alive' || bd.age < 4600 || bd._unrideable) continue;
+            if (bd.state !== 'alive' || bd.age < 7200 || bd._unrideable) continue;
             const dx = px - bd.x, dz = pz - bd.z;
             if (dx*dx + dz*dz < 6 * bd.growthScale + 4) return 'Press E to ride ' + bd.dragonName;
         }
