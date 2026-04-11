@@ -9298,7 +9298,19 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             player.triggerSwing();
             attackCooldown = 0.6 * getSwordCooldownMult();
             const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
-            if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
+            if (creatures && creatures.attackAt) {
+                creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
+                // Tell dragons what player is attacking
+                if (dragonMgr) {
+                    const sinA = Math.sin(player.group.rotation.y), cosA = Math.cos(player.group.rotation.y);
+                    for (const c of creatures.creatures) {
+                        if (c.dead) continue;
+                        const dx = c.x - player.position.x, dz = c.z - player.position.z;
+                        const d = Math.sqrt(dx*dx+dz*dz);
+                        if (d < 4 && d > 0.1 && (dx*sinA+dz*cosA)/d > 0.2) { dragonMgr._playerTarget = c; dragonMgr._playerTargetTimer = 10; break; }
+                    }
+                }
+            }
             if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
             if (mp.active) {
                 mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);

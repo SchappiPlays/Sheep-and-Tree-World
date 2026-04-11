@@ -958,19 +958,6 @@ export class DragonManager {
         // Update fire particles every frame
         this._updateFireParticles(dt);
 
-        // ── L key: age up nearest dragon by 2 mins ──
-        if (keys['KeyL'] && !this._lDown) {
-            this._lDown = true;
-            let nearest = null, nearDist = Infinity;
-            for (const bd of this.dragons) {
-                if (bd.state !== 'alive') continue;
-                const dx = px - bd.x, dz = pz - bd.z;
-                const d = dx * dx + dz * dz;
-                if (d < nearDist) { nearDist = d; nearest = bd; }
-            }
-            if (nearest) nearest.age += 120; // 2 minutes
-        }
-        if (!keys['KeyL']) this._lDown = false;
 
         // ── Update carried egg visual ──
         const held = this.getHeldItem ? this.getHeldItem() : null;
@@ -1081,6 +1068,12 @@ export class DragonManager {
             }
         }
         if (!keys['KeyE']) this._eDown = false;
+
+        // Clear player target after timeout
+        if (this._playerTargetTimer > 0) {
+            this._playerTargetTimer -= dt;
+            if (this._playerTargetTimer <= 0 || (this._playerTarget && this._playerTarget.dead)) this._playerTarget = null;
+        }
 
         // ── Update all dragons ──
         for (let bi = this.dragons.length - 1; bi >= 0; bi--) {
@@ -1201,18 +1194,27 @@ export class DragonManager {
 
             let target = null, targetDist = 25;
             if (this._creatureMgr && !bd._passive) {
-                for (const c of this._creatureMgr.creatures) {
-                    if (c.dead || !c.hostile || c._tamed) continue;
-                    if (c.type === 'babyDragon' || c.type === 'dragon') continue;
-                    if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
-                    const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                // Priority 1: attack whatever the player is attacking
+                if (this._playerTarget && !this._playerTarget.dead) {
+                    const pt = this._playerTarget;
+                    const cdx = pt.x - bd.x, cdz = pt.z - bd.z;
                     const cd = Math.sqrt(cdx*cdx + cdz*cdz);
-                    if (cd < targetDist) {
-                        // Only engage if target is close to player too
-                        const pdx = c.x - px, pdz = c.z - pz;
-                        if (pdx*pdx + pdz*pdz < 30 * 30) {
-                            targetDist = cd;
-                            target = c;
+                    if (cd < 50) { target = pt; targetDist = cd; }
+                }
+                // Priority 2: nearby hostile creatures
+                if (!target) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead || !c.hostile || c._tamed) continue;
+                        if (c.type === 'babyDragon' || c.type === 'dragon') continue;
+                        if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+                        const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                        const cd = Math.sqrt(cdx*cdx + cdz*cdz);
+                        if (cd < targetDist) {
+                            const pdx = c.x - px, pdz = c.z - pz;
+                            if (pdx*pdx + pdz*pdz < 30 * 30) {
+                                targetDist = cd;
+                                target = c;
+                            }
                         }
                     }
                 }
@@ -1426,6 +1428,26 @@ export class DragonManager {
                 bd.z = pz - Math.cos(player.group.rotation.y) * 3;
             }
 
+            // Occasionally take off / land while following (teens+)
+            if (bd.age >= 6200 && !target) {
+                bd._followFlyTimer = (bd._followFlyTimer || 10 + Math.random() * 20) - dt;
+                if (bd._followFlyTimer <= 0) {
+                    bd._followFlyTimer = 12 + Math.random() * 25;
+                    if (!bd.flying && Math.random() < 0.35) {
+                        bd.flying = true;
+                        bd.flyHeight = bd.group.position.y + 8 + Math.random() * 15;
+                    } else if (bd.flying && Math.random() < 0.4) {
+                        bd.flying = false;
+                        bd.flyHeight = 0;
+                    }
+                }
+            }
+            // Fly during combat (teens+)
+            if (target && bd.age >= 6200 && !bd.flying && targetDist < 20) {
+                bd.flying = true;
+                bd.flyHeight = bd.group.position.y + 5 + Math.random() * 10;
+            }
+
             const maxSpd = 8 + gs * 6;
             if (bDist > bd.followDist) {
                 const targetAngle = Math.atan2(bdx, bdz);
@@ -1434,16 +1456,28 @@ export class DragonManager {
                 while (da < -Math.PI) da += Math.PI * 2;
                 bd.angle += da * Math.min(dt * 5, 1);
                 bd.group.rotation.y = bd.angle;
-                const spd = Math.min(bDist * 1.5, maxSpd) * dt;
-                bd.x += Math.sin(bd.angle) * spd;
-                bd.z += Math.cos(bd.angle) * spd;
-                bd.walking = true;
+                if (bd.flying) {
+                    const flySpd = (14 + gs * 10) * dt;
+                    bd.x += Math.sin(bd.angle) * flySpd;
+                    bd.z += Math.cos(bd.angle) * flySpd;
+                    const targetH = Math.max(py + 6, this.getHeight(bd.x, bd.z) + bd.footOffset + 10 + Math.sin((bd._followFlyTimer || 0) * 0.4) * 5);
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                } else {
+                    const spd = Math.min(bDist * 1.5, maxSpd) * dt;
+                    bd.x += Math.sin(bd.angle) * spd;
+                    bd.z += Math.cos(bd.angle) * spd;
+                }
+                bd.walking = !bd.flying;
             } else {
                 bd.walking = false;
             }
 
-            const bTerrainY = this.getHeight(bd.x, bd.z);
-            bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+            if (bd.flying) {
+                bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            } else {
+                const bTerrainY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+            }
 
             // ── Animation ──
             this._animateDragon(dt, bd);
