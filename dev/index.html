@@ -12275,9 +12275,9 @@ function animate() {
             player.rightArm.shoulder.rotation.z = -0.9;
             player.rightArm.shoulder.rotation.y = 0.2;
             player.rightArm.elbow.rotation.x = -1.6;
-            // Shield on forearm facing outward, covering chest
+            // Shield in front of forearm, facing outward
             player._shieldMesh.rotation.set(0.3, -0.2, 0.1);
-            player._shieldMesh.position.set(-0.02, -0.1, 0.08);
+            player._shieldMesh.position.set(-0.15, -0.1, 0.12);
         } else {
             // Default: shield on outer side of arm
             player._shieldMesh.rotation.set(0, Math.PI / 2, 0);
