@@ -1362,12 +1362,18 @@ function buildFarTerrain(centerX, centerZ) {
     _addLodTower(swFX - swHW - swEncW * 2, swFZ + swEncD/2, 1.4, 11.4, swDarkLight);
 
     // Village markers — actual village positions from VILLAGE_DEFS
-    for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200}]) {
-        // Small cluster of house-sized boxes
+    const _lodVillages = [
+        {x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200},
+        {x:100,z:550,desert:true},{x:-120,z:620,desert:true},{x:250,z:680,desert:true},
+    ];
+    for (const vd of _lodVillages) {
         const vh = 2 + Math.abs(Math.sin(vd.x * 0.1)) * 1;
-        _addLodBox(vd.x, vd.z, 3.5, vh, 3, 0x8a6a3a);
-        _addLodBox(vd.x + 4, vd.z + 2, 3, vh - 0.5, 2.5, 0x7a5a2a);
-        _addLodBox(vd.x - 3, vd.z + 3, 2.5, vh - 0.3, 2.8, 0x8a7040);
+        const c1 = vd.desert ? 0xc4a860 : 0x8a6a3a;
+        const c2 = vd.desert ? 0xb09850 : 0x7a5a2a;
+        const c3 = vd.desert ? 0xd0b870 : 0x8a7040;
+        _addLodBox(vd.x, vd.z, 3.5, vh, 3, c1);
+        _addLodBox(vd.x + 4, vd.z + 2, 3, vh - 0.5, 2.5, c2);
+        _addLodBox(vd.x - 3, vd.z + 3, 2.5, vh - 0.3, 2.8, c3);
     }
 
     // Water plane — simple flat plane, shader-based cutout near player
