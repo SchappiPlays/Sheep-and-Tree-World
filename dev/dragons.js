@@ -1977,6 +1977,21 @@ export class DragonManager {
         bd._sleepBlend = t;
         const lerp = (a, b) => a + (b - a) * t;
 
+        // Breathing — gentle rise/fall
+        bd._sleepBreathPhase = (bd._sleepBreathPhase || 0) + dt * 0.8;
+        const breath = Math.sin(bd._sleepBreathPhase) * 0.06 * bd.growthScale;
+        const bTerrainY = this.getHeight(bd.x, bd.z);
+        bd.group.position.y = bTerrainY + bd.footOffset * 0.35 + breath * t;
+        // Chest/body expands slightly with breath
+        if (bd.chest) {
+            const breathScale = 1 + Math.sin(bd._sleepBreathPhase) * 0.03 * t;
+            bd.chest.scale.set(1, breathScale, 1);
+        }
+        if (bd.midBody) {
+            const breathScale = 1 + Math.sin(bd._sleepBreathPhase + 0.3) * 0.02 * t;
+            bd.midBody.scale.set(1, breathScale, 1);
+        }
+
         // Neck: bend sideways and down so head rests on the ground curving right
         if (bd.neckGrp) {
             bd.neckGrp.rotation.x = lerp(bd.neckGrp.rotation.x, 0.7); // droop down
