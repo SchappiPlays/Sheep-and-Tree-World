@@ -12287,14 +12287,14 @@ function animate() {
         player._shieldMesh.visible = true;
         player._shieldMat.color.setHex(SHIELD_TIERS[equippedShield].color);
         if (shieldRaised) {
-            // Defensive stance — arm tucked at side, shield covering torso
-            player.rightArm.shoulder.rotation.x = -0.8;
-            player.rightArm.shoulder.rotation.z = -0.9;
-            player.rightArm.shoulder.rotation.y = 0.2;
-            player.rightArm.elbow.rotation.x = -1.6;
-            // Shield in front of forearm, facing outward
-            player._shieldMesh.rotation.set(0.3, -0.2, 0.1);
-            player._shieldMesh.position.set(-0.15, -0.1, 0.12);
+            // Defensive stance — arm out to side, forearm up, shield facing forward
+            player.rightArm.shoulder.rotation.x = -1.2;
+            player.rightArm.shoulder.rotation.z = -0.5;
+            player.rightArm.shoulder.rotation.y = 0;
+            player.rightArm.elbow.rotation.x = -2.2;
+            // Shield on forearm, rotated so face points forward (away from player)
+            player._shieldMesh.rotation.set(-0.3, Math.PI, 0);
+            player._shieldMesh.position.set(0, -0.12, 0);
         } else {
             // Default: shield on outer side of arm
             player._shieldMesh.rotation.set(0, Math.PI / 2, 0);
