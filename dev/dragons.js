@@ -1428,29 +1428,16 @@ export class DragonManager {
                 bd.z = pz - Math.cos(player.group.rotation.y) * 3;
             }
 
-            // Force flying when player is riding a mount
-            if (this._playerRiding && !bd.flying) {
+            // Take off: sprinting, far away, riding, or combat
+            const shouldFly = this._playerSprinting || bDist > 15 || this._playerRiding || (target && targetDist < 20);
+            if (shouldFly && !bd.flying) {
                 bd.flying = true;
                 bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
             }
-            // Occasionally take off / land while following (all ages)
-            if (!target) {
-                bd._followFlyTimer = (bd._followFlyTimer || 5 + Math.random() * 10) - dt;
-                if (bd._followFlyTimer <= 0) {
-                    bd._followFlyTimer = 5 + Math.random() * 12;
-                    if (!bd.flying && Math.random() < 0.55) {
-                        bd.flying = true;
-                        bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
-                    } else if (bd.flying && !this._playerRiding && Math.random() < 0.3) {
-                        bd.flying = false;
-                        bd.flyHeight = 0;
-                    }
-                }
-            }
-            // Fly during combat (all ages)
-            if (target && !bd.flying && targetDist < 20) {
-                bd.flying = true;
-                bd.flyHeight = bd.group.position.y + 3 + Math.random() * 8 * gs;
+            // Land: not sprinting, close enough, not riding, no combat
+            if (!shouldFly && bd.flying && bDist < 10) {
+                bd.flying = false;
+                bd.flyHeight = 0;
             }
 
             const maxSpd = 8 + gs * 6;
