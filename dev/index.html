@@ -480,7 +480,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -793,7 +793,12 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
             else color = 0x5a9040; // grass
-            addBlock(wx, h, wz, color);
+            // Check if this cell is in a river
+            let inRiver = false;
+            for (const riv of riverDefs) {
+                if (getRiverBlend(wx, wz, riv) > 0.3) { color = 0x3a7ab5; inRiver = true; break; }
+            }
+            addBlock(wx, inRiver ? h - S * 0.5 : h, wz, color);
             // Two layers below surface
             const dirt = biome === 'desert' || biome === 'desert_transition' ? 0xd4c07a : 0x8b6b3d;
             addBlock(wx, h - S, wz, dirt);
@@ -7374,6 +7379,10 @@ function drawWorldMap() {
                 else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
                 else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
                 else biomeData[idx] = 0;
+                // River override — check on top of other biomes
+                for (const riv of riverDefs) {
+                    if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; }
+                }
             }
         }
 
@@ -7403,6 +7412,8 @@ function drawWorldMap() {
                     tintR = 30; tintG = 20; tintB = 15; tintA = 0.4;
                 } else if (biome === 7) { // enchanted — purple wash
                     tintR = 90; tintG = 50; tintB = 130; tintA = 0.25;
+                } else if (biome === 10) { // river — blue water
+                    tintR = 50; tintG = 90; tintB = 150; tintA = 0.5;
                 } else if (biome === 9) { // path — sandy brown line
                     tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
                 } else if (biome === 8) { // forest — deep green
