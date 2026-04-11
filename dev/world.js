@@ -777,7 +777,7 @@ export class World {
                         else if (depthBelow > 20 && _oreCheck(bx,y,bz, 16, 2.5, 0.07, 444)) block = BLOCK.EMERALD_ORE;
                         else if (depthBelow > 20 && _oreCheck(bx,y,bz, 16, 2.5, 0.07, 555)) block = BLOCK.TOPAZ_ORE;
                         else if (depthBelow > 15 && _oreCheck(bx,y,bz, 12, 3, 0.1, 666)) block = BLOCK.GOLD_ORE;
-                        else if (_oreCheck(bx,y,bz, 10, 3.5, 0.15, 777)) block = BLOCK.IRON_ORE;
+                        else if (_oreCheck(bx,y,bz, 8, 4, 0.22, 777)) block = BLOCK.IRON_ORE;
                         else if (depthBelow > 3 && depthBelow < 25 && _oreCheck(bx,y,bz, 8, 3.5, 0.18, 888)) block = BLOCK.COPPER_ORE;
                         else if (_oreCheck(bx,y,bz, 8, 4, 0.2, 999)) block = BLOCK.COAL_ORE;
                         else block = BLOCK.STONE;

@@ -9398,8 +9398,8 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     }
 
     if (breakTime === Infinity) return; // can't break without pickaxe
-    breakTime *= 0.85; // global speed boost
     breakTime *= getStatBreakMult(); // Dexterity stat bonus
+    breakTime *= 0.75; // global speed boost (applied after stats so it always helps)
 
     player.triggerSwing();
     miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe, hasAxe };
