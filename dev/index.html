@@ -1559,6 +1559,7 @@ function updateMenuUI() {
             html += `<div class="save-slot">
                 <div class="info"><div class="name">${name}</div>${date}</div>
                 <button class="menu-btn" style="width:80px;padding:8px;font-size:13px;" data-load="${name}">Load</button>
+                <button class="menu-btn" style="width:65px;padding:6px;font-size:11px;" data-rename="${name}">Rename</button>
                 <button class="menu-btn delete" data-delete="${name}">Delete</button>
             </div>`;
         }
@@ -1566,6 +1567,20 @@ function updateMenuUI() {
     document.getElementById('savedGames').innerHTML = html;
     document.querySelectorAll('[data-load]').forEach(btn => {
         btn.addEventListener('click', () => startGame(btn.dataset.load));
+    });
+    document.querySelectorAll('[data-rename]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const oldName = btn.dataset.rename;
+            const newName = prompt('Rename save:', oldName);
+            if (!newName || newName === oldName || newName.trim() === '') return;
+            const trimmed = newName.trim();
+            if (_savesCache[trimmed]) { alert('A save with that name already exists.'); return; }
+            _savesCache[trimmed] = _savesCache[oldName];
+            delete _savesCache[oldName];
+            if (_currentSaveName === oldName) _currentSaveName = trimmed;
+            _persistSaves();
+            updateMenuUI();
+        });
     });
     document.querySelectorAll('[data-delete]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -9383,6 +9398,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     }
 
     if (breakTime === Infinity) return; // can't break without pickaxe
+    breakTime *= 0.85; // global speed boost
     breakTime *= getStatBreakMult(); // Dexterity stat bonus
 
     player.triggerSwing();
