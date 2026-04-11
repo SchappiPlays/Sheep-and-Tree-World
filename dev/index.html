@@ -563,15 +563,13 @@ moonGlow.renderOrder = -10;
 moonGlow.visible = false;
 scene.add(moonGlow);
 
-// ── Night Sky Box ──
+// ── Night Sky Dome ──
 const _skyTex = new THREE.TextureLoader().load('sky.png');
-_skyTex.wrapS = THREE.RepeatWrapping;
-_skyTex.wrapT = THREE.RepeatWrapping;
 const nightSkyMat = new THREE.MeshBasicMaterial({
     map: _skyTex, side: THREE.BackSide, fog: false,
     transparent: true, opacity: 0, depthWrite: false
 });
-const nightSkyDome = new THREE.Mesh(new THREE.BoxGeometry(7000, 7000, 7000), nightSkyMat);
+const nightSkyDome = new THREE.Mesh(new THREE.SphereGeometry(4800, 64, 32), nightSkyMat);
 nightSkyDome.renderOrder = -20;
 scene.add(nightSkyDome);
 
