@@ -1233,7 +1233,7 @@ function buildFarTerrain(centerX, centerZ) {
     // Shader hack: discard fragments within a radius of the player (dynamic cutout)
     farMat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.uniforms._cutoutR = { value: 25.0 };
         // Add varying + uniforms
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
@@ -1415,7 +1415,7 @@ function buildFarTerrain(centerX, centerZ) {
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
     waterMat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.uniforms._cutoutR = { value: 25.0 };
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
