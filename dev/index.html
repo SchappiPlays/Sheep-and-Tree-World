@@ -3302,7 +3302,7 @@ function startGame(loadSlotName) {
 
     // === Ice Dragon Nest — far north ===
     {
-        const nestX = -343, nestZ = -1250;
+        const nestX = FM_CX, nestZ = FM_CZ; // center of frozen mountain ring
         const nestY = getTerrainHeight(nestX, nestZ);
         const yOff = 128;
         const BS = BLOCK_SIZE;
