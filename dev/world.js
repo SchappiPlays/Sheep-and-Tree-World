@@ -4,7 +4,7 @@
 
 export const BLOCK_SIZE = 1.9 / 4; // ≈ 0.475 world units per block
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 384;
+export const WORLD_HEIGHT = 512;
 export const SEA_LEVEL = 0; // sea level in block coords = world y=0
 
 export const BLOCK = {
@@ -99,20 +99,22 @@ function getFrozenMountainBlend(x, z) {
     return t * t;
 }
 function getDeepNorthBlend(x, z) {
-    // Returns > 0 if in any deep north mountain range
-    const nwr_dx = (x - (-250)) / 120, nwr_dz = (z - (-1350)) / 45;
-    const nwr = nwr_dx*nwr_dx + nwr_dz*nwr_dz;
-    if (nwr < 1) { const t = 1 - nwr; return t * t; }
-    const nep_dx = (x - 200) / 100, nep_dz = (z - (-1300)) / 80;
-    const nep = nep_dx*nep_dx + nep_dz*nep_dz;
-    if (nep < 1) { const t = 1 - nep; return t * t; }
-    const cns_dx = (x - 50) / 40, cns_dz = (z - (-1400)) / 120;
-    const cns = cns_dx*cns_dx + cns_dz*cns_dz;
-    if (cns < 1) { const t = 1 - cns; return t * t; }
-    if (Math.abs(x) < 400) {
-        const fnw_dz = (z - (-1500)) / 50;
+    const ranges = [
+        [-250, -1350, 150, 55],  // NW ridge
+        [200, -1300, 130, 100],  // NE peaks
+        [50, -1400, 55, 150],    // Central spine
+        [-400, -1200, 100, 70],  // West deep north
+        [380, -1180, 90, 65],    // East deep north
+    ];
+    for (const r of ranges) {
+        const dx = (x - r[0]) / r[2], dz = (z - r[1]) / r[3];
+        const d = dx*dx + dz*dz;
+        if (d < 1) { const t = 1 - d; return t * t; }
+    }
+    if (Math.abs(x) < 500) {
+        const fnw_dz = (z - (-1500)) / 65;
         const fnw = fnw_dz * fnw_dz;
-        if (fnw < 1) { const xb = 1 - Math.abs(x)/400; const t = (1-fnw)*Math.min(1,xb*2); return t * t; }
+        if (fnw < 1) { const xb = 1 - Math.abs(x)/500; const t = (1-fnw)*Math.min(1,xb*2); return t * t; }
     }
     return 0;
 }
@@ -409,21 +411,21 @@ function getTerrainHeight(x, z) {
         let mh = 0;
         if (onRing) {
             const ringT = 1 - Math.min(1, ringDist / (FM_RING_W / 2 + 20));
-            mh = ringT * ringT * 55;
+            mh = ringT * ringT * 85;
             // 12 peaks around the ring
             const peaks = [
-                { a: 0,    h: 30, r: 45 },
-                { a: 0.52, h: 38, r: 40 },
-                { a: 1.05, h: 28, r: 42 },
-                { a: 1.57, h: 35, r: 40 },
-                { a: 2.09, h: 25, r: 45 },
-                { a: 2.62, h: 32, r: 38 },
-                { a: 3.14, h: 28, r: 42 },
-                { a: 3.67, h: 35, r: 40 },
-                { a: 4.19, h: 22, r: 48 },
-                { a: 4.71, h: 30, r: 42 },
-                { a: 5.24, h: 25, r: 45 },
-                { a: 5.76, h: 32, r: 40 },
+                { a: 0,    h: 50, r: 45 },
+                { a: 0.52, h: 65, r: 40 },
+                { a: 1.05, h: 45, r: 42 },
+                { a: 1.57, h: 60, r: 40 },
+                { a: 2.09, h: 40, r: 45 },
+                { a: 2.62, h: 55, r: 38 },
+                { a: 3.14, h: 45, r: 42 },
+                { a: 3.67, h: 60, r: 40 },
+                { a: 4.19, h: 35, r: 48 },
+                { a: 4.71, h: 50, r: 42 },
+                { a: 5.24, h: 40, r: 45 },
+                { a: 5.76, h: 55, r: 40 },
             ];
             for (const pk of peaks) {
                 const px = FM_CX + Math.cos(pk.a) * ringCenter;
@@ -433,15 +435,15 @@ function getTerrainHeight(x, z) {
                 if (pd < 1) { const t = 1 - pd; mh += t * t * pk.h; }
             }
             // Jagged ridgelines
-            mh += Math.abs(Math.sin((x + z * 0.7) * 0.05)) * 10 * ringT;
-            mh += (Math.sin((x + 30) * 0.07) * Math.cos((z + 1050) * 0.09) * 8 + Math.cos((x + 20) * 0.11) * Math.sin((z + 1030) * 0.08) * 6) * ringT;
+            mh += Math.abs(Math.sin((x + z * 0.7) * 0.05)) * 18 * ringT;
+            mh += (Math.sin((x + 30) * 0.07) * Math.cos((z + 1050) * 0.09) * 12 + Math.cos((x + 20) * 0.11) * Math.sin((z + 1030) * 0.08) * 10) * ringT;
         }
         // Raised glacial basin inside
         if (frDist < FM_INNER) {
             const basinT = 1 - frDist / FM_INNER;
-            mh = 20 + basinT * 15;
-            mh += Math.sin(x * 0.08 + z * 0.06) * 3 + Math.cos(x * 0.05 - z * 0.07 + 1) * 2.5;
-            mh += Math.abs(Math.sin(x * 0.04 + z * 0.03)) * 5 * basinT;
+            mh = 30 + basinT * 20;
+            mh += Math.sin(x * 0.08 + z * 0.06) * 4 + Math.cos(x * 0.05 - z * 0.07 + 1) * 3;
+            mh += Math.abs(Math.sin(x * 0.04 + z * 0.03)) * 7 * basinT;
         }
         mh += (Math.sin(x * 0.22 + z * 0.28) * 2 + Math.cos(x * 0.18 - z * 0.2) * 1.5) * frMtn;
         h += mh;
@@ -506,65 +508,88 @@ function getTerrainHeight(x, z) {
     const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
-    // ── Deep North Highlands — terrain rises sharply past z=-1275 ──
-    if (z < -1200) {
-        const nht = Math.min(1, (z - (-1200)) / (-1350 - (-1200))); // 0 at -1200, 1 at -1350
-        const highlandH = nht * nht * 35; // raised plateau up to 35
+    // ── Deep North Highlands — terrain rises sharply past z=-900 ──
+    if (z < -900) {
+        const nht = Math.min(1, (z - (-900)) / (-1150 - (-900))); // 0 at -900, 1 at -1150
+        const highlandH = nht * nht * 45;
         h += highlandH;
         // Rugged highland noise
-        h += nht * (Math.sin(x * 0.04 + z * 0.035) * 8 + Math.cos(x * 0.06 - z * 0.05) * 6);
-        h += nht * Math.abs(Math.sin(x * 0.03 + z * 0.02)) * 10;
+        h += nht * (Math.sin(x * 0.04 + z * 0.035) * 10 + Math.cos(x * 0.06 - z * 0.05) * 8);
+        h += nht * Math.abs(Math.sin(x * 0.03 + z * 0.02)) * 12;
     }
 
     // ── Deep North Mountain Ranges ──
     // NW frozen ridge — long east-west range
-    const nwr_dx = (x - (-250)) / 120, nwr_dz = (z - (-1350)) / 45;
+    const nwr_dx = (x - (-250)) / 150, nwr_dz = (z - (-1350)) / 55;
     const nwr_d = nwr_dx*nwr_dx + nwr_dz*nwr_dz;
     if (nwr_d < 1) {
         const t = 1 - nwr_d;
-        let mh = t * t * 55;
-        mh += Math.abs(Math.sin((x + 250) * 0.07)) * 18 * t;
-        mh += Math.sin((x + 250) * 0.1) * Math.cos((z + 1350) * 0.12) * 10 * t;
-        // 4 peaks
-        const nwrPks = [[-310,-1350,25,35],[-220,-1345,30,30],[-170,-1355,22,32],[-290,-1340,18,28]];
+        let mh = t * t * 80;
+        mh += Math.abs(Math.sin((x + 250) * 0.07)) * 25 * t;
+        mh += Math.sin((x + 250) * 0.1) * Math.cos((z + 1350) * 0.12) * 15 * t;
+        const nwrPks = [[-340,-1350,45,40],[-220,-1345,55,35],[-150,-1355,40,38],[-290,-1340,35,32],[-100,-1348,30,30]];
         for (const p of nwrPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
     // NE frozen peaks — cluster of sharp peaks
-    const nep_dx = (x - 200) / 100, nep_dz = (z - (-1300)) / 80;
+    const nep_dx = (x - 200) / 130, nep_dz = (z - (-1300)) / 100;
     const nep_d = nep_dx*nep_dx + nep_dz*nep_dz;
     if (nep_d < 1) {
         const t = 1 - nep_d;
-        let mh = t * t * 50;
-        mh += Math.abs(Math.sin((x - 200) * 0.08 + (z + 1300) * 0.06)) * 15 * t;
-        const nepPks = [[160,-1280,28,30],[230,-1310,32,28],[190,-1340,24,32],[250,-1270,20,25],[140,-1330,26,30]];
+        let mh = t * t * 75;
+        mh += Math.abs(Math.sin((x - 200) * 0.08 + (z + 1300) * 0.06)) * 22 * t;
+        const nepPks = [[160,-1280,50,35],[240,-1310,55,32],[190,-1350,42,36],[270,-1270,38,30],[130,-1330,45,34],[210,-1260,35,28]];
         for (const p of nepPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
-    // Central north spine — narrow ridge running north-south
-    const cns_dx = (x - 50) / 40, cns_dz = (z - (-1400)) / 120;
+    // Central north spine — ridge running north-south
+    const cns_dx = (x - 50) / 55, cns_dz = (z - (-1400)) / 150;
     const cns_d = cns_dx*cns_dx + cns_dz*cns_dz;
     if (cns_d < 1) {
         const t = 1 - cns_d;
-        let mh = t * t * 45;
-        mh += Math.abs(Math.cos((z + 1400) * 0.05)) * 20 * t;
-        mh += Math.sin((x - 50) * 0.15) * 8 * t;
-        const cnsPks = [[50,-1320,25,28],[45,-1420,30,26],[55,-1480,22,30],[40,-1380,28,25]];
+        let mh = t * t * 70;
+        mh += Math.abs(Math.cos((z + 1400) * 0.05)) * 28 * t;
+        mh += Math.sin((x - 50) * 0.15) * 12 * t;
+        const cnsPks = [[50,-1310,45,32],[45,-1420,55,30],[55,-1490,40,34],[40,-1370,48,28],[60,-1450,35,30]];
         for (const p of cnsPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
-    // Far north wall — massive east-west barrier near the edge
-    const fnw_dz = (z - (-1500)) / 50;
-    const fnw_d = fnw_dz * fnw_dz;
-    if (fnw_d < 1 && Math.abs(x) < 400) {
-        const xBlend = 1 - (Math.abs(x) / 400); // fade at edges
-        const t = (1 - fnw_d) * Math.min(1, xBlend * 2);
+    // West deep north range
+    const wdn_dx = (x - (-400)) / 100, wdn_dz = (z - (-1200)) / 70;
+    const wdn_d = wdn_dx*wdn_dx + wdn_dz*wdn_dz;
+    if (wdn_d < 1) {
+        const t = 1 - wdn_d;
+        let mh = t * t * 65;
+        mh += Math.abs(Math.sin((x + 400) * 0.09)) * 20 * t;
+        const wdnPks = [[-430,-1200,40,32],[-370,-1210,48,30],[-350,-1180,35,28],[-450,-1230,30,26]];
+        for (const p of wdnPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
+        h += mh;
+    }
+
+    // East deep north range
+    const edn_dx = (x - 380) / 90, edn_dz = (z - (-1180)) / 65;
+    const edn_d = edn_dx*edn_dx + edn_dz*edn_dz;
+    if (edn_d < 1) {
+        const t = 1 - edn_d;
         let mh = t * t * 60;
-        mh += Math.abs(Math.sin(x * 0.04)) * 15 * t;
-        mh += Math.sin(x * 0.08) * Math.cos((z + 1500) * 0.1) * 8 * t;
+        mh += Math.abs(Math.cos((x - 380) * 0.08)) * 18 * t;
+        const ednPks = [[350,-1180,42,30],[400,-1170,38,28],[420,-1200,45,32],[360,-1210,32,26]];
+        for (const p of ednPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
+        h += mh;
+    }
+
+    // Far north wall — massive east-west barrier near the edge
+    const fnw_dz = (z - (-1500)) / 65;
+    const fnw_d = fnw_dz * fnw_dz;
+    if (fnw_d < 1 && Math.abs(x) < 500) {
+        const xBlend = 1 - (Math.abs(x) / 500);
+        const t = (1 - fnw_d) * Math.min(1, xBlend * 2);
+        let mh = t * t * 90;
+        mh += Math.abs(Math.sin(x * 0.04)) * 25 * t;
+        mh += Math.sin(x * 0.08) * Math.cos((z + 1500) * 0.1) * 12 * t;
         h += mh;
     }
 
