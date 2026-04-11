@@ -793,8 +793,9 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
             else color = 0x5a9040; // grass
-            // Check if this cell is in a river
+            // Check if this cell is on a path or river
             let inRiver = false;
+            if (isOnPath(wx, wz)) { color = 0x8a7a5a; }
             for (const riv of riverDefs) {
                 if (getRiverBlend(wx, wz, riv) > 0.3) { color = 0x3a7ab5; inRiver = true; break; }
             }
