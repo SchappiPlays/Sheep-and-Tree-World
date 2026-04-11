@@ -81,6 +81,11 @@ function getFarEastMountainBlend(x, z) {
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
+function getFrozenMountainBlend(x, z) {
+    const mx = (x - (-50)) / 200, mz = (z - (-450)) / 70;
+    const d = mx * mx + mz * mz; if (d > 1) return 0;
+    const t = 1 - d; return t * t;
+}
 function getCentralValleyBlend(x, z) {
     const vx = (x - 545) / 35, vz = (z - (-90)) / 40;
     const d = vx * vx + vz * vz; if (d > 1) return 0;
@@ -251,7 +256,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -355,6 +360,28 @@ function getTerrainHeight(x, z) {
         h += mh;
     }
 
+    // Frozen mountains (north)
+    const frMtn = getFrozenMountainBlend(x, z);
+    if (frMtn > 0) {
+        let mh = frMtn * 70;
+        // Main ridge peaks — 5 sub-peaks along the east-west ridge
+        const pk1Dx=(x-(-120))/40,pk1Dz=(z-(-450))/30,pk1D=pk1Dx*pk1Dx+pk1Dz*pk1Dz;
+        if(pk1D<1){const t=1-pk1D;mh+=t*t*45;}
+        const pk2Dx=(x-(-40))/35,pk2Dz=(z-(-460))/28,pk2D=pk2Dx*pk2Dx+pk2Dz*pk2Dz;
+        if(pk2D<1){const t=1-pk2D;mh+=t*t*55;} // tallest peak
+        const pk3Dx=(x-50)/38,pk3Dz=(z-(-440))/32,pk3D=pk3Dx*pk3Dx+pk3Dz*pk3Dz;
+        if(pk3D<1){const t=1-pk3D;mh+=t*t*40;}
+        const pk4Dx=(x-130)/42,pk4Dz=(z-(-455))/30,pk4D=pk4Dx*pk4Dx+pk4Dz*pk4Dz;
+        if(pk4D<1){const t=1-pk4D;mh+=t*t*35;}
+        const pk5Dx=(x-(-180))/35,pk5Dz=(z-(-445))/26,pk5D=pk5Dx*pk5Dx+pk5Dz*pk5Dz;
+        if(pk5D<1){const t=1-pk5D;mh+=t*t*30;}
+        // Jagged noise — sharp ridgelines
+        mh += (Math.sin((x+50)*0.08)*Math.cos((z+450)*0.1)*20 + Math.cos((x+30)*0.12)*Math.sin((z+440)*0.09)*15) * frMtn;
+        mh += Math.abs(Math.sin((x+z*0.7)*0.06)) * 18 * frMtn; // sharp ridges
+        mh += (Math.sin(x*0.25+z*0.3)*3 + Math.cos(x*0.2-z*0.22)*2.5) * frMtn; // fine detail
+        h += mh;
+    }
+
     // Valleys (removed)
     const enchBlend = getEnchantedBlend(x, z);
     if (enchBlend > 0) { h -= enchBlend * 6; h += enchBlend * (Math.sin(x*0.12+z*0.08)*1.2 + Math.cos(x*0.09-z*0.11+1.5)*0.8); }
@@ -362,6 +389,9 @@ function getTerrainHeight(x, z) {
     if (afHill > 0) { h += afHill * 40 + afHill * Math.sin(x*0.08+z*0.06)*6 + afHill * Math.cos(x*0.05-z*0.07+1)*4; }
 
     // Mountain passes
+    // Frozen mountain pass (path to ice castle)
+    const fpDx=(x-5)/22,fpDz=(z-(-450))/20,fpD=fpDx*fpDx+fpDz*fpDz;
+    if(fpD<1){const t=1-fpD;h-=t*t*45;h=Math.max(2,h);}
     const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
     if(npD<1){const t=1-npD;h-=t*t*10;h=Math.max(0.5,h);}
     const spDx2=(x-555)/18,spDz2=(z+95)/14,spD2=spDx2*spDx2+spDz2*spDz2;
@@ -470,7 +500,7 @@ export class World {
         const snow = getSnowBlend(wz);
         const desert = getDesertBlend(wz);
         const scorched = getScorchedBlend(wx, wz);
-        const mtn = getMountainBlend(wx,wz) + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz);
+        const mtn = getMountainBlend(wx,wz) + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
         if (scorched > 0.1) return 'scorched';
         if (snow > 0.5) return 'snow';
         if (desert > 0.5) return 'desert';
