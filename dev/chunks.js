@@ -606,8 +606,7 @@ export class ChunkManager {
                             }
                             continue; // skip normal block face
                         } else if (block === BLOCK.CAMPFIRE) {
-                            // Render as grass so ground shows beneath campfire model
-                            tmpColor.setHex(BLOCK_COLORS[BLOCK.GRASS]);
+                            continue; // skip — 3D campfire model renders instead
                         } else {
                             tmpColor.setHex(BLOCK_COLORS[block] || 0xff00ff);
                         }
