@@ -4927,7 +4927,7 @@ function startGame(loadSlotName) {
             Object.assign(eggItems, s.eggItems || {});
             if (s.armorSlots) Object.assign(armorSlots, s.armorSlots);
             if (s.equippedShield) equippedShield = s.equippedShield;
-            if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP; }
+            if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
@@ -4937,11 +4937,11 @@ function startGame(loadSlotName) {
                 Object.assign(playerStats, s.playerStats);
                 player.walkSpeed = 3.6 * getStatSpeedMult();
                 player.sprintSpeed = 8.0 * getStatSpeedMult();
-                // Recalculate max HP with current formula (handles balance changes)
-                const newMaxHP = Math.max(2, 10 + getStatHPBonus());
-                playerHP = Math.min(playerHP, newMaxHP);
-                playerMaxHP = newMaxHP;
             }
+            // Always recalculate max HP from current formula (handles balance changes)
+            const newMaxHP = Math.max(2, 10 + getStatHPBonus());
+            playerHP = Math.min(playerHP, newMaxHP);
+            playerMaxHP = newMaxHP;
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             if (s.waypoints) { waypoints = s.waypoints; _rebuildWaypointBeams(); }
