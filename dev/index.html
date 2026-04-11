@@ -5047,7 +5047,7 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
-                    if (dd.iceBreath || (bd.dragonName && bd.dragonName.toLowerCase().includes('ice'))) bd._iceBreath = true;
+                    if (dd.iceBreath) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }

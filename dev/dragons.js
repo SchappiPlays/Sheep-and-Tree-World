@@ -278,11 +278,11 @@ function computeFlap(t) {
 }
 
 function getDragonMaxHP(age) {
-    if (age < 1200) return 15 + (age / 1200) * 15;
-    if (age < 2400) return 30 + ((age - 1200) / 1200) * 30;
-    if (age < 3600) return 60 + ((age - 2400) / 1200) * 40;
-    if (age < 7200) return 100 + ((age - 3600) / 3600) * 50;
-    return 150;
+    if (age < 1200) return 40 + (age / 1200) * 20;
+    if (age < 2400) return 60 + ((age - 1200) / 1200) * 40;
+    if (age < 3600) return 100 + ((age - 2400) / 1200) * 50;
+    if (age < 7200) return 150 + ((age - 3600) / 3600) * 50;
+    return 200;
 }
 
 
@@ -1042,7 +1042,7 @@ export class DragonManager {
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
                         bd.dragonName = egg.name || '';
-                        if (egg.isIce || (egg.name && egg.name.toLowerCase().includes('ice'))) bd._iceBreath = true;
+                        if (egg.isIce) bd._iceBreath = true;
                         this.heldEgg = null;
                         // Prompt player to name the dragon
                         if (this.onDragonHatched) this.onDragonHatched(bd);
