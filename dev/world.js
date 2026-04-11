@@ -330,14 +330,16 @@ function getTerrainHeight(x, z) {
         if (d < p.radius + 3) { const t = Math.max(0, 1 - d / (p.radius + 3)); h *= (1 - t * 0.9); }
     }
 
-    // Western Bay — large natural inlet
+    // Western Bay — large inlet reaching from coast inland
     const bayPts = [
-        { x: -580, z: 30, rx: 50, rz: 40 },   // inner basin
-        { x: -620, z: 20, rx: 45, rz: 35 },    // middle
-        { x: -660, z: 10, rx: 40, rz: 30 },    // toward coast
-        { x: -545, z: 55, rx: 32, rz: 28 },    // northern arm
-        { x: -555, z: -5, rx: 32, rz: 25 },    // southern arm
-        { x: -700, z: 5, rx: 35, rz: 28 },     // mouth to ocean
+        { x: -800, z: 20, rx: 120, rz: 90 },   // main basin — huge
+        { x: -900, z: 10, rx: 80, rz: 70 },     // outer basin toward coast
+        { x: -980, z: 0, rx: 60, rz: 55 },      // mouth to ocean
+        { x: -720, z: 60, rx: 70, rz: 55 },     // northern reach
+        { x: -730, z: -40, rx: 65, rz: 50 },    // southern reach
+        { x: -650, z: 30, rx: 50, rz: 40 },     // inner finger
+        { x: -850, z: 70, rx: 55, rz: 40 },     // NW cove
+        { x: -860, z: -50, rx: 50, rz: 38 },    // SW cove
     ];
     for (const b of bayPts) {
         const bdx = (x - b.x) / b.rx, bdz = (z - b.z) / b.rz;
