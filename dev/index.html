@@ -98,6 +98,68 @@ canvas { display: block; }
     color: rgba(220,200,160,0.85); font: bold 15px monospace;
     text-align: center; margin-bottom: 10px;
 }
+#whistleMenu {
+    display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 115;
+    background: rgba(10,12,10,0.7);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(120,160,200,0.35);
+    border-radius: 10px;
+    padding: 18px 22px;
+    min-width: 320px; max-width: 400px;
+    user-select: none;
+}
+#whistleMenu h2 {
+    color: rgba(180,200,255,0.9); font: bold 16px monospace;
+    text-align: center; margin: 0 0 12px;
+}
+#whistleDragonList {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 260px; overflow-y: auto;
+    margin-bottom: 12px;
+}
+.whistle-dragon-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px;
+    background: rgba(40,50,40,0.5);
+    border: 1px solid rgba(100,120,80,0.25);
+    cursor: pointer; font: 13px monospace; color: rgba(200,200,180,0.9);
+    transition: background 0.15s;
+}
+.whistle-dragon-row:hover { background: rgba(60,70,55,0.6); }
+.whistle-dragon-row.selected {
+    background: rgba(60,90,60,0.6);
+    border-color: rgba(140,200,140,0.5);
+}
+.whistle-dragon-row .wd-check {
+    width: 16px; height: 16px; border-radius: 3px;
+    border: 1px solid rgba(150,170,130,0.5);
+    background: rgba(30,35,30,0.6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: rgba(140,220,140,0.9);
+}
+.whistle-dragon-row.selected .wd-check { background: rgba(50,80,50,0.7); }
+.whistle-dragon-row .wd-name { flex: 1; }
+.whistle-dragon-row .wd-mode {
+    font-size: 11px; color: rgba(160,160,140,0.6);
+}
+#whistleButtons {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 8px;
+}
+.whistle-btn {
+    padding: 8px 18px; font: bold 13px monospace;
+    border-radius: 5px; border: 1px solid rgba(120,160,200,0.3);
+    background: rgba(30,40,50,0.6); color: rgba(180,200,220,0.9);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.whistle-btn:hover {
+    background: rgba(50,70,90,0.7); border-color: rgba(140,180,220,0.5);
+}
+#whistleHint {
+    text-align: center; font: 10px monospace;
+    color: rgba(150,150,130,0.45); margin-top: 2px;
+}
 .inv-section-label {
     color: rgba(180,160,120,0.6); font: 11px monospace;
     margin: 10px 0 4px 2px;
@@ -289,7 +351,7 @@ canvas { display: block; }
 <div id="statAllocationMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:550;flex-direction:column;align-items:center;justify-content:center;">
     <div style="background:rgba(25,35,20,0.95);border:2px solid rgba(120,160,80,0.4);border-radius:10px;padding:24px 32px;min-width:340px;">
         <h2 style="color:rgba(220,200,160,0.9);font:bold 20px monospace;margin:0 0 4px;text-align:center;">Allocate Stats</h2>
-        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 20</div>
+        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 25</div>
         <div id="statRows" style="display:flex;flex-direction:column;gap:8px;"></div>
         <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
     </div>
@@ -400,6 +462,16 @@ canvas { display: block; }
 </div>
 <div id="hotbar"></div>
 <div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
+<div id="whistleMenu">
+    <h2>Dragon Commands</h2>
+    <div id="whistleDragonList"></div>
+    <div id="whistleButtons">
+        <button class="whistle-btn" data-cmd="follow">Follow</button>
+        <button class="whistle-btn" data-cmd="stay">Stay</button>
+        <button class="whistle-btn" data-cmd="wander">Wander</button>
+    </div>
+    <div id="whistleHint">Click dragons to select/deselect | Press command button | F to close</div>
+</div>
 <div id="dragGhost"></div>
 <div id="worldMap"><h2>World Map</h2><canvas id="mapCanvas" width="600" height="600"></canvas></div>
 <script src="three.min.js" onerror="
@@ -3181,7 +3253,7 @@ function startGame(loadSlotName) {
                 group: eggGrp, x: ex, z: ez, pickedUp: false,
                 color: ed.color, emissive: ed.emissive, veinColor: ed.veinColor,
                 wingColor: ed.wingColor || null,
-                isWyvern: !!ed.isWyvern, name: ed.name || 'Ice Dragon',
+                isWyvern: !!ed.isWyvern, isIce: !!ed.isIce, name: ed.name || 'Ice Dragon',
             });
         }
 
@@ -4764,7 +4836,7 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
-                    if (dd.iceBreath) bd._iceBreath = true;
+                    if (dd.iceBreath || (bd.dragonName && bd.dragonName.toLowerCase().includes('ice'))) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
@@ -4943,7 +5015,7 @@ const STAT_DEFS = [
     { key: 'dexterity', label: 'Dexterity', desc: 'Mining speed (0 = very slow)', icon: '\u26CF' },
     { key: 'wisdom',    label: 'Wisdom',    desc: 'Mana pool (0 = no mana)', icon: '\u2605' },
 ];
-const STAT_MAX_POINTS = 22;
+const STAT_MAX_POINTS = 25;
 const STAT_MAX_EACH = 10;
 let playerStats = { strength: 0, agility: 0, fortitude: 0, dexterity: 0, wisdom: 0 };
 let _statPending = null; // resolve callback for stat allocation
@@ -6866,6 +6938,90 @@ function keyName(code) {
 
 // ── Input ──
 const keys = {};
+// ── Dragon Whistle Menu ──
+let whistleMenuOpen = false;
+let _fHoldTimer = null, _fHoldFired = false;
+const whistleSelectedDragons = new Set();
+const whistleMenuEl = document.getElementById('whistleMenu');
+const whistleDragonListEl = document.getElementById('whistleDragonList');
+
+function openWhistleMenu() {
+    if (!dragonMgr) { console.log('WHISTLE: no dragonMgr'); return; }
+    const owned = dragonMgr.getOwnedDragons();
+    console.log('WHISTLE: owned dragons =', owned.length);
+    if (owned.length === 0) { addChatMessage('No dragons to command', 'rgba(180,200,255,0.9)'); return; }
+    whistleMenuOpen = true;
+    whistleSelectedDragons.clear();
+    owned.forEach(bd => whistleSelectedDragons.add(bd)); // all selected by default
+    updateWhistleDragonList();
+    whistleMenuEl.style.display = 'block';
+    if (pointerLocked) document.exitPointerLock();
+}
+
+function closeWhistleMenu() {
+    whistleMenuOpen = false;
+    whistleMenuEl.style.display = 'none';
+    if (useMouseLook && gameStarted && !gamePaused) {
+        setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    }
+}
+
+function updateWhistleDragonList() {
+    if (!dragonMgr) return;
+    const owned = dragonMgr.getOwnedDragons();
+    whistleDragonListEl.innerHTML = '';
+    // "Select All" row
+    const allRow = document.createElement('div');
+    allRow.className = 'whistle-dragon-row' + (whistleSelectedDragons.size === owned.length ? ' selected' : '');
+    allRow.innerHTML = `<span class="wd-check">${whistleSelectedDragons.size === owned.length ? '\u2713' : ''}</span><span class="wd-name" style="font-style:italic;">All Dragons</span><span class="wd-mode">${owned.length}</span>`;
+    allRow.onclick = () => {
+        if (whistleSelectedDragons.size === owned.length) {
+            whistleSelectedDragons.clear();
+        } else {
+            owned.forEach(bd => whistleSelectedDragons.add(bd));
+        }
+        updateWhistleDragonList();
+    };
+    whistleDragonListEl.appendChild(allRow);
+    for (const bd of owned) {
+        const sel = whistleSelectedDragons.has(bd);
+        const row = document.createElement('div');
+        row.className = 'whistle-dragon-row' + (sel ? ' selected' : '');
+        const mode = bd._followMode || 'wander';
+        const modeLabel = mode === 'follow' ? 'Following' : mode === 'stay' ? 'Staying' : 'Wandering';
+        const name = bd.dragonName || (bd.isWyvern ? 'Wyvern' : 'Dragon');
+        const age = bd.age || 0;
+        let stage = 'Baby';
+        if (age >= 3600) stage = 'Elder';
+        else if (age >= 2400) stage = 'Adult';
+        else if (age >= 1200) stage = 'Teen';
+        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel}</span>`;
+        row.onclick = () => {
+            if (whistleSelectedDragons.has(bd)) whistleSelectedDragons.delete(bd);
+            else whistleSelectedDragons.add(bd);
+            updateWhistleDragonList();
+        };
+        whistleDragonListEl.appendChild(row);
+    }
+}
+
+// Wire up command buttons
+document.querySelectorAll('.whistle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        if (!dragonMgr || whistleSelectedDragons.size === 0) return;
+        const px = player.position.x, pz = player.position.z, py = player.position.y;
+        let count = 0;
+        for (const bd of whistleSelectedDragons) {
+            dragonMgr.setFollowMode(bd, cmd, px, pz, py);
+            count++;
+        }
+        const modeText = cmd === 'follow' ? 'following you' : cmd === 'stay' ? 'staying' : 'wandering freely';
+        addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${modeText}`, 'rgba(180,200,255,0.9)');
+        updateWhistleDragonList();
+    });
+});
+
 let _leftMouseDown = false;
 renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) _leftMouseDown = true; });
 document.addEventListener('mouseup', e => { if (e.button === 0) { _leftMouseDown = false; staffShielding = false; } });
@@ -6928,17 +7084,48 @@ document.addEventListener('keydown', e => {
             drawWorldMap();
         }
     }
-    // F key — toggle follow on the dragon you're looking at
-    if (e.code === 'KeyF' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
-        const looked = dragonMgr.getLookedAtDragon(player);
-        if (looked) {
-            const mode = dragonMgr.toggleFollow(looked, player.position.x, player.position.z);
-            const modeText = mode === 'follow' ? 'following you' : mode === 'stay' ? 'staying' : 'wandering freely';
-            addChatMessage(`${looked.dragonName || 'Dragon'} is now ${modeText}`, 'rgba(180,200,255,0.9)');
+    // F key — tap to cycle all dragons, hold to open whistle menu
+    if (e.code === 'KeyF') {
+        if (whistleMenuOpen) { closeWhistleMenu(); e.preventDefault(); return; }
+        if (!e.repeat && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
+            if (!_fHoldTimer) {
+                _fHoldFired = false;
+                console.log('WHISTLE: timer started');
+                _fHoldTimer = setTimeout(() => {
+                    console.log('WHISTLE: timer fired, opening menu');
+                    _fHoldFired = true;
+                    _fHoldTimer = null;
+                    openWhistleMenu();
+                }, 400);
+            }
         }
     }
 });
-document.addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('keyup', e => {
+    keys[e.code] = false;
+    if (e.code === 'KeyF' && _fHoldTimer) {
+        clearTimeout(_fHoldTimer); _fHoldTimer = null;
+        if (!_fHoldFired && !whistleMenuOpen) {
+            // Quick tap — cycle all owned dragons
+            if (dragonMgr) {
+                const owned = dragonMgr.getOwnedDragons();
+                if (owned.length > 0) {
+                    // Determine majority mode to decide next mode
+                    const counts = { follow: 0, stay: 0, wander: 0 };
+                    for (const bd of owned) counts[bd._followMode || 'wander']++;
+                    let curMode = 'wander';
+                    if (counts.follow >= counts.stay && counts.follow >= counts.wander) curMode = 'follow';
+                    else if (counts.stay >= counts.wander) curMode = 'stay';
+                    const next = curMode === 'follow' ? 'stay' : curMode === 'stay' ? 'wander' : 'follow';
+                    const px = player.position.x, pz = player.position.z, py = player.position.y;
+                    for (const bd of owned) dragonMgr.setFollowMode(bd, next, px, pz, py);
+                    const modeText = next === 'follow' ? 'following you' : next === 'stay' ? 'staying' : 'wandering freely';
+                    addChatMessage(`All dragons: ${modeText}`, 'rgba(180,200,255,0.9)');
+                }
+            }
+        }
+    }
+});
 
 // ── Zoom — exact same as game.html ──
 let zoomLevel = 1.0;
@@ -8468,7 +8655,9 @@ document.addEventListener('keydown', e => {
         updateHotbarUI();
         updateSpellSlotUI();
     }
-    if (e.code === 'Escape' && settingsOpen) {
+    if (e.code === 'Escape' && whistleMenuOpen) {
+        closeWhistleMenu(); return;
+    } else if (e.code === 'Escape' && settingsOpen) {
         settingsOpen = false;
         document.getElementById('settingsMenu').style.display = 'none';
         pauseMenuEl.style.display = 'flex';
@@ -11359,6 +11548,21 @@ function doPlace(e) {
                     addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
                     return false;
                 }
+            }
+        }
+    }
+
+    // Right-click on a rideable dragon to mount it (not while holding meat)
+    if (dragonMgr && !dragonMgr.ridingDragon && placeHoldTime < 0.05) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (!isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.state === 'alive' && looked.age >= 1150 && !looked._fortressGuardian && !looked._stationary) {
+                dragonMgr.ridingDragon = true;
+                dragonMgr.ridingRef = looked;
+                addChatMessage(`Mounted ${looked.dragonName || 'dragon'}!`, 'rgba(180,200,255,0.9)');
+                return false;
             }
         }
     }
