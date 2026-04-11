@@ -111,11 +111,6 @@ function getDeepNorthBlend(x, z) {
         const d = dx*dx + dz*dz;
         if (d < 1) { const t = 1 - d; return t * t; }
     }
-    if (Math.abs(x) < 500) {
-        const fnw_dz = (z - (-1500)) / 65;
-        const fnw = fnw_dz * fnw_dz;
-        if (fnw < 1) { const xb = 1 - Math.abs(x)/500; const t = (1-fnw)*Math.min(1,xb*2); return t * t; }
-    }
     return 0;
 }
 function getFrozenBasinBlend(x, z) {
@@ -581,17 +576,6 @@ function getTerrainHeight(x, z) {
         h += mh;
     }
 
-    // Far north wall — massive east-west barrier near the edge
-    const fnw_dz = (z - (-1500)) / 65;
-    const fnw_d = fnw_dz * fnw_dz;
-    if (fnw_d < 1 && Math.abs(x) < 500) {
-        const xBlend = 1 - (Math.abs(x) / 500);
-        const t = (1 - fnw_d) * Math.min(1, xBlend * 2);
-        let mh = t * t * 90;
-        mh += Math.abs(Math.sin(x * 0.04)) * 25 * t;
-        mh += Math.sin(x * 0.08) * Math.cos((z + 1500) * 0.1) * 12 * t;
-        h += mh;
-    }
 
     // Rivers
     for (const riv of riverDefs) {
