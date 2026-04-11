@@ -1430,13 +1430,13 @@ export class DragonManager {
 
             // Occasionally take off / land while following (all ages)
             if (!target) {
-                bd._followFlyTimer = (bd._followFlyTimer || 10 + Math.random() * 20) - dt;
+                bd._followFlyTimer = (bd._followFlyTimer || 5 + Math.random() * 10) - dt;
                 if (bd._followFlyTimer <= 0) {
-                    bd._followFlyTimer = 12 + Math.random() * 25;
-                    if (!bd.flying && Math.random() < 0.35) {
+                    bd._followFlyTimer = 5 + Math.random() * 12;
+                    if (!bd.flying && Math.random() < 0.55) {
                         bd.flying = true;
                         bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
-                    } else if (bd.flying && Math.random() < 0.4) {
+                    } else if (bd.flying && Math.random() < 0.2) {
                         bd.flying = false;
                         bd.flyHeight = 0;
                     }
