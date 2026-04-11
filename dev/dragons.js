@@ -1452,24 +1452,34 @@ export class DragonManager {
             let moveX = 0, moveZ = 0;
             if (bd.flying) {
                 // Flying follow — circle around player
-                bd._followOrbitAngle = (bd._followOrbitAngle || Math.random() * Math.PI * 2) + dt * 0.4;
-                const orbitR = 10 + gs * 8;
+                // Pick a fly-to point near the player, change it periodically
+                bd._flyGoalTimer = (bd._flyGoalTimer || 0) - dt;
+                if (bd._flyGoalTimer <= 0 || !bd._flyGoalX) {
+                    bd._flyGoalTimer = 3 + Math.random() * 5;
+                    const ang = Math.random() * Math.PI * 2;
+                    const r = 5 + Math.random() * (10 + gs * 8);
+                    bd._flyGoalX = px + Math.sin(ang) * r;
+                    bd._flyGoalZ = pz + Math.cos(ang) * r;
+                }
+                // Move goal with player so it doesn't fall behind
+                bd._flyGoalX += (px - (bd._prevPX || px)); bd._flyGoalZ += (pz - (bd._prevPZ || pz));
+                bd._prevPX = px; bd._prevPZ = pz;
                 const flySpd = (14 + gs * 10) * dt;
-                if (bDist > orbitR + 8) {
+                const gx = bd._flyGoalX - bd.x, gz = bd._flyGoalZ - bd.z;
+                const gd = Math.sqrt(gx * gx + gz * gz) || 1;
+                if (bDist > 20 + gs * 10) {
                     // Far — fly toward player
                     moveX = bdx / bDist * flySpd;
                     moveZ = bdz / bDist * flySpd;
                 } else {
-                    // Circle around player
-                    const circleX = px + Math.sin(bd._followOrbitAngle) * orbitR;
-                    const circleZ = pz + Math.cos(bd._followOrbitAngle) * orbitR;
-                    const cdx = circleX - bd.x, cdz = circleZ - bd.z;
-                    const cd = Math.sqrt(cdx * cdx + cdz * cdz) || 1;
-                    moveX = cdx / cd * flySpd;
-                    moveZ = cdz / cd * flySpd;
+                    // Swoop toward goal point
+                    moveX = gx / gd * flySpd;
+                    moveZ = gz / gd * flySpd;
+                    // Pick new goal if reached
+                    if (gd < 3) bd._flyGoalTimer = 0;
                 }
                 bd.x += moveX; bd.z += moveZ;
-                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin(bd._followOrbitAngle * 0.8) * 4 * gs);
+                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin((bd._flyGoalTimer || 0) * 0.8) * 4 * gs);
                 bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
                 bd.walking = false;
             } else if (bDist > bd.followDist) {
