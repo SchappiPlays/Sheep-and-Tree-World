@@ -380,6 +380,7 @@ function getTerrainHeight(x, z) {
     }
 
     // Frozen mountains (north) — large ring with glacial basin
+    // Max world height is ~121. Base ring ~55, peaks up to +30, noise ~+10 = ~95 max
     const frDx = x - FM_CX, frDz = z - FM_CZ;
     const frDist = Math.sqrt(frDx * frDx + frDz * frDz);
     const frMtn = getFrozenMountainBlend(x, z);
@@ -390,21 +391,21 @@ function getTerrainHeight(x, z) {
         let mh = 0;
         if (onRing) {
             const ringT = 1 - Math.min(1, ringDist / (FM_RING_W / 2 + 20));
-            mh = ringT * ringT * 85;
+            mh = ringT * ringT * 55;
             // 12 peaks around the ring
             const peaks = [
-                { a: 0,    h: 65, r: 40 },
-                { a: 0.52, h: 80, r: 35 },   // tallest
-                { a: 1.05, h: 60, r: 38 },
-                { a: 1.57, h: 75, r: 36 },
-                { a: 2.09, h: 55, r: 40 },
-                { a: 2.62, h: 70, r: 34 },
-                { a: 3.14, h: 60, r: 38 },
-                { a: 3.67, h: 75, r: 36 },
-                { a: 4.19, h: 50, r: 42 },
-                { a: 4.71, h: 65, r: 38 },
-                { a: 5.24, h: 55, r: 40 },
-                { a: 5.76, h: 70, r: 36 },
+                { a: 0,    h: 30, r: 45 },
+                { a: 0.52, h: 38, r: 40 },
+                { a: 1.05, h: 28, r: 42 },
+                { a: 1.57, h: 35, r: 40 },
+                { a: 2.09, h: 25, r: 45 },
+                { a: 2.62, h: 32, r: 38 },
+                { a: 3.14, h: 28, r: 42 },
+                { a: 3.67, h: 35, r: 40 },
+                { a: 4.19, h: 22, r: 48 },
+                { a: 4.71, h: 30, r: 42 },
+                { a: 5.24, h: 25, r: 45 },
+                { a: 5.76, h: 32, r: 40 },
             ];
             for (const pk of peaks) {
                 const px = FM_CX + Math.cos(pk.a) * ringCenter;
@@ -414,20 +415,17 @@ function getTerrainHeight(x, z) {
                 if (pd < 1) { const t = 1 - pd; mh += t * t * pk.h; }
             }
             // Jagged ridgelines
-            mh += Math.abs(Math.sin((x + z * 0.7) * 0.05)) * 20 * ringT;
-            mh += (Math.sin((x + 30) * 0.07) * Math.cos((z + 800) * 0.09) * 15 + Math.cos((x + 20) * 0.11) * Math.sin((z + 780) * 0.08) * 12) * ringT;
-            mh += Math.abs(Math.cos((x * 0.13 - z * 0.11) * 0.8)) * 10 * ringT;
+            mh += Math.abs(Math.sin((x + z * 0.7) * 0.05)) * 10 * ringT;
+            mh += (Math.sin((x + 30) * 0.07) * Math.cos((z + 1050) * 0.09) * 8 + Math.cos((x + 20) * 0.11) * Math.sin((z + 1030) * 0.08) * 6) * ringT;
         }
         // Raised glacial basin inside
         if (frDist < FM_INNER) {
             const basinT = 1 - frDist / FM_INNER;
-            mh = 30 + basinT * 20;
-            // Undulating frozen terrain inside
-            mh += Math.sin(x * 0.08 + z * 0.06) * 5 + Math.cos(x * 0.05 - z * 0.07 + 1) * 4;
-            // Frozen ridges inside the basin
-            mh += Math.abs(Math.sin(x * 0.04 + z * 0.03)) * 8 * basinT;
+            mh = 20 + basinT * 15;
+            mh += Math.sin(x * 0.08 + z * 0.06) * 3 + Math.cos(x * 0.05 - z * 0.07 + 1) * 2.5;
+            mh += Math.abs(Math.sin(x * 0.04 + z * 0.03)) * 5 * basinT;
         }
-        mh += (Math.sin(x * 0.22 + z * 0.28) * 3 + Math.cos(x * 0.18 - z * 0.2) * 2.5) * frMtn;
+        mh += (Math.sin(x * 0.22 + z * 0.28) * 2 + Math.cos(x * 0.18 - z * 0.2) * 1.5) * frMtn;
         h += mh;
     }
 
@@ -440,10 +438,10 @@ function getTerrainHeight(x, z) {
     // Mountain passes
     // Frozen mountain pass — south entrance
     const fpDx=(x-(-30))/30,fpDz=(z-(-830))/24,fpD=fpDx*fpDx+fpDz*fpDz;
-    if(fpD<1){const t=1-fpD;h-=t*t*80;h=Math.max(3,h);}
+    if(fpD<1){const t=1-fpD;h-=t*t*50;h=Math.max(3,h);}
     // East pass
     const fp2Dx=(x-200)/24,fp2Dz=(z-(-1050))/30,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
-    if(fp2D<1){const t=1-fp2D;h-=t*t*75;h=Math.max(3,h);}
+    if(fp2D<1){const t=1-fp2D;h-=t*t*45;h=Math.max(3,h);}
     const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
     if(npD<1){const t=1-npD;h-=t*t*10;h=Math.max(0.5,h);}
     const spDx2=(x-555)/18,spDz2=(z+95)/14,spD2=spDx2*spDx2+spDz2*spDz2;
