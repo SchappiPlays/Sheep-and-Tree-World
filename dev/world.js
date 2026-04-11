@@ -82,7 +82,7 @@ function getFarEastMountainBlend(x, z) {
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
-const FM_CX = -30, FM_CZ = -800, FM_OUTER = 250, FM_RING_W = 70;
+const FM_CX = -30, FM_CZ = -1050, FM_OUTER = 280, FM_RING_W = 120;
 const FM_INNER = FM_OUTER - FM_RING_W;
 function getFrozenMountainBlend(x, z) {
     const dx = x - FM_CX, dz = z - FM_CZ;
@@ -439,11 +439,11 @@ function getTerrainHeight(x, z) {
 
     // Mountain passes
     // Frozen mountain pass — south entrance
-    const fpDx=(x-(-30))/28,fpDz=(z-(-600))/22,fpD=fpDx*fpDx+fpDz*fpDz;
-    if(fpD<1){const t=1-fpD;h-=t*t*70;h=Math.max(3,h);}
+    const fpDx=(x-(-30))/30,fpDz=(z-(-830))/24,fpD=fpDx*fpDx+fpDz*fpDz;
+    if(fpD<1){const t=1-fpD;h-=t*t*80;h=Math.max(3,h);}
     // East pass
-    const fp2Dx=(x-170)/22,fp2Dz=(z-(-800))/28,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
-    if(fp2D<1){const t=1-fp2D;h-=t*t*65;h=Math.max(3,h);}
+    const fp2Dx=(x-200)/24,fp2Dz=(z-(-1050))/30,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
+    if(fp2D<1){const t=1-fp2D;h-=t*t*75;h=Math.max(3,h);}
     const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
     if(npD<1){const t=1-npD;h-=t*t*10;h=Math.max(0.5,h);}
     const spDx2=(x-555)/18,spDz2=(z+95)/14,spD2=spDx2*spDx2+spDz2*spDz2;
