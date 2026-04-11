@@ -331,7 +331,7 @@ function getTerrainHeight(x, z) {
     }
 
     // Western Bay — single large elliptical inlet at the coast
-    const bayDx = (x - (-1110)) / 160, bayDz = (z - 15) / 110;
+    const bayDx = (x - (-1174)) / 160, bayDz = (z - 15) / 110;
     const bayD = bayDx * bayDx + bayDz * bayDz;
     if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-3) * s; }
 
