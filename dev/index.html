@@ -4939,7 +4939,7 @@ function startGame(loadSlotName) {
                 player.sprintSpeed = 8.0 * getStatSpeedMult();
             }
             // Always recalculate max HP from current formula (handles balance changes)
-            const newMaxHP = Math.max(2, 10 + getStatHPBonus());
+            const newMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
             playerHP = Math.min(playerHP, newMaxHP);
             playerMaxHP = newMaxHP;
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
@@ -5080,7 +5080,7 @@ function startGame(loadSlotName) {
         // New game — spawn at center, reset progression
         staffDamageDealt = 0;
         activeSpellSlot = 1;
-        playerMaxHP = Math.max(2, 10 + getStatHPBonus());
+        playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
         playerHP = playerMaxHP;
         playerMaxMana = Math.round(10 * getStatManaMult());
         playerMana = playerMaxMana;
