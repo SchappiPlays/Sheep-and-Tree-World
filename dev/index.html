@@ -1273,31 +1273,57 @@ function buildFarTerrain(centerX, centerZ) {
         scene.add(mesh);
         _lodStructures.push(mesh);
     };
-    // The Castle (-400, 20) — 60x50 blocks = ~28x24 world, walls 8.5h, keep 13h, towers 12h
-    _addLodBox(-400, 20, 28, 8.5, 24, 0x808080); // outer walls
-    _addLodBox(-400, 20, 11, 13, 9.5, 0x8a8a8a); // central keep
-    _addLodTower(-400-14, 20-12, 2.4, 12, 0x777777); // SW tower
-    _addLodTower(-400+14, 20-12, 2.4, 12, 0x777777); // SE tower
-    _addLodTower(-400-14, 20+12, 2.4, 12, 0x777777); // NW tower
-    _addLodTower(-400+14, 20+12, 2.4, 12, 0x777777); // NE tower
+    // Stone Castle / Kingdom (260, 105) — 100W×90D, walls ~8.5h, corner towers 16h
+    const kcX = 260, kcZ = 105, kcHW = 23.75, kcHD = 21.4;
+    // Outer walls (4 pieces)
+    _addLodBox(kcX, kcZ - kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(kcX, kcZ + kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(kcX - kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
+    _addLodBox(kcX + kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
+    // Corner towers (r=3.5 h=16 → 1.66r, 7.6h)
+    _addLodTower(kcX - kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX - kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
+    // Mid-wall towers
+    _addLodTower(kcX, kcZ - kcHD, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX, kcZ + kcHD, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX - kcHW, kcZ, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ, 1.4, 6.65, 0x777777);
+    // Gate towers
+    _addLodTower(kcX - 3, kcZ - kcHD, 1.2, 7, 0x888888);
+    _addLodTower(kcX + 3, kcZ - kcHD, 1.2, 7, 0x888888);
+    // Central keep / throne room
+    _addLodBox(kcX, kcZ, 11, 10, 9, 0x8a8a8a);
 
-    // Ruined Fortress (-505, -335) — 80x80 blocks = ~38x38 world, walls 5.7h, towers 10h
-    _addLodBox(-505, -335, 38, 5.7, 38, 0x6a6a5a); // outer walls (lower, ruined)
-    _addLodBox(-505, -335, 14, 8, 11, 0x7a7a6a); // central keep
-    _addLodTower(-505-19, -335-19, 2, 10, 0x5a5a50); // corner towers
-    _addLodTower(-505+19, -335-19, 2, 10, 0x5a5a50);
-    _addLodTower(-505-19, -335+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505+19, -335+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505, -335-19, 1.5, 8, 0x5a5a50); // mid-wall towers
-    _addLodTower(-505, -335+19, 1.5, 8, 0x5a5a50);
+    // Ruined Fortress (-505, -335) — walls partially crumbled
+    const rfX = -505, rfZ = -335, rfHW = 19, rfHD = 19;
+    _addLodBox(rfX, rfZ - rfHD, rfHW * 2 + 2, 5.7, 1.2, 0x6a6a5a);
+    _addLodBox(rfX, rfZ + rfHD, rfHW * 2 + 2, 4.2, 1.2, 0x5a5a50); // back wall lower (ruined)
+    _addLodBox(rfX - rfHW, rfZ, 1.2, 5.7, rfHD * 2 + 2, 0x6a6a5a);
+    _addLodBox(rfX + rfHW, rfZ, 1.2, 4.8, rfHD * 2 + 2, 0x5a5a50); // east wall crumbled
+    _addLodTower(rfX - rfHW, rfZ - rfHD, 2, 10, 0x5a5a50);
+    _addLodTower(rfX + rfHW, rfZ - rfHD, 2, 8, 0x5a5a50); // shorter (damaged)
+    _addLodTower(rfX - rfHW, rfZ + rfHD, 2, 10, 0x5a5a50);
+    _addLodTower(rfX + rfHW, rfZ + rfHD, 2, 6, 0x4a4a44); // most damaged
+    _addLodTower(rfX, rfZ - rfHD, 1.5, 8, 0x5a5a50);
+    _addLodTower(rfX, rfZ + rfHD, 1.5, 7, 0x5a5a50);
+    _addLodBox(rfX, rfZ, 14, 8, 11, 0x7a7a6a); // central keep
 
-    // Scorched Castle (-300, 280) — 50x40 blocks = ~24x19 world, walls 4.75h, towers 6.65h
-    _addLodBox(-300, 280, 24, 4.75, 19, 0x2a2020); // dark outer walls
-    _addLodBox(-300, 280, 9.5, 7, 6.5, 0x332828); // throne room
-    _addLodTower(-300-12, 280-9.5, 1.4, 6.65, 0x221818); // corner towers
-    _addLodTower(-300+12, 280-9.5, 1.4, 6.65, 0x221818);
-    _addLodTower(-300-12, 280+9.5, 1.4, 6.65, 0x221818);
-    _addLodTower(-300+12, 280+9.5, 1.4, 6.65, 0x221818);
+    // Scorched Castle (-300, 280) — blackened fortress, 60W×50D
+    const scX = -300, scZ = 280, scHW = 14.25, scHD = 11.9;
+    _addLodBox(scX, scZ - scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
+    _addLodBox(scX, scZ + scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
+    _addLodBox(scX - scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
+    _addLodBox(scX + scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
+    _addLodTower(scX - scHW, scZ - scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX + scHW, scZ - scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX - scHW, scZ + scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX + scHW, scZ + scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX, scZ - scHD, 1.2, 5.7, 0x221818); // mid-wall
+    _addLodTower(scX, scZ + scHD, 1.2, 5.7, 0x221818);
+    _addLodBox(scX + 2, scZ, 7.6, 6.2, 5.7, 0x332828); // keep
+    _addLodBox(scX - 6, scZ, 4.75, 7, 3.3, 0x332828); // throne room tower
 
     // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-350) r=170)
     // Each gate has twin towers ~10.5h, positioned at ring edge
