@@ -1120,7 +1120,7 @@ export class DragonManager {
             bd.growthScale = gs;
             bd.group.scale.setScalar(gs);
             bd.footOffset = 0.95 * 2.55 * gs;
-            bd.followDist = 2.5 + gs * 3;
+            bd.followDist = 4 + gs * 5;
             // Update max HP as dragon grows
             const newMaxHP = getDragonMaxHP(bd.age);
             if (newMaxHP > bd.maxHP) {
@@ -1452,10 +1452,10 @@ export class DragonManager {
             let moveX = 0, moveZ = 0;
             if (bd.flying) {
                 // Flying follow — circle around player
-                bd._followOrbitAngle = (bd._followOrbitAngle || Math.random() * Math.PI * 2) + dt * 0.5;
-                const orbitR = 6 + gs * 4;
+                bd._followOrbitAngle = (bd._followOrbitAngle || Math.random() * Math.PI * 2) + dt * 0.4;
+                const orbitR = 10 + gs * 8;
                 const flySpd = (14 + gs * 10) * dt;
-                if (bDist > orbitR + 5) {
+                if (bDist > orbitR + 8) {
                     // Far — fly toward player
                     moveX = bdx / bDist * flySpd;
                     moveZ = bdz / bDist * flySpd;
