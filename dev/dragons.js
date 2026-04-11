@@ -1462,7 +1462,7 @@ export class DragonManager {
                 if (bd._flyGoalTimer <= 0 || !bd._flyGoalX) {
                     bd._flyGoalTimer = 3 + Math.random() * 5;
                     const ang = Math.random() * Math.PI * 2;
-                    const r = 5 + Math.random() * (10 + gs * 8);
+                    const r = 3 + Math.random() * (5 + gs * 4);
                     bd._flyGoalX = px + Math.sin(ang) * r;
                     bd._flyGoalZ = pz + Math.cos(ang) * r;
                 }
@@ -1472,7 +1472,7 @@ export class DragonManager {
                 const flySpd = (14 + gs * 10) * dt;
                 const gx = bd._flyGoalX - bd.x, gz = bd._flyGoalZ - bd.z;
                 const gd = Math.sqrt(gx * gx + gz * gz) || 1;
-                if (bDist > 20 + gs * 10) {
+                if (bDist > 12 + gs * 6) {
                     // Far — fly toward player
                     moveX = bdx / bDist * flySpd;
                     moveZ = bdz / bDist * flySpd;
