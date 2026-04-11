@@ -4467,7 +4467,7 @@ function startGame(loadSlotName) {
 
     // === Hobgoblin Warchief + Goblins at south gate ===
     if (!killedBosses.has('Grokthak the Warchief')) {
-        const hgX = -30, hgZ = -80;
+        const hgX = -30, hgZ = -230; // south gate inner side (gate at z=-240)
         const hgY = getTerrainHeight(hgX, hgZ);
 
         // Spawn 6 goblin minions around the gate
@@ -4937,6 +4937,10 @@ function startGame(loadSlotName) {
                 Object.assign(playerStats, s.playerStats);
                 player.walkSpeed = 3.6 * getStatSpeedMult();
                 player.sprintSpeed = 8.0 * getStatSpeedMult();
+                // Recalculate max HP with current formula (handles balance changes)
+                const newMaxHP = Math.max(2, 10 + getStatHPBonus());
+                playerHP = Math.min(playerHP, newMaxHP);
+                playerMaxHP = newMaxHP;
             }
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
