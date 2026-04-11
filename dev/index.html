@@ -5047,7 +5047,9 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
-                    if (dd.iceBreath) bd._iceBreath = true;
+                    // Only trust iceBreath if egg color is actually from the ice nest
+                    const _iceColors = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
+                    if (dd.iceBreath && _iceColors.includes(dd.eggColor)) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
