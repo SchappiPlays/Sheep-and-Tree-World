@@ -9475,7 +9475,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
             delete chestData[ck];
             if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
             world._lootedChestKeys.add(ck);
-            updateHotbar();
+            updateHotbarUI();
             if (mp.active) mp.sendChestLoot(ck);
         }
     }
@@ -10628,7 +10628,7 @@ window._chestTakeItem = (itemKey) => {
     chest.items[itemKey] -= amount;
     if (chest.items[itemKey] <= 0) delete chest.items[itemKey];
     updateChestUI();
-    updateHotbar();
+    updateHotbarUI();
 };
 
 window._chestDepositItem = (itemKey) => {
@@ -10643,7 +10643,7 @@ window._chestDepositItem = (itemKey) => {
     inventory[itemKey] -= amount;
     if (inventory[itemKey] <= 0) delete inventory[itemKey];
     updateChestUI();
-    updateHotbar();
+    updateHotbarUI();
     if (inventoryOpen) updateInventoryUI();
 };
 
