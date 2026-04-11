@@ -151,6 +151,7 @@ export class Multiplayer {
                     chests: msg.world.lootedChests || [],
                     eggs: msg.world.pickedEggs || [],
                     bosses: msg.world.killedBosses || [],
+                    blocks: msg.world.blocks || {},
                 });
             }
             if (msg.world && this.onTimeOfDay) this.onTimeOfDay(msg.world.tod);

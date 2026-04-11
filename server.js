@@ -127,6 +127,7 @@ async function saveToSupabase() {
             lootedChests: [...world.lootedChests],
             pickedSwords: [...world.pickedSwords],
             killedBosses: [...world.killedBosses],
+            blocks: world.blocks,
             timeOfDay: world.timeOfDay,
         };
         await _sbRequest('POST', '/rest/v1/world_saves', { id: 'world', data, updated_at: new Date().toISOString() });
@@ -145,6 +146,7 @@ async function loadFromSupabase() {
             if (d.lootedChests) d.lootedChests.forEach(e => world.lootedChests.add(e));
             if (d.pickedSwords) d.pickedSwords.forEach(e => world.pickedSwords.add(e));
             if (d.killedBosses) d.killedBosses.forEach(e => world.killedBosses.add(e));
+            if (d.blocks) Object.assign(world.blocks, d.blocks);
             if (d.timeOfDay !== undefined) world.timeOfDay = d.timeOfDay;
             console.log('[satw-server] Loaded world from Supabase');
             return true;
@@ -159,6 +161,7 @@ const world = {
     lootedChests: new Set(),
     pickedSwords: new Set(),
     killedBosses: new Set(),
+    blocks: {},  // "x,y,z" → blockType — placed/broken blocks
     timeOfDay: 0.35,
 };
 
@@ -233,6 +236,7 @@ wss.on('connection', (ws) => {
             lootedChests: [...world.lootedChests],
             pickedSwords: [...world.pickedSwords],
             killedBosses: [...world.killedBosses],
+            blocks: world.blocks,
             tod: +world.timeOfDay.toFixed(4),
         },
         peers: [...clients.values()]
@@ -273,6 +277,11 @@ wss.on('connection', (ws) => {
         if (msg.t === 'chest_loot' && msg.key) world.lootedChests.add(msg.key);
         if (msg.t === 'sword_pickup' && msg.id) world.pickedSwords.add(msg.id);
         if (msg.t === 'boss_killed' && msg.name) world.killedBosses.add(msg.name);
+        if (msg.t === 'block' && msg.bx != null && msg.by != null && msg.bz != null) {
+            const key = msg.bx + ',' + msg.by + ',' + msg.bz;
+            if (msg.b === 0) delete world.blocks[key];
+            else world.blocks[key] = msg.b;
+        }
 
         // Tag with sender pid and broadcast to everyone else
         msg.pid = pid;
