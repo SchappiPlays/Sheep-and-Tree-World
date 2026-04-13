@@ -1546,7 +1546,7 @@ function collectSaveData() {
         playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
         playerStats: { ...playerStats },
         killedBosses: [...killedBosses],
-        playerXP, playerLevel, skillPoints,
+        playerXP, playerLevel, skillPoints, availableStatPoints,
         skills: { warrior: [...skills.warrior], wizard: [...skills.wizard] },
         horses: horseMgr ? horseMgr.getSaveData() : [],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
@@ -5062,7 +5062,7 @@ function startGame(loadSlotName) {
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
-            if (s.playerXP !== undefined) { playerXP = s.playerXP; playerLevel = s.playerLevel; skillPoints = s.skillPoints; }
+            if (s.playerXP !== undefined) { playerXP = s.playerXP; playerLevel = s.playerLevel; skillPoints = s.skillPoints; availableStatPoints = s.availableStatPoints || 0; }
             if (s.playerStats) {
                 Object.assign(playerStats, s.playerStats);
                 player.walkSpeed = 3.6 * getStatSpeedMult();
@@ -5380,6 +5380,7 @@ const STAT_DEFS = [
 const STAT_MAX_POINTS = 25;
 const STAT_MAX_EACH = 10;
 let playerStats = { strength: 0, agility: 0, fortitude: 0, dexterity: 0, wisdom: 0 };
+let availableStatPoints = 0; // earned by leveling up
 let _statPending = null; // resolve callback for stat allocation
 
 function getStatPointsUsed() {
@@ -6397,7 +6398,8 @@ function addXP(amount) {
         playerXP -= XP_PER_LEVEL;
         playerLevel++;
         skillPoints++;
-        addChatMessage(`Level up! You are now level ${playerLevel}. +1 skill point.`, 'rgba(255,220,100,0.95)');
+        availableStatPoints++;
+        addChatMessage(`Level up! You are now level ${playerLevel}. +1 skill point, +1 stat point.`, 'rgba(255,220,100,0.95)');
     }
 }
 
@@ -11437,9 +11439,25 @@ document.body.appendChild(levelMenuEl);
 function updateLevelMenuUI() {
     const xpPct = playerLevel >= MAX_LEVEL ? 100 : Math.floor((playerXP / XP_PER_LEVEL) * 100);
     let html = `<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;">Level ${playerLevel}</div>`;
-    html += `<div style="color:rgba(180,170,140,0.6);font:11px monospace;text-align:center;margin-bottom:4px;">XP: ${playerXP}/${XP_PER_LEVEL} (${xpPct}%) | Skill Points: <span style="color:#ffdd66;">${skillPoints}</span></div>`;
+    html += `<div style="color:rgba(180,170,140,0.6);font:11px monospace;text-align:center;margin-bottom:4px;">XP: ${playerXP}/${XP_PER_LEVEL} (${xpPct}%) | Skill Points: <span style="color:#ffdd66;">${skillPoints}</span> | Stat Points: <span style="color:#88ddff;">${availableStatPoints}</span></div>`;
     // XP bar
     html += `<div style="width:100%;height:8px;background:rgba(40,40,40,0.6);border-radius:4px;margin-bottom:12px;"><div style="width:${xpPct}%;height:100%;background:rgba(180,160,60,0.8);border-radius:4px;"></div></div>`;
+
+    // Stats section
+    html += '<div style="background:rgba(30,35,25,0.5);border-radius:6px;padding:10px;margin-bottom:12px;">';
+    html += '<div style="color:rgba(180,200,150,0.8);font:bold 13px Georgia,serif;text-align:center;margin-bottom:8px;">Stats</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">';
+    for (const def of STAT_DEFS) {
+        const v = playerStats[def.key];
+        const canAdd = availableStatPoints > 0 && v < STAT_MAX_EACH;
+        html += `<div style="background:rgba(40,50,30,0.6);border:1px solid rgba(120,160,80,0.3);border-radius:4px;padding:6px;text-align:center;" title="${def.desc}">`;
+        html += `<div style="color:rgba(220,200,160,0.9);font:14px Georgia,serif;">${def.icon}</div>`;
+        html += `<div style="color:rgba(200,190,160,0.85);font:bold 11px monospace;">${def.label}</div>`;
+        html += `<div style="color:#ffe0a0;font:bold 16px monospace;margin:3px 0;">${v}</div>`;
+        html += `<button onclick="window._addStatPoint('${def.key}')" ${canAdd ? '' : 'disabled'} style="width:100%;padding:3px;font:bold 14px monospace;background:${canAdd?'rgba(80,120,60,0.7)':'rgba(50,50,50,0.3)'};color:${canAdd?'#fff':'#666'};border:1px solid ${canAdd?'rgba(140,200,100,0.6)':'rgba(80,80,80,0.3)'};border-radius:3px;cursor:${canAdd?'pointer':'default'};">+</button>`;
+        html += '</div>';
+    }
+    html += '</div></div>';
 
     // Branching skill tree layout
     // Each node has: grid column, grid row position
@@ -11521,6 +11539,27 @@ function updateLevelMenuUI() {
     levelMenuEl.innerHTML = html;
 }
 
+window._addStatPoint = (key) => {
+    if (availableStatPoints <= 0) return;
+    if (playerStats[key] >= STAT_MAX_EACH) return;
+    playerStats[key]++;
+    availableStatPoints--;
+    // Apply effects that depend on stats
+    if (key === 'agility' && player) {
+        player.walkSpeed = 3.6 * getStatSpeedMult();
+        player.sprintSpeed = 8.0 * getStatSpeedMult();
+    }
+    if (key === 'fortitude') {
+        const newMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
+        playerMaxHP = newMaxHP;
+        updateHeartsUI();
+    }
+    if (key === 'wisdom') {
+        playerMaxMana = Math.round(10 * getStatManaMult());
+        updateManaUI();
+    }
+    updateLevelMenuUI();
+};
 window._unlockSkill = (tree, idx) => {
     unlockSkill(tree, idx);
     updateLevelMenuUI();
