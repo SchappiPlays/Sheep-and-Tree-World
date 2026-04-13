@@ -11214,6 +11214,22 @@ function updateShopUI() {
         const canBuyFull = totalMoney >= fullPrice;
         html += `<button onclick="window._buyRobeSet('${rc}','${rp}')" style="width:100%;margin-top:4px;padding:6px;font:11px monospace;background:rgba(80,60,120,0.5);color:#ddd;border:1px solid rgba(150,120,200,0.4);border-radius:3px;cursor:${canBuyFull?'pointer':'default'};opacity:${canBuyFull?1:0.4};">Buy Full Set — ${formatPrice(fullPrice)}</button>`;
         html += '</div>';
+
+        // Stat respec section (magic shop only) — 2 copper per point refunded
+        html += '<div style="color:rgba(180,170,140,0.7);font:11px monospace;margin-top:10px;margin-bottom:4px;">Stat Respec (2c per point refunded)</div>';
+        html += '<div style="padding:6px;border:1px solid rgba(100,80,140,0.3);border-radius:4px;">';
+        html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">';
+        const canRespec = totalMoney >= 2;
+        for (const def of STAT_DEFS) {
+            const v = playerStats[def.key];
+            const canRefund = canRespec && v > 0;
+            html += `<div style="text-align:center;">`;
+            html += `<div style="color:rgba(220,200,160,0.85);font:11px monospace;">${def.icon} ${def.label}</div>`;
+            html += `<div style="color:#ffe0a0;font:bold 13px monospace;margin:2px 0;">${v}</div>`;
+            html += `<button onclick="window._respecStat('${def.key}')" ${canRefund ? '' : 'disabled'} style="width:100%;padding:3px;font:10px monospace;background:${canRefund?'rgba(80,60,120,0.6)':'rgba(50,50,50,0.3)'};color:${canRefund?'#fff':'#666'};border:1px solid ${canRefund?'rgba(150,120,200,0.5)':'rgba(80,80,80,0.3)'};border-radius:3px;cursor:${canRefund?'pointer':'default'};">−1</button>`;
+            html += '</div>';
+        }
+        html += '</div></div>';
     }
 
     // Salvage section (blacksmith only) — break down weapons/armor into materials
@@ -11247,6 +11263,29 @@ window._shopBuy = (item, price) => {
     if (!spendCopper(price)) return;
     inventory[item] = (inventory[item] || 0) + 1;
     addXP(Math.max(1, Math.floor(price / 10)));
+    refreshUI(); updateShopUI();
+};
+window._respecStat = (key) => {
+    if (!playerStats[key] || playerStats[key] <= 0) return;
+    if (!spendCopper(2)) { addChatMessage('Need 2 copper to respec', 'rgba(255,150,100,0.9)'); return; }
+    playerStats[key]--;
+    availableStatPoints++;
+    // Reapply effects that depend on stats
+    if (key === 'agility' && player) {
+        player.walkSpeed = 3.6 * getStatSpeedMult();
+        player.sprintSpeed = 8.0 * getStatSpeedMult();
+    }
+    if (key === 'fortitude') {
+        playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
+        playerHP = Math.min(playerHP, playerMaxHP);
+        updateHeartsUI();
+    }
+    if (key === 'wisdom') {
+        playerMaxMana = Math.round(10 * getStatManaMult());
+        playerMana = Math.min(playerMana, playerMaxMana);
+        updateManaUI();
+    }
+    addChatMessage(`Refunded 1 ${key} point`, 'rgba(180,200,255,0.9)');
     refreshUI(); updateShopUI();
 };
 window._shopSell = (item) => {
