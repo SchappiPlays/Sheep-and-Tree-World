@@ -300,7 +300,9 @@ export class Multiplayer {
     // ── Outgoing send helpers ──
 
     _send(data) {
-        if (!this.active || !this.ws || this.ws.readyState !== 1) return;
+        if (!this.ws || this.ws.readyState !== 1) return;
+        // Host/join must send before we're "active"
+        if (data.t !== 'host' && data.t !== 'join' && !this.active) return;
         // Skip non-critical sends if buffer is backing up (> 64KB)
         if (this.ws.bufferedAmount > 65536 && data.t !== 'cc' && data.t !== 'block') return;
         try { this.ws.send(JSON.stringify(data)); } catch (e) {}
