@@ -790,9 +790,13 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
         for (let gz = -gridSize; gz <= gridSize; gz++) {
             const wx = gx * S, wz = gz * S;
             const h = getTerrainHeight(wx, wz);
-            if (h < -0.5) continue;
             const biome = _getBiome(wx, wz);
             let color;
+            // Water (below sea level)
+            if (h < 0.5) {
+                addBlock(wx, 0, wz, 0x3a7ab5);
+                continue;
+            }
             if (biome === 'glacial') color = 0x90c8e0;
             else if (biome === 'scorched') color = 0x2a2018;
             else if (biome === 'snow') color = 0xe0e0e8;
@@ -801,12 +805,24 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
             else color = 0x5a9040; // grass
-            // Check if this cell is on a path or river
+            // Beach sand — near water's edge
+            if (h < 2) color = 0xd4c07a;
+            // Check if this cell is on a path or river (override color)
             let inRiver = false;
-            if (isOnPath(wx, wz)) { color = 0x8a7a5a; }
-            for (const riv of riverDefs) {
-                if (getRiverBlend(wx, wz, riv) > 0.3) { color = 0x3a7ab5; inRiver = true; break; }
+            // Check a 3x3 sub-grid for paths/rivers since they're narrower than LOD step
+            let pathFound = false, riverFound = false;
+            const subStep = S / 2;
+            outer: for (let ox = -1; ox <= 1; ox++) {
+                for (let oz = -1; oz <= 1; oz++) {
+                    const sx = wx + ox * subStep, sz = wz + oz * subStep;
+                    if (!pathFound && isOnPath(sx, sz)) { pathFound = true; }
+                    for (const riv of riverDefs) {
+                        if (getRiverBlend(sx, sz, riv) > 0.3) { riverFound = true; break outer; }
+                    }
+                }
             }
+            if (pathFound) color = 0x8a7a5a;
+            if (riverFound) { color = 0x3a7ab5; inRiver = true; }
             addBlock(wx, inRiver ? h - S * 0.5 : h, wz, color);
             // Two layers below surface
             const dirt = biome === 'desert' || biome === 'desert_transition' ? 0xd4c07a : 0x8b6b3d;
@@ -1287,28 +1303,7 @@ function buildFarTerrain(centerX, centerZ) {
         scene.add(mesh);
         _lodStructures.push(mesh);
     };
-    // Stone Castle / Kingdom (260, 105) — 100W×90D, walls ~8.5h, corner towers 16h
-    const kcX = 260, kcZ = 105, kcHW = 23.75, kcHD = 21.4;
-    // Outer walls (4 pieces)
-    _addLodBox(kcX, kcZ - kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
-    _addLodBox(kcX, kcZ + kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
-    _addLodBox(kcX - kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
-    _addLodBox(kcX + kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
-    // Corner towers (r=3.5 h=16 → 1.66r, 7.6h)
-    _addLodTower(kcX - kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
-    _addLodTower(kcX + kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
-    _addLodTower(kcX - kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
-    _addLodTower(kcX + kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
-    // Mid-wall towers
-    _addLodTower(kcX, kcZ - kcHD, 1.4, 6.65, 0x777777);
-    _addLodTower(kcX, kcZ + kcHD, 1.4, 6.65, 0x777777);
-    _addLodTower(kcX - kcHW, kcZ, 1.4, 6.65, 0x777777);
-    _addLodTower(kcX + kcHW, kcZ, 1.4, 6.65, 0x777777);
-    // Gate towers
-    _addLodTower(kcX - 3, kcZ - kcHD, 1.2, 7, 0x888888);
-    _addLodTower(kcX + 3, kcZ - kcHD, 1.2, 7, 0x888888);
-    // Central keep / throne room
-    _addLodBox(kcX, kcZ, 11, 10, 9, 0x8a8a8a);
+    // (Stone Castle LOD removed — not built in dev/)
 
     // Ruined Fortress (-505, -335) — walls partially crumbled
     const rfX = -505, rfZ = -335, rfHW = 19, rfHD = 19;
