@@ -1312,7 +1312,17 @@ function buildFarTerrain(centerX, centerZ) {
         scene.add(mesh);
         _lodStructures.push(mesh);
     };
-    // (Stone Castle LOD removed — not built in dev/)
+    // Western Castle (-400, 20) — 60x50 blocks = ~28x24 world
+    const wcX = -400, wcZ = 20, wcHW = 14.25, wcHD = 11.9;
+    _addLodBox(wcX, wcZ - wcHD, wcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(wcX, wcZ + wcHD, wcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(wcX - wcHW, wcZ, 1.2, 8.5, wcHD * 2 + 2, 0x808080);
+    _addLodBox(wcX + wcHW, wcZ, 1.2, 8.5, wcHD * 2 + 2, 0x808080);
+    _addLodTower(wcX - wcHW, wcZ - wcHD, 2.4, 12, 0x777777);
+    _addLodTower(wcX + wcHW, wcZ - wcHD, 2.4, 12, 0x777777);
+    _addLodTower(wcX - wcHW, wcZ + wcHD, 2.4, 12, 0x777777);
+    _addLodTower(wcX + wcHW, wcZ + wcHD, 2.4, 12, 0x777777);
+    _addLodBox(wcX, wcZ, 11, 13, 9.5, 0x8a8a8a); // central keep
 
     // Ruined Fortress (-505, -335) — walls partially crumbled
     const rfX = -505, rfZ = -335, rfHW = 19, rfHD = 19;
@@ -2358,7 +2368,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.8, bladeThickness: 1.2,
             trimMat: 'emerald', name: 'Voidpiercer',
         };
-        fortressSwords.push({ id: s7, wx: -500, wz: -160, data: window._customSwords[s7] });
+        fortressSwords.push({ id: s7, wx: -500, wz: -342, data: window._customSwords[s7] });
 
         w._fortressSwords = fortressSwords;
     }
