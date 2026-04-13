@@ -1553,6 +1553,36 @@ function saveGame(slotName) {
     _persistSaves();
 }
 
+// Apply host's world state when joining multiplayer (guest side)
+// Applies only shared world data, not player character
+function _applyMultiplayerHostState(s) {
+    if (!s || !world) return;
+    // Modified blocks (placed/broken)
+    if (s.modifiedBlocks) {
+        const rebuilt = new Set();
+        for (const [key, val] of Object.entries(s.modifiedBlocks)) {
+            const [bx, by, bz] = key.split(',').map(Number);
+            world.setBlock(bx, by, bz, val);
+            const ck = Math.floor(bx / CHUNK_SIZE) + ',' + Math.floor(bz / CHUNK_SIZE);
+            if (!rebuilt.has(ck)) { rebuilt.add(ck); if (chunkManager) chunkManager.rebuildChunkAt(bx, bz); }
+        }
+        console.log('[mp] applied', Object.keys(s.modifiedBlocks).length, 'blocks from host');
+    }
+    // Picked eggs
+    if (s.pickedUpEggs && dragonMgr) {
+        for (const idx of s.pickedUpEggs) {
+            const e = dragonMgr.eggs[idx];
+            if (e && !e.pickedUp) { e.pickedUp = true; if (e.group) e.group.visible = false; }
+        }
+    }
+    // Killed bosses
+    if (s.killedBosses) for (const b of s.killedBosses) killedBosses.add(b);
+    // Time of day
+    if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
+    // Chests
+    if (s.chests) for (const [k, v] of Object.entries(s.chests)) chestData[k] = v;
+}
+
 function showToast(msg) {
     const t = document.getElementById('saveToast');
     t.textContent = msg; t.style.opacity = '1';
@@ -1637,15 +1667,32 @@ async function _ensureMpStats() {
 
 document.getElementById('playOnlineBtn').addEventListener('click', async () => {
     await _ensureMpStats();
-    document.getElementById('mpStatus').textContent = 'Connecting...';
-    mp.host(id => {
-        if (id) {
-            document.getElementById('mpStatus').textContent = 'Connected!';
-            startGame(null);
-        } else {
-            document.getElementById('mpStatus').textContent = 'Failed to connect';
-        }
-    });
+    const choice = prompt('Type HOST to host a new world, or paste a room code to join:', 'HOST');
+    if (!choice) return;
+    const mpStatus = document.getElementById('mpStatus');
+    if (choice.toUpperCase() === 'HOST') {
+        mpStatus.textContent = 'Hosting...';
+        mp.host(code => {
+            if (code) {
+                mpStatus.textContent = 'Room code: ' + code;
+                alert('Your room code: ' + code + '\nShare it with friends so they can join!');
+                startGame(null);
+            } else {
+                mpStatus.textContent = 'Failed to host';
+            }
+        });
+    } else {
+        mpStatus.textContent = 'Joining ' + choice + '...';
+        mp.join(choice, (code, reason) => {
+            if (code) {
+                mpStatus.textContent = 'Joined ' + code;
+                startGame(null);
+            } else {
+                mpStatus.textContent = 'Join failed: ' + (reason || 'unknown');
+                alert('Failed to join: ' + (reason || 'unknown'));
+            }
+        });
+    }
 });
 
 // ── World (created once, reset on new game) ──
@@ -3258,6 +3305,24 @@ function startGame(loadSlotName) {
         if (state.bosses) {
             for (const b of state.bosses) killedBosses.add(b);
         }
+    };
+    // Host: gather full world state for a joining guest
+    mp.onGatherFullState = () => {
+        try {
+            return collectSaveData();
+        } catch (e) { console.error('[mp] gather state failed', e); return {}; }
+    };
+    // Guest: apply full world state received from host
+    mp.onFullState = (state) => {
+        if (!state) return;
+        console.log('[mp] received full state from host');
+        try {
+            _applyMultiplayerHostState(state);
+        } catch (e) { console.error('[mp] apply state failed', e); }
+    };
+    // Room closed (host left)
+    mp.onRoomClosed = (reason) => {
+        addChatMessage('Multiplayer ended: ' + reason, 'rgba(255,150,100,0.9)');
     };
     // Boss killed by another peer — add to local set
     mp.onBossKilled = (name) => {

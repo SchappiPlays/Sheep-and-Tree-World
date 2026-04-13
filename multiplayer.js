@@ -109,9 +109,22 @@ export class Multiplayer {
         };
     }
 
-    // Legacy host/join API — both just connect to the shared server now
-    host(callback) { this._connect(id => callback && callback(id ? 'SHARED-WORLD' : null)); }
-    join(_code, callback) { this._connect(callback); }
+    // Host a new world — connect, then ask server for a room code
+    host(callback) {
+        this._connect(id => {
+            if (!id) { if (callback) callback(null); return; }
+            this._hostPendingCb = callback;
+            this._send({ t: 'host' });
+        });
+    }
+    // Join an existing world with a code
+    join(code, callback) {
+        this._connect(id => {
+            if (!id) { if (callback) callback(null); return; }
+            this._joinPendingCb = callback;
+            this._send({ t: 'join', code: String(code || '').toUpperCase() });
+        });
+    }
 
     disconnect() {
         this._intentionalDisconnect = true;
@@ -141,21 +154,26 @@ export class Multiplayer {
 
         if (t === 'welcome') {
             this.myId = String(msg.pid);
-            this.active = true;
-            this.isHost = !!msg.isHost;
-            console.log('[mp] welcomed as pid', this.myId, 'isHost=', this.isHost);
-            // Apply authoritative world state
-            if (msg.world && this.onWorldStateSync) {
-                this.onWorldStateSync({
-                    swords: msg.world.pickedSwords || [],
-                    chests: msg.world.lootedChests || [],
-                    eggs: msg.world.pickedEggs || [],
-                    bosses: msg.world.killedBosses || [],
-                    blocks: msg.world.blocks || {},
-                });
+            console.log('[mp] welcomed as pid', this.myId);
+            if (this._connectCallback) {
+                this._connectCallback(this.myId);
+                this._connectCallback = null;
             }
-            if (msg.world && this.onTimeOfDay) this.onTimeOfDay(msg.world.tod);
-            // Pre-create remote players for peers already connected
+            return;
+        }
+        if (t === 'hosting') {
+            this.active = true;
+            this.isHost = true;
+            this.roomCode = msg.code;
+            console.log('[mp] hosting room', msg.code);
+            if (this._hostPendingCb) { this._hostPendingCb(msg.code); this._hostPendingCb = null; }
+            return;
+        }
+        if (t === 'joined') {
+            this.active = true;
+            this.isHost = false;
+            this.roomCode = msg.code;
+            console.log('[mp] joined room', msg.code);
             if (msg.peers) {
                 for (const p of msg.peers) {
                     const pp = String(p.pid);
@@ -163,10 +181,32 @@ export class Multiplayer {
                     if (p.cc) this._applyRemoteCC(pp, p.cc);
                 }
             }
-            if (this._connectCallback) {
-                this._connectCallback(this.myId);
-                this._connectCallback = null;
+            if (this._joinPendingCb) { this._joinPendingCb(msg.code); this._joinPendingCb = null; }
+            return;
+        }
+        if (t === 'join_failed') {
+            console.warn('[mp] join failed:', msg.reason);
+            if (this._joinPendingCb) { this._joinPendingCb(null, msg.reason); this._joinPendingCb = null; }
+            this.disconnect();
+            return;
+        }
+        if (t === 'room_closed') {
+            console.warn('[mp] room closed:', msg.reason);
+            if (this.onRoomClosed) this.onRoomClosed(msg.reason || 'Room closed');
+            this.disconnect();
+            return;
+        }
+        if (t === 'request_state') {
+            // Host must send full world state for this guest
+            if (this.isHost && this.onGatherFullState) {
+                const state = this.onGatherFullState();
+                this._send({ t: 'full_state', forPid: msg.forPid, state });
             }
+            return;
+        }
+        if (t === 'full_state') {
+            // Guest receives world state from host
+            if (this.onFullState) this.onFullState(msg.state);
             return;
         }
         if (t === 'host_promoted') {
