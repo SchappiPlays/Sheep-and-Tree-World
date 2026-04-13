@@ -290,7 +290,11 @@ canvas { display: block; }
             <div id="savedGames"></div>
             <div style="margin-top:16px;border-top:1px solid rgba(120,160,80,0.3);padding-top:12px;">
                 <div style="color:rgba(180,170,140,0.6);font:11px monospace;margin-bottom:8px;">Multiplayer</div>
-                <button class="menu-btn" id="playOnlineBtn" style="margin-bottom:6px;">Play Online</button>
+                <button class="menu-btn" id="hostWorldBtn" style="margin-bottom:6px;">Host World</button>
+                <div style="display:flex;gap:4px;margin-bottom:6px;">
+                    <input type="text" id="joinCodeInput" maxlength="5" placeholder="CODE" style="flex:1;padding:8px;font:bold 13px monospace;text-align:center;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:4px;text-transform:uppercase;">
+                    <button class="menu-btn" id="joinWorldBtn" style="width:90px;padding:8px;font-size:13px;">Join</button>
+                </div>
                 <div id="mpStatus" style="color:rgba(150,200,100,0.7);font:11px monospace;margin-top:6px;min-height:16px;"></div>
             </div>
         </div>
@@ -1665,34 +1669,47 @@ async function _ensureMpStats() {
     _saveMpStats();
 }
 
-document.getElementById('playOnlineBtn').addEventListener('click', async () => {
+let _mpConnecting = false;
+const _mpStatus = () => document.getElementById('mpStatus');
+function _setMpButtons(disabled) {
+    document.getElementById('hostWorldBtn').disabled = disabled;
+    document.getElementById('joinWorldBtn').disabled = disabled;
+    document.getElementById('joinCodeInput').disabled = disabled;
+}
+document.getElementById('hostWorldBtn').addEventListener('click', async () => {
+    if (_mpConnecting) return;
+    _mpConnecting = true; _setMpButtons(true);
     await _ensureMpStats();
-    const choice = prompt('Type HOST to host a new world, or paste a room code to join:', 'HOST');
-    if (!choice) return;
-    const mpStatus = document.getElementById('mpStatus');
-    if (choice.toUpperCase() === 'HOST') {
-        mpStatus.textContent = 'Hosting...';
-        mp.host(code => {
-            if (code) {
-                mpStatus.textContent = 'Room code: ' + code;
-                alert('Your room code: ' + code + '\nShare it with friends so they can join!');
-                startGame(null);
-            } else {
-                mpStatus.textContent = 'Failed to host';
-            }
-        });
-    } else {
-        mpStatus.textContent = 'Joining ' + choice + '...';
-        mp.join(choice, (code, reason) => {
-            if (code) {
-                mpStatus.textContent = 'Joined ' + code;
-                startGame(null);
-            } else {
-                mpStatus.textContent = 'Join failed: ' + (reason || 'unknown');
-                alert('Failed to join: ' + (reason || 'unknown'));
-            }
-        });
-    }
+    _mpStatus().textContent = 'Hosting...';
+    mp.host(code => {
+        _mpConnecting = false; _setMpButtons(false);
+        if (code) {
+            _mpStatus().innerHTML = 'Room: <span style="color:#e0d080;font-weight:bold;letter-spacing:2px;">' + code + '</span>';
+            startGame(null);
+        } else {
+            _mpStatus().textContent = 'Failed to host';
+        }
+    });
+});
+document.getElementById('joinWorldBtn').addEventListener('click', async () => {
+    if (_mpConnecting) return;
+    const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+    if (!code) { _mpStatus().textContent = 'Enter a room code'; return; }
+    _mpConnecting = true; _setMpButtons(true);
+    await _ensureMpStats();
+    _mpStatus().textContent = 'Joining ' + code + '...';
+    mp.join(code, (gotCode, reason) => {
+        _mpConnecting = false; _setMpButtons(false);
+        if (gotCode) {
+            _mpStatus().textContent = 'Joined ' + gotCode;
+            startGame(null);
+        } else {
+            _mpStatus().textContent = 'Join failed: ' + (reason || 'unknown');
+        }
+    });
+});
+document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('joinWorldBtn').click();
 });
 
 // ── World (created once, reset on new game) ──
