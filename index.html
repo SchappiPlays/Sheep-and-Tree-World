@@ -253,7 +253,7 @@ canvas { display: block; }
 .menu-btn.delete { background: rgba(80,30,30,0.5); border-color: rgba(160,60,60,0.4); font-size: 11px; width: 80px; padding: 6px; }
 .menu-btn.delete:hover { background: rgba(120,40,40,0.7); }
 .save-slot {
-    display: flex; align-items: center; gap: 6px; width: 440px;
+    display: flex; align-items: center; gap: 6px; width: 510px;
     background: rgba(30,40,25,0.5); border: 1px solid rgba(100,120,70,0.3);
     border-radius: 6px; padding: 8px 12px;
 }
@@ -1609,6 +1609,7 @@ function updateMenuUI() {
             html += `<div class="save-slot">
                 <div class="info"><div class="name">${name}</div>${date}</div>
                 <button class="menu-btn" style="width:80px;padding:8px;font-size:13px;" data-load="${name}">Load</button>
+                <button class="menu-btn" style="width:65px;padding:6px;font-size:11px;" data-host="${name}">Host</button>
                 <button class="menu-btn" style="width:65px;padding:6px;font-size:11px;" data-rename="${name}">Rename</button>
                 <button class="menu-btn delete" data-delete="${name}">Delete</button>
             </div>`;
@@ -1617,6 +1618,22 @@ function updateMenuUI() {
     document.getElementById('savedGames').innerHTML = html;
     document.querySelectorAll('[data-load]').forEach(btn => {
         btn.addEventListener('click', () => startGame(btn.dataset.load));
+    });
+    document.querySelectorAll('[data-host]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (_mpConnecting) return;
+            _mpConnecting = true; _setMpButtons(true);
+            _mpStatus().textContent = 'Hosting...';
+            mp.host(code => {
+                _mpConnecting = false; _setMpButtons(false);
+                if (code) {
+                    _mpStatus().innerHTML = 'Room: <span style="color:#e0d080;font-weight:bold;letter-spacing:2px;">' + code + '</span>';
+                    startGame(btn.dataset.host);
+                } else {
+                    _mpStatus().textContent = 'Failed to host';
+                }
+            });
+        });
     });
     document.querySelectorAll('[data-rename]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -5693,25 +5710,44 @@ document.body.appendChild(mpPanelEl);
 function updateMpPanel() {
     let html = '<div style="color:rgba(220,200,160,0.9);font:bold 18px Georgia,serif;text-align:center;margin-bottom:12px;">Multiplayer</div>';
     if (mp.active) {
-        html += `<div style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">Connected | Players: ${mp.playerCount || 1}</div>`;
+        const codeDisplay = mp.roomCode ? `<div style="text-align:center;color:#e0d080;font:bold 16px monospace;letter-spacing:3px;margin-bottom:8px;">${mp.roomCode}</div>` : '';
+        html += codeDisplay;
+        html += `<div style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">${mp.isHost ? 'Hosting' : 'Joined'} | Players: ${mp.playerCount || 1}</div>`;
         html += `<button onclick="window._mpDisconnect()" class="menu-btn" style="width:100%;background:rgba(80,40,30,0.7);border-color:rgba(160,80,60,0.5);">Disconnect</button>`;
     } else {
-        html += `<button onclick="window._mpHost()" class="menu-btn" style="width:100%;margin-bottom:8px;">Play Online</button>`;
+        html += `<button onclick="window._mpHostInGame()" class="menu-btn" style="width:100%;margin-bottom:8px;">Host Current World</button>`;
+        html += `<div style="display:flex;gap:4px;margin-bottom:6px;"><input type="text" id="mpPanelCode" maxlength="5" placeholder="CODE" style="flex:1;padding:8px;font:bold 13px monospace;text-align:center;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:4px;text-transform:uppercase;"><button onclick="window._mpJoinInGame()" class="menu-btn" style="width:90px;padding:8px;font-size:13px;">Join</button></div>`;
         html += '<div id="mpPanelStatus" style="color:rgba(150,140,110,0.5);font:11px monospace;text-align:center;min-height:16px;"></div>';
     }
     html += `<button onclick="window._closeMpPanel()" class="menu-btn" style="width:100%;margin-top:8px;">Back</button>`;
     mpPanelEl.innerHTML = html;
 }
 
-window._mpHost = () => {
+window._mpHost = () => window._mpHostInGame();
+window._mpHostInGame = () => {
     const statusEl = document.getElementById('mpPanelStatus');
-    if (statusEl) statusEl.textContent = 'Connecting...';
-    mp.host(id => {
-        if (id) {
+    if (statusEl) statusEl.textContent = 'Hosting...';
+    mp.host(code => {
+        if (code) {
             if (dragonMgr) dragonMgr.setMyPid(mp.myId);
             updateMpPanel();
         } else {
-            if (statusEl) statusEl.textContent = 'Failed to connect';
+            if (statusEl) statusEl.textContent = 'Failed to host';
+        }
+    });
+};
+window._mpJoinInGame = () => {
+    const input = document.getElementById('mpPanelCode');
+    const code = input ? input.value.trim().toUpperCase() : '';
+    if (!code) { const s = document.getElementById('mpPanelStatus'); if (s) s.textContent = 'Enter a code'; return; }
+    const statusEl = document.getElementById('mpPanelStatus');
+    if (statusEl) statusEl.textContent = 'Joining ' + code + '...';
+    mp.join(code, (gotCode, reason) => {
+        if (gotCode) {
+            if (dragonMgr) dragonMgr.setMyPid(mp.myId);
+            updateMpPanel();
+        } else {
+            if (statusEl) statusEl.textContent = 'Join failed: ' + (reason || 'unknown');
         }
     });
 };
