@@ -56,6 +56,9 @@ export class Multiplayer {
         this.onPvpHit = null;
         this.onPeerDisconnect = null;
         this.onDragonHatch = null;
+        this.onDragonGrab = null;
+        this.onDragonHold = null;
+        this.onDragonDrop = null;
     }
 
     // ── Connection lifecycle ──
@@ -148,6 +151,7 @@ export class Multiplayer {
                     chests: msg.world.lootedChests || [],
                     eggs: msg.world.pickedEggs || [],
                     bosses: msg.world.killedBosses || [],
+                    blocks: msg.world.blocks || {},
                 });
             }
             if (msg.world && this.onTimeOfDay) this.onTimeOfDay(msg.world.tod);
@@ -237,6 +241,18 @@ export class Multiplayer {
         }
         if (t === 'pvp') {
             if (msg.targetPid === this.myId && this.onPvpHit) this.onPvpHit(msg.damage, msg.fromPid);
+            return;
+        }
+        if (t === 'dragon_grab') {
+            if (msg.targetPid === this.myId && this.onDragonGrab) this.onDragonGrab(pid);
+            return;
+        }
+        if (t === 'dragon_hold') {
+            if (msg.targetPid === this.myId && this.onDragonHold) this.onDragonHold(msg.x, msg.y, msg.z);
+            return;
+        }
+        if (t === 'dragon_drop') {
+            if (msg.targetPid === this.myId && this.onDragonDrop) this.onDragonDrop();
             return;
         }
     }

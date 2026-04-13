@@ -10,11 +10,14 @@ const VILLAGE_DEFS = [
     { x: -200, z: 100, houses: 3, name: 'Western Hamlet' },
     { x: 50, z: -150, houses: 4, name: 'Northwatch' },
     { x: -150, z: 200, houses: 3, name: 'Southmoor' },
+    { x: 100, z: 550, houses: 5, name: 'Desert Crossing', biome: 'desert' },
+    { x: -120, z: 620, houses: 4, name: 'Sunstone', biome: 'desert' },
+    { x: 250, z: 680, houses: 3, name: 'Dune\'s End', biome: 'desert' },
 ];
 
 // House templates — defined as block offsets from base corner
 // All coords are (dx, dy, dz) relative to house origin
-function getHouseBlocks(seed, sizeIdx) {
+function getHouseBlocks(seed, sizeIdx, biome) {
     const blocks = [];
     // Player is 6 blocks tall — houses need ~10 block walls, doors 7 tall
     const sizes = [
@@ -23,10 +26,11 @@ function getHouseBlocks(seed, sizeIdx) {
         { w: 18, d: 14, wallH: 12, roofH: 6 }, // large house
     ];
     const s = sizes[sizeIdx % 3];
-    const wallMat = seed > 0.7 ? BLOCK.PLANKS : BLOCK.STONE;
-    const floorMat = BLOCK.PLANKS;
-    const roofMat = BLOCK.PLANKS;
-    const foundationMat = BLOCK.STONE;
+    const isDesert = biome === 'desert';
+    const wallMat = isDesert ? BLOCK.SAND : (seed > 0.7 ? BLOCK.PLANKS : BLOCK.STONE);
+    const floorMat = isDesert ? BLOCK.SAND : BLOCK.PLANKS;
+    const roofMat = isDesert ? BLOCK.SAND : BLOCK.PLANKS;
+    const foundationMat = isDesert ? BLOCK.SAND : BLOCK.STONE;
 
     // Foundation — fill deep underneath to handle any slope (20 blocks down)
     for (let x = -1; x <= s.w; x++)
@@ -57,9 +61,9 @@ function getHouseBlocks(seed, sizeIdx) {
                     (z === s.d - 1 && x >= Math.floor(s.w / 2) - 1 && x <= Math.floor(s.w / 2) + 1)
                 );
                 if (isDoor || isWindow) continue;
-                // Corner pillars are logs
+                // Corner pillars are logs (stone in desert)
                 const isCorner = (x === 0 || x === s.w - 1) && (z === 0 || z === s.d - 1);
-                blocks.push({ x, y, z, b: isCorner ? BLOCK.WOOD : wallMat });
+                blocks.push({ x, y, z, b: isCorner ? (isDesert ? BLOCK.STONE : BLOCK.WOOD) : wallMat });
             }
         }
     }
@@ -415,7 +419,7 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
                 if (th > maxH) maxH = th;
             }
             const baseY = maxH + yOff;
-            const houseBlocks = getHouseBlocks(seed, sizeIdx);
+            const houseBlocks = getHouseBlocks(seed, sizeIdx, vd.biome);
 
             // FIRST: Clear everything in the house area (terrain, trees, etc)
             const hs = [{ w: 12, d: 10, h: 10, rh: 4 }, { w: 15, d: 12, h: 10, rh: 5 }, { w: 18, d: 14, h: 12, rh: 6 }][sizeIdx % 3];

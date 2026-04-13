@@ -115,12 +115,12 @@ export class ChunkManager {
                             continue;
                         }
                     }
-                    // Priority: bias toward the same side of the world as the player
-                    // If player is left of center, left-side chunks load first
-                    const sameX = (pcx > 0 && cx > 0) || (pcx < 0 && cx < 0) || pcx === 0;
-                    const sameZ = (pcz > 0 && cz > 0) || (pcz < 0 && cz < 0) || pcz === 0;
-                    const sameSide = (sameX && sameZ) ? 0.5 : 1.5; // half priority if same side
-                    const priority = d2 * sameSide;
+                    // Priority: distance + bias toward facing direction
+                    const dot = dx * faceDX + dz * faceDZ;
+                    // Skip chunks far behind the player (saves build time when flying)
+                    if (dot < -3 && d2 > 25) continue;
+                    const facing = dot > 0 ? 0.5 : 1.5; // chunks in front load first
+                    const priority = d2 * facing;
                     this.buildQueue.push({ cx, cz, key, dist: d2, lod, priority });
                     queued.add(key);
                 }
@@ -606,8 +606,7 @@ export class ChunkManager {
                             }
                             continue; // skip normal block face
                         } else if (block === BLOCK.CAMPFIRE) {
-                            // Render as grass so ground shows beneath campfire model
-                            tmpColor.setHex(BLOCK_COLORS[BLOCK.GRASS]);
+                            continue; // skip — 3D campfire model renders instead
                         } else {
                             tmpColor.setHex(BLOCK_COLORS[block] || 0xff00ff);
                         }

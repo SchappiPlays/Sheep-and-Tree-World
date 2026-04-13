@@ -98,6 +98,68 @@ canvas { display: block; }
     color: rgba(220,200,160,0.85); font: bold 15px monospace;
     text-align: center; margin-bottom: 10px;
 }
+#whistleMenu {
+    display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 115;
+    background: rgba(10,12,10,0.7);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(120,160,200,0.35);
+    border-radius: 10px;
+    padding: 18px 22px;
+    min-width: 320px; max-width: 400px;
+    user-select: none;
+}
+#whistleMenu h2 {
+    color: rgba(180,200,255,0.9); font: bold 16px monospace;
+    text-align: center; margin: 0 0 12px;
+}
+#whistleDragonList {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 260px; overflow-y: auto;
+    margin-bottom: 12px;
+}
+.whistle-dragon-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px;
+    background: rgba(40,50,40,0.5);
+    border: 1px solid rgba(100,120,80,0.25);
+    cursor: pointer; font: 13px monospace; color: rgba(200,200,180,0.9);
+    transition: background 0.15s;
+}
+.whistle-dragon-row:hover { background: rgba(60,70,55,0.6); }
+.whistle-dragon-row.selected {
+    background: rgba(60,90,60,0.6);
+    border-color: rgba(140,200,140,0.5);
+}
+.whistle-dragon-row .wd-check {
+    width: 16px; height: 16px; border-radius: 3px;
+    border: 1px solid rgba(150,170,130,0.5);
+    background: rgba(30,35,30,0.6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: rgba(140,220,140,0.9);
+}
+.whistle-dragon-row.selected .wd-check { background: rgba(50,80,50,0.7); }
+.whistle-dragon-row .wd-name { flex: 1; }
+.whistle-dragon-row .wd-mode {
+    font-size: 11px; color: rgba(160,160,140,0.6);
+}
+#whistleButtons {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 8px;
+}
+.whistle-btn {
+    padding: 8px 18px; font: bold 13px monospace;
+    border-radius: 5px; border: 1px solid rgba(120,160,200,0.3);
+    background: rgba(30,40,50,0.6); color: rgba(180,200,220,0.9);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.whistle-btn:hover {
+    background: rgba(50,70,90,0.7); border-color: rgba(140,180,220,0.5);
+}
+#whistleHint {
+    text-align: center; font: 10px monospace;
+    color: rgba(150,150,130,0.45); margin-top: 2px;
+}
 .inv-section-label {
     color: rgba(180,160,120,0.6); font: 11px monospace;
     margin: 10px 0 4px 2px;
@@ -191,7 +253,7 @@ canvas { display: block; }
 .menu-btn.delete { background: rgba(80,30,30,0.5); border-color: rgba(160,60,60,0.4); font-size: 11px; width: 80px; padding: 6px; }
 .menu-btn.delete:hover { background: rgba(120,40,40,0.7); }
 .save-slot {
-    display: flex; align-items: center; gap: 8px; width: 360px;
+    display: flex; align-items: center; gap: 6px; width: 440px;
     background: rgba(30,40,25,0.5); border: 1px solid rgba(100,120,70,0.3);
     border-radius: 6px; padding: 8px 12px;
 }
@@ -289,7 +351,7 @@ canvas { display: block; }
 <div id="statAllocationMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:550;flex-direction:column;align-items:center;justify-content:center;">
     <div style="background:rgba(25,35,20,0.95);border:2px solid rgba(120,160,80,0.4);border-radius:10px;padding:24px 32px;min-width:340px;">
         <h2 style="color:rgba(220,200,160,0.9);font:bold 20px monospace;margin:0 0 4px;text-align:center;">Allocate Stats</h2>
-        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 20</div>
+        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 25</div>
         <div id="statRows" style="display:flex;flex-direction:column;gap:8px;"></div>
         <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
     </div>
@@ -400,6 +462,20 @@ canvas { display: block; }
 </div>
 <div id="hotbar"></div>
 <div id="inventoryScreen"><h2>Inventory</h2><div id="invContents"></div></div>
+<div id="whistleMenu">
+    <h2>Dragon Commands</h2>
+    <div id="whistleDragonList"></div>
+    <div id="whistleButtons">
+        <button class="whistle-btn" data-cmd="follow">Follow</button>
+        <button class="whistle-btn" data-cmd="stay">Stay</button>
+        <button class="whistle-btn" data-cmd="wander">Wander</button>
+    </div>
+    <div id="whistleButtons2" style="margin-top:6px;">
+        <button class="whistle-btn" data-cmd="aggressive">Aggressive</button>
+        <button class="whistle-btn" data-cmd="passive">Passive</button>
+    </div>
+    <div id="whistleHint">Click dragons to select/deselect | Press command button | F to close</div>
+</div>
 <div id="dragGhost"></div>
 <div id="worldMap"><h2>World Map</h2><canvas id="mapCanvas" width="600" height="600"></canvas></div>
 <script src="three.min.js" onerror="
@@ -408,7 +484,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -491,6 +567,134 @@ moonGlow.renderOrder = -10;
 moonGlow.visible = false;
 scene.add(moonGlow);
 
+// ── Night Sky — procedural stars + milky way ──
+const _nightSkyGroup = new THREE.Group();
+_nightSkyGroup.renderOrder = -20;
+scene.add(_nightSkyGroup);
+
+// Stars — scattered points on a sphere
+const _starCount = 1800;
+const _starPos = new Float32Array(_starCount * 3);
+const _starSizes = new Float32Array(_starCount);
+const _starColors = new Float32Array(_starCount * 3);
+const _starR = 4500;
+for (let i = 0; i < _starCount; i++) {
+    // Uniform distribution on sphere (above horizon only)
+    const u = Math.random(), v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    // Bias toward upper hemisphere — skip stars below y=−0.1
+    const y = Math.cos(phi);
+    if (y < -0.1) { _starPos[i*3]=0; _starPos[i*3+1]=-9999; _starPos[i*3+2]=0; _starSizes[i]=0; continue; }
+    _starPos[i*3]   = Math.sin(phi) * Math.cos(theta) * _starR;
+    _starPos[i*3+1] = y * _starR;
+    _starPos[i*3+2] = Math.sin(phi) * Math.sin(theta) * _starR;
+    // Vary size — mostly small, a few bright ones
+    const rnd = Math.random();
+    _starSizes[i] = rnd < 0.92 ? 1.5 + Math.random() * 2 : 3.5 + Math.random() * 4;
+    // Slight color variation — white, bluish, yellowish
+    const tint = Math.random();
+    if (tint < 0.6) { _starColors[i*3]=1; _starColors[i*3+1]=1; _starColors[i*3+2]=1; }
+    else if (tint < 0.8) { _starColors[i*3]=0.7; _starColors[i*3+1]=0.8; _starColors[i*3+2]=1; }
+    else if (tint < 0.95) { _starColors[i*3]=1; _starColors[i*3+1]=0.95; _starColors[i*3+2]=0.7; }
+    else { _starColors[i*3]=1; _starColors[i*3+1]=0.6; _starColors[i*3+2]=0.4; } // rare reddish
+}
+const _starGeo = new THREE.BufferGeometry();
+_starGeo.setAttribute('position', new THREE.BufferAttribute(_starPos, 3));
+_starGeo.setAttribute('size', new THREE.BufferAttribute(_starSizes, 1));
+_starGeo.setAttribute('color', new THREE.BufferAttribute(_starColors, 3));
+const _starMat = new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0 }, twinkleTime: { value: 0 } },
+    vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        varying float vId;
+        void main() {
+            vColor = color;
+            vId = position.x * 0.01 + position.z * 0.013;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (300.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+        }
+    `,
+    fragmentShader: `
+        uniform float opacity;
+        uniform float twinkleTime;
+        varying vec3 vColor;
+        varying float vId;
+        void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float glow = 1.0 - d * 2.0;
+            glow = glow * glow;
+            float twinkle = 0.7 + 0.3 * sin(twinkleTime * 1.5 + vId * 100.0);
+            gl_FragColor = vec4(vColor * glow * twinkle, opacity * glow);
+        }
+    `,
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending
+});
+const _starPoints = new THREE.Points(_starGeo, _starMat);
+_nightSkyGroup.add(_starPoints);
+
+// Milky way band — faint glowing strip of clustered dim points
+const _mwCount = 2400;
+const _mwPos = new Float32Array(_mwCount * 3);
+const _mwSizes = new Float32Array(_mwCount);
+const _mwColors = new Float32Array(_mwCount * 3);
+for (let i = 0; i < _mwCount; i++) {
+    // Band along a great circle tilted ~30 degrees
+    const t = Math.random() * Math.PI * 2;
+    const spread = (Math.random() - 0.5) * 0.35; // width of band in radians
+    const tilt = 0.5; // tilt angle
+    let x = Math.cos(t) * _starR;
+    let y = (Math.sin(t) * Math.cos(tilt) + spread * Math.sin(tilt)) * _starR;
+    let z = (Math.sin(t) * Math.sin(tilt) + spread * Math.cos(tilt)) * _starR;
+    // Normalize to sphere
+    const len = Math.sqrt(x*x+y*y+z*z);
+    x = x/len*_starR; y = y/len*_starR; z = z/len*_starR;
+    if (y < -500) { y = -9999; } // hide below horizon
+    _mwPos[i*3]=x; _mwPos[i*3+1]=y; _mwPos[i*3+2]=z;
+    _mwSizes[i] = 2 + Math.random() * 5;
+    // Bluish-white milky way color
+    const b = 0.5 + Math.random() * 0.5;
+    _mwColors[i*3]=0.6*b; _mwColors[i*3+1]=0.7*b; _mwColors[i*3+2]=1.0*b;
+}
+const _mwGeo = new THREE.BufferGeometry();
+_mwGeo.setAttribute('position', new THREE.BufferAttribute(_mwPos, 3));
+_mwGeo.setAttribute('size', new THREE.BufferAttribute(_mwSizes, 1));
+_mwGeo.setAttribute('color', new THREE.BufferAttribute(_mwColors, 3));
+const _mwMat = new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0 } },
+    vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        void main() {
+            vColor = color;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (300.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+        }
+    `,
+    fragmentShader: `
+        uniform float opacity;
+        varying vec3 vColor;
+        void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float glow = 1.0 - d * 2.0;
+            glow = pow(glow, 1.5);
+            gl_FragColor = vec4(vColor * glow * 0.4, opacity * glow * 0.35);
+        }
+    `,
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending
+});
+const _mwPoints = new THREE.Points(_mwGeo, _mwMat);
+_nightSkyGroup.add(_mwPoints);
+
+let _nightSkyAlpha = 0;
+
 // ── Clouds ──
 const clouds = [];
 const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, fog: false });
@@ -561,6 +765,8 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     const range = 150; // world units in each direction
     const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
     const _getBiome = (wx, wz) => {
+        const glacial = getFrozenBasinBlend(wx, wz);
+        if (glacial > 0.05) return 'glacial';
         const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx,wz), sc = getScorchedBlend(wx,wz);
         if (sc > 0.1) return 'scorched'; if (snow > 0.5) return 'snow'; if (desert > 0.5) return 'desert';
         if (mtn > 0.3) return 'mountain'; if (snow > 0) return 'snow_transition'; if (desert > 0) return 'desert_transition'; return 'grass';
@@ -583,14 +789,21 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             if (h < -0.5) continue;
             const biome = _getBiome(wx, wz);
             let color;
-            if (biome === 'scorched') color = 0x2a2018;
+            if (biome === 'glacial') color = 0x90c8e0;
+            else if (biome === 'scorched') color = 0x2a2018;
             else if (biome === 'snow') color = 0xe0e0e8;
             else if (biome === 'snow_transition') color = 0xb0c8b0;
             else if (biome === 'desert') color = 0xd4c07a;
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
             else color = 0x5a9040; // grass
-            addBlock(wx, h, wz, color);
+            // Check if this cell is on a path or river
+            let inRiver = false;
+            if (isOnPath(wx, wz)) { color = 0x8a7a5a; }
+            for (const riv of riverDefs) {
+                if (getRiverBlend(wx, wz, riv) > 0.3) { color = 0x3a7ab5; inRiver = true; break; }
+            }
+            addBlock(wx, inRiver ? h - S * 0.5 : h, wz, color);
             // Two layers below surface
             const dirt = biome === 'desert' || biome === 'desert_transition' ? 0xd4c07a : 0x8b6b3d;
             addBlock(wx, h - S, wz, dirt);
@@ -641,7 +854,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             if (_hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > 0.05) continue;
             const h = getTerrainHeight(wx, wz);
             if (h < 1 || h > 60) continue;
-            const mtn = getMountainBlend(wx,wz)+getNWMountainBlend(wx,wz)+getSWMountainBlend(wx,wz)+getNEMountainBlend(wx,wz)+getSEMountainBlend(wx,wz)+getFarEastMountainBlend(wx,wz);
+            const mtn = getMountainBlend(wx,wz)+getNWMountainBlend(wx,wz)+getSWMountainBlend(wx,wz)+getNEMountainBlend(wx,wz)+getSEMountainBlend(wx,wz)+getFarEastMountainBlend(wx,wz)+getFrozenMountainBlend(wx,wz)+getDeepNorthBlend(wx,wz);
             if (mtn > 0.5) continue;
             const trunkH = 6 + Math.floor(_hash(bx*1.3, bz*2.1) * 5);
             const canopyStartH = 2 + Math.floor(_hash(bx*0.9, bz*1.7) * 2);
@@ -918,8 +1131,10 @@ function buildFarTerrain(centerX, centerZ) {
             // Biome color
             const snow = getSnowBlend(wz), desert = getDesertBlend(wz);
             const mtn = getMountainBlend(wx, wz), scorched = getScorchedBlend(wx, wz);
+            const glacial = getFrozenBasinBlend(wx, wz);
             let hex;
-            if (scorched > 0.3) hex = 0x2a2018;
+            if (glacial > 0.05) hex = 0x90c8e0;
+            else if (scorched > 0.3) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
             else if (snow > 0) hex = 0xb0c8b0;
             else if (desert > 0.5) hex = 0xd4c07a;
@@ -952,7 +1167,7 @@ function buildFarTerrain(centerX, centerZ) {
             if (hmz < top) pushFace(wx+halfS,top,wz-halfS, wx-halfS,top,wz-halfS, wx-halfS,hmz,wz-halfS, wx+halfS,hmz,wz-halfS, (top-hmz>S*2)?sideHex:hex);
 
             // LOD trees — match actual biome check (all mountain blends summed)
-            const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz);
+            const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
             const plains = getPlainsBlend(wx, wz);
             if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50) {
@@ -1018,11 +1233,11 @@ function buildFarTerrain(centerX, centerZ) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colArr.subarray(0, vi * 3), 3));
     geo.setIndex(new THREE.BufferAttribute(idxArr.subarray(0, ii), 1));
     geo.computeVertexNormals();
-    const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0 });
+    const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     // Shader hack: discard fragments within a radius of the player (dynamic cutout)
     farMat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.uniforms._cutoutR = { value: 25.0 };
         // Add varying + uniforms
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
@@ -1068,31 +1283,57 @@ function buildFarTerrain(centerX, centerZ) {
         scene.add(mesh);
         _lodStructures.push(mesh);
     };
-    // The Castle (-400, 20) — 60x50 blocks = ~28x24 world, walls 8.5h, keep 13h, towers 12h
-    _addLodBox(-400, 20, 28, 8.5, 24, 0x808080); // outer walls
-    _addLodBox(-400, 20, 11, 13, 9.5, 0x8a8a8a); // central keep
-    _addLodTower(-400-14, 20-12, 2.4, 12, 0x777777); // SW tower
-    _addLodTower(-400+14, 20-12, 2.4, 12, 0x777777); // SE tower
-    _addLodTower(-400-14, 20+12, 2.4, 12, 0x777777); // NW tower
-    _addLodTower(-400+14, 20+12, 2.4, 12, 0x777777); // NE tower
+    // Stone Castle / Kingdom (260, 105) — 100W×90D, walls ~8.5h, corner towers 16h
+    const kcX = 260, kcZ = 105, kcHW = 23.75, kcHD = 21.4;
+    // Outer walls (4 pieces)
+    _addLodBox(kcX, kcZ - kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(kcX, kcZ + kcHD, kcHW * 2 + 2, 8.5, 1.2, 0x808080);
+    _addLodBox(kcX - kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
+    _addLodBox(kcX + kcHW, kcZ, 1.2, 8.5, kcHD * 2 + 2, 0x808080);
+    // Corner towers (r=3.5 h=16 → 1.66r, 7.6h)
+    _addLodTower(kcX - kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ - kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX - kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ + kcHD, 1.66, 7.6, 0x777777);
+    // Mid-wall towers
+    _addLodTower(kcX, kcZ - kcHD, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX, kcZ + kcHD, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX - kcHW, kcZ, 1.4, 6.65, 0x777777);
+    _addLodTower(kcX + kcHW, kcZ, 1.4, 6.65, 0x777777);
+    // Gate towers
+    _addLodTower(kcX - 3, kcZ - kcHD, 1.2, 7, 0x888888);
+    _addLodTower(kcX + 3, kcZ - kcHD, 1.2, 7, 0x888888);
+    // Central keep / throne room
+    _addLodBox(kcX, kcZ, 11, 10, 9, 0x8a8a8a);
 
-    // Ruined Fortress (-505, -335) — 80x80 blocks = ~38x38 world, walls 5.7h, towers 10h
-    _addLodBox(-505, -335, 38, 5.7, 38, 0x6a6a5a); // outer walls (lower, ruined)
-    _addLodBox(-505, -335, 14, 8, 11, 0x7a7a6a); // central keep
-    _addLodTower(-505-19, -335-19, 2, 10, 0x5a5a50); // corner towers
-    _addLodTower(-505+19, -335-19, 2, 10, 0x5a5a50);
-    _addLodTower(-505-19, -335+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505+19, -335+19, 2, 10, 0x5a5a50);
-    _addLodTower(-505, -335-19, 1.5, 8, 0x5a5a50); // mid-wall towers
-    _addLodTower(-505, -335+19, 1.5, 8, 0x5a5a50);
+    // Ruined Fortress (-505, -335) — walls partially crumbled
+    const rfX = -505, rfZ = -335, rfHW = 19, rfHD = 19;
+    _addLodBox(rfX, rfZ - rfHD, rfHW * 2 + 2, 5.7, 1.2, 0x6a6a5a);
+    _addLodBox(rfX, rfZ + rfHD, rfHW * 2 + 2, 4.2, 1.2, 0x5a5a50); // back wall lower (ruined)
+    _addLodBox(rfX - rfHW, rfZ, 1.2, 5.7, rfHD * 2 + 2, 0x6a6a5a);
+    _addLodBox(rfX + rfHW, rfZ, 1.2, 4.8, rfHD * 2 + 2, 0x5a5a50); // east wall crumbled
+    _addLodTower(rfX - rfHW, rfZ - rfHD, 2, 10, 0x5a5a50);
+    _addLodTower(rfX + rfHW, rfZ - rfHD, 2, 8, 0x5a5a50); // shorter (damaged)
+    _addLodTower(rfX - rfHW, rfZ + rfHD, 2, 10, 0x5a5a50);
+    _addLodTower(rfX + rfHW, rfZ + rfHD, 2, 6, 0x4a4a44); // most damaged
+    _addLodTower(rfX, rfZ - rfHD, 1.5, 8, 0x5a5a50);
+    _addLodTower(rfX, rfZ + rfHD, 1.5, 7, 0x5a5a50);
+    _addLodBox(rfX, rfZ, 14, 8, 11, 0x7a7a6a); // central keep
 
-    // Scorched Castle (-300, 280) — 50x40 blocks = ~24x19 world, walls 4.75h, towers 6.65h
-    _addLodBox(-300, 280, 24, 4.75, 19, 0x2a2020); // dark outer walls
-    _addLodBox(-300, 280, 9.5, 7, 6.5, 0x332828); // throne room
-    _addLodTower(-300-12, 280-9.5, 1.4, 6.65, 0x221818); // corner towers
-    _addLodTower(-300+12, 280-9.5, 1.4, 6.65, 0x221818);
-    _addLodTower(-300-12, 280+9.5, 1.4, 6.65, 0x221818);
-    _addLodTower(-300+12, 280+9.5, 1.4, 6.65, 0x221818);
+    // Scorched Castle (-300, 280) — blackened fortress, 60W×50D
+    const scX = -300, scZ = 280, scHW = 14.25, scHD = 11.9;
+    _addLodBox(scX, scZ - scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
+    _addLodBox(scX, scZ + scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
+    _addLodBox(scX - scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
+    _addLodBox(scX + scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
+    _addLodTower(scX - scHW, scZ - scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX + scHW, scZ - scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX - scHW, scZ + scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX + scHW, scZ + scHD, 1.4, 6.65, 0x221818);
+    _addLodTower(scX, scZ - scHD, 1.2, 5.7, 0x221818); // mid-wall
+    _addLodTower(scX, scZ + scHD, 1.2, 5.7, 0x221818);
+    _addLodBox(scX + 2, scZ, 7.6, 6.2, 5.7, 0x332828); // keep
+    _addLodBox(scX - 6, scZ, 4.75, 7, 3.3, 0x332828); // throne room tower
 
     // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-350) r=170)
     // Each gate has twin towers ~10.5h, positioned at ring edge
@@ -1156,13 +1397,35 @@ function buildFarTerrain(centerX, centerZ) {
     _addLodTower(swFX - swHW - swEncW * 2, swFZ - swEncD/2, 1.4, 11.4, swDarkLight);
     _addLodTower(swFX - swHW - swEncW * 2, swFZ + swEncD/2, 1.4, 11.4, swDarkLight);
 
-    // Village markers — actual village positions from VILLAGE_DEFS
-    for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200}]) {
-        // Small cluster of house-sized boxes
-        const vh = 2 + Math.abs(Math.sin(vd.x * 0.1)) * 1;
-        _addLodBox(vd.x, vd.z, 3.5, vh, 3, 0x8a6a3a);
-        _addLodBox(vd.x + 4, vd.z + 2, 3, vh - 0.5, 2.5, 0x7a5a2a);
-        _addLodBox(vd.x - 3, vd.z + 3, 2.5, vh - 0.3, 2.8, 0x8a7040);
+    // Village markers — replicate actual house positions from village system
+    const _lodVillages = [
+        {x:80,z:16,houses:5},{x:-100,z:-50,houses:4},{x:200,z:60,houses:6},
+        {x:-200,z:100,houses:3},{x:50,z:-150,houses:4},{x:-150,z:200,houses:3},
+        {x:100,z:550,houses:5,desert:true},{x:-120,z:620,houses:4,desert:true},{x:250,z:680,houses:3,desert:true},
+    ];
+    const _houseSizes = [{w:5.7,d:4.75,wallH:4.75,roofH:1.9},{w:7.1,d:5.7,wallH:4.75,roofH:2.4},{w:8.55,d:6.65,wallH:5.7,roofH:2.85}];
+    const _BS = BLOCK_SIZE;
+    for (const vd of _lodVillages) {
+        const vbx = Math.floor(vd.x / _BS), vbz = Math.floor(vd.z / _BS);
+        const wallCol = vd.desert ? 0xc4a860 : 0x8a6a3a;
+        const roofCol = vd.desert ? 0xb09850 : 0x6a4a1a;
+        const pillarCol = vd.desert ? 0x888888 : 0x5a3518;
+        for (let hi = 0; hi < vd.houses; hi++) {
+            const angle = (hi / vd.houses) * Math.PI * 2 + vd.x * 0.01;
+            const dist = 20 + (hi * 17) % 30;
+            const hx = (vbx + Math.round(Math.cos(angle) * dist)) * _BS;
+            const hz = (vbz + Math.round(Math.sin(angle) * dist)) * _BS;
+            const hs = _houseSizes[hi % 3];
+            // Walls
+            _addLodBox(hx + hs.w/2, hz + hs.d/2, hs.w, hs.wallH, hs.d, wallCol);
+            // Roof (peaked — slightly wider)
+            _addLodBox(hx + hs.w/2, hz + hs.d/2, hs.w + 0.5, hs.roofH, hs.d + 0.5, roofCol);
+            // Corner pillars
+            _addLodTower(hx, hz, 0.2, hs.wallH + 0.5, pillarCol);
+            _addLodTower(hx + hs.w, hz, 0.2, hs.wallH + 0.5, pillarCol);
+            _addLodTower(hx, hz + hs.d, 0.2, hs.wallH + 0.5, pillarCol);
+            _addLodTower(hx + hs.w, hz + hs.d, 0.2, hs.wallH + 0.5, pillarCol);
+        }
     }
 
     // Water plane — simple flat plane, shader-based cutout near player
@@ -1172,7 +1435,7 @@ function buildFarTerrain(centerX, centerZ) {
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
     waterMat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 75.0 };
+        shader.uniforms._cutoutR = { value: 25.0 };
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
@@ -1189,7 +1452,7 @@ function buildFarTerrain(centerX, centerZ) {
         waterMat._shader = shader;
     };
     farWater = new THREE.Mesh(farWaterGeo, waterMat);
-    farWater.position.y = -0.1;
+    farWater.position.y = -0.5;
     farWater.renderOrder = -2;
     scene.add(farWater);
 }
@@ -1312,6 +1575,7 @@ function updateMenuUI() {
             html += `<div class="save-slot">
                 <div class="info"><div class="name">${name}</div>${date}</div>
                 <button class="menu-btn" style="width:80px;padding:8px;font-size:13px;" data-load="${name}">Load</button>
+                <button class="menu-btn" style="width:65px;padding:6px;font-size:11px;" data-rename="${name}">Rename</button>
                 <button class="menu-btn delete" data-delete="${name}">Delete</button>
             </div>`;
         }
@@ -1319,6 +1583,20 @@ function updateMenuUI() {
     document.getElementById('savedGames').innerHTML = html;
     document.querySelectorAll('[data-load]').forEach(btn => {
         btn.addEventListener('click', () => startGame(btn.dataset.load));
+    });
+    document.querySelectorAll('[data-rename]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const oldName = btn.dataset.rename;
+            const newName = prompt('Rename save:', oldName);
+            if (!newName || newName === oldName || newName.trim() === '') return;
+            const trimmed = newName.trim();
+            if (_savesCache[trimmed]) { alert('A save with that name already exists.'); return; }
+            _savesCache[trimmed] = _savesCache[oldName];
+            delete _savesCache[oldName];
+            if (_currentSaveName === oldName) _currentSaveName = trimmed;
+            _persistSaves();
+            updateMenuUI();
+        });
     });
     document.querySelectorAll('[data-delete]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -2851,6 +3129,29 @@ function startGame(loadSlotName) {
         addChatMessage('You were hit by another player!', 'rgba(255,100,100,0.9)');
     };
 
+    // Dragon grab — another player's dragon grabbed you
+    mp.onDragonGrab = (fromPid) => {
+        player._dragonGrabbed = true;
+        player._dragonGrabPid = fromPid;
+        addChatMessage('A dragon grabbed you!', 'rgba(255,150,100,0.9)');
+    };
+    mp.onDragonHold = (x, y, z) => {
+        if (player._dragonGrabbed) {
+            player.position.set(x, y, z);
+            player.group.position.set(x, y, z);
+            player.jumpVel = 0;
+            player.speed = 0;
+        }
+    };
+    mp.onDragonDrop = () => {
+        if (player._dragonGrabbed) {
+            player._dragonGrabbed = false;
+            player._dragonGrabPid = null;
+            player.jumpVel = 0; // start falling from current position via normal gravity
+            addChatMessage('You were dropped!', 'rgba(255,200,100,0.9)');
+        }
+    };
+
     // Receive creature sync from host — match by cid
     mp.onCreatureSync = (list) => {
         const byId = new Map();
@@ -2883,6 +3184,7 @@ function startGame(loadSlotName) {
     dragonMgr = new DragonManager(scene, world);
     dragonMgr._world = world;
     dragonMgr._creatureMgr = creatures;
+    dragonMgr._mp = mp;
     creatures._dragonMgr = dragonMgr;
     // Bidirectional dragon sync — every peer broadcasts their own dragons
     mp.onDragonSync = (list, fromPid) => {
@@ -2909,6 +3211,23 @@ function startGame(loadSlotName) {
     };
     // Authoritative world snapshot from host (handles late joiners)
     mp.onWorldStateSync = (state) => {
+        // Blocks should always be restored, even for host
+        if (state.blocks) {
+            for (const [key, blockType] of Object.entries(state.blocks)) {
+                const [bx, by, bz] = key.split(',').map(Number);
+                world.setBlock(bx, by, bz, blockType);
+            }
+            const rebuiltChunks = new Set();
+            for (const key of Object.keys(state.blocks)) {
+                const [bx, , bz] = key.split(',').map(Number);
+                const ck = Math.floor(bx / CHUNK_SIZE) + ',' + Math.floor(bz / CHUNK_SIZE);
+                if (!rebuiltChunks.has(ck)) {
+                    rebuiltChunks.add(ck);
+                    if (chunkManager) chunkManager.rebuildChunkAt(bx, bz);
+                }
+            }
+            console.log('[mp] Restored', Object.keys(state.blocks).length, 'blocks from server');
+        }
         if (mp.isHost) return;
         // Picked-up swords
         if (state.swords && world._fortressSwordMeshes) {
@@ -3073,7 +3392,7 @@ function startGame(loadSlotName) {
 
     // === Ice Dragon Nest — far north ===
     {
-        const nestX = -343, nestZ = -1250;
+        const nestX = FM_CX, nestZ = FM_CZ; // center of frozen mountain ring
         const nestY = getTerrainHeight(nestX, nestZ);
         const yOff = 128;
         const BS = BLOCK_SIZE;
@@ -3157,7 +3476,7 @@ function startGame(loadSlotName) {
                 group: eggGrp, x: ex, z: ez, pickedUp: false,
                 color: ed.color, emissive: ed.emissive, veinColor: ed.veinColor,
                 wingColor: ed.wingColor || null,
-                isWyvern: !!ed.isWyvern, name: ed.name || 'Ice Dragon',
+                isWyvern: !!ed.isWyvern, isIce: !!ed.isIce, name: ed.name || 'Ice Dragon',
             });
         }
 
@@ -4165,7 +4484,7 @@ function startGame(loadSlotName) {
 
     // === Hobgoblin Warchief + Goblins at south gate ===
     if (!killedBosses.has('Grokthak the Warchief')) {
-        const hgX = -30, hgZ = -80;
+        const hgX = -30, hgZ = -230; // south gate inner side (gate at z=-240)
         const hgY = getTerrainHeight(hgX, hgZ);
 
         // Spawn 6 goblin minions around the gate
@@ -4574,6 +4893,19 @@ function startGame(loadSlotName) {
     dragonMgr.buildCarriedEgg(player.spine);
     dragonMgr.addToInventory = addToInventory;
     dragonMgr.removeFromInventory = removeFromInventory;
+    dragonMgr.onDragonHatched = (bd) => {
+        const name = prompt('Name your dragon:', bd.dragonName || '');
+        if (name && name.trim()) bd.dragonName = name.trim();
+        addChatMessage(`${bd.dragonName || 'Dragon'} has hatched!`, 'rgba(180,255,180,0.9)');
+    };
+    dragonMgr.onEggHatched = (eggKey) => {
+        delete eggItems[eggKey];
+        // Clear from hotbar if still referenced
+        for (let i = 0; i < hotbarSlots.length; i++) {
+            if (hotbarSlots[i] === eggKey) hotbarSlots[i] = 0;
+        }
+        refreshUI();
+    };
     dragonMgr.getHeldItem = () => {
         const bt = hotbarSlots[selectedSlot];
         if (typeof bt === 'string' && bt.startsWith('egg_') && inventory[bt] > 0) {
@@ -4612,7 +4944,7 @@ function startGame(loadSlotName) {
             Object.assign(eggItems, s.eggItems || {});
             if (s.armorSlots) Object.assign(armorSlots, s.armorSlots);
             if (s.equippedShield) equippedShield = s.equippedShield;
-            if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP; }
+            if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
@@ -4623,6 +4955,10 @@ function startGame(loadSlotName) {
                 player.walkSpeed = 3.6 * getStatSpeedMult();
                 player.sprintSpeed = 8.0 * getStatSpeedMult();
             }
+            // Always recalculate max HP from current formula (handles balance changes)
+            const newMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
+            playerHP = Math.min(playerHP, newMaxHP);
+            playerMaxHP = newMaxHP;
             if (s.skills) { for (let i=0;i<10;i++) { skills.warrior[i] = s.skills.warrior[i] || false; skills.wizard[i] = s.skills.wizard[i] || false; } }
             if (s.horses && horseMgr) horseMgr.loadSaveData(s.horses, s.player.x, s.player.z);
             if (s.waypoints) { waypoints = s.waypoints; _rebuildWaypointBeams(); }
@@ -4674,30 +5010,45 @@ function startGame(loadSlotName) {
                     const ck = mcx + ',' + mcz;
                     if (!world._modsByChunk.has(ck)) world._modsByChunk.set(ck, []);
                     world._modsByChunk.get(ck).push({ lx: mlx, y: mby, lz: mlz, block: val });
-                    // Track anvil blocks — snap to 2x2x2 origin
-                    if (val === BLOCK.ANVIL) {
-                        const ox = mbx - (((mbx % 2) + 2) % 2);
-                        const oy = mby - (((mby % 2) + 2) % 2);
-                        const oz = mbz - (((mbz % 2) + 2) % 2);
-                        anvilOrigins.add(ox + ',' + oy + ',' + oz);
-                    }
-                    // Track campfire blocks — snap to 2x1x2 origin
-                    if (val === BLOCK.CAMPFIRE) {
-                        const ox = mbx - (((mbx % 2) + 2) % 2);
-                        const oz = mbz - (((mbz % 2) + 2) % 2);
-                        campfireOrigins.add(ox + ',' + mby + ',' + oz);
-                    }
+                    // Collect anvil/campfire block positions for clustering after loop
+                    if (val === BLOCK.ANVIL) anvilOrigins.add(mbx + ',' + mby + ',' + mbz);
+                    if (val === BLOCK.CAMPFIRE) campfireOrigins.add(mbx + ',' + mby + ',' + mbz);
                 }
+                // Cluster anvil blocks into 2x2x2 origins, campfires into 2x1x2
+                const _clusterOrigins = (blockSet, dy) => {
+                    const origins = new Set();
+                    const used = new Set();
+                    for (const key of blockSet) {
+                        if (used.has(key)) continue;
+                        const [bx, by, bz] = key.split(',').map(Number);
+                        // Find minimum corner of this group
+                        let minX = bx, minY = by, minZ = bz;
+                        for (const other of blockSet) {
+                            const [ox, oy, oz] = other.split(',').map(Number);
+                            if (Math.abs(ox - bx) <= 1 && Math.abs(oy - by) <= dy && Math.abs(oz - bz) <= 1) {
+                                minX = Math.min(minX, ox); minY = Math.min(minY, oy); minZ = Math.min(minZ, oz);
+                            }
+                        }
+                        const originKey = minX + ',' + minY + ',' + minZ;
+                        if (!origins.has(originKey)) {
+                            origins.add(originKey);
+                            // Mark all blocks in this group as used
+                            for (const other of blockSet) {
+                                const [ox, oy, oz] = other.split(',').map(Number);
+                                if (ox >= minX && ox <= minX+1 && oy >= minY && oy <= minY+dy && oz >= minZ && oz <= minZ+1) used.add(other);
+                            }
+                        }
+                    }
+                    return origins;
+                };
                 // Clear existing anvil models before recreating
                 for (const [k, m] of anvilModels) scene.remove(m);
                 anvilModels.clear();
-                // Recreate anvil 3D models
-                for (const key of anvilOrigins) {
+                for (const key of _clusterOrigins(anvilOrigins, 1)) {
                     const [ax, ay, az] = key.split(',').map(Number);
                     placeAnvilModel(ax, ay, az);
                 }
-                // Recreate campfire 3D models
-                for (const key of campfireOrigins) {
+                for (const key of _clusterOrigins(campfireOrigins, 0)) {
                     const [cx, cy, cz] = key.split(',').map(Number);
                     placeCampfireModel(cx, cy, cz);
                 }
@@ -4732,7 +5083,9 @@ function startGame(loadSlotName) {
                     bd.hp = dd.hp || bd.maxHP;
                     bd.angle = dd.angle || 0;
                     bd.group.rotation.y = bd.angle;
-                    if (dd.iceBreath) bd._iceBreath = true;
+                    // Only trust iceBreath if egg color is actually from the ice nest
+                    const _iceColors = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
+                    if (dd.iceBreath && _iceColors.includes(dd.eggColor)) bd._iceBreath = true;
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
@@ -4744,7 +5097,7 @@ function startGame(loadSlotName) {
         // New game — spawn at center, reset progression
         staffDamageDealt = 0;
         activeSpellSlot = 1;
-        playerMaxHP = Math.max(2, 10 + getStatHPBonus());
+        playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
         playerHP = playerMaxHP;
         playerMaxMana = Math.round(10 * getStatManaMult());
         playerMana = playerMaxMana;
@@ -4907,11 +5260,11 @@ function saveSettings() {
 const STAT_DEFS = [
     { key: 'strength',  label: 'Strength',  desc: 'Attack damage (0 = very weak)', icon: '\u2694' },
     { key: 'agility',   label: 'Agility',   desc: 'Movement speed (0 = very slow)', icon: '\u27A4' },
-    { key: 'fortitude', label: 'Fortitude', desc: 'Max health (0 = 2 hearts)', icon: '\u2665' },
+    { key: 'fortitude', label: 'Fortitude', desc: 'Max health, diminishing returns (0 = 2 hearts)', icon: '\u2665' },
     { key: 'dexterity', label: 'Dexterity', desc: 'Mining speed (0 = very slow)', icon: '\u26CF' },
     { key: 'wisdom',    label: 'Wisdom',    desc: 'Mana pool (0 = no mana)', icon: '\u2605' },
 ];
-const STAT_MAX_POINTS = 22;
+const STAT_MAX_POINTS = 25;
 const STAT_MAX_EACH = 10;
 let playerStats = { strength: 0, agility: 0, fortitude: 0, dexterity: 0, wisdom: 0 };
 let _statPending = null; // resolve callback for stat allocation
@@ -4922,7 +5275,20 @@ function getStatPointsUsed() {
 
 function getStatDmgMult()   { return 0.4 + playerStats.strength * 0.12; }   // 0pts=0.4x, 5pts=1.0x, 10pts=1.6x
 function getStatSpeedMult() { return 0.6 + playerStats.agility * 0.08; }   // 0pts=0.6x, 5pts=1.0x, 10pts=1.4x
-function getStatHPBonus()   { return -4 + playerStats.fortitude * 2; }     // 0pts=6HP(3hearts), 3pts=12HP, 10pts=26HP
+function getStatHPBonus() { // diminishing: first points worth more, later points worth less
+    const f = playerStats.fortitude;
+    if (f <= 0) return -4; // 0pts = 6HP
+    // Each point gives: 2, 2, 1.5, 1.5, 1, 1, 0.75, 0.75, 0.5, 0.5
+    let bonus = -4;
+    for (let i = 1; i <= f; i++) {
+        if (i <= 2) bonus += 2;
+        else if (i <= 4) bonus += 1.5;
+        else if (i <= 6) bonus += 1;
+        else if (i <= 8) bonus += 0.75;
+        else bonus += 0.5;
+    }
+    return bonus; // 0pts=6HP, 3pts=11.5HP, 5pts=13.5HP, 10pts=17.5HP
+}
 function getStatBreakMult() { return Math.max(0.4, 3.5 - playerStats.dexterity * 0.31); } // 0pts=3.5x slower, 5pts=1.95x, 10pts=0.4x fast
 function getStatManaMult()  { return playerStats.wisdom * 0.2; }           // 0pts=0 mana, 5pts=1.0x, 10pts=2.0x
 
@@ -6834,6 +7200,102 @@ function keyName(code) {
 
 // ── Input ──
 const keys = {};
+// ── Dragon Whistle Menu ──
+let whistleMenuOpen = false;
+let _fHoldTimer = null, _fHoldFired = false;
+const whistleSelectedDragons = new Set();
+const whistleMenuEl = document.getElementById('whistleMenu');
+const whistleDragonListEl = document.getElementById('whistleDragonList');
+
+function openWhistleMenu() {
+    if (!dragonMgr) { console.log('WHISTLE: no dragonMgr'); return; }
+    const owned = dragonMgr.getOwnedDragons();
+    console.log('WHISTLE: owned dragons =', owned.length);
+    if (owned.length === 0) { addChatMessage('No dragons to command', 'rgba(180,200,255,0.9)'); return; }
+    whistleMenuOpen = true;
+    whistleSelectedDragons.clear();
+    owned.forEach(bd => whistleSelectedDragons.add(bd)); // all selected by default
+    updateWhistleDragonList();
+    whistleMenuEl.style.display = 'block';
+    if (pointerLocked) document.exitPointerLock();
+}
+
+function closeWhistleMenu() {
+    whistleMenuOpen = false;
+    whistleMenuEl.style.display = 'none';
+    if (useMouseLook && gameStarted && !gamePaused) {
+        setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    }
+}
+
+function updateWhistleDragonList() {
+    if (!dragonMgr) return;
+    const owned = dragonMgr.getOwnedDragons();
+    whistleDragonListEl.innerHTML = '';
+    // "Select All" row
+    const allRow = document.createElement('div');
+    allRow.className = 'whistle-dragon-row' + (whistleSelectedDragons.size === owned.length ? ' selected' : '');
+    allRow.innerHTML = `<span class="wd-check">${whistleSelectedDragons.size === owned.length ? '\u2713' : ''}</span><span class="wd-name" style="font-style:italic;">All Dragons</span><span class="wd-mode">${owned.length}</span>`;
+    allRow.onclick = () => {
+        if (whistleSelectedDragons.size === owned.length) {
+            whistleSelectedDragons.clear();
+        } else {
+            owned.forEach(bd => whistleSelectedDragons.add(bd));
+        }
+        updateWhistleDragonList();
+    };
+    whistleDragonListEl.appendChild(allRow);
+    for (const bd of owned) {
+        const sel = whistleSelectedDragons.has(bd);
+        const row = document.createElement('div');
+        row.className = 'whistle-dragon-row' + (sel ? ' selected' : '');
+        const mode = bd._followMode || 'wander';
+        const modeLabel = mode === 'follow' ? 'Following' : mode === 'stay' ? 'Staying' : 'Wandering';
+        const hostile = bd._passive ? 'Passive' : 'Aggressive';
+        const name = bd.dragonName || (bd.isWyvern ? 'Wyvern' : 'Dragon');
+        const age = bd.age || 0;
+        let stage = 'Baby';
+        if (age >= 14400) stage = 'Elder';
+        else if (age >= 9600) stage = 'Adult';
+        else if (age >= 4800) stage = 'Teen';
+        row.innerHTML = `<span class="wd-check">${sel ? '\u2713' : ''}</span><span class="wd-name">${name} <span style="color:rgba(150,150,130,0.5);font-size:11px;">(${stage})</span></span><span class="wd-mode">${modeLabel} | ${hostile}</span><span class="wd-rename" style="font-size:10px;color:rgba(140,170,200,0.7);cursor:pointer;padding:2px 5px;margin-left:4px;">✎</span>`;
+        row.querySelector('.wd-rename').onclick = (ev) => {
+            ev.stopPropagation();
+            const newName = prompt('Rename dragon:', bd.dragonName || '');
+            if (newName && newName.trim()) { bd.dragonName = newName.trim(); updateWhistleDragonList(); }
+        };
+        row.onclick = () => {
+            if (whistleSelectedDragons.has(bd)) whistleSelectedDragons.delete(bd);
+            else whistleSelectedDragons.add(bd);
+            updateWhistleDragonList();
+        };
+        whistleDragonListEl.appendChild(row);
+    }
+}
+
+// Wire up command buttons
+document.querySelectorAll('.whistle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        if (!dragonMgr || whistleSelectedDragons.size === 0) return;
+        const px = player.position.x, pz = player.position.z, py = player.position.y;
+        let count = 0;
+        if (cmd === 'aggressive' || cmd === 'passive') {
+            const hostile = cmd === 'aggressive';
+            for (const bd of whistleSelectedDragons) { bd._passive = !hostile; count++; }
+            addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${hostile ? 'aggressive' : 'passive'}`, 'rgba(180,200,255,0.9)');
+        } else {
+            for (const bd of whistleSelectedDragons) {
+                dragonMgr.setFollowMode(bd, cmd, px, pz, py);
+                count++;
+            }
+            const modeText = cmd === 'follow' ? 'following you' : cmd === 'stay' ? 'staying' : 'wandering freely';
+            addChatMessage(`${count} dragon${count > 1 ? 's' : ''}: ${modeText}`, 'rgba(180,200,255,0.9)');
+        }
+        updateWhistleDragonList();
+    });
+});
+
 let _leftMouseDown = false;
 renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) _leftMouseDown = true; });
 document.addEventListener('mouseup', e => { if (e.button === 0) { _leftMouseDown = false; staffShielding = false; } });
@@ -6896,16 +7358,49 @@ document.addEventListener('keydown', e => {
             drawWorldMap();
         }
     }
-    // F key — toggle follow on the dragon you're looking at
-    if (e.code === 'KeyF' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
-        const looked = dragonMgr.getLookedAtDragon(player);
-        if (looked) {
-            const following = dragonMgr.toggleFollow(looked);
-            addChatMessage(`${looked.dragonName || 'Dragon'} is now ${following ? 'following' : 'staying'}`, 'rgba(180,200,255,0.9)');
+    // F key — tap to cycle all dragons, hold to open whistle menu
+    if (e.code === 'KeyF') {
+        if (e.repeat) return; // ignore held key repeats
+        if (whistleMenuOpen) { closeWhistleMenu(); e.preventDefault(); return; }
+        if (gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
+            if (!_fHoldTimer) {
+                _fHoldFired = false;
+                console.log('WHISTLE: timer started');
+                _fHoldTimer = setTimeout(() => {
+                    console.log('WHISTLE: timer fired, opening menu');
+                    _fHoldFired = true;
+                    _fHoldTimer = null;
+                    openWhistleMenu();
+                }, 400);
+            }
         }
     }
 });
-document.addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('keyup', e => {
+    keys[e.code] = false;
+    if (e.code === 'KeyF' && _fHoldTimer) {
+        clearTimeout(_fHoldTimer); _fHoldTimer = null;
+        if (!_fHoldFired && !whistleMenuOpen) {
+            // Quick tap — cycle all owned dragons
+            if (dragonMgr) {
+                const owned = dragonMgr.getOwnedDragons();
+                if (owned.length > 0) {
+                    // Determine majority mode to decide next mode
+                    const counts = { follow: 0, stay: 0, wander: 0 };
+                    for (const bd of owned) counts[bd._followMode || 'wander']++;
+                    let curMode = 'wander';
+                    if (counts.follow >= counts.stay && counts.follow >= counts.wander) curMode = 'follow';
+                    else if (counts.stay >= counts.wander) curMode = 'stay';
+                    const next = curMode === 'follow' ? 'stay' : curMode === 'stay' ? 'wander' : 'follow';
+                    const px = player.position.x, pz = player.position.z, py = player.position.y;
+                    for (const bd of owned) dragonMgr.setFollowMode(bd, next, px, pz, py);
+                    const modeText = next === 'follow' ? 'following you' : next === 'stay' ? 'staying' : 'wandering freely';
+                    addChatMessage(`All dragons: ${modeText}`, 'rgba(180,200,255,0.9)');
+                }
+            }
+        }
+    }
+});
 
 // ── Zoom — exact same as game.html ──
 let zoomLevel = 1.0;
@@ -6989,6 +7484,10 @@ function drawWorldMap() {
                 else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
                 else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
                 else biomeData[idx] = 0;
+                // River override — check on top of other biomes
+                for (const riv of riverDefs) {
+                    if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; }
+                }
             }
         }
 
@@ -7018,6 +7517,8 @@ function drawWorldMap() {
                     tintR = 30; tintG = 20; tintB = 15; tintA = 0.4;
                 } else if (biome === 7) { // enchanted — purple wash
                     tintR = 90; tintG = 50; tintB = 130; tintA = 0.25;
+                } else if (biome === 10) { // river — blue water
+                    tintR = 50; tintG = 90; tintB = 150; tintA = 0.5;
                 } else if (biome === 9) { // path — sandy brown line
                     tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
                 } else if (biome === 8) { // forest — deep green
@@ -7041,7 +7542,7 @@ function drawWorldMap() {
 
         // Draw contour lines — interval scales with zoom (finer when zoomed in)
         // mapViewSize=1200 (zoomed out) → interval=10, mapViewSize=100 (zoomed in) → interval=1
-        const contourInterval = Math.max(1, Math.min(10, mapViewSize / 120));
+        const contourInterval = Math.max(0.5, Math.min(5, mapViewSize / 200));
         const majorMult = contourInterval <= 2 ? 5 : 3; // major line every 3rd or 5th
         const inkR = 70, inkG = 45, inkB = 25;
 
@@ -7301,6 +7802,12 @@ function drawWorldMap() {
         drawMountain(820, -40, 'Great Peak', 12);
         drawMountain(730, -95, 'NE Ridge', 6);
         drawMountain(735, 40, 'SE Ridge', 6);
+        drawMountain(-30, -1050, 'Frozen Mountains', 14);
+        drawMountain(-250, -1350, 'Frostfang Ridge', 10);
+        drawMountain(200, -1300, 'Icespire Peaks', 9);
+        drawMountain(50, -1400, 'Pale Spine', 8);
+        drawMountain(-400, -1200, 'Howling Crags', 8);
+        drawMountain(380, -1180, 'Rimestone Peaks', 8);
 
         // Villages
         drawVillage(80, 16, 'Meadow Village');
@@ -7714,6 +8221,7 @@ const BLOCK_INFO = {
     [BLOCK.FLOWER_WHITE]: { name:'White Flower', top:'#eeeeff', front:'#2a6a1a' },
     [BLOCK.PINE_WOOD]: { name:'Pine Log', top:'#5a3828', front:'#3a2018' },
     [BLOCK.PINE_LEAVES]: { name:'Pine Needles', top:'#1a5a2a', front:'#0a3a1a' },
+    [BLOCK.ICE]: { name:'Ice', top:'#a8ddf0', front:'#78b8d8' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -8435,7 +8943,9 @@ document.addEventListener('keydown', e => {
         updateHotbarUI();
         updateSpellSlotUI();
     }
-    if (e.code === 'Escape' && settingsOpen) {
+    if (e.code === 'Escape' && whistleMenuOpen) {
+        closeWhistleMenu(); return;
+    } else if (e.code === 'Escape' && settingsOpen) {
         settingsOpen = false;
         document.getElementById('settingsMenu').style.display = 'none';
         pauseMenuEl.style.display = 'flex';
@@ -8822,7 +9332,19 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             player.triggerSwing();
             attackCooldown = 0.6 * getSwordCooldownMult();
             const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
-            if (creatures && creatures.attackAt) creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
+            if (creatures && creatures.attackAt) {
+                creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
+                // Tell dragons what player is attacking
+                if (dragonMgr) {
+                    const sinA = Math.sin(player.group.rotation.y), cosA = Math.cos(player.group.rotation.y);
+                    for (const c of creatures.creatures) {
+                        if (c.dead) continue;
+                        const dx = c.x - player.position.x, dz = c.z - player.position.z;
+                        const d = Math.sqrt(dx*dx+dz*dz);
+                        if (d < 4 && d > 0.1 && (dx*sinA+dz*cosA)/d > 0.2) { dragonMgr._playerTarget = c; dragonMgr._playerTargetTimer = 10; break; }
+                    }
+                }
+            }
             if (villageMgr) villageMgr.damageVillagerAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, 3);
             if (mp.active) {
                 mp.sendAttack(player.position.x, player.position.z, player.group.rotation.y, swordDmg);
@@ -8900,6 +9422,8 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     miningHeld = true;
     const hit = raycastBlock(e);
     if (!hit) return;
+    // Water and bedrock are unbreakable
+    if (hit.block === BLOCK.WATER || hit.block === BLOCK.BEDROCK) return;
     const hasWoodPick = held === 'pickaxe' && inventory['pickaxe'] > 0;
     const hasStonePick = held === 'stone_pickaxe' && inventory['stone_pickaxe'] > 0;
     const hasCopperPick = held === 'copper_pickaxe' && inventory['copper_pickaxe'] > 0;
@@ -8964,6 +9488,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 
     if (breakTime === Infinity) return; // can't break without pickaxe
     breakTime *= getStatBreakMult(); // Dexterity stat bonus
+    breakTime *= 0.75; // global speed boost (applied after stats so it always helps)
 
     player.triggerSwing();
     miningTarget = { x: hit.x, y: hit.y, z: hit.z, block: bt, progress: 0, time: breakTime, hit, hasPickaxe, hasAxe };
@@ -9013,7 +9538,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
             delete chestData[ck];
             if (!world._lootedChestKeys) world._lootedChestKeys = new Set();
             world._lootedChestKeys.add(ck);
-            updateHotbar();
+            updateHotbarUI();
             if (mp.active) mp.sendChestLoot(ck);
         }
     }
@@ -9972,13 +10497,25 @@ getItemInfo = function(key) {
 
 // Custom swords do damage based on tier
 const _origSwordDmg = Object.assign({}, SWORD_DAMAGE);
+const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight', 'Grokthak the Warchief', 'The Necromancer'];
 const _getSwordDamage = (held) => {
-    if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
+        if (window._customSwords[held].tier === 'dragonsteel') return _getDragonsteelDmg(5);
         return window._customSwords[held].damage || 6;
     }
+    if (held === 'dragonsteel_sword') return _getDragonsteelDmg(5);
+    if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
     return 0;
 };
+function _getDragonsteelDmg(base) {
+    let dmg = base;
+    dmg += playerLevel; // +1 per level
+    if (dragonMgr) dmg += dragonMgr.getOwnedDragons().length * 3; // +3 per dragon
+    let bossKills = 0;
+    for (const b of _gateBosses) if (killedBosses.has(b)) bossKills++;
+    dmg += bossKills; // +1 per gate boss killed
+    return dmg;
+}
 
 // ── Guide Book ──
 let guideBookOpen = false;
@@ -10110,23 +10647,27 @@ function updateChestUI() {
     const items = chest.items;
     let html = '<div style="color:#e0d8c0;font:bold 16px monospace;text-align:center;margin-bottom:10px;">Chest</div>';
 
+    // Helper to render a chest/inventory slot
+    const _chestSlot = (itemKey, count, onclick) => {
+        const info = itemKey ? getItemInfo(itemKey) : null;
+        const bg = info ? info.front : 'rgba(40,40,40,0.5)';
+        const border = itemKey ? 'rgba(180,160,100,0.4)' : 'rgba(80,80,80,0.3)';
+        const title = info ? info.name : '';
+        let inner = '';
+        if (info) {
+            inner = blockIconHTML(info);
+            if (count > 1) inner += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
+        }
+        return `<div title="${title}" style="width:40px;height:40px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" ${onclick ? `onclick="${onclick}"` : ''}>${inner}</div>`;
+    };
+
     // Chest contents
     html += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:3px;margin-bottom:12px;">';
     const keys = Object.keys(items);
     for (let i = 0; i < CHEST_SLOTS; i++) {
         const itemKey = keys[i];
         const count = itemKey ? items[itemKey] : 0;
-        const info = itemKey ? getItemInfo(itemKey) : null;
-        const bg = info ? info.front : 'rgba(40,40,40,0.5)';
-        const border = itemKey ? 'rgba(180,160,100,0.4)' : 'rgba(80,80,80,0.3)';
-        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
-        if (itemKey) html += `onclick="window._chestTakeItem('${itemKey}')"`;
-        html += '>';
-        if (info) {
-            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
-            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
-        }
-        html += '</div>';
+        html += _chestSlot(itemKey, count, itemKey ? `window._chestTakeItem('${itemKey}')` : '');
     }
     html += '</div>';
 
@@ -10137,17 +10678,7 @@ function updateChestUI() {
     for (let i = 0; i < 27; i++) {
         const itemKey = invKeys[i];
         const count = itemKey ? inventory[itemKey] : 0;
-        const info = itemKey ? getItemInfo(itemKey) : null;
-        const bg = info ? info.front : 'rgba(30,30,30,0.4)';
-        const border = itemKey ? 'rgba(100,140,100,0.4)' : 'rgba(60,60,60,0.3)';
-        html += `<div style="width:36px;height:36px;background:${bg};border:1px solid ${border};border-radius:3px;display:flex;align-items:center;justify-content:center;position:relative;cursor:${itemKey ? 'pointer' : 'default'};" `;
-        if (itemKey) html += `onclick="window._chestDepositItem('${itemKey}')"`;
-        html += '>';
-        if (info) {
-            html += `<div style="width:20px;height:20px;background:${info.top};border-radius:2px;"></div>`;
-            if (count > 1) html += `<span style="position:absolute;bottom:1px;right:2px;color:#fff;font:bold 9px monospace;text-shadow:1px 1px #000;">${count}</span>`;
-        }
-        html += '</div>';
+        html += _chestSlot(itemKey, count, itemKey ? `window._chestDepositItem('${itemKey}')` : '');
     }
     html += '</div>';
 
@@ -10166,7 +10697,7 @@ window._chestTakeItem = (itemKey) => {
     chest.items[itemKey] -= amount;
     if (chest.items[itemKey] <= 0) delete chest.items[itemKey];
     updateChestUI();
-    updateHotbar();
+    updateHotbarUI();
 };
 
 window._chestDepositItem = (itemKey) => {
@@ -10181,7 +10712,7 @@ window._chestDepositItem = (itemKey) => {
     inventory[itemKey] -= amount;
     if (inventory[itemKey] <= 0) delete inventory[itemKey];
     updateChestUI();
-    updateHotbar();
+    updateHotbarUI();
     if (inventoryOpen) updateInventoryUI();
 };
 
@@ -11299,12 +11830,48 @@ function doPlace(e) {
         }
     }
 
-    // Right-click on a baby dragon to put it on shoulder
+    // Right-click on a baby dragon with meat to feed it (+1 min age)
+    if (dragonMgr && placeHoldTime < 0.05) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.state === 'alive') {
+                looked.age += 60; // 1 minute
+                removeFromInventory(held);
+                refreshUI();
+                addChatMessage(`Fed ${looked.dragonName || 'dragon'}! (+1 min)`, 'rgba(180,255,180,0.9)');
+                return false;
+            }
+        }
+    }
+
+    // Right-click on a baby dragon to put it on shoulder (not while holding meat)
     if (dragonMgr && placeHoldTime < 0.05 && !dragonMgr.getShoulderDragon()) {
-        const looked = dragonMgr.getLookedAtDragon(player);
-        if (looked && looked.age < 1200) {
-            if (dragonMgr.putOnShoulder(looked)) {
-                addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (!isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.age < 4800) {
+                if (dragonMgr.putOnShoulder(looked)) {
+                    addChatMessage(`${looked.dragonName || 'Baby dragon'} is on your shoulder. Press E to remove.`, 'rgba(180,255,180,0.9)');
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Right-click on a rideable dragon to mount it (not while holding meat)
+    if (dragonMgr && !dragonMgr.ridingDragon && placeHoldTime < 0.05) {
+        const held = hotbarSlots[selectedSlot];
+        const isMeat = held === 'raw_mutton' || held === 'raw_beef' || held === 'raw_pork' || held === 'raw_venison';
+        if (!isMeat) {
+            const looked = dragonMgr.getLookedAtDragon(player);
+            if (looked && looked.state === 'alive' && looked.age >= 7200 && !looked._fortressGuardian && !looked._stationary) {
+                dragonMgr.ridingDragon = true;
+                dragonMgr.ridingRef = looked;
+                dragonMgr._wakeFromSleep(looked);
+                addChatMessage(`Mounted ${looked.dragonName || 'dragon'}!`, 'rgba(180,200,255,0.9)');
                 return false;
             }
         }
@@ -11672,7 +12239,12 @@ function animate() {
                 }
             }
         }
-        player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
+        if (!player._dragonGrabbed) {
+            player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
+        } else {
+            // While grabbed, just update group position to match
+            player.group.position.copy(player.position);
+        }
     }
     dragonMgr.applyPlayerPose(player);
 
@@ -11732,13 +12304,14 @@ function animate() {
         player._shieldMesh.visible = true;
         player._shieldMat.color.setHex(SHIELD_TIERS[equippedShield].color);
         if (shieldRaised) {
-            // Defensive stance — arm across chest, shield facing forward
-            player.rightArm.shoulder.rotation.x = -1.3;
-            player.rightArm.shoulder.rotation.z = -0.6;
-            player.rightArm.elbow.rotation.x = -1.4;
-            // Shield facing outward (toward enemy)
-            player._shieldMesh.rotation.set(0.2, -0.3, 0);
-            player._shieldMesh.position.set(-0.05, -0.1, 0.1);
+            // Defensive stance — arm out to side, forearm up, shield facing forward
+            player.rightArm.shoulder.rotation.x = -1.2;
+            player.rightArm.shoulder.rotation.z = -0.5;
+            player.rightArm.shoulder.rotation.y = 0;
+            player.rightArm.elbow.rotation.x = -2.2;
+            // Shield on forearm, rotated so face points forward (away from player)
+            player._shieldMesh.rotation.set(-0.3, Math.PI, 0);
+            player._shieldMesh.position.set(0, -0.12, 0);
         } else {
             // Default: shield on outer side of arm
             player._shieldMesh.rotation.set(0, Math.PI / 2, 0);
@@ -12031,16 +12604,16 @@ function animate() {
 
     // Lighting intensity based on time
     let dayBright = Math.max(0, Math.sin(sunAngle));
-    if (isNight) dayBright = 0.08;
+    if (isNight) dayBright = 0.18;
     else if (isDusk || isDawn) dayBright = 0.15 + dayBright * 0.5;
 
     sun.intensity = 0.3 + dayBright * 1.1;
-    ambient.intensity = 0.15 + dayBright * 0.4;
-    hemi.intensity = 0.15 + dayBright * 0.5;
+    ambient.intensity = 0.2 + dayBright * 0.4;
+    hemi.intensity = 0.2 + dayBright * 0.5;
 
     // Sky color — smooth gradient through time of day
     // timeOfDay: 0.0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
-    const _skyNight   = new THREE.Color(0x080810);
+    const _skyNight   = new THREE.Color(0x101828);
     const _skyPreDawn  = new THREE.Color(0x1a1a30);
     const _skyDawn     = new THREE.Color(0xffaa66);
     const _skyMorning  = new THREE.Color(0x6db3d4);
@@ -12119,6 +12692,20 @@ function animate() {
         player.position.z + Math.abs(Math.sin(moonAngle)) * sunSkyDist * 0.3
     );
     moonGlow.position.copy(moonSphere.position);
+
+    // Night sky — fade in at dusk, full at night, fade out at dawn
+    _nightSkyGroup.position.set(player.position.x, 0, player.position.z);
+    let skyDomeAlpha = 0;
+    if (isNight) skyDomeAlpha = 1;
+    else if (isDusk) skyDomeAlpha = (timeOfDay - 0.72) / 0.06;
+    else if (isDawn) skyDomeAlpha = 1 - (timeOfDay - 0.22) / 0.06;
+    else if (timeOfDay > 0.78 && timeOfDay <= 0.82) skyDomeAlpha = 1;
+    else if (timeOfDay >= 0.18 && timeOfDay < 0.22) skyDomeAlpha = 1;
+    _nightSkyAlpha = Math.max(0, Math.min(1, skyDomeAlpha));
+    _starMat.uniforms.opacity.value = _nightSkyAlpha;
+    _starMat.uniforms.twinkleTime.value += dt;
+    _mwMat.uniforms.opacity.value = _nightSkyAlpha;
+    _nightSkyGroup.visible = _nightSkyAlpha > 0.01;
 
     // ── Shooting Stars (nighttime only) ──
     if (isNight) {
@@ -12267,6 +12854,11 @@ function animate() {
     if (!staffShielding && playerMana < playerMaxMana) {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5 * getManaRegenMult());
         updateManaUI();
+    }
+    // Health regeneration — passive 0.5 HP/s
+    if (playerHP < playerMaxHP) {
+        playerHP = Math.min(playerMaxHP, playerHP + dt * 0.5);
+        updateHeartsUI();
     }
     // Hold right-click to channel mana (2/s extra regen)
     const rightMouseHeld = placingHeld || shieldRaised;
@@ -12488,6 +13080,8 @@ function animate() {
     player._lookPitch = fpPitch;
     player._lookYaw = fpYaw;
     dragonMgr._timeOfDay = timeOfDay;
+    dragonMgr._playerRiding = !!(dragonMgr.ridingDragon || (horseMgr && horseMgr.ridingHorse));
+    dragonMgr._playerSprinting = !!(keys[keybinds.sprint] || keys['ShiftRight']);
     dragonMgr.update(dt, player, keys);
     if (mp.active) dragonMgr.updateRemoteDragons(dt);
 

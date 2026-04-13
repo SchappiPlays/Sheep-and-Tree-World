@@ -278,11 +278,11 @@ function computeFlap(t) {
 }
 
 function getDragonMaxHP(age) {
-    if (age < 1200) return 15 + (age / 1200) * 15;
-    if (age < 2400) return 30 + ((age - 1200) / 1200) * 30;
-    if (age < 3600) return 60 + ((age - 2400) / 1200) * 40;
-    if (age < 7200) return 100 + ((age - 3600) / 3600) * 50;
-    return 150;
+    if (age < 4800) return 40 + (age / 4800) * 20;
+    if (age < 9600) return 60 + ((age - 4800) / 4800) * 40;
+    if (age < 14400) return 100 + ((age - 9600) / 4800) * 50;
+    if (age < 28800) return 150 + ((age - 14400) / 14400) * 50;
+    return 200;
 }
 
 
@@ -733,6 +733,7 @@ export class DragonManager {
         for (const bd of this.dragons) {
             if (bd.state !== 'alive') continue;
             if (bd._isRemote) continue; // never broadcast phantoms
+            if (bd._fortressGuardian || bd._stationary || bd._iceDragon) continue; // world dragons exist locally for everyone
             if (!bd._ownerPid) bd._ownerPid = myPid; // claim unowned dragons
             if (bd._ownerPid !== myPid) continue;
             if (!bd._mpId) {
@@ -957,19 +958,6 @@ export class DragonManager {
         // Update fire particles every frame
         this._updateFireParticles(dt);
 
-        // ── L key: age up nearest dragon by 2 mins ──
-        if (keys['KeyL'] && !this._lDown) {
-            this._lDown = true;
-            let nearest = null, nearDist = Infinity;
-            for (const bd of this.dragons) {
-                if (bd.state !== 'alive') continue;
-                const dx = px - bd.x, dz = pz - bd.z;
-                const d = dx * dx + dz * dz;
-                if (d < nearDist) { nearDist = d; nearest = bd; }
-            }
-            if (nearest) nearest.age += 120; // 2 minutes
-        }
-        if (!keys['KeyL']) this._lDown = false;
 
         // ── Update carried egg visual ──
         const held = this.getHeldItem ? this.getHeldItem() : null;
@@ -1033,14 +1021,18 @@ export class DragonManager {
                         }
                     } else {
                         const egg = this.heldEgg;
-                        if (this.removeFromInventory) this.removeFromInventory('egg_' + egg._idx);
+                        const eggKey = 'egg_' + egg._idx;
+                        if (this.removeFromInventory) this.removeFromInventory(eggKey);
+                        if (this.onEggHatched) this.onEggHatched(eggKey);
                         const hy = this.getHeight(px, pz);
                         const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
-                        bd.dragonName = egg.name;
+                        bd.dragonName = egg.name || '';
                         if (egg.isIce) bd._iceBreath = true;
                         this.heldEgg = null;
+                        // Prompt player to name the dragon
+                        if (this.onDragonHatched) this.onDragonHatched(bd);
                     }
                 }
             } else {
@@ -1063,11 +1055,12 @@ export class DragonManager {
                 // Check for nearby dragon to ride
                 if (!pickedEgg) {
                     for (const bd of this.dragons) {
-                        if (bd.state !== 'alive' || bd.age < 1150) continue;
+                        if (bd.state !== 'alive' || bd.age < 7200) continue;
                         const ddx = px - bd.x, ddz = pz - bd.z;
                         if (ddx * ddx + ddz * ddz < 6 * bd.growthScale + 4) {
                             this.ridingDragon = true;
                             this.ridingRef = bd;
+                            this._wakeFromSleep(bd);
                             break;
                         }
                     }
@@ -1075,6 +1068,12 @@ export class DragonManager {
             }
         }
         if (!keys['KeyE']) this._eDown = false;
+
+        // Clear player target after timeout
+        if (this._playerTargetTimer > 0) {
+            this._playerTargetTimer -= dt;
+            if (this._playerTargetTimer <= 0 || (this._playerTarget && this._playerTarget.dead)) this._playerTarget = null;
+        }
 
         // ── Update all dragons ──
         for (let bi = this.dragons.length - 1; bi >= 0; bi--) {
@@ -1113,20 +1112,39 @@ export class DragonManager {
             // Growth
             bd.age += dt;
             let gs;
-            if (bd.age < 1200) gs = 0.04 + (bd.age / 1200) * (0.25 - 0.04);
-            else if (bd.age < 2400) gs = 0.25 + ((bd.age - 1200) / 1200) * (0.50 - 0.25);
-            else if (bd.age < 3600) gs = 0.50 + ((bd.age - 2400) / 1200) * (1.0 - 0.50);
-            else if (bd.age < 7200) gs = 1.0 + ((bd.age - 3600) / 3600) * (2.0 - 1.0);
+            if (bd.age < 4800) gs = 0.04 + (bd.age / 4800) * (0.25 - 0.04);
+            else if (bd.age < 9600) gs = 0.25 + ((bd.age - 4800) / 4800) * (0.50 - 0.25);
+            else if (bd.age < 14400) gs = 0.50 + ((bd.age - 9600) / 4800) * (1.0 - 0.50);
+            else if (bd.age < 28800) gs = 1.0 + ((bd.age - 14400) / 14400) * (2.0 - 1.0);
             else gs = 2.0;
             bd.growthScale = gs;
             bd.group.scale.setScalar(gs);
             bd.footOffset = 0.95 * 2.55 * gs;
-            bd.followDist = 2.5 + gs * 3;
+            bd.followDist = 4 + gs * 5;
             // Update max HP as dragon grows
             const newMaxHP = getDragonMaxHP(bd.age);
             if (newMaxHP > bd.maxHP) {
                 bd.hp += (newMaxHP - bd.maxHP); // grow with new HP
                 bd.maxHP = newMaxHP;
+            }
+
+            // ── Dragon falling (dropped from bite) ──
+            if (bd._dragonFalling) {
+                bd._dragonFallVel = (bd._dragonFallVel || 0) + 25 * dt;
+                bd.group.position.y -= bd._dragonFallVel * dt;
+                const terrY = this.getHeight(bd.x, bd.z) + bd.footOffset;
+                if (bd.group.position.y <= terrY) {
+                    bd.group.position.y = terrY;
+                    const fallH = bd._dragonFallStartY - terrY;
+                    if (fallH > 3) {
+                        bd.hp -= Math.floor(fallH * 1.5);
+                        if (bd.hp <= 0) { bd.hp = 0; bd.state = 'dead'; }
+                    }
+                    bd._dragonFalling = false;
+                    bd._dragonFallVel = 0;
+                }
+                this._animateDragon(dt, bd);
+                continue;
             }
 
             // ── Riding ──
@@ -1149,29 +1167,81 @@ export class DragonManager {
             }
 
             // Default to following the player
-            if (bd._followingPlayer === undefined) bd._followingPlayer = true;
+            if (bd._followingPlayer === undefined) { bd._followingPlayer = true; bd._followMode = 'follow'; }
+
+            // ── Sleep at night (if not following player) ──
+            const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
+            const isNight = tod < 0.22 || tod > 0.78;
+            if (isNight && !bd._followingPlayer) {
+                bd._sleeping = true;
+                bd.walking = false;
+                bd.speed = 0;
+                bd._breathingFire = false;
+                // Sleep pose — lower body to ground (reduce footOffset)
+                const bTerrainY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, bTerrainY + bd.footOffset * 0.35, bd.z);
+                this._animateDragonSleep(dt, bd);
+                continue;
+            }
+            if (bd._sleeping) this._wakeFromSleep(bd);
 
             // ── Combat AI — find nearby hostile creature to fight ──
             // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
             let dragonFireDmg = 0.5;
-            if (bd.age >= 1200) dragonFireDmg = 1;
-            if (bd.age >= 2400) dragonFireDmg = 2;
-            if (bd.age >= 3600) dragonFireDmg = 3;
+            if (bd.age >= 9600) dragonFireDmg = 1;
+            if (bd.age >= 9600) dragonFireDmg = 2;
+            if (bd.age >= 14400) dragonFireDmg = 3;
+
+            // Flee when low HP (< 25%) — fly away from threats
+            const lowHP = bd.hp < bd.maxHP * 0.25;
+            if (lowHP && this._creatureMgr) {
+                let fleeX = 0, fleeZ = 0, threatCount = 0;
+                for (const c of this._creatureMgr.creatures) {
+                    if (c.dead || !c.hostile) continue;
+                    const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                    if (cdx * cdx + cdz * cdz < 900) { fleeX -= cdx; fleeZ -= cdz; threatCount++; }
+                }
+                if (threatCount > 0) {
+                    const fd = Math.sqrt(fleeX * fleeX + fleeZ * fleeZ) || 1;
+                    if (!bd.flying) { bd.flying = true; bd.flyHeight = bd.group.position.y + 10 + gs * 8; }
+                    const fleeSpd = (16 + gs * 10) * dt;
+                    bd.x += (fleeX / fd) * fleeSpd;
+                    bd.z += (fleeZ / fd) * fleeSpd;
+                    bd.angle = Math.atan2(fleeX / fd, fleeZ / fd);
+                    bd.group.rotation.y = bd.angle;
+                    const targetH = this.getHeight(bd.x, bd.z) + bd.footOffset + 15 + gs * 10;
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                    bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                    bd.walking = false;
+                    bd._breathingFire = false;
+                    this._animateDragon(dt, bd);
+                    continue;
+                }
+            }
 
             let target = null, targetDist = 25;
-            if (this._creatureMgr) {
-                for (const c of this._creatureMgr.creatures) {
-                    if (c.dead || !c.hostile || c._tamed) continue;
-                    if (c.type === 'babyDragon' || c.type === 'dragon') continue;
-                    if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
-                    const cdx = c.x - bd.x, cdz = c.z - bd.z;
+            if (this._creatureMgr && !bd._passive && !lowHP) {
+                // Priority 1: attack whatever the player is attacking
+                if (this._playerTarget && !this._playerTarget.dead) {
+                    const pt = this._playerTarget;
+                    const cdx = pt.x - bd.x, cdz = pt.z - bd.z;
                     const cd = Math.sqrt(cdx*cdx + cdz*cdz);
-                    if (cd < targetDist) {
-                        // Only engage if target is close to player too
-                        const pdx = c.x - px, pdz = c.z - pz;
-                        if (pdx*pdx + pdz*pdz < 30 * 30) {
-                            targetDist = cd;
-                            target = c;
+                    if (cd < 50) { target = pt; targetDist = cd; }
+                }
+                // Priority 2: nearby hostile creatures
+                if (!target) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead || !c.hostile || c._tamed) continue;
+                        if (c.type === 'babyDragon' || c.type === 'dragon') continue;
+                        if (c._isBoss && (c._isColossus || c._isEmberLord || c._isNecromancer || c._isSWNecromancer)) continue;
+                        const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                        const cd = Math.sqrt(cdx*cdx + cdz*cdz);
+                        if (cd < targetDist) {
+                            const pdx = c.x - px, pdz = c.z - pz;
+                            if (pdx*pdx + pdz*pdz < 30 * 30) {
+                                targetDist = cd;
+                                target = c;
+                            }
                         }
                     }
                 }
@@ -1179,6 +1249,11 @@ export class DragonManager {
 
             bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
 
+            if (!target && bd._breathingFire) {
+                bd._breathingFire = false;
+                bd._fireDirYaw = undefined;
+                bd._fireDirPitch = undefined;
+            }
             if (target) {
                 // Chase target
                 const tdx = target.x - bd.x, tdz = target.z - bd.z;
@@ -1230,8 +1305,8 @@ export class DragonManager {
             const bdx = px - bd.x, bdz = pz - bd.z;
             const bDist = Math.sqrt(bdx * bdx + bdz * bdz);
 
-            // Only follow if flag is set
-            if (!bd._followingPlayer) {
+            // ── Stay mode — just idle ──
+            if (bd._followMode === 'stay') {
                 bd.walking = false;
                 const tY = this.getHeight(bd.x, bd.z);
                 bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
@@ -1239,30 +1314,229 @@ export class DragonManager {
                 continue;
             }
 
-            // Teleport if too far
-            if (bDist > 50) {
+            // ── Wander mode — roam within 100u of home, occasionally grab sheep ──
+            if (bd._followMode === 'wander') {
+                const homeX = bd._wanderHomeX || bd.x;
+                const homeZ = bd._wanderHomeZ || bd.z;
+                bd._wanderTimer = (bd._wanderTimer || 0) - dt;
+
+                // Pick new wander target when timer expires
+                if (bd._wanderTimer <= 0) {
+                    bd._wanderTimer = 5 + Math.random() * 10;
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 10 + Math.random() * 80;
+                    bd._wanderTargetX = homeX + Math.sin(angle) * dist;
+                    bd._wanderTargetZ = homeZ + Math.cos(angle) * dist;
+                    // Clamp to within 120u of home
+                    const wdx = bd._wanderTargetX - homeX, wdz = bd._wanderTargetZ - homeZ;
+                    const wd = Math.sqrt(wdx * wdx + wdz * wdz);
+                    if (wd > 120) {
+                        bd._wanderTargetX = homeX + (wdx / wd) * 120;
+                        bd._wanderTargetZ = homeZ + (wdz / wd) * 120;
+                    }
+                    // Teens+ sometimes take off to fly to target
+                    if (bd.age >= 6200 && !bd.flying && Math.random() < 0.4) {
+                        bd.flying = true;
+                        bd.flyHeight = bd.group.position.y + 15 + Math.random() * 25;
+                        bd._wanderTimer = 8 + Math.random() * 15; // fly longer
+                    }
+                    // Flying dragons sometimes land
+                    if (bd.flying && Math.random() < 0.25) {
+                        bd.flying = false;
+                        bd.flyHeight = 0;
+                    }
+                }
+
+                // Move toward wander target
+                const wtdx = bd._wanderTargetX - bd.x, wtdz = bd._wanderTargetZ - bd.z;
+                const wtDist = Math.sqrt(wtdx * wtdx + wtdz * wtdz);
+                if (wtDist > 2) {
+                    const targetAngle = Math.atan2(wtdx, wtdz);
+                    let da = targetAngle - bd.angle;
+                    while (da > Math.PI) da -= Math.PI * 2;
+                    while (da < -Math.PI) da += Math.PI * 2;
+                    bd.angle += da * Math.min(dt * 3, 1);
+                    bd.group.rotation.y = bd.angle;
+                    if (bd.flying) {
+                        // Fly toward target
+                        const flySpd = (12 + gs * 8) * dt;
+                        bd.x += Math.sin(bd.angle) * flySpd;
+                        bd.z += Math.cos(bd.angle) * flySpd;
+                        // Gently vary height
+                        const targetH = this.getHeight(bd.x, bd.z) + bd.footOffset + 15 + Math.sin(bd._wanderTimer * 0.5) * 8;
+                        bd.flyHeight += (targetH - bd.flyHeight) * dt * 1.5;
+                        bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                        bd.walking = false;
+                    } else {
+                        const spd = Math.min(wtDist, 4 + gs * 2) * dt;
+                        bd.x += Math.sin(bd.angle) * spd;
+                        bd.z += Math.cos(bd.angle) * spd;
+                        bd.walking = true;
+                    }
+                } else {
+                    bd.walking = false;
+                }
+
+                // Drift back if too far from home
+                const hdx = bd.x - homeX, hdz = bd.z - homeZ;
+                if (hdx * hdx + hdz * hdz > 10000) { // > 100u
+                    bd._wanderTargetX = homeX;
+                    bd._wanderTargetZ = homeZ;
+                    bd._wanderTimer = 0;
+                }
+
+                // Occasionally grab a nearby sheep in talons
+                bd._wanderGrabTimer = (bd._wanderGrabTimer || 30) - dt;
+                if (bd._wanderGrabTimer <= 0 && !bd._grabbedCreature && this._creatureMgr) {
+                    bd._wanderGrabTimer = 40 + Math.random() * 80;
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead || (c.type !== 'sheep' && c.type !== 'pig')) continue;
+                        const cdx = c.x - bd.x, cdz = c.z - bd.z;
+                        if (cdx * cdx + cdz * cdz < 25 * gs) {
+                            bd._grabbedCreature = c;
+                            bd._wanderDropTimer = 5 + Math.random() * 10;
+                            break;
+                        }
+                    }
+                }
+                // Hold grabbed creature at feet, drop after timer
+                if (bd._grabbedCreature) {
+                    const c = bd._grabbedCreature;
+                    if (c.dead) { bd._grabbedCreature = null; }
+                    else {
+                        c.x = bd.x; c.z = bd.z;
+                        c.group.position.set(bd.x, bd.group.position.y - bd.footOffset * 0.5, bd.z);
+                        c.walking = false; c.speed = 0;
+                        bd._wanderDropTimer = (bd._wanderDropTimer || 5) - dt;
+                        if (bd._wanderDropTimer <= 0) {
+                            bd._grabbedCreature = null;
+                        }
+                    }
+                }
+
+                if (!bd.flying) {
+                    const tY = this.getHeight(bd.x, bd.z);
+                    bd.group.position.set(bd.x, tY + bd.footOffset, bd.z);
+                }
+                this._animateDragon(dt, bd);
+                continue;
+            }
+
+            // ── Follow mode — fly back if returning from wander ──
+            if (bd._flyingBack) {
+                if (bDist < 15) {
+                    bd._flyingBack = false;
+                    bd.flying = false;
+                    bd.flyHeight = 0;
+                } else if (bd.flying) {
+                    // Fly toward player
+                    const targetAngle = Math.atan2(bdx, bdz);
+                    let da = targetAngle - bd.angle;
+                    while (da > Math.PI) da -= Math.PI * 2;
+                    while (da < -Math.PI) da += Math.PI * 2;
+                    bd.angle += da * Math.min(dt * 4, 1);
+                    bd.group.rotation.y = bd.angle;
+                    const flySpd = (20 + gs * 15) * dt;
+                    bd.x += Math.sin(bd.angle) * flySpd;
+                    bd.z += Math.cos(bd.angle) * flySpd;
+                    // Adjust height toward player
+                    const targetH = Math.max(py + 10, this.getHeight(bd.x, bd.z) + bd.footOffset + 8);
+                    bd.flyHeight += (targetH - bd.flyHeight) * 2 * dt;
+                    bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                    bd.walking = false;
+                    this._animateDragon(dt, bd);
+                    continue;
+                }
+            }
+
+            // Don't teleport — let dragon walk/fly back naturally
+            if (bDist > 50 && !bd._flyingBack) {
                 bd.x = px - Math.sin(player.group.rotation.y) * 3;
                 bd.z = pz - Math.cos(player.group.rotation.y) * 3;
             }
 
+            // Take off: sprinting, far away, riding, or combat
+            const shouldFly = this._playerSprinting || bDist > 15 || this._playerRiding || (target && targetDist < 20);
+            if (shouldFly && !bd.flying) {
+                bd.flying = true;
+                bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
+            }
+            // Land: not sprinting, close enough, not riding, no combat
+            if (!shouldFly && bd.flying && bDist < 10) {
+                bd.flying = false;
+                bd.flyHeight = 0;
+            }
+
             const maxSpd = 8 + gs * 6;
-            if (bDist > bd.followDist) {
-                const targetAngle = Math.atan2(bdx, bdz);
-                let da = targetAngle - bd.angle;
-                while (da > Math.PI) da -= Math.PI * 2;
-                while (da < -Math.PI) da += Math.PI * 2;
-                bd.angle += da * Math.min(dt * 5, 1);
-                bd.group.rotation.y = bd.angle;
+            let moveX = 0, moveZ = 0;
+            if (bd.flying) {
+                // Flying follow — circle around player
+                // Pick a fly-to point near the player, change it periodically
+                bd._flyGoalTimer = (bd._flyGoalTimer || 0) - dt;
+                if (bd._flyGoalTimer <= 0 || !bd._flyGoalX) {
+                    bd._flyGoalTimer = 3 + Math.random() * 5;
+                    const ang = Math.random() * Math.PI * 2;
+                    const r = 3 + Math.random() * (5 + gs * 4);
+                    bd._flyGoalX = px + Math.sin(ang) * r;
+                    bd._flyGoalZ = pz + Math.cos(ang) * r;
+                }
+                // Move goal with player so it doesn't fall behind
+                bd._flyGoalX += (px - (bd._prevPX || px)); bd._flyGoalZ += (pz - (bd._prevPZ || pz));
+                bd._prevPX = px; bd._prevPZ = pz;
+                const flySpd = (14 + gs * 10) * dt;
+                const gx = bd._flyGoalX - bd.x, gz = bd._flyGoalZ - bd.z;
+                const gd = Math.sqrt(gx * gx + gz * gz) || 1;
+                if (bDist > 12 + gs * 6) {
+                    // Far — fly toward player
+                    moveX = bdx / bDist * flySpd;
+                    moveZ = bdz / bDist * flySpd;
+                } else {
+                    // Swoop toward goal point
+                    moveX = gx / gd * flySpd;
+                    moveZ = gz / gd * flySpd;
+                    // Pick new goal if reached
+                    if (gd < 3) bd._flyGoalTimer = 0;
+                }
+                bd.x += moveX; bd.z += moveZ;
+                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin((bd._flyGoalTimer || 0) * 0.8) * 4 * gs);
+                bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                bd.walking = false;
+            } else if (bDist > bd.followDist) {
+                // Walking — go toward player
                 const spd = Math.min(bDist * 1.5, maxSpd) * dt;
-                bd.x += Math.sin(bd.angle) * spd;
-                bd.z += Math.cos(bd.angle) * spd;
+                moveX = bdx / bDist * spd;
+                moveZ = bdz / bDist * spd;
+                bd.x += moveX; bd.z += moveZ;
+                bd.walking = true;
+            } else if (bDist > bd.followDist * 0.5) {
+                // Close — slow approach
+                const spd = Math.min(bDist * 0.5, maxSpd * 0.3) * dt;
+                moveX = bdx / bDist * spd;
+                moveZ = bdz / bDist * spd;
+                bd.x += moveX; bd.z += moveZ;
                 bd.walking = true;
             } else {
                 bd.walking = false;
             }
+            // Face movement direction (flying) or face player (ground)
+            let faceAngle;
+            if (bd.flying && (moveX * moveX + moveZ * moveZ > 0.0001)) {
+                faceAngle = Math.atan2(moveX, moveZ);
+            } else {
+                faceAngle = Math.atan2(bdx, bdz);
+            }
+            let da = faceAngle - bd.angle;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            bd.angle += da * Math.min(dt * 5, 1);
+            bd.group.rotation.y = bd.angle;
 
-            const bTerrainY = this.getHeight(bd.x, bd.z);
-            bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+            if (bd.flying) {
+                bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            } else {
+                const bTerrainY = this.getHeight(bd.x, bd.z);
+                bd.group.position.set(bd.x, bTerrainY + bd.footOffset, bd.z);
+            }
 
             // ── Animation ──
             this._animateDragon(dt, bd);
@@ -1294,8 +1568,8 @@ export class DragonManager {
             const dx = Math.sin(lookYaw) * Math.cos(lookPitch);
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
-            // Emit particles — long-range mode (ice if dragon breathes ice)
-            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0);
+            // Emit particles — long-range mode (ice if dragon breathes ice), inherit dragon velocity
+            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0, bd._velX || 0, bd._velY || 0, bd._velZ || 0);
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
@@ -1305,13 +1579,163 @@ export class DragonManager {
             bd._breathingFire = false;
         }
 
+        // ── B key — bite attack ──
+        if (keys['KeyB']) {
+            if (!bd._biting) {
+                // Initial bite — find target
+                bd._biting = true;
+                bd._biteTarget = null;
+                bd._biteDragonTarget = null;
+                bd._biteShakeAccum = 0;
+                bd._biteShakeDmgAccum = 0;
+                bd._lastBiteYaw = (player._lookYaw !== undefined) ? player._lookYaw : player.group.rotation.y;
+                const lookYaw = bd._lastBiteYaw;
+                const lookPitch = (player._lookPitch !== undefined) ? player._lookPitch : 0;
+                bd._fireDirYaw = lookYaw;
+                bd._fireDirPitch = lookPitch;
+                this._aimDragonHead(bd, true);
+                this._getMouthWorld(bd, _afv);
+                const mx = _afv.x, my = _afv.y, mz = _afv.z;
+                const biteRange = 6 * gs;
+                // Check creatures
+                let best = null, bestDist = biteRange;
+                if (this._creatureMgr) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead) continue;
+                        const cdx = c.x - mx, cdz = c.z - mz;
+                        const cd = Math.sqrt(cdx * cdx + cdz * cdz);
+                        if (cd < bestDist) {
+                            // Check direction — must be roughly where we're looking
+                            const dirX = Math.sin(lookYaw), dirZ = Math.cos(lookYaw);
+                            const dot = (cdx * dirX + cdz * dirZ) / (cd || 1);
+                            if (dot > 0.6) { bestDist = cd; best = c; }
+                        }
+                    }
+                }
+                if (best) {
+                    bd._biteTarget = best;
+                    best.hp -= 8;
+                    if (best.hp <= 0) { best.hp = 0; best.dead = true; best.deathTimer = 0; best.walking = false; best.speed = 0; }
+                }
+                // Check other dragons (can bite, can hold if <= 65% size)
+                if (!best) {
+                    for (const other of this.dragons) {
+                        if (other === bd || other.state !== 'alive') continue;
+                        if (other._isRemote) continue; // handled via sync
+                        const cdx = other.x - mx, cdz = other.z - mz;
+                        const cd = Math.sqrt(cdx * cdx + cdz * cdz);
+                        if (cd < biteRange) {
+                            const dirX = Math.sin(lookYaw), dirZ = Math.cos(lookYaw);
+                            const dot = (cdx * dirX + cdz * dirZ) / (cd || 1);
+                            if (dot > 0.6) {
+                                other.hp -= 8;
+                                if (other.hp <= 0) { other.hp = 0; other.state = 'dead'; }
+                                if (other.growthScale <= gs * 0.65) {
+                                    bd._biteDragonTarget = other;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Check remote players
+                if (!best && !bd._biteDragonTarget && this._mp && this._mp.remotePlayers) {
+                    for (const [pid, rp] of this._mp.remotePlayers) {
+                        if (!rp._hasReceived) continue;
+                        const rpx = rp.group.position.x, rpz = rp.group.position.z;
+                        const cdx = rpx - mx, cdz = rpz - mz;
+                        const cd = Math.sqrt(cdx * cdx + cdz * cdz);
+                        if (cd < biteRange) {
+                            const dirX = Math.sin(lookYaw), dirZ = Math.cos(lookYaw);
+                            const dot = (cdx * dirX + cdz * dirZ) / (cd || 1);
+                            if (dot > 0.6) {
+                                this._mp.sendPvpHit(pid, 8);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            // Holding B — aim head at target and shake damage
+            if (bd._biteTarget || bd._biteDragonTarget) {
+                const target = bd._biteTarget || bd._biteDragonTarget;
+                const tx = bd._biteTarget ? target.x : target.x;
+                const tz = bd._biteTarget ? target.z : target.z;
+                const ty = bd._biteTarget ? (target.group.position.y || 0) : (target.group.position.y || 0);
+                const aimDx = tx - bd.x, aimDz = tz - bd.z;
+                const aimY = ty - (bd.group.position.y + 1.0 * gs);
+                const aimHoriz = Math.sqrt(aimDx * aimDx + aimDz * aimDz) || 1;
+                bd._fireDirYaw = Math.atan2(aimDx, aimDz);
+                bd._fireDirPitch = -Math.atan2(aimY, aimHoriz);
+                bd._breathingFire = true; // reuse neck bend system
+                this._aimDragonHead(bd, true);
+                // Jaw open for bite
+                bd._jawOpenT = 0.8;
+                // Hold target in mouth
+                this._getMouthWorld(bd, _afv);
+                if (bd._biteTarget && !bd._biteTarget.dead) {
+                    bd._biteTarget.x = _afv.x;
+                    bd._biteTarget.z = _afv.z;
+                    bd._biteTarget.group.position.set(_afv.x, _afv.y, _afv.z);
+                    bd._biteTarget.walking = false;
+                    bd._biteTarget.speed = 0;
+                }
+                if (bd._biteDragonTarget && bd._biteDragonTarget.state === 'alive') {
+                    bd._biteDragonTarget.x = _afv.x;
+                    bd._biteDragonTarget.z = _afv.z;
+                    bd._biteDragonTarget.group.position.set(_afv.x, _afv.y, _afv.z);
+                }
+                // Shake damage — track mouse/crosshair yaw changes
+                const curYaw = (player._lookYaw !== undefined) ? player._lookYaw : player.group.rotation.y;
+                let yawDelta = Math.abs(curYaw - bd._lastBiteYaw);
+                if (yawDelta > Math.PI) yawDelta = Math.PI * 2 - yawDelta;
+                bd._lastBiteYaw = curYaw;
+                bd._biteShakeAccum += yawDelta;
+                bd._biteShakeDmgAccum += dt;
+                // Deal 1 damage per 0.3 radians of shake, checked every 0.2s
+                if (bd._biteShakeDmgAccum >= 0.2) {
+                    bd._biteShakeDmgAccum = 0;
+                    if (bd._biteShakeAccum > 0.3) {
+                        const shakeDmg = Math.floor(bd._biteShakeAccum / 0.3);
+                        bd._biteShakeAccum -= shakeDmg * 0.3;
+                        if (bd._biteTarget && !bd._biteTarget.dead) {
+                            bd._biteTarget.hp -= shakeDmg;
+                            if (bd._biteTarget.hp <= 0) { bd._biteTarget.hp = 0; bd._biteTarget.dead = true; bd._biteTarget.deathTimer = 0; bd._biteTarget.walking = false; bd._biteTarget.speed = 0; }
+                        }
+                        if (bd._biteDragonTarget && bd._biteDragonTarget.state === 'alive') {
+                            bd._biteDragonTarget.hp -= shakeDmg;
+                            if (bd._biteDragonTarget.hp <= 0) { bd._biteDragonTarget.hp = 0; bd._biteDragonTarget.state = 'dead'; }
+                        }
+                    }
+                }
+                bd._breathingFire = false; // don't actually show fire particles
+            }
+        } else if (bd._biting) {
+            // Released B — drop target
+            bd._biting = false;
+            if (bd._biteTarget && !bd._biteTarget.dead) {
+                bd._biteTarget._falling = true;
+                bd._biteTarget._fallVel = 0;
+                bd._biteTarget._fallStartY = bd._biteTarget.group.position.y;
+            }
+            if (bd._biteDragonTarget && bd._biteDragonTarget.state === 'alive') {
+                // Dragon falls — set a temporary fall state
+                const dt2 = bd._biteDragonTarget;
+                dt2._dragonFalling = true;
+                dt2._dragonFallVel = 0;
+                dt2._dragonFallStartY = dt2.group.position.y;
+            }
+            bd._biteTarget = null;
+            bd._biteDragonTarget = null;
+        }
+
         if (keys['KeyA'] || keys['ArrowLeft']) bd.angle += turnRate * dt;
         if (keys['KeyD'] || keys['ArrowRight']) bd.angle -= turnRate * dt;
         let wantDir = 0;
         if (keys['KeyW'] || keys['ArrowUp']) wantDir = 1;
         if (keys['KeyS'] || keys['ArrowDown']) wantDir = -1;
 
-        const canFly = bd.age >= 1550;
+        const canFly = bd.age >= 6200;
         const speed = bd.flying ? flySpeed : walkSpeed;
 
         // Flight controls
@@ -1335,6 +1759,7 @@ export class DragonManager {
         }
 
         // Movement
+        const prevX = bd.x, prevZ = bd.z, prevY = bd.group.position.y;
         if (wantDir !== 0) {
             const spd = speed * wantDir * dt;
             bd.x += Math.sin(bd.angle) * spd;
@@ -1357,6 +1782,13 @@ export class DragonManager {
             bd.group.rotation.x = 0;
             const terrY = this.getHeight(bd.x, bd.z);
             bd.group.position.set(bd.x, terrY + bd.footOffset, bd.z);
+        }
+
+        // Track dragon velocity for fire particle inheritance
+        if (dt > 0) {
+            bd._velX = (bd.x - prevX) / dt;
+            bd._velY = (bd.group.position.y - prevY) / dt;
+            bd._velZ = (bd.z - prevZ) / dt;
         }
 
         // Player sits on dragon's back — compute seat position in dragon's local space
@@ -1396,6 +1828,102 @@ export class DragonManager {
         player.spine.rotation.y = 0;
         player.spine.rotation.z = 0;
 
+        // ── G key — grab creatures with talons ──
+        if (keys['KeyG']) {
+            bd._grabbing = true;
+            // Tilt back and extend rear legs forward
+            if (!bd._grabTilt) bd._grabTilt = 0;
+            bd._grabTilt += (-0.45 - bd._grabTilt) * 4 * dt;
+            bd.group.rotation.x = (bd._flyTilt || 0) + bd._grabTilt;
+            // Check for creatures or players near the rear feet to grab
+            if (!bd._grabbedCreature && !bd._grabbedPlayer) {
+                bd.group.updateMatrixWorld(true);
+                const footWorld = new THREE.Vector3();
+                const S = 2.55;
+                footWorld.set(0, -0.7 * S * gs, -0.7 * S * gs);
+                footWorld.applyMatrix4(bd.group.matrixWorld);
+                const grabR = 2.5 * gs;
+                const grabR2 = grabR * grabR;
+                // Check creatures
+                let closest = null, closestDist = grabR2;
+                if (this._creatureMgr) {
+                    for (const c of this._creatureMgr.creatures) {
+                        if (c.dead) continue;
+                        if (c.type === 'dragon' || c.type === 'babyDragon') continue;
+                        const cdx = c.x - footWorld.x, cdz = c.z - footWorld.z;
+                        const d2 = cdx * cdx + cdz * cdz;
+                        if (d2 < closestDist) { closestDist = d2; closest = c; }
+                    }
+                }
+                if (closest) {
+                    bd._grabbedCreature = closest;
+                    bd._grabStartY = closest.group.position.y;
+                } else if (this._mp && this._mp.remotePlayers) {
+                    // Check remote players (not riding their own dragon)
+                    for (const [pid, rp] of this._mp.remotePlayers) {
+                        if (!rp._hasReceived || rp._riding) continue;
+                        const rpx = rp.group.position.x, rpz = rp.group.position.z;
+                        const cdx = rpx - footWorld.x, cdz = rpz - footWorld.z;
+                        const d2 = cdx * cdx + cdz * cdz;
+                        if (d2 < grabR2) {
+                            bd._grabbedPlayer = pid;
+                            this._mp._send({ t: 'dragon_grab', targetPid: pid });
+                            break;
+                        }
+                    }
+                }
+            }
+            // Hold grabbed creature at foot position
+            if (bd._grabbedCreature) {
+                const c = bd._grabbedCreature;
+                if (c.dead) { bd._grabbedCreature = null; }
+                else {
+                    bd.group.updateMatrixWorld(true);
+                    const S = 2.55;
+                    const footWorld = new THREE.Vector3(0, -0.95 * S * gs, -0.5 * S * gs);
+                    footWorld.applyMatrix4(bd.group.matrixWorld);
+                    c.x = footWorld.x;
+                    c.z = footWorld.z;
+                    c.group.position.set(footWorld.x, footWorld.y, footWorld.z);
+                    c.walking = false;
+                    c.speed = 0;
+                }
+            }
+            // Hold grabbed remote player at foot position
+            if (bd._grabbedPlayer && this._mp && this._mp.remotePlayers) {
+                const rp = this._mp.remotePlayers.get(bd._grabbedPlayer);
+                if (rp) {
+                    bd.group.updateMatrixWorld(true);
+                    const S = 2.55;
+                    const footWorld = new THREE.Vector3(0, -0.95 * S * gs, -0.5 * S * gs);
+                    footWorld.applyMatrix4(bd.group.matrixWorld);
+                    // Send position override to grabbed player
+                    this._mp._send({ t: 'dragon_hold', targetPid: bd._grabbedPlayer, x: +footWorld.x.toFixed(2), y: +footWorld.y.toFixed(2), z: +footWorld.z.toFixed(2) });
+                }
+            }
+        } else if (bd._grabbing) {
+            // Released G — drop creature/player
+            bd._grabbing = false;
+            if (bd._grabbedCreature) {
+                const c = bd._grabbedCreature;
+                if (!c.dead) {
+                    c._falling = true;
+                    c._fallVel = 0;
+                    c._fallStartY = c.group.position.y;
+                }
+                bd._grabbedCreature = null;
+            }
+            if (bd._grabbedPlayer && this._mp) {
+                this._mp._send({ t: 'dragon_drop', targetPid: bd._grabbedPlayer, y: 0 });
+                bd._grabbedPlayer = null;
+            }
+            bd._grabTilt = 0;
+        }
+        if (!bd._grabbing && bd._grabTilt) {
+            bd._grabTilt *= Math.max(0, 1 - 4 * dt);
+            if (bd._grabTilt < 0.01) bd._grabTilt = 0;
+        }
+
         bd.walking = wantDir !== 0;
         this._animateDragon(dt, bd);
     }
@@ -1431,6 +1959,19 @@ export class DragonManager {
                 updateWyvernMembrane(w);
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
+            // Grabbing: rear legs extend forward/down to grab
+            if (bd._grabbing) {
+                bd.legs[2].rotation.x = -0.8; // rear left forward
+                bd.legs[3].rotation.x = -0.8; // rear right forward
+                // Curl inward slightly if holding something
+                if (bd._grabbedCreature) {
+                    bd.legs[2].rotation.z = 0.15;
+                    bd.legs[3].rotation.z = -0.15;
+                }
+            } else {
+                bd.legs[2].rotation.z = 0;
+                bd.legs[3].rotation.z = 0;
+            }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
                 bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 0.5 + ti * 0.35) * 0.07;
             }
@@ -1499,25 +2040,125 @@ export class DragonManager {
             }
             bd.headGrp.rotation.x = Math.sin(bd.walkPhase * 0.8) * 0.1;
         }
-        // Smoothly lerp neck bend amount toward target (1 if breathing, 0 otherwise)
-        const bendTarget = (bd._breathingFire && bd._fireDirYaw !== undefined) ? 1 : 0;
+        // Smoothly lerp neck bend amount toward target (1 if breathing or biting, 0 otherwise)
+        const bendTarget = ((bd._breathingFire || bd._biting) && bd._fireDirYaw !== undefined) ? 1 : 0;
         bd._neckBendT = (bd._neckBendT || 0) + (bendTarget - (bd._neckBendT || 0)) * Math.min(1, 8 * dt);
         if (bd._neckBendT > 0.01) {
             this._aimDragonHead(bd, false);
         } else if (bd.neckSegs) {
             // Fully released — clear all rotations so default head animation reads through
             bd._neckBendT = 0;
+            bd._fireDirYaw = undefined;
+            bd._fireDirPitch = undefined;
             for (const seg of bd.neckSegs) {
                 seg.rotation.y = 0;
                 seg.rotation.x = 0;
             }
             bd.headGrp.rotation.y = 0;
         }
-        // Jaw open animation — smoothly opens when breathing fire
+        // Jaw open animation — smoothly opens when breathing fire or biting
         if (bd.jawGrp) {
-            const target = bd._breathingFire ? 1 : 0;
+            const target = (bd._breathingFire || (bd._biting && (bd._biteTarget || bd._biteDragonTarget))) ? 1 : 0;
             bd._jawOpenT = (bd._jawOpenT || 0) + (target - (bd._jawOpenT || 0)) * Math.min(1, 12 * dt);
             bd.jawGrp.rotation.x = bd._jawOpenT * 0.65;
+        }
+    }
+
+    _animateDragonSleep(dt, bd) {
+        // Smoothly transition into sleep pose
+        const t = Math.min(1, (bd._sleepBlend || 0) + dt * 2);
+        bd._sleepBlend = t;
+        const lerp = (a, b) => a + (b - a) * t;
+
+        // Breathing — gentle rise/fall
+        bd._sleepBreathPhase = (bd._sleepBreathPhase || 0) + dt * 0.8;
+        const breath = Math.sin(bd._sleepBreathPhase) * 0.06 * bd.growthScale;
+        const bTerrainY = this.getHeight(bd.x, bd.z);
+        bd.group.position.y = bTerrainY + bd.footOffset * 0.35 + breath * t;
+        // Chest/body expands slightly with breath
+        if (bd.chest) {
+            const breathScale = 1 + Math.sin(bd._sleepBreathPhase) * 0.03 * t;
+            bd.chest.scale.set(1, breathScale, 1);
+        }
+        if (bd.midBody) {
+            const breathScale = 1 + Math.sin(bd._sleepBreathPhase + 0.3) * 0.02 * t;
+            bd.midBody.scale.set(1, breathScale, 1);
+        }
+
+        // Neck: bend sideways and down so head rests on the ground curving right
+        if (bd.neckGrp) {
+            bd.neckGrp.rotation.x = lerp(bd.neckGrp.rotation.x, 0.7); // droop down
+            bd.neckGrp.rotation.y = lerp(bd.neckGrp.rotation.y, 0.3); // curve right
+        }
+        if (bd.neckSegs) {
+            for (let i = 0; i < bd.neckSegs.length; i++) {
+                const seg = bd.neckSegs[i];
+                seg.rotation.x = lerp(seg.rotation.x, 0.35); // each seg droops further
+                seg.rotation.y = lerp(seg.rotation.y, 0.25);  // curves right
+            }
+        }
+        // Head on its side (roll via z), facing inward/sideways
+        bd.headGrp.rotation.order = 'YXZ';
+        bd.headGrp.rotation.x = lerp(bd.headGrp.rotation.x, 0);    // no pitch
+        bd.headGrp.rotation.y = lerp(bd.headGrp.rotation.y, 0.4);   // facing inward
+        bd.headGrp.rotation.z = lerp(bd.headGrp.rotation.z || 0, 0.7); // rolled onto its side
+
+        // Jaw closed
+        if (bd.jawGrp) {
+            bd._jawOpenT = (bd._jawOpenT || 0) * 0.9;
+            bd.jawGrp.rotation.x = bd._jawOpenT * 0.65;
+        }
+
+        // Close eyes
+        if (bd.eyes) {
+            for (const eye of bd.eyes) {
+                eye.scale.y = lerp(eye.scale.y, 0.1);
+            }
+        }
+
+        // Wings flat on the ground — spread out like flying, nearly flat
+        for (const w of bd.wings) {
+            const si = w._s;
+            w.rotation.set(
+                lerp(w.rotation.x, 0),
+                lerp(w.rotation.y, si * 0.05),
+                lerp(w.rotation.z, si * -0.03)  // flat outstretched
+            );
+            if (w._elbow) w._elbow.rotation.set(
+                lerp(w._elbow.rotation.x, 0),
+                lerp(w._elbow.rotation.y, si * -0.08),
+                lerp(w._elbow.rotation.z, si * -0.02) // flat
+            );
+            if (w._hand) w._hand.rotation.set(0, 0, 0);
+            // Flying membrane setup
+            if (w._memOutlineFly) w._memOutline = w._memOutlineFly;
+            if (w._flyFRots) applyFingerRots(w, w._flyFRots);
+            if (w._patMesh) w._patMesh.visible = true;
+            if (w._afOrigBodyPt) w._afBodyPt = w._afOrigBodyPt;
+            if (w._patP0) {
+                const S = 2.55;
+                w.updateMatrix();
+                _afInvMat.copy(w.matrix).invert();
+                _afv.set(0, 0, -0.3 * S).applyMatrix4(_afInvMat);
+                w._patP0[0] = _afv.x; w._patP0[1] = _afv.y; w._patP0[2] = _afv.z;
+            }
+            updateWyvernMembrane(w);
+        }
+
+        // Tail flat on ground, curves more to same side as head
+        for (let ti = 0; ti < bd.tailSegs.length; ti++) {
+            bd.tailSegs[ti].rotation.x = lerp(bd.tailSegs[ti].rotation.x, 0.1); // flat
+            bd.tailSegs[ti].rotation.y = lerp(bd.tailSegs[ti].rotation.y, 0.25 + ti * 0.1); // strong curve
+        }
+
+        // Legs splayed flat to the sides
+        for (let li = 0; li < bd.legs.length; li++) {
+            const leg = bd.legs[li];
+            if (bd.isWyvern && li < 2) continue;
+            const side = (li % 2 === 0) ? 1 : -1;
+            const isFront = li < 2;
+            leg.rotation.x = lerp(leg.rotation.x, isFront ? 0.3 : -0.3);
+            leg.rotation.z = lerp(leg.rotation.z, side * 1.4); // even more splayed
         }
     }
 
@@ -1742,10 +2383,11 @@ export class DragonManager {
     }
 
     // Emit fire particles from a position in a direction
-    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode) {
+    _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode, dragonVx, dragonVy, dragonVz) {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
+        const dvx = dragonVx || 0, dvy = dragonVy || 0, dvz = dragonVz || 0;
         for (let i = 0; i < count; i++) {
             // Find an inactive slot
             let slot = -1;
@@ -1759,9 +2401,9 @@ export class DragonManager {
             fp.pz[slot] = oz + (Math.random() - 0.5) * 0.3;
             const speed = longRange ? (32 + Math.random() * 8) : (18 + Math.random() * 6);
             const spread = longRange ? 0.06 : 0.15;
-            fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed;
-            fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed;
-            fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed;
+            fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed + dvx;
+            fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed + dvy;
+            fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed + dvz;
             fp.age[slot] = 0;
             fp.life[slot] = longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4);
             fp.size[slot] = 0.6 + Math.random() * 0.5;
@@ -1868,6 +2510,53 @@ export class DragonManager {
         return true;
     }
 
+    _wakeFromSleep(bd) {
+        if (!bd._sleeping) return;
+        bd._sleeping = false;
+        bd._sleepBlend = 0;
+        if (bd.eyes) for (const eye of bd.eyes) eye.scale.y = 1;
+        bd.headGrp.rotation.z = 0;
+        bd.headGrp.rotation.order = 'XYZ';
+        bd.headGrp.rotation.y = 0;
+        bd.headGrp.rotation.x = 0;
+        if (bd.neckGrp) { bd.neckGrp.rotation.x = 0; bd.neckGrp.rotation.y = 0; }
+        if (bd.neckSegs) for (const seg of bd.neckSegs) { seg.rotation.x = 0; seg.rotation.y = 0; }
+        bd._neckBendT = 0;
+        bd._fireDirYaw = undefined;
+        bd._fireDirPitch = undefined;
+        for (const leg of bd.legs) leg.rotation.z = 0;
+        for (const seg of bd.tailSegs) seg.rotation.x = 0;
+    }
+
+    getOwnedDragons() {
+        return this.dragons.filter(d => d.state === 'alive' && !d._fortressGuardian && !d._stationary);
+    }
+
+    setFollowMode(bd, mode, playerX, playerZ, playerY) {
+        if (!bd || bd._followMode === mode) return;
+        bd._followMode = mode;
+        if (mode === 'follow') {
+            bd._followingPlayer = true;
+            const dx = bd.x - playerX, dz = bd.z - playerZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const terrainY = this.getHeight(playerX, playerZ);
+            const highOff = playerY !== undefined && (playerY - terrainY > 10);
+            if (dist > 20 || highOff) {
+                bd._flyingBack = true;
+                if (!bd.flying) { bd.flying = true; bd.flyHeight = bd.group.position.y + 5; }
+            }
+        } else if (mode === 'stay') {
+            bd._followingPlayer = false;
+            bd.flying = false;
+            bd.flyHeight = 0;
+        } else {
+            bd._followingPlayer = false;
+            bd._wanderHomeX = bd.x; bd._wanderHomeZ = bd.z;
+            bd._wanderTargetX = bd.x; bd._wanderTargetZ = bd.z;
+            bd._wanderTimer = 0; bd._wanderGrabTimer = 30 + Math.random() * 60;
+        }
+    }
+
     // Find the dragon the player is looking at (raycast-style — closest in front, within range)
     getLookedAtDragon(player) {
         const px = player.position.x, pz = player.position.z;
@@ -1885,17 +2574,68 @@ export class DragonManager {
         return best;
     }
 
-    toggleFollow(bd) {
-        if (!bd) return;
-        if (bd._followingPlayer === undefined) bd._followingPlayer = true;
-        bd._followingPlayer = !bd._followingPlayer;
-        return bd._followingPlayer;
+    toggleFollow(bd, playerX, playerZ, playerY) {
+        if (!bd) return 'follow';
+        // Cycle: follow → stay → wander → follow
+        const mode = bd._followMode || 'wander';
+        if (mode === 'wander') {
+            bd._followMode = 'follow';
+            bd._followingPlayer = true;
+            // Only fly back if dragon is far away or player is high off the ground
+            const dx = bd.x - playerX, dz = bd.z - playerZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const terrainY = this.getHeight(playerX, playerZ);
+            const highOff = playerY !== undefined && (playerY - terrainY > 10);
+            if (dist > 20 || highOff) {
+                bd._flyingBack = true;
+                if (!bd.flying) {
+                    bd.flying = true;
+                    bd.flyHeight = bd.group.position.y + 5;
+                }
+            }
+        } else if (mode === 'follow') {
+            bd._followMode = 'stay';
+            bd._followingPlayer = false;
+        } else {
+            bd._followMode = 'wander';
+            bd._followingPlayer = false;
+            bd._wanderHomeX = bd.x;
+            bd._wanderHomeZ = bd.z;
+            bd._wanderTargetX = bd.x;
+            bd._wanderTargetZ = bd.z;
+            bd._wanderTimer = 0;
+            bd._wanderGrabTimer = 30 + Math.random() * 60;
+        }
+        return bd._followMode;
+    }
+
+    recallWandering(playerX, playerZ, playerY) {
+        let count = 0;
+        const terrainY = this.getHeight(playerX, playerZ);
+        const highOff = playerY !== undefined && (playerY - terrainY > 10);
+        for (const bd of this.dragons) {
+            if (bd.state !== 'alive' || bd._fortressGuardian || bd._stationary) continue;
+            if (bd._followMode !== 'wander') continue;
+            bd._followMode = 'follow';
+            bd._followingPlayer = true;
+            const dx = bd.x - playerX, dz = bd.z - playerZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > 20 || highOff) {
+                bd._flyingBack = true;
+                if (!bd.flying) {
+                    bd.flying = true;
+                    bd.flyHeight = bd.group.position.y + 5;
+                }
+            }
+            count++;
+        }
+        return count;
     }
 
     putOnShoulder(bd) {
         if (!bd) return false;
         // Only baby dragons (age < 1200)
-        if (bd.age >= 1200) return false;
+        if (bd.age >= 9600) return false;
         bd._onShoulder = true;
         bd._followingPlayer = false;
         return true;
@@ -1937,7 +2677,7 @@ export class DragonManager {
             if (dx*dx + dz*dz < 4) return 'Press E to pick up dragon egg';
         }
         for (const bd of this.dragons) {
-            if (bd.state !== 'alive' || bd.age < 1150 || bd._unrideable) continue;
+            if (bd.state !== 'alive' || bd.age < 7200 || bd._unrideable) continue;
             const dx = px - bd.x, dz = pz - bd.z;
             if (dx*dx + dz*dz < 6 * bd.growthScale + 4) return 'Press E to ride ' + bd.dragonName;
         }
