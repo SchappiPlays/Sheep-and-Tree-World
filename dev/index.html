@@ -299,7 +299,7 @@ canvas { display: block; }
             </div>
         </div>
         <!-- Right: character customization + preview -->
-        <div style="width:260px;padding:12px;background:rgba(30,40,25,0.6);border:1px solid rgba(120,160,80,0.3);border-radius:8px;margin-left:120px;">
+        <div style="width:260px;padding:12px;background:rgba(30,40,25,0.6);border:1px solid rgba(120,160,80,0.3);border-radius:8px;margin-left:200px;">
             <div style="color:rgba(180,170,140,0.6);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Character</div>
             <canvas id="charPreview" width="200" height="250" style="display:block;margin:0 auto 10px;border-radius:6px;background:rgba(20,30,20,0.5);"></canvas>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
@@ -13925,13 +13925,21 @@ function animate() {
         }
     }
 
-    // Fortress sword interaction
+    // Fortress sword interaction — skip if egg pickup is available (higher priority)
+    let _eggInRange = false;
+    if (dragonMgr && dragonMgr.eggs) {
+        for (const egg of dragonMgr.eggs) {
+            if (egg.pickedUp) continue;
+            const edx = player.position.x - egg.x, edz = player.position.z - egg.z;
+            if (edx*edx + edz*edz < 4) { _eggInRange = true; break; }
+        }
+    }
     let fortressSwordPrompt = '';
-    if (world._fortressSwordMeshes) {
+    if (world._fortressSwordMeshes && !_eggInRange) {
         for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
             const fs = world._fortressSwordMeshes[fi];
             const sdx = player.position.x - fs.wx, sdz = player.position.z - fs.wz;
-            if (sdx*sdx + sdz*sdz < 9) {
+            if (sdx*sdx + sdz*sdz < 2.25) { // 1.5u radius (was 3u)
                 const sName = window._customSwords[fs.id]?.name || 'ancient sword';
                 fortressSwordPrompt = 'Press E to draw ' + sName;
                 if (keys['KeyE']) {
