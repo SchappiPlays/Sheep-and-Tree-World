@@ -83,110 +83,24 @@ const wss = new WebSocketServer({ server: httpServer });
 console.log('[satw-server] HTTP + WebSocket starting on port', PORT);
 
 let nextPid = 0;
-const clients = new Map(); // pid → { ws, name, charColors, lastState, isHost }
-let hostPid = null; // designated host for creature/villager/horse AI broadcasts
+const clients = new Map(); // pid → { ws, name, charColors, pid, code, isHost }
+const rooms = new Map();   // code → { hostPid, members: Set<pid> }
 
-// ── Supabase persistence ──
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
-const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);
-console.log('[satw-server] Supabase:', SUPABASE_ENABLED ? 'ENABLED' : 'DISABLED');
-
-function _sbRequest(method, urlPath, body) {
-    return new Promise((resolve, reject) => {
-        const url = new URL(SUPABASE_URL + urlPath);
-        const postData = body ? JSON.stringify(body) : null;
-        const opts = {
-            method, hostname: url.hostname, path: url.pathname + url.search,
-            headers: {
-                'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Content-Type': 'application/json',
-            },
-        };
-        if (method === 'POST') opts.headers['Prefer'] = 'resolution=merge-duplicates,return=minimal';
-        if (postData) opts.headers['Content-Length'] = Buffer.byteLength(postData);
-        const req = https.request(opts, res => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => {
-                if (res.statusCode >= 400) console.error('[supabase]', method, urlPath, res.statusCode, data);
-                resolve({ status: res.statusCode, data });
-            });
-        });
-        req.on('error', e => { console.error('[supabase] error:', e.message); reject(e); });
-        if (postData) req.write(postData);
-        req.end();
-    });
+// Generate a short unique room code
+function makeRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no confusing chars
+    for (let tries = 0; tries < 100; tries++) {
+        let code = '';
+        for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        if (!rooms.has(code)) return code;
+    }
+    return 'ROOM' + Date.now();
 }
-
-async function saveToSupabase() {
-    if (!SUPABASE_ENABLED) return;
-    try {
-        const data = {
-            pickedEggs: [...world.pickedEggs],
-            lootedChests: [...world.lootedChests],
-            pickedSwords: [...world.pickedSwords],
-            killedBosses: [...world.killedBosses],
-            blocks: world.blocks,
-            timeOfDay: world.timeOfDay,
-        };
-        await _sbRequest('POST', '/rest/v1/world_saves', { id: 'world', data, updated_at: new Date().toISOString() });
-        console.log('[satw-server] Saved world to Supabase');
-    } catch (e) { console.error('[satw-server] Supabase save failed:', e.message); }
-}
-
-async function loadFromSupabase() {
-    if (!SUPABASE_ENABLED) return false;
-    try {
-        const res = await _sbRequest('GET', '/rest/v1/world_saves?id=eq.world&select=data');
-        const rows = JSON.parse(res.data);
-        if (rows && rows.length > 0 && rows[0].data) {
-            const d = rows[0].data;
-            if (d.pickedEggs) d.pickedEggs.forEach(e => world.pickedEggs.add(e));
-            if (d.lootedChests) d.lootedChests.forEach(e => world.lootedChests.add(e));
-            if (d.pickedSwords) d.pickedSwords.forEach(e => world.pickedSwords.add(e));
-            if (d.killedBosses) d.killedBosses.forEach(e => world.killedBosses.add(e));
-            if (d.blocks) Object.assign(world.blocks, d.blocks);
-            if (d.timeOfDay !== undefined) world.timeOfDay = d.timeOfDay;
-            console.log('[satw-server] Loaded world from Supabase');
-            return true;
-        }
-    } catch (e) { console.error('[satw-server] Supabase load failed:', e.message); }
-    return false;
-}
-
-// Authoritative persistent world state
-const world = {
-    pickedEggs: new Set(),
-    lootedChests: new Set(),
-    pickedSwords: new Set(),
-    killedBosses: new Set(),
-    blocks: {},  // "x,y,z" → blockType — placed/broken blocks
-    timeOfDay: 0.35,
-};
-
-// Load saved state on startup
-loadFromSupabase();
-
-// Server tick — advance time of day
-let lastTick = Date.now();
-const DAY_LENGTH = 600; // seconds for a full day cycle
-setInterval(() => {
-    const now = Date.now();
-    const dt = (now - lastTick) / 1000;
-    lastTick = now;
-    world.timeOfDay = (world.timeOfDay + dt / DAY_LENGTH) % 1.0;
-}, 100);
-
-// Periodic time-of-day broadcast
-setInterval(() => {
-    broadcast({ t: 'tod', tod: +world.timeOfDay.toFixed(4) });
-}, 2000);
 
 // Connection summary every 30s
 setInterval(() => {
-    if (clients.size === 0) return;
-    console.log('[satw-server] active clients:', clients.size, 'host=', hostPid);
+    if (rooms.size === 0) return;
+    console.log('[satw-server] rooms:', rooms.size, 'clients:', clients.size);
 }, 30000);
 
 function send(ws, data) {
@@ -194,11 +108,15 @@ function send(ws, data) {
     try { ws.send(JSON.stringify(data)); } catch (e) {}
 }
 
-function broadcast(data, exceptPid) {
+// Broadcast to everyone in the same room as senderPid (except sender)
+function broadcastToRoom(code, data, exceptPid) {
+    const room = rooms.get(code);
+    if (!room) return;
     const json = JSON.stringify(data);
-    for (const [pid, c] of clients) {
+    for (const pid of room.members) {
         if (pid === exceptPid) continue;
-        if (c.ws.readyState !== 1) continue;
+        const c = clients.get(pid);
+        if (!c || c.ws.readyState !== 1) continue;
         try { c.ws.send(json); } catch (e) {}
     }
 }
@@ -220,40 +138,12 @@ setInterval(() => {
 
 wss.on('connection', (ws) => {
     const pid = String(++nextPid);
-    const isFirst = hostPid === null;
-    if (isFirst) hostPid = pid;
-    const client = { ws, name: 'Player', charColors: null, pid, isHost: isFirst };
+    const client = { ws, name: 'Player', charColors: null, pid, code: null, isHost: false };
     clients.set(pid, client);
-    console.log('[satw-server]', pid, 'connected (host=' + isFirst + '), total:', clients.size);
+    console.log('[satw-server]', pid, 'connected (awaiting host/join)');
 
-    // Send welcome with current world state and existing peers
-    send(ws, {
-        t: 'welcome',
-        pid,
-        isHost: isFirst,
-        world: {
-            pickedEggs: [...world.pickedEggs],
-            lootedChests: [...world.lootedChests],
-            pickedSwords: [...world.pickedSwords],
-            killedBosses: [...world.killedBosses],
-            blocks: world.blocks,
-            tod: +world.timeOfDay.toFixed(4),
-        },
-        peers: [...clients.values()]
-            .filter(c => c.pid !== pid)
-            .map(c => ({ pid: c.pid, name: c.name, cc: c.charColors })),
-    });
-
-    // Notify existing clients of the new join
-    broadcast({ t: 'player_join', pid }, pid);
-
-    // If this is a non-host client, send them the current host's last known state
-    if (!isFirst && hostPid && clients.has(hostPid)) {
-        const host = clients.get(hostPid);
-        if (host.charColors) {
-            send(ws, { t: 'cc', pid: hostPid, ...host.charColors });
-        }
-    }
+    // Initial welcome — no room yet, client must host or join
+    send(ws, { t: 'welcome', pid });
 
     ws.on('pong', () => { client._pongPending = false; });
 
@@ -262,52 +152,83 @@ wss.on('connection', (ws) => {
         try { msg = JSON.parse(raw.toString()); } catch (e) { return; }
         if (!msg || !msg.t) return;
 
+        // ── Host a new room ──
+        if (msg.t === 'host') {
+            const code = makeRoomCode();
+            rooms.set(code, { hostPid: pid, members: new Set([pid]) });
+            client.code = code;
+            client.isHost = true;
+            send(ws, { t: 'hosting', code });
+            console.log('[satw-server]', pid, 'hosting room', code);
+            return;
+        }
+
+        // ── Join an existing room ──
+        if (msg.t === 'join') {
+            const code = (msg.code || '').toUpperCase();
+            const room = rooms.get(code);
+            if (!room) { send(ws, { t: 'join_failed', reason: 'Room not found' }); return; }
+            const hostClient = clients.get(room.hostPid);
+            if (!hostClient) { send(ws, { t: 'join_failed', reason: 'Host offline' }); return; }
+            client.code = code;
+            client.isHost = false;
+            room.members.add(pid);
+            // Tell guest they joined, list existing peers
+            const peers = [...room.members]
+                .filter(p => p !== pid && clients.has(p))
+                .map(p => { const c = clients.get(p); return { pid: c.pid, name: c.name, cc: c.charColors }; });
+            send(ws, { t: 'joined', code, hostPid: room.hostPid, peers });
+            // Ask host for their full world state and forward to this guest
+            send(hostClient.ws, { t: 'request_state', forPid: pid });
+            // Notify existing room members
+            broadcastToRoom(code, { t: 'player_join', pid }, pid);
+            console.log('[satw-server]', pid, 'joined room', code);
+            return;
+        }
+
+        if (!client.code) return; // must be in a room to do anything else
+
+        // ── Host sends full state to a specific guest ──
+        if (msg.t === 'full_state' && msg.forPid) {
+            const guest = clients.get(msg.forPid);
+            if (guest) send(guest.ws, { t: 'full_state', state: msg.state });
+            return;
+        }
+
         // Cache identity
         if (msg.t === 'cc') {
             client.charColors = { ...msg };
             delete client.charColors.t;
             client.name = msg.name || 'Player';
         }
-        if (msg.t === 'state') {
-            client.lastState = msg;
-        }
 
-        // World state mutations
-        if (msg.t === 'egg_pickup' && msg.idx != null) world.pickedEggs.add(msg.idx);
-        if (msg.t === 'chest_loot' && msg.key) world.lootedChests.add(msg.key);
-        if (msg.t === 'sword_pickup' && msg.id) world.pickedSwords.add(msg.id);
-        if (msg.t === 'boss_killed' && msg.name) world.killedBosses.add(msg.name);
-        if (msg.t === 'block' && msg.bx != null && msg.by != null && msg.bz != null) {
-            const key = msg.bx + ',' + msg.by + ',' + msg.bz;
-            if (msg.b === 0) delete world.blocks[key];
-            else world.blocks[key] = msg.b;
-            if (Object.keys(world.blocks).length % 10 === 0) console.log('[satw-server] blocks stored:', Object.keys(world.blocks).length);
-        }
-
-        // Tag with sender pid and broadcast to everyone else
+        // Tag with sender pid and broadcast to everyone else in the same room
         msg.pid = pid;
-        broadcast(msg, pid);
+        broadcastToRoom(client.code, msg, pid);
     });
 
     ws.on('close', () => {
+        const code = client.code;
         clients.delete(pid);
-        // Promote next client as host if the host left
-        if (hostPid === pid) {
-            const next = clients.keys().next().value;
-            hostPid = next || null;
-            if (next) {
-                const nc = clients.get(next);
-                nc.isHost = true;
-                send(nc.ws, { t: 'host_promoted' });
-                console.log('[satw-server] promoted', next, 'to host');
+        if (code) {
+            const room = rooms.get(code);
+            if (room) {
+                room.members.delete(pid);
+                if (room.hostPid === pid) {
+                    // Host left — close the room, kick everyone else
+                    console.log('[satw-server] host of room', code, 'left — closing room');
+                    for (const mpid of room.members) {
+                        const m = clients.get(mpid);
+                        if (m) { send(m.ws, { t: 'room_closed', reason: 'Host disconnected' }); m.code = null; }
+                    }
+                    rooms.delete(code);
+                } else {
+                    broadcastToRoom(code, { t: 'player_leave', pid });
+                    if (room.members.size === 0) rooms.delete(code);
+                }
             }
         }
-        broadcast({ t: 'player_leave', pid });
-        console.log('[satw-server]', pid, 'disconnected, total:', clients.size);
-        if (clients.size === 0) {
-            console.log('[satw-server] All players left — saving to Supabase');
-            saveToSupabase();
-        }
+        console.log('[satw-server]', pid, 'disconnected');
     });
 
     ws.on('error', (err) => {
