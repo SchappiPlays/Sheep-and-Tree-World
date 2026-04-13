@@ -659,11 +659,12 @@ export class VillageManager {
                 // Corner posts (wood)
                 for (const cx of [-hw, hw]) for (const cz of [-hd, hd])
                     for (let dy = 1; dy <= wallH; dy++) _set(cx, dy, cz, BLOCK.WOOD);
-                // Rebuild affected chunks
-                for (let dx = -hw-1; dx <= hw+1; dx += 8) {
-                    for (let dz = -hd-1; dz <= hd+1; dz += 8) {
-                        const ck = Math.floor((bx+dx)/16) + ',' + Math.floor((bz+dz)/16);
-                        _rebuildChunks.add(ck);
+                // Rebuild all affected chunks (including neighbors that straddle the shop)
+                const minCx = Math.floor((bx-hw-1)/16), maxCx = Math.floor((bx+hw+1)/16);
+                const minCz = Math.floor((bz-hd-1)/16), maxCz = Math.floor((bz+hd+1)/16);
+                for (let cx2 = minCx; cx2 <= maxCx; cx2++) {
+                    for (let cz2 = minCz; cz2 <= maxCz; cz2++) {
+                        _rebuildChunks.add(cx2 + ',' + cz2);
                     }
                 }
                 if (this._chunkRebuild) {
