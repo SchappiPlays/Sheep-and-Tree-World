@@ -21,16 +21,6 @@ export function makeHorse(scene, x, z, terrainHeight) {
     const hDarkMat = new THREE.MeshStandardMaterial({ color: coat.dark, roughness: 0.65 });
     const hManeMat = new THREE.MeshStandardMaterial({ color: coat.mane, roughness: 0.8 });
 
-    // Fake contact shadow (elongated dark disc on ground)
-    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
-    const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), shadowMat);
-    shadowMesh.rotation.x = -Math.PI / 2;
-    shadowMesh.scale.set(0.75, 1.35, 1); // elongated along Z to match horse body
-    shadowMesh.position.y = 0.015;
-    shadowMesh.renderOrder = -1;
-    g.add(shadowMesh);
-    g._shadowMesh = shadowMesh;
-
     // Body
     const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.4, 1.1), hMat);
     bodyMesh.position.y = 0.75; bodyMesh.castShadow = true; g.add(bodyMesh);
@@ -110,6 +100,9 @@ export function makeHorse(scene, x, z, terrainHeight) {
         t.position.set(0, -i * 0.12, -i * 0.03); tailGrp.add(t);
     }
     g.add(tailGrp);
+
+    // Enable cast shadows on all horse parts for a proper silhouette
+    g.traverse(obj => { if (obj.isMesh) obj.castShadow = true; });
 
     g.position.set(x, terrainHeight, z);
     g.rotation.y = Math.random() * Math.PI * 2;

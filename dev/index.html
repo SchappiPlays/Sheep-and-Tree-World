@@ -5384,15 +5384,15 @@ function getStatSpeedMult() { return 1.0 + playerStats.agility * 0.04; }   // 0p
 function getStatHPBonus() { // diminishing HP, flat baseline at 0pts
     const f = playerStats.fortitude;
     if (f <= 0) return 0; // 0pts = 10HP (5 hearts) baseline
-    // Each point gives: 1, 1, 0.75, 0.75, 0.5, 0.5, 0.5, 0.25, 0.25, 0.25
+    // Each point gives: 1.5, 1.5, 1, 1, 0.75, 0.75, 0.5, 0.5, 0.5, 0.5
     let bonus = 0;
     for (let i = 1; i <= f; i++) {
-        if (i <= 2) bonus += 1;
-        else if (i <= 4) bonus += 0.75;
-        else if (i <= 7) bonus += 0.5;
-        else bonus += 0.25;
+        if (i <= 2) bonus += 1.5;
+        else if (i <= 4) bonus += 1;
+        else if (i <= 6) bonus += 0.75;
+        else bonus += 0.5;
     }
-    return bonus; // 0pts=10HP, 3pts=12.75HP, 6pts=14.5HP, 10pts=15.75HP
+    return bonus; // 0pts=10HP, 3pts=14HP, 6pts=16.5HP, 10pts=18.5HP
 }
 function getStatHPRegenMult() { return 1.0 + playerStats.fortitude * 0.1; }  // 0pts=1x regen, 10pts=2x regen
 function getStatBreakMult() { return 1.0 - playerStats.dexterity * 0.05; }  // 0pts=1.0x, 10pts=0.5x (faster)
