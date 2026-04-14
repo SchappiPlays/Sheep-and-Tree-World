@@ -610,10 +610,14 @@ function getTerrainHeight(x, z) {
     }
 
 
-    // Rivers
+    // Rivers — paths act as bridges (don't carve terrain there)
+    const onPath = isOnPath(x, z);
     for (const riv of riverDefs) {
         const rb = getRiverBlend(x, z, riv);
-        if (rb > 0) h = h * (1 - rb) + 0.1 * rb;
+        if (rb > 0) {
+            if (onPath) h = Math.max(h, 2); // bridge deck sits above water
+            else h = h * (1 - rb) + 0.1 * rb;
+        }
     }
 
     return Math.max(0, h * edgeFade);
@@ -739,6 +743,8 @@ export class World {
                         break;
                     }
                 }
+                const onPathBridge = inRiver && isOnPath(wx, wz);
+                if (onPathBridge) inRiver = false; // bridge overrides — no water, no river sand
                 const riverWaterLevel = Math.floor(0.5 / BLOCK_SIZE) + yOff;
 
                 // Near coast = sand. Inland low areas = grass/water
@@ -808,6 +814,7 @@ export class World {
                         else if (biome === 'mountain' && h > 50) block = BLOCK.SNOW;
                         else if (biome === 'mountain' && h > 35) block = BLOCK.STONE;
                         else if (isCoastal && h < 1.5) block = BLOCK.SAND;
+                        else if (onPathBridge) block = BLOCK.PLANKS;
                         else if (isOnPath(wx, wz)) block = BLOCK.PATH;
                         else block = BLOCK.GRASS;
                     } else if (inPond && y > surfaceBlock && y <= pondWaterLevel) {
