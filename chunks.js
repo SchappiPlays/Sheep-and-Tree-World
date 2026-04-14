@@ -217,8 +217,8 @@ export class ChunkManager {
                     yStart = Math.max(0, surfY - 20);
                     yEnd = Math.min(scanMaxY, surfY + 1);
                 } else {
-                    // Scan around surface + deep enough for caves (50 blocks down)
-                    yStart = Math.max(0, surfY - 50);
+                    // Scan around surface + deep enough for caves/mining (120 blocks down)
+                    yStart = Math.max(0, surfY - 120);
                     yEnd = Math.min(scanMaxY, surfY + 2);
                 }
                 for (let y = yStart; y < yEnd; y++) {
