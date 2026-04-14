@@ -1255,7 +1255,7 @@ export class DragonManager {
                 if (threatCount > 0) {
                     const fd = Math.sqrt(fleeX * fleeX + fleeZ * fleeZ) || 1;
                     if (!bd.flying) { bd.flying = true; bd.flyHeight = bd.group.position.y + 10 + gs * 8; }
-                    const fleeSpd = (16 + gs * 10) * dt;
+                    const fleeSpd = (16 + gs * 10) * dt * this._speedMult(bd);
                     bd.x += (fleeX / fd) * fleeSpd;
                     bd.z += (fleeZ / fd) * fleeSpd;
                     bd.angle = Math.atan2(fleeX / fd, fleeZ / fd);
@@ -1328,7 +1328,7 @@ export class DragonManager {
                 bd.group.rotation.y = bd.angle;
                 const desiredDist = 4;
                 if (targetDist > desiredDist) {
-                    const cspd = Math.min(targetDist * 1.5, 6 + gs * 4) * dt;
+                    const cspd = Math.min(targetDist * 1.5, 6 + gs * 4) * dt * this._speedMult(bd);
                     bd.x += Math.sin(bd.angle) * cspd;
                     bd.z += Math.cos(bd.angle) * cspd;
                     bd.walking = true;
@@ -1357,11 +1357,12 @@ export class DragonManager {
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
                         const mode = bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0);
+                        const breathMult = mode === 2 ? 1.5 : (mode === 1 ? 0.75 : 1.0);
+                        const dmg = dragonFireDmg * breathMult;
                         if (target.state !== undefined && target.group) {
-                            // Other dragon target
-                            this.damageDragon(target, dragonFireDmg, 'breath', mode);
+                            this.damageDragon(target, dmg, 'breath', mode);
                         } else {
-                            target.hp -= dragonFireDmg;
+                            target.hp -= dmg;
                             if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
                         }
                     }
@@ -1432,7 +1433,7 @@ export class DragonManager {
                     bd.group.rotation.y = bd.angle;
                     if (bd.flying) {
                         // Fly toward target
-                        const flySpd = (12 + gs * 8) * dt;
+                        const flySpd = (12 + gs * 8) * dt * this._speedMult(bd);
                         bd.x += Math.sin(bd.angle) * flySpd;
                         bd.z += Math.cos(bd.angle) * flySpd;
                         // Gently vary height
@@ -1441,7 +1442,7 @@ export class DragonManager {
                         bd.group.position.set(bd.x, bd.flyHeight, bd.z);
                         bd.walking = false;
                     } else {
-                        const spd = Math.min(wtDist, 4 + gs * 2) * dt;
+                        const spd = Math.min(wtDist, 4 + gs * 2) * dt * this._speedMult(bd);
                         bd.x += Math.sin(bd.angle) * spd;
                         bd.z += Math.cos(bd.angle) * spd;
                         bd.walking = true;
@@ -1509,7 +1510,7 @@ export class DragonManager {
                     while (da < -Math.PI) da += Math.PI * 2;
                     bd.angle += da * Math.min(dt * 4, 1);
                     bd.group.rotation.y = bd.angle;
-                    const flySpd = (20 + gs * 15) * dt;
+                    const flySpd = (20 + gs * 15) * dt * this._speedMult(bd);
                     bd.x += Math.sin(bd.angle) * flySpd;
                     bd.z += Math.cos(bd.angle) * flySpd;
                     // Adjust height toward player
@@ -1542,7 +1543,7 @@ export class DragonManager {
                 bd._takingOff = false;
             }
 
-            const maxSpd = 8 + gs * 6;
+            const maxSpd = (8 + gs * 6) * this._speedMult(bd);
             let moveX = 0, moveZ = 0;
             if (bd.flying) {
                 // Flying follow — circle around player
@@ -1558,7 +1559,7 @@ export class DragonManager {
                 // Move goal with player so it doesn't fall behind
                 bd._flyGoalX += (px - (bd._prevPX || px)); bd._flyGoalZ += (pz - (bd._prevPZ || pz));
                 bd._prevPX = px; bd._prevPZ = pz;
-                const flySpd = (14 + gs * 10) * dt;
+                const flySpd = (14 + gs * 10) * dt * this._speedMult(bd);
                 const gx = bd._flyGoalX - bd.x, gz = bd._flyGoalZ - bd.z;
                 const gd = Math.sqrt(gx * gx + gz * gz) || 1;
                 if (bDist > 12 + gs * 6) {
@@ -2366,7 +2367,7 @@ export class DragonManager {
             bd.group.rotation.y = bd.angle;
             const desired = 12;
             if (distXZ > desired) {
-                const spd = Math.min(8 + gs * 4, distXZ * 1.5) * dt;
+                const spd = Math.min(8 + gs * 4, distXZ * 1.5) * dt * this._speedMult(bd);
                 bd.x += Math.sin(bd.angle) * spd;
                 bd.z += Math.cos(bd.angle) * spd;
                 bd.walking = true;
@@ -2390,14 +2391,14 @@ export class DragonManager {
                 this._emitFire(mx, my, mz, fdx, fdy, fdz, 4, 1, 1);
                 if (bd._fireBreathTimer <= 0) {
                     bd._fireBreathTimer = 0.4;
-                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28, player, 1, bd);
+                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 3, 28, player, 1, bd);
                 }
             } else {
                 bd._breathingFire = false;
             }
         } else if (bd._iceState === 'flying_aimless') {
             // Wander purposefully — fly forward in current direction
-            const speed = 18 + gs * 6;
+            const speed = (18 + gs * 6) * this._speedMult(bd);
             bd._iceFlyAngle += (Math.random() - 0.5) * 0.4 * dt;
             bd.angle = bd._iceFlyAngle;
             bd.x += Math.sin(bd.angle) * speed * dt;
@@ -2436,6 +2437,14 @@ export class DragonManager {
             }
             bd._breathingFire = false;
         }
+    }
+
+    // Speed multiplier by dragon breath type
+    _speedMult(bd) {
+        if (!bd) return 1.0;
+        if (bd._lightningDragon || bd._isLightning || bd._lightningBreath) return 1.25;
+        if (bd._iceDragon || bd._iceBreath) return 0.75;
+        return 1.0;
     }
 
     _toCorpse(bd) {
@@ -2553,7 +2562,7 @@ export class DragonManager {
             const radius = 28 + gs * 8;
             const targetX = bd._nestX + Math.cos(bd._ltCircleAngle) * radius;
             const targetZ = bd._nestZ + Math.sin(bd._ltCircleAngle) * radius;
-            const speed = 20 + gs * 6;
+            const speed = (20 + gs * 6) * this._speedMult(bd);
             const mvX = targetX - bd.x, mvZ = targetZ - bd.z;
             const mvD = Math.sqrt(mvX*mvX + mvZ*mvZ) || 1;
             bd.x += (mvX / mvD) * speed * dt;
@@ -2570,7 +2579,7 @@ export class DragonManager {
             const radius = 16 + gs * 4;
             const targetX = px + Math.cos(bd._ltCircleAngle) * radius;
             const targetZ = pz + Math.sin(bd._ltCircleAngle) * radius;
-            const speed = 24 + gs * 6;
+            const speed = (24 + gs * 6) * this._speedMult(bd);
             const mvX = targetX - bd.x, mvZ = targetZ - bd.z;
             const mvD = Math.sqrt(mvX*mvX + mvZ*mvZ) || 1;
             bd.x += (mvX / mvD) * speed * dt;
@@ -2595,7 +2604,7 @@ export class DragonManager {
             this._emitFire(mx, my, mz, fdx, fdy, fdz, 6, 1, 2);
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.35;
-                this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 5, 45, player, 2, bd);
+                this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 8, 45, player, 2, bd);
             }
         } else if (bd._ltState === 'returning') {
             const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
