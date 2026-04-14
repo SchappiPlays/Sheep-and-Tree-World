@@ -12933,8 +12933,15 @@ function animate() {
         player.leftArm.shoulder.rotation.y = -0.3 + drawT * 0.2;   // slight cross-body
         player.leftArm.shoulder.rotation.z = 0.2 + drawT * 0.5;    // raise shoulder outward/up
         player.leftArm.elbow.rotation.x = -0.2 - drawT * 2.0;      // elbow bends sharply
-
+    } else if (player.bowHeld && player.bowHeld._bowWasHeld !== false) {
+        // Bow put away — clear the bow pose so shoulders don't stay rolled outward
+        player.rightArm.shoulder.rotation.y = 0;
+        player.rightArm.shoulder.rotation.z = 0;
+        player.leftArm.shoulder.rotation.y = 0;
+        player.leftArm.shoulder.rotation.z = 0;
+        player.bowHeld._bowWasHeld = false;
     }
+    if (holdingBow && player.bowHeld) player.bowHeld._bowWasHeld = true;
 
     // Held torch light
     const holdingTorch = heldItem === BLOCK.TORCH && inventory[BLOCK.TORCH] > 0;
