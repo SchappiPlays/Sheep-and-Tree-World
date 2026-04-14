@@ -645,8 +645,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
 export { makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane };
 
 // Lightning bolt system — jagged polylines used by lightning dragons
-const LIGHTNING_BOLT_MAX = 24;
-const LIGHTNING_BOLT_SEGS = 10; // 10 points = 9 segments
+const LIGHTNING_BOLT_MAX = 80;
+const LIGHTNING_BOLT_SEGS = 14; // 14 points = 13 segments
 function _initLightningBolts(scene) {
     const bolts = [];
     for (let i = 0; i < LIGHTNING_BOLT_MAX; i++) {
@@ -654,12 +654,12 @@ function _initLightningBolts(scene) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         const mat = new THREE.LineBasicMaterial({
-            color: 0xbbeeff,
+            color: 0xddf4ff,
             transparent: true,
             opacity: 0.0,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
-            linewidth: 2,
+            linewidth: 4,
         });
         const line = new THREE.Line(geo, mat);
         line.frustumCulled = false;
@@ -1296,6 +1296,22 @@ export class DragonManager {
                         }
                     }
                 }
+                // Priority 3: nearby wild dragons (fortress/ice/lightning) — only if near player
+                if (!target) {
+                    for (const other of this.dragons) {
+                        if (other === bd || !other || other.state !== 'alive' || other._isCorpse) continue;
+                        if (!(other._fortressGuardian || other._iceDragon || other._lightningDragon)) continue;
+                        const cdx = other.x - bd.x, cdz = other.z - bd.z;
+                        const cd = Math.sqrt(cdx*cdx + cdz*cdz);
+                        if (cd < targetDist) {
+                            const pdx = other.x - px, pdz = other.z - pz;
+                            if (pdx*pdx + pdz*pdz < 60 * 60) {
+                                targetDist = cd;
+                                target = other;
+                            }
+                        }
+                    }
+                }
             }
 
             bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
@@ -1340,8 +1356,14 @@ export class DragonManager {
                     this._emitFire(mx, my, mz, tdx, tdy, tdz, 2, 0, bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0));
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
-                        target.hp -= dragonFireDmg;
-                        if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
+                        const mode = bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0);
+                        if (target.state !== undefined && target.group) {
+                            // Other dragon target
+                            this.damageDragon(target, dragonFireDmg, 'breath', mode);
+                        } else {
+                            target.hp -= dragonFireDmg;
+                            if (target.hp <= 0) { target.hp = 0; target.dead = true; target.deathTimer = 0; target.walking = false; target.speed = 0; }
+                        }
                     }
                 } else {
                     bd._breathingFire = false;
@@ -1646,7 +1668,7 @@ export class DragonManager {
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
-                this._damageInFireCone(mx, my, mz, dx, dy, dz, 1, 30);
+                this._damageInFireCone(mx, my, mz, dx, dy, dz, 1, 30, null, bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0), bd);
             }
         } else {
             bd._breathingFire = false;
@@ -2246,6 +2268,10 @@ export class DragonManager {
 
     // Ice dragon AI — sleeps at night, defends nest by day, sometimes flies "with purpose"
     _updateIceDragon(dt, bd, player) {
+        // Regen after not being hit for 10s
+        bd._lastHitTime = (bd._lastHitTime === undefined ? 1000 : bd._lastHitTime + dt);
+        if (bd._lastHitTime > 10 && bd.hp < bd.maxHP) bd.hp = Math.min(bd.maxHP, bd.hp + bd.maxHP * 0.02 * dt);
+        if (bd.hp <= 0) { bd.state = 'dead'; return; }
         const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
         const isNight = tod < 0.22 || tod > 0.78;
         const px = player.position.x, pz = player.position.z;
@@ -2364,7 +2390,7 @@ export class DragonManager {
                 this._emitFire(mx, my, mz, fdx, fdy, fdz, 4, 1, 1);
                 if (bd._fireBreathTimer <= 0) {
                     bd._fireBreathTimer = 0.4;
-                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28, player);
+                    this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 4, 28, player, 1, bd);
                 }
             } else {
                 bd._breathingFire = false;
@@ -2460,6 +2486,9 @@ export class DragonManager {
     }
 
     _updateLightningDragon(dt, bd, player) {
+        bd._lastHitTime = (bd._lastHitTime === undefined ? 1000 : bd._lastHitTime + dt);
+        if (bd._lastHitTime > 10 && bd.hp < bd.maxHP) bd.hp = Math.min(bd.maxHP, bd.hp + bd.maxHP * 0.02 * dt);
+        if (bd.hp <= 0) { bd.state = 'dead'; return; }
         const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
         const isDay = tod >= 0.22 && tod <= 0.78;
         const px = player.position.x, pz = player.position.z;
@@ -2566,7 +2595,7 @@ export class DragonManager {
             this._emitFire(mx, my, mz, fdx, fdy, fdz, 6, 1, 2);
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.35;
-                this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 5, 30, player);
+                this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 5, 45, player, 2, bd);
             }
         } else if (bd._ltState === 'returning') {
             const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
@@ -2720,12 +2749,27 @@ export class DragonManager {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
-        // Lightning mode — spawn bolts + a few sparks
+        // Lightning mode — thick, long, visible bolts + sparks
         if (iceMode === 2) {
-            const boltLen = longRange ? (22 + Math.random() * 8) : (12 + Math.random() * 4);
-            this._spawnLightningBolt(ox, oy, oz, dx, dy, dz, boltLen);
-            if (Math.random() < 0.5) this._spawnLightningBolt(ox, oy, oz, dx, dy, dz, boltLen * (0.8 + Math.random() * 0.3));
-            count = Math.min(count, 2); // keep 1-2 sparks at mouth
+            const boltLen = longRange ? (45 + Math.random() * 12) : (22 + Math.random() * 6);
+            // Multi-strand thick core — 4 parallel bolts with slight lateral offset
+            let ux = -dz, uy = 0, uz = dx;
+            const uL = Math.sqrt(ux*ux + uz*uz) || 1;
+            ux /= uL; uz /= uL;
+            const vx = dy * uz - dz * uy;
+            const vy = dz * ux - dx * uz;
+            const vz = dx * uy - dy * ux;
+            for (let k = 0; k < 4; k++) {
+                const off = (Math.random() - 0.5) * 0.35;
+                const off2 = (Math.random() - 0.5) * 0.35;
+                const oxk = ox + ux * off + vx * off2;
+                const oyk = oy + uy * off + vy * off2;
+                const ozk = oz + uz * off + vz * off2;
+                this._spawnLightningBolt(oxk, oyk, ozk, dx, dy, dz, boltLen * (0.9 + Math.random() * 0.2), 0.75);
+            }
+            // Extra forking branch
+            if (Math.random() < 0.8) this._spawnLightningBolt(ox, oy, oz, dx, dy, dz, boltLen * (0.7 + Math.random() * 0.3), 0.4);
+            count = Math.min(count, 4);
         }
         const dvx = dragonVx || 0, dvy = dragonVy || 0, dvz = dragonVz || 0;
         for (let i = 0; i < count; i++) {
@@ -2813,7 +2857,7 @@ export class DragonManager {
     }
 
     // Damage creatures (and optionally the player) in a cone in front of a position
-    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick, maxRange, hitPlayer) {
+    _damageInFireCone(ox, oy, oz, dx, dy, dz, dmgPerTick, maxRange, hitPlayer, breathMode, srcDragon) {
         const _l = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _l; dy /= _l; dz /= _l;
         const range = maxRange || 12;
@@ -2831,6 +2875,16 @@ export class DragonManager {
                 if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
             }
         }
+        // Dragons can damage other dragons (respecting immunity/resistance)
+        for (const other of this.dragons) {
+            if (!other || other === srcDragon || other.state !== 'alive' || other._isCorpse) continue;
+            const cdx = other.x - ox, cdy = (other.group.position.y || 0) - oy, cdz = other.z - oz;
+            const cd = Math.sqrt(cdx*cdx + cdy*cdy + cdz*cdz);
+            if (cd > range || cd < 0.1) continue;
+            const dot = (cdx * dx + cdy * dy + cdz * dz) / cd;
+            if (dot < 0.8) continue;
+            this.damageDragon(other, dmgPerTick, 'breath', breathMode);
+        }
         if (hitPlayer && typeof window !== 'undefined' && typeof window.playerTakeDamage === 'function') {
             const cdx = hitPlayer.position.x - ox;
             const cdy = (hitPlayer.position.y || 0) - oy;
@@ -2845,15 +2899,24 @@ export class DragonManager {
         }
     }
 
-    // Damage a dragon — respects weapon tier (only steel+ from players)
-    damageDragon(bd, amount, source) {
-        if (!bd || bd.state !== 'alive' || bd._fortressGuardian || bd._stationary) return false;
-        if (source === 'player_weapon') {
-            // Check held weapon tier — only steel/dragonsteel hurts dragons
+    // Damage a dragon — respects weapon tier (only steel+ from players) and breath immunity
+    // breathMode: undefined = not breath; 0 = fire, 1 = ice, 2 = lightning
+    damageDragon(bd, amount, source, breathMode) {
+        if (!bd || bd.state !== 'alive' || bd._isCorpse) return false;
+        if (breathMode === 0 || breathMode === 1 || breathMode === 2) {
+            const isIceDragon = !!(bd._iceDragon || bd._iceBreath);
+            const isLightningDragon = !!(bd._lightningDragon || bd._isLightning || bd._lightningBreath);
+            const isFireDragon = !isIceDragon && !isLightningDragon;
+            if (isFireDragon && breathMode === 0) return false;
+            if (isIceDragon && breathMode === 1) return false;
+            if (isLightningDragon) amount *= 0.4; // 60% resistant to all breath
+        } else if (source === 'player_weapon') {
             const tier = (typeof window !== 'undefined' && window._playerWeaponTier) || 'wood';
             if (tier !== 'steel' && tier !== 'diamond' && tier !== 'dragonsteel') return false;
         }
         bd.hp = Math.max(0, bd.hp - amount);
+        bd._lastHitTime = 0;
+        if (bd.hp <= 0) bd.state = 'dead';
         return true;
     }
 

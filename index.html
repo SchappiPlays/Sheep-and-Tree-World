@@ -3750,6 +3750,8 @@ function startGame(loadSlotName) {
         fortDragon.dragonName = 'Kaelthrazor the Ancient';
         fortDragon._fortressGuardian = true;
         fortDragon._unrideable = true;
+        fortDragon.maxHP = 400; fortDragon.hp = 400;
+        fortDragon._lastHitTime = 1000;
         // Start flying high above fortress
         fortDragon._flyAngle = 0;
         fortDragon._flyRadius = 35;
@@ -14054,8 +14056,11 @@ function animate() {
     }
 
     // Fortress guardian wyvern — circle above fortress (day), land at night
-    if (world._fortressDragon) {
+    if (world._fortressDragon && world._fortressDragon.state === 'alive') {
         const fd = world._fortressDragon;
+        fd._lastHitTime = (fd._lastHitTime === undefined ? 1000 : fd._lastHitTime + dt);
+        if (fd._lastHitTime > 10 && fd.hp < fd.maxHP) fd.hp = Math.min(fd.maxHP, fd.hp + fd.maxHP * 0.02 * dt);
+        if (fd.hp <= 0) { fd.state = 'dead'; }
         const fortCX = -505, fortCZ = -335;
         const landX = fortCX + 20, landZ = fortCZ + 15; // landing spot near fortress
         const landY = getTerrainHeight(landX, landZ);
