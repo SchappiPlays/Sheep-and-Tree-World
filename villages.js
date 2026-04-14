@@ -874,7 +874,7 @@ export class VillageManager {
             msV.group.add(msLabel);
 
             // Spawn armor shopkeeper
-            const asAngle = bsAngle + Math.PI * 0.5; // 90 degrees from blacksmith
+            const asAngle = firstSmithAngle + Math.PI * 0.5; // 90 degrees from blacksmith
             const asX = vd.x + Math.cos(asAngle) * shopDist;
             const asZ = vd.z + Math.sin(asAngle) * shopDist;
             const asY = this.world.getHeight(asX, asZ);
@@ -898,7 +898,7 @@ export class VillageManager {
             asV.group.add(asLabel);
 
             // Spawn stablemaster
-            const stAngle = bsAngle + Math.PI * 1.5; // 270 degrees from blacksmith
+            const stAngle = firstSmithAngle + Math.PI * 1.5; // 270 degrees from blacksmith
             const stX = vd.x + Math.cos(stAngle) * shopDist;
             const stZ = vd.z + Math.sin(stAngle) * shopDist;
             const stY = this.world.getHeight(stX, stZ);
