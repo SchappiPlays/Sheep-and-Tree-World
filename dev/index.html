@@ -1508,6 +1508,7 @@ function collectSaveData() {
         horses: horseMgr ? horseMgr.getSaveData() : [],
         customSwords: window._customSwords ? JSON.parse(JSON.stringify(window._customSwords)) : {},
         customStaffs: window._customStaffs ? JSON.parse(JSON.stringify(window._customStaffs)) : {},
+        salvagedSkeletons: world._salvagedSkeletons ? Object.assign({}, world._salvagedSkeletons) : {},
         eggItems: JSON.parse(JSON.stringify(eggItems)),
         modifiedBlocks: world._modifiedBlocks ? Object.fromEntries(world._modifiedBlocks) : {},
         dragons: dragonMgr.dragons.filter(bd => !bd._fortressGuardian && !bd._stationary).map(bd => ({
@@ -2333,7 +2334,108 @@ function startGame(loadSlotName) {
         };
         fortressSwords.push({ id: s7, wx: -500, wz: -342, data: window._customSwords[s7] });
 
+        // === 24 damaged dragonsteel swords scattered around the fort ===
+        // Half damage (tier uses numeric damage field), half attack speed.
+        const _gemPool = ['ruby', 'sapphire', 'emerald', 'topaz', 'diamond'];
+        const _pommelPool = ['gem', 'skull', 'wolf', 'claw', 'round'];
+        const _guardPool = ['straight', 'curved', 'wide', 'ring', 'spiked'];
+        const _handlePool = ['dragonsteel_ingot', 'iron_ingot', 'stick', 'gold_ingot', 'steel_ingot'];
+        const _hash01 = (n) => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+        // Scatter positions in a ring around the fort, radius 18-32
+        for (let i = 0; i < 24; i++) {
+            const dh = 'csword_damaged_fortress_' + i;
+            const h = _hash01(i + 1000);
+            const ang = (i / 24) * Math.PI * 2 + _hash01(i + 500) * 0.3;
+            const rad = 18 + _hash01(i + 200) * 14;
+            const wx = Math.round(-505 + Math.cos(ang) * rad);
+            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const pommelStyle = _pommelPool[Math.floor(_hash01(i + 11) * _pommelPool.length)];
+            const pommelGem = _gemPool[Math.floor(_hash01(i + 22) * _gemPool.length)];
+            const guardStyle = _guardPool[Math.floor(_hash01(i + 33) * _guardPool.length)];
+            const handleMat = _handlePool[Math.floor(_hash01(i + 44) * _handlePool.length)];
+            const bladeLength = 1.5 + _hash01(i + 55) * 1.2; // 1.5 – 2.7
+            const bladeThickness = 1.0 + _hash01(i + 66); // 1.0 – 2.0
+            const hasTrim = i < 6; // first 6 have trims
+            const trimMat = hasTrim ? _gemPool[Math.floor(_hash01(i + 77) * _gemPool.length)] : null;
+            const def = {
+                tier: 'damaged_dragonsteel',
+                damage: 6, // half of the 12 named dragonsteel baseline
+                speedMult: 2.0, // attack twice as slow
+                pommelStyle, pommelMat: pommelGem,
+                handleMat,
+                guardStyle, guardMat: 'dragonsteel_ingot',
+                bladeMat: 'dragonsteel_ingot',
+                bladeLength, bladeThickness,
+                trimMat,
+                name: 'Damaged Dragonsteel Sword',
+            };
+            window._customSwords[dh] = def;
+            fortressSwords.push({ id: dh, wx, wz, data: def });
+        }
+
+        // === 6 custom dragonsteel battleaxes near the fort entrance ===
+        // Battleaxes use the sword system with a very wide, short blade so the silhouette
+        // reads as a cleaver/axe head rather than a long sword.
+        const battleaxeDefs = [
+            { name: 'Ironcleaver',    gem: 'ruby',     trim: 'gold_ingot', handle: 'dragonsteel_ingot' },
+            { name: 'Blooddrinker',   gem: 'ruby',     trim: 'ruby',        handle: 'iron_ingot' },
+            { name: 'Skullsplitter',  gem: 'topaz',    trim: null,          handle: 'steel_ingot' },
+            { name: 'Dragontooth',    gem: 'emerald',  trim: 'emerald',     handle: 'dragonsteel_ingot' },
+            { name: 'Stonebreaker',   gem: 'diamond',  trim: 'diamond',     handle: 'iron_ingot' },
+            { name: 'Ashenedge',      gem: 'sapphire', trim: null,          handle: 'dragonsteel_ingot' },
+        ];
+        for (let i = 0; i < battleaxeDefs.length; i++) {
+            const bd = battleaxeDefs[i];
+            const id = 'csword_battleaxe_' + i;
+            const ang = Math.PI * 0.15 + i * 0.22;
+            const rad = 9 + (i % 2) * 4;
+            const wx = Math.round(-505 + Math.cos(ang) * rad);
+            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const def = {
+                tier: 'dragonsteel_heavy',
+                damage: 14, // battleaxes hit harder
+                speedMult: 1.4, // but swing slower
+                pommelStyle: 'round', pommelMat: bd.gem,
+                handleMat: bd.handle,
+                guardStyle: 'wide', guardMat: 'dragonsteel_ingot',
+                bladeMat: 'dragonsteel_ingot',
+                bladeLength: 0.8, bladeThickness: 3.0, // wide axe-head silhouette
+                trimMat: bd.trim, name: bd.name,
+                isBattleaxe: true,
+            };
+            window._customSwords[id] = def;
+            fortressSwords.push({ id, wx, wz, data: def });
+        }
+
         w._fortressSwords = fortressSwords;
+
+        // === Salvageable skeletons scattered around the fort ===
+        // Dead, non-hostile skeletons. Interact with E to loot dragonsteel armor +
+        // occasionally a damaged tool. Each is persisted as salvaged once looted.
+        const skeletons = [];
+        const _skArmorPool = ['dragonsteel_helmet', 'dragonsteel_chestplate', 'dragonsteel_leggings', 'dragonsteel_boots'];
+        const _skToolPool = ['iron_pickaxe', 'iron_axe', 'iron_shovel', 'stone_pickaxe', 'stone_axe'];
+        const _shash = (n) => { const x = Math.sin(n * 23.9) * 97531.246; return x - Math.floor(x); };
+        for (let i = 0; i < 28; i++) {
+            const ang = (i / 28) * Math.PI * 2 + _shash(i + 13) * 0.5;
+            const rad = 10 + _shash(i + 27) * 22;
+            const wx = -505 + Math.cos(ang) * rad;
+            const wz = -335 + Math.sin(ang) * rad;
+            const yaw = _shash(i + 41) * Math.PI * 2;
+            // Loot: 1-2 armor pieces + 30% chance for a tool
+            const lootCount = 1 + (_shash(i + 53) < 0.4 ? 1 : 0);
+            const loot = {};
+            for (let li = 0; li < lootCount; li++) {
+                const piece = _skArmorPool[Math.floor(_shash(i + 70 + li) * _skArmorPool.length)];
+                loot[piece] = (loot[piece] || 0) + 1;
+            }
+            if (_shash(i + 99) < 0.3) {
+                const tool = _skToolPool[Math.floor(_shash(i + 110) * _skToolPool.length)];
+                loot[tool] = 1;
+            }
+            skeletons.push({ id: 'fort_sk_' + i, wx, wz, yaw, loot });
+        }
+        w._fortressSkeletons = skeletons;
     }
 
     function buildSouthwestFortress(w) {
@@ -3458,6 +3560,21 @@ function startGame(loadSlotName) {
             const bLenS = (cs.bladeLength || 2) / 2;
             sm._bladeGrp.scale.set(cs.bladeThickness || 1, bLenS, cs.bladeThickness || 1);
             sm._bladeGrp.position.y = 0.1 * (1 - bLenS);
+            // Battleaxe silhouette — add a wide axe-head wedge and hide default blade/tip
+            if (cs.isBattleaxe && !sm._axeHead) {
+                for (const child of sm._bladeGrp.children) child.visible = false;
+                const axeMat = sm._bladeMat;
+                const axeGrp = new THREE.Group();
+                axeGrp.position.y = 0.28;
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), axeMat);
+                head.position.y = 0; axeGrp.add(head);
+                const fanL = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.26, 3), axeMat);
+                fanL.rotation.z = Math.PI; fanL.position.set(0.10, 0.01, 0); axeGrp.add(fanL);
+                const fanR = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.20, 3), axeMat);
+                fanR.rotation.z = 0; fanR.position.set(-0.07, 0.01, 0); axeGrp.add(fanR);
+                sm._bladeGrp.add(axeGrp);
+                sm._axeHead = axeGrp;
+            }
             // Position in world — stuck in ground at angle
             const gy = getTerrainHeight(fs.wx, fs.wz);
             const lean = 0.1 + Math.sin(fs.wx * 3.7) * 0.08;
@@ -3467,6 +3584,73 @@ function startGame(loadSlotName) {
             sm.scale.set(2.5, 2.5, 2.5);
             scene.add(sm);
             world._fortressSwordMeshes.push({ id: fs.id, mesh: sm, wx: fs.wx, wz: fs.wz });
+        }
+    }
+
+    // === Fortress skeletons (dead, salvageable) ===
+    if (world._fortressSkeletons) {
+        world._fortressSkeletonMeshes = [];
+        const _skBone = new THREE.MeshStandardMaterial({ color: 0xd8d2b8, roughness: 0.85 });
+        const _skBoneGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+        const _skSkullGeo = new THREE.BoxGeometry(0.22, 0.2, 0.22);
+        const _skRibGeo = new THREE.BoxGeometry(0.3, 0.04, 0.08);
+        const _skSpineGeo = new THREE.BoxGeometry(0.05, 0.45, 0.07);
+        const _skLimbGeo = new THREE.BoxGeometry(0.07, 0.35, 0.07);
+        for (const sk of world._fortressSkeletons) {
+            if (world._salvagedSkeletons && world._salvagedSkeletons[sk.id]) continue;
+            const g = new THREE.Group();
+            const gy = getTerrainHeight(sk.wx, sk.wz);
+            // Lying on ground, splayed — rotate whole group flat
+            g.rotation.set(Math.PI / 2, sk.yaw, 0);
+            g.position.set(sk.wx, gy + 0.12, sk.wz);
+            // Skull
+            const skull = new THREE.Mesh(_skSkullGeo, _skBone);
+            skull.position.set(0, 0, 0.55); g.add(skull);
+            // Eye sockets — dark boxes
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            for (const side of [-1, 1]) {
+                const eye = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.02), eyeMat);
+                eye.position.set(side * 0.05, 0.02, 0.67); g.add(eye);
+            }
+            // Spine
+            const spine = new THREE.Mesh(_skSpineGeo, _skBone);
+            spine.position.set(0, 0, 0.2); g.add(spine);
+            // Ribs — 4 pairs
+            for (let r = 0; r < 4; r++) {
+                const rib = new THREE.Mesh(_skRibGeo, _skBone);
+                rib.position.set(0, 0.01, 0.32 - r * 0.09); g.add(rib);
+            }
+            // Pelvis
+            const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.1), _skBone);
+            pelvis.position.set(0, 0, -0.08); g.add(pelvis);
+            // Arms — splayed out to sides
+            for (const side of [-1, 1]) {
+                const upper = new THREE.Mesh(_skLimbGeo, _skBone);
+                upper.position.set(side * 0.25, 0, 0.38);
+                upper.rotation.z = side * 1.2; g.add(upper);
+                const fore = new THREE.Mesh(_skLimbGeo, _skBone);
+                fore.position.set(side * 0.48, 0, 0.35);
+                fore.rotation.z = side * 1.4; g.add(fore);
+                const hand = new THREE.Mesh(_skBoneGeo, _skBone);
+                hand.position.set(side * 0.62, 0, 0.33); g.add(hand);
+            }
+            // Legs
+            for (const side of [-1, 1]) {
+                const thigh = new THREE.Mesh(_skLimbGeo, _skBone);
+                thigh.position.set(side * 0.08, 0, -0.3);
+                thigh.rotation.z = side * 0.15; g.add(thigh);
+                const shin = new THREE.Mesh(_skLimbGeo, _skBone);
+                shin.position.set(side * 0.12, 0, -0.64);
+                shin.rotation.z = side * 0.1; g.add(shin);
+                const foot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.14), _skBone);
+                foot.position.set(side * 0.14, 0, -0.85); g.add(foot);
+            }
+            // Damaged dragonsteel breastplate — visible loot hint
+            const breastMat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.3, metalness: 0.75 });
+            const breast = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.32), breastMat);
+            breast.position.set(0, 0.05, 0.2); g.add(breast);
+            scene.add(g);
+            world._fortressSkeletonMeshes.push({ id: sk.id, group: g, wx: sk.wx, wz: sk.wz, loot: sk.loot });
         }
     }
 
@@ -5224,6 +5408,7 @@ function startGame(loadSlotName) {
             }
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
+            world._salvagedSkeletons = s.salvagedSkeletons || {};
             // Re-register custom staff props
             for (const [id, cs] of Object.entries(window._customStaffs)) {
                 const baseType = STAFF_GEM_TYPE[cs.gem] || 'basic_staff';
@@ -9711,7 +9896,12 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     if (swordDmg && inventory[held] > 0) {
         // Track weapon tier for dragon damage check
         const heldStr = String(held);
-        if (heldStr.includes('dragonsteel')) window._playerWeaponTier = 'dragonsteel';
+        if (heldStr.startsWith('csword_') && window._customSwords && window._customSwords[heldStr]) {
+            const _ct = window._customSwords[heldStr].tier;
+            if (_ct && _ct.indexOf('dragonsteel') !== -1) window._playerWeaponTier = 'dragonsteel';
+            else window._playerWeaponTier = _ct || 'iron';
+        }
+        else if (heldStr.includes('dragonsteel')) window._playerWeaponTier = 'dragonsteel';
         else if (heldStr.includes('diamond')) window._playerWeaponTier = 'diamond';
         else if (heldStr.includes('steel')) window._playerWeaponTier = 'steel';
         else if (heldStr.includes('iron')) window._playerWeaponTier = 'iron';
@@ -9721,7 +9911,11 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         else window._playerWeaponTier = 'wood';
         if (attackCooldown <= 0) {
             player.triggerSwing();
-            attackCooldown = 0.6 * getSwordCooldownMult();
+            let _csSpeedMult = 1.0;
+            if (typeof heldItem === 'string' && heldItem.startsWith('csword_') && window._customSwords && window._customSwords[heldItem] && window._customSwords[heldItem].speedMult) {
+                _csSpeedMult = window._customSwords[heldItem].speedMult;
+            }
+            attackCooldown = 0.6 * getSwordCooldownMult() * _csSpeedMult;
             const finalSwordDmg = Math.round(swordDmg * getWarriorDamageBonus() * getStatDmgMult() * (window._avatarActive ? 2 : 1));
             if (creatures && creatures.attackAt) {
                 creatures.attackAt(player.position.x, player.position.z, player.group.rotation.y, finalSwordDmg, has360Sword() ? 99 : 3);
@@ -10963,8 +11157,12 @@ const _origSwordDmg = Object.assign({}, SWORD_DAMAGE);
 const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight', 'Grokthak the Warchief', 'The Necromancer'];
 const _getSwordDamage = (held) => {
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
-        if (window._customSwords[held].tier === 'dragonsteel') return _getDragonsteelDmg(5);
-        return window._customSwords[held].damage || 6;
+        const cs = window._customSwords[held];
+        // Plain 'dragonsteel' tier keeps the level-scaled base so named fortress swords
+        // stay consistent. Sub-tiers (damaged_dragonsteel, dragonsteel_heavy) use flat damage.
+        if (cs.tier === 'dragonsteel' && !cs.damage) return _getDragonsteelDmg(5);
+        if (cs.tier === 'dragonsteel') return _getDragonsteelDmg(5);
+        return cs.damage || 6;
     }
     if (held === 'dragonsteel_sword') return _getDragonsteelDmg(5);
     if (SWORD_DAMAGE[held]) return SWORD_DAMAGE[held];
@@ -14444,7 +14642,33 @@ function animate() {
         }
     }
     let fortressSwordPrompt = '';
-    if (world._fortressSwordMeshes && !_eggInRange) {
+    // Salvageable skeletons — highest priority when in range
+    if (world._fortressSkeletonMeshes && !_eggInRange) {
+        for (let si = world._fortressSkeletonMeshes.length - 1; si >= 0; si--) {
+            const sk = world._fortressSkeletonMeshes[si];
+            const sdx = player.position.x - sk.wx, sdz = player.position.z - sk.wz;
+            if (sdx*sdx + sdz*sdz < 3.0) {
+                fortressSwordPrompt = 'Press E to salvage fallen warrior';
+                if (keys['KeyE']) {
+                    let msg = 'Salvaged: ';
+                    for (const [k, n] of Object.entries(sk.loot)) {
+                        inventory[k] = (inventory[k] || 0) + n;
+                        const info = (typeof getItemInfo === 'function') ? getItemInfo(k) : null;
+                        msg += `${n}× ${(info && info.name) || k}, `;
+                    }
+                    addChatMessage(msg.slice(0, -2), 'rgba(200,180,100,0.9)');
+                    refreshUI();
+                    scene.remove(sk.group);
+                    world._fortressSkeletonMeshes.splice(si, 1);
+                    if (!world._salvagedSkeletons) world._salvagedSkeletons = {};
+                    world._salvagedSkeletons[sk.id] = true;
+                    keys['KeyE'] = false;
+                }
+                break;
+            }
+        }
+    }
+    if (!fortressSwordPrompt && world._fortressSwordMeshes && !_eggInRange) {
         for (let fi = world._fortressSwordMeshes.length - 1; fi >= 0; fi--) {
             const fs = world._fortressSwordMeshes[fi];
             const sdx = player.position.x - fs.wx, sdz = player.position.z - fs.wz;
