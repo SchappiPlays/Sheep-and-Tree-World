@@ -12725,34 +12725,34 @@ function animate() {
         // Bowstring as two segments: upperTip → nock, nock → lowerTip
         if (player.bowHeld._bowstring) {
             const str = player.bowHeld._bowstring;
-            // Upper segment: from (0, tipY, tipZ) to (0, 0, nockZ)
+            // Upper segment: from upper tip (0, tipY, tipZ) to nock (0, 0, nockZ)
+            const dzU = tipZ - nockZ; // z delta from nock to tip
             const midU_y = tipY * 0.5;
             const midU_z = (tipZ + nockZ) * 0.5;
-            const lenU = Math.sqrt(tipY * tipY + (tipZ - nockZ) * (tipZ - nockZ));
+            const lenU = Math.sqrt(tipY * tipY + dzU * dzU);
             str._upper.position.set(0, midU_y, midU_z);
             str._upper.scale.y = lenU;
-            str._upper.rotation.x = -Math.atan2(tipZ - nockZ, tipY);
-            // Lower segment (mirror)
+            str._upper.rotation.x = Math.atan2(dzU, tipY); // fixed: no negation
+            // Lower segment — mirror: from lower tip (0, -tipY, tipZ) to nock
             str._lower.position.set(0, -midU_y, midU_z);
             str._lower.scale.y = lenU;
-            str._lower.rotation.x = Math.atan2(tipZ - nockZ, tipY);
+            str._lower.rotation.x = -Math.atan2(dzU, tipY);
         }
         // Nocked arrow — fletching at nock position
         if (player.bowHeld._nockedArrow) {
             player.bowHeld._nockedArrow.visible = drawT > 0.05 && inventory['arrow'] > 0;
             player.bowHeld._nockedArrow.position.z = nockZ + 0.4;
         }
-        // RIGHT arm (non-sword) holds bow extended forward, angled slightly inward toward center
+        // RIGHT arm (non-sword) holds bow extended forward, bending IN toward body
         player.rightArm.shoulder.rotation.x = -1.55;
-        player.rightArm.shoulder.rotation.y = -0.25; // bend INWARD (across body)
-        player.rightArm.shoulder.rotation.z = 0.4;   // roll to tilt bow left (top leans left)
+        player.rightArm.shoulder.rotation.y = 0.25;   // inverted — bend inward across body
+        player.rightArm.shoulder.rotation.z = -0.4;   // inverted roll
         player.rightArm.elbow.rotation.x = -0.1;
         // LEFT arm (sword hand) reaches across to the bowstring and pulls back
-        // Reaches across body (positive y rotation to cross), with elbow bending as drawn
         player.leftArm.shoulder.rotation.x = -1.5;
-        player.leftArm.shoulder.rotation.y = 0.5 - drawT * 0.15;   // reach across to the right side
-        player.leftArm.shoulder.rotation.z = -0.2;
-        player.leftArm.elbow.rotation.x = -0.2 - drawT * 1.5; // elbow bends back as draw increases
+        player.leftArm.shoulder.rotation.y = -0.5 + drawT * 0.15;  // inverted — bend inward
+        player.leftArm.shoulder.rotation.z = 0.2;                  // inverted
+        player.leftArm.elbow.rotation.x = -0.2 - drawT * 1.5;
 
     }
 
