@@ -1237,11 +1237,11 @@ export class DragonManager {
             if (bd._sleeping) this._wakeFromSleep(bd);
 
             // ── Combat AI — find nearby hostile creature to fight ──
-            // Fire damage scales with age: 0.5 at baby, 1 at teen, 2 at adult, 3 at elder
-            let dragonFireDmg = 0.5;
-            if (bd.age >= 9600) dragonFireDmg = 1;
-            if (bd.age >= 9600) dragonFireDmg = 2;
-            if (bd.age >= 14400) dragonFireDmg = 3;
+            // Breath damage scales with age: 1 at baby, 2 at teen, 4 at adult, 6 at elder
+            let dragonFireDmg = 1;
+            if (bd.age >= 4800) dragonFireDmg = 2;
+            if (bd.age >= 9600) dragonFireDmg = 4;
+            if (bd.age >= 14400) dragonFireDmg = 6;
 
             // Flee when low HP (< 25%) — fly away from threats
             const lowHP = bd.hp < bd.maxHP * 0.25;
