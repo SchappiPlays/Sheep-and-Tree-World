@@ -1514,6 +1514,7 @@ function collectSaveData() {
             x: bd.x, z: bd.z, age: bd.age, angle: bd.angle,
             eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
             dragonName: bd.dragonName, hp: bd.hp, iceBreath: !!bd._iceBreath,
+            lightningBreath: !!bd._lightningBreath, isLightning: !!bd._isLightning,
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
@@ -5283,7 +5284,9 @@ function startGame(loadSlotName) {
                     if (Math.abs(dd.x - (-505)) < 2 && Math.abs(dd.z - (-335)) < 2) continue; // ruined fortress
                     if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
-                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern);
+                    const _lightningColors = [0x7a3dc4, 0x20202a, 0xa05a28, 0x2878f0];
+                    const restoreLightning = !!(dd.lightningBreath || dd.isLightning) && _lightningColors.includes(dd.eggColor);
+                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern, restoreLightning);
                     bd.age = dd.age || 0;
                     bd.dragonName = dd.dragonName || 'Dragon';
                     bd.hp = dd.hp || bd.maxHP;
@@ -5292,6 +5295,7 @@ function startGame(loadSlotName) {
                     // Only trust iceBreath if egg color is actually from the ice nest
                     const _iceColors = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
                     if (dd.iceBreath && _iceColors.includes(dd.eggColor)) bd._iceBreath = true;
+                    if (restoreLightning) { bd._lightningBreath = true; bd._isLightning = true; }
                     scene.add(bd.group);
                     dragonMgr.dragons.push(bd);
                 }
