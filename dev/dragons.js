@@ -2278,8 +2278,10 @@ export class DragonManager {
                 bd._iceState = 'returning';
             }
         } else if (bd._iceState === 'idle') {
-            if (distXZ < 40) {
+            bd._pursuitCooldown = Math.max(0, (bd._pursuitCooldown || 0) - dt);
+            if (distXZ < 40 && bd._pursuitCooldown <= 0) {
                 bd._iceState = 'defending';
+                bd._pursuitTime = 0;
             } else if (bd._iceTimer <= 0) {
                 bd._iceState = 'flying_aimless';
                 bd._iceTimer = 6 + Math.random() * 8;
@@ -2287,8 +2289,13 @@ export class DragonManager {
                 bd.flying = true;
                 bd.flyHeight = (this.getHeight ? this.getHeight(bd.x, bd.z) : 0) + 25 + Math.random() * 15;
             }
-        } else if (bd._iceState === 'defending' && distXZ > 60) {
-            bd._iceState = 'returning';
+        } else if (bd._iceState === 'defending') {
+            bd._pursuitTime = (bd._pursuitTime || 0) + dt;
+            if (distXZ > 60 || bd._pursuitTime > 30) {
+                bd._iceState = 'returning';
+                bd._pursuitCooldown = 60; // won't re-aggro for 60s
+                bd._pursuitTime = 0;
+            }
         } else if (bd._iceState === 'flying_aimless' && bd._iceTimer <= 0) {
             bd._iceState = 'returning';
         } else if (bd._iceState === 'returning') {
@@ -2431,9 +2438,18 @@ export class DragonManager {
         } else if (isDay && bd._ltState !== 'defending' && bd._ltState !== 'returning' && !(sprinting && distXZ < 50)) {
             bd._ltState = 'returning';
         } else if (bd._ltState === 'circling') {
-            if (distXZ < 45) { bd._ltState = 'defending'; }
-        } else if (bd._ltState === 'defending' && distXZ > 70) {
-            bd._ltState = 'circling';
+            bd._pursuitCooldown = Math.max(0, (bd._pursuitCooldown || 0) - dt);
+            if (distXZ < 45 && bd._pursuitCooldown <= 0) {
+                bd._ltState = 'defending';
+                bd._pursuitTime = 0;
+            }
+        } else if (bd._ltState === 'defending') {
+            bd._pursuitTime = (bd._pursuitTime || 0) + dt;
+            if (distXZ > 70 || bd._pursuitTime > 30) {
+                bd._ltState = 'circling';
+                bd._pursuitCooldown = 60;
+                bd._pursuitTime = 0;
+            }
         } else if (bd._ltState === 'returning') {
             const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
             if (Math.sqrt(ndx*ndx + ndz*ndz) < 5 && !bd.flying) {
