@@ -605,8 +605,8 @@ export class ChunkManager {
                                 }
                             }
                             continue; // skip normal block face
-                        } else if (block === BLOCK.CAMPFIRE) {
-                            continue; // skip — 3D campfire model renders instead
+                        } else if (block === BLOCK.CAMPFIRE || block === BLOCK.TORCH) {
+                            continue; // skip — 3D model renders instead
                         } else {
                             tmpColor.setHex(BLOCK_COLORS[block] || 0xff00ff);
                         }

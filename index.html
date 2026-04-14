@@ -5113,6 +5113,7 @@ function startGame(loadSlotName) {
             if (s.modifiedBlocks) {
                 const anvilOrigins = new Set();
                 const campfireOrigins = new Set();
+                const torchPositions = [];
                 for (const [key, val] of Object.entries(s.modifiedBlocks)) {
                     world._modifiedBlocks.set(key, val);
                     // Build chunk index
@@ -5126,7 +5127,12 @@ function startGame(loadSlotName) {
                     // Collect anvil/campfire block positions for clustering after loop
                     if (val === BLOCK.ANVIL) anvilOrigins.add(mbx + ',' + mby + ',' + mbz);
                     if (val === BLOCK.CAMPFIRE) campfireOrigins.add(mbx + ',' + mby + ',' + mbz);
+                    if (val === BLOCK.TORCH) torchPositions.push([mbx, mby, mbz]);
                 }
+                // Torches are single-block — just place models at each
+                for (const t of torchModels.values()) scene.remove(t);
+                torchModels.clear();
+                for (const [tx, ty, tz] of torchPositions) placeTorchModel(tx, ty, tz);
                 // Cluster anvil blocks into 2x2x2 origins, campfires into 2x1x2
                 const _clusterOrigins = (blockSet, dy) => {
                     const origins = new Set();
@@ -5273,6 +5279,14 @@ function startGame(loadSlotName) {
     if (!hotbarSlots.includes('hp_potion')) {
         const ei = hotbarSlots.indexOf(0);
         if (ei >= 0) hotbarSlots[ei] = 'hp_potion';
+    }
+    // Starting torches (new games only, not overwritten on load)
+    if (!loadSlotName && !inventory[BLOCK.TORCH]) {
+        inventory[BLOCK.TORCH] = 15;
+        if (!hotbarSlots.includes(BLOCK.TORCH)) {
+            const ei = hotbarSlots.indexOf(0);
+            if (ei >= 0) hotbarSlots[ei] = BLOCK.TORCH;
+        }
     }
 
     refreshUI();
@@ -8359,6 +8373,7 @@ const BLOCK_INFO = {
     [BLOCK.PINE_WOOD]: { name:'Pine Log', top:'#5a3828', front:'#3a2018' },
     [BLOCK.PINE_LEAVES]: { name:'Pine Needles', top:'#1a5a2a', front:'#0a3a1a' },
     [BLOCK.ICE]: { name:'Ice', top:'#a8ddf0', front:'#78b8d8' },
+    [BLOCK.TORCH]: { name:'Torch', top:'#ffaa44', front:'#8a5a30' },
 };
 
 // Egg data stored separately — maps 'egg_0' → egg object
@@ -9665,6 +9680,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
     // Remove anvil/campfire model if breaking
     if (hit.block === BLOCK.ANVIL) removeAnvilModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CAMPFIRE) removeCampfireModel(hit.x, hit.y, hit.z);
+    if (hit.block === BLOCK.TORCH) removeTorchModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CHEST) {
         // Spill chest contents into player inventory
         const ck = _findChestKey(hit.x, hit.y, hit.z);
@@ -10068,6 +10084,55 @@ function removeCampfireModel(px, py, pz) {
                 campfireModels.delete(key);
             }
         }
+}
+
+// ── Torch 3D models ──
+const torchModels = new Map();
+const _torchStickMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.9 });
+const _torchHeadMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0xff6611, emissiveIntensity: 1.0 });
+const _torchFlameMat = new THREE.MeshBasicMaterial({ color: 0xffcc55, transparent: true, opacity: 0.85, fog: false });
+
+function createTorchModel(wx, wy, wz) {
+    const BS = BLOCK_SIZE;
+    const g = new THREE.Group();
+    // Stick
+    const stick = new THREE.Mesh(new THREE.BoxGeometry(BS*0.12, BS*0.6, BS*0.12), _torchStickMat);
+    stick.position.y = BS*0.3;
+    g.add(stick);
+    // Burning head (emissive)
+    const head = new THREE.Mesh(new THREE.BoxGeometry(BS*0.2, BS*0.16, BS*0.2), _torchHeadMat);
+    head.position.y = BS*0.65;
+    g.add(head);
+    // Flame
+    const flame = new THREE.Mesh(new THREE.OctahedronGeometry(BS*0.22), _torchFlameMat);
+    flame.position.y = BS*0.85; flame.scale.set(0.55, 1.3, 0.55);
+    g.add(flame);
+    g._flame = flame;
+    // Point light
+    const light = new THREE.PointLight(0xffaa55, 0.9, BS*12, 1.5);
+    light.position.y = BS*0.7;
+    g.add(light);
+    g._light = light;
+    g.position.set(wx, wy, wz);
+    scene.add(g);
+    return g;
+}
+
+function placeTorchModel(px, py, pz) {
+    const BS = BLOCK_SIZE;
+    const yOff = 128;
+    const wx = px * BS, wy = (py - yOff) * BS, wz = pz * BS;
+    const key = px + ',' + py + ',' + pz;
+    if (torchModels.has(key)) return;
+    torchModels.set(key, createTorchModel(wx, wy, wz));
+}
+
+function removeTorchModel(px, py, pz) {
+    const key = px + ',' + py + ',' + pz;
+    if (torchModels.has(key)) {
+        scene.remove(torchModels.get(key));
+        torchModels.delete(key);
+    }
 }
 
 // ── Anvil 3D models ──
@@ -12263,7 +12328,11 @@ function doPlace(e) {
 
     if (!removeFromInventory(bt)) return false;
 
-    if (placeBlock === BLOCK.CAMPFIRE) {
+    if (placeBlock === BLOCK.TORCH) {
+        world.setBlock(px, py, pz, placeBlock);
+        rebuildNear(px, pz);
+        placeTorchModel(px, py, pz);
+    } else if (placeBlock === BLOCK.CAMPFIRE) {
         // 2x1x2 campfire
         for (let dx = 0; dx <= 1; dx++)
             for (let dz = 0; dz <= 1; dz++)
@@ -12545,6 +12614,17 @@ function animate() {
     player.staffHeld.visible = false;
     player.sheathedSword.visible = false;
     player.sheathedStaff.visible = false;
+
+    // Held torch light
+    const holdingTorch = heldItem === BLOCK.TORCH && inventory[BLOCK.TORCH] > 0;
+    if (holdingTorch && !player._torchLight) {
+        player._torchLight = new THREE.PointLight(0xffaa55, 0.9, 10, 1.5);
+        player._torchLight.position.set(0, 0.3, 0.5);
+        player.group.add(player._torchLight);
+    } else if (!holdingTorch && player._torchLight) {
+        player.group.remove(player._torchLight);
+        player._torchLight = null;
+    }
 
     // Check if player has a staff in hotbar but not currently holding one
     const holdingStaff = heldItem && typeof heldItem === 'string' && heldItem.includes('staff');
