@@ -3,17 +3,19 @@
 import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath } from './world.js';
 
 // Village definitions — deterministic positions on the main island
+// Skill levels: 1=Apprentice, 2=Novice, 3=Journeyman, 4=Skilled, 5=Expert, 6=Master, 7=Veteran, 8=Grandmaster, 9=Legendary
 const VILLAGE_DEFS = [
-    { x: 80, z: 16, houses: 5, name: 'Meadow Village' },
-    { x: -100, z: -50, houses: 4, name: 'Forest Edge' },
-    { x: 200, z: 60, houses: 6, name: 'Hillside Town' },
-    { x: -200, z: 100, houses: 3, name: 'Western Hamlet' },
-    { x: 50, z: -150, houses: 4, name: 'Northwatch' },
-    { x: -150, z: 200, houses: 3, name: 'Southmoor' },
-    { x: 100, z: 550, houses: 5, name: 'Desert Crossing', biome: 'desert' },
-    { x: -120, z: 620, houses: 4, name: 'Sunstone', biome: 'desert' },
-    { x: 250, z: 680, houses: 3, name: 'Dune\'s End', biome: 'desert' },
+    { x: 80, z: 16, houses: 5, name: 'Meadow Village', smiths: [1] },
+    { x: -100, z: -50, houses: 4, name: 'Forest Edge', smiths: [3] },
+    { x: 200, z: 60, houses: 6, name: 'Hillside Town', smiths: [5, 5, 2] },
+    { x: -200, z: 100, houses: 3, name: 'Western Hamlet', smiths: [4] },
+    { x: 50, z: -150, houses: 4, name: 'Northwatch', smiths: [6] },
+    { x: -150, z: 200, houses: 3, name: 'Southmoor', smiths: [2] },
+    { x: 100, z: 550, houses: 5, name: 'Desert Crossing', biome: 'desert', smiths: [9, 6, 6] },
+    { x: -120, z: 620, houses: 4, name: 'Sunstone', biome: 'desert', smiths: [8, 5] },
+    { x: 250, z: 680, houses: 3, name: 'Dune\'s End', biome: 'desert', smiths: [7] },
 ];
+const SMITH_SKILL_NAMES = { 1:'Apprentice', 2:'Novice', 3:'Journeyman', 4:'Skilled', 5:'Expert', 6:'Master', 7:'Veteran', 8:'Grandmaster', 9:'Legendary' };
 
 // House templates — defined as block offsets from base corner
 // All coords are (dx, dy, dz) relative to house origin
@@ -675,34 +677,42 @@ export class VillageManager {
                 }
             };
 
-            // Spawn blacksmith shopkeeper (fixed position near village)
-            const bsAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
-            const shopDist = 28; // far enough past house ring to avoid overlap
-            const bsX = vd.x + Math.cos(bsAngle) * shopDist;
-            const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
-            const bsY = this.world.getHeight(bsX, bsZ);
-            const bsV = makeVillager(this.scene, bsX, bsZ, bsY, 0.8);
-            bsV._shopType = 'blacksmith';
-            bsV._stayHome = true; // don't wander
-            bsV.homeX = bsX; bsV.homeZ = bsZ;
-            // Make blacksmith visually distinct — dark apron
-            bsV._shirtMat.color.setHex(0x3a2a1a);
-            this.villagers.push(bsV);
-            buildShopBuilding(bsX, bsZ, BLOCK.STONE, BLOCK.STONE, BLOCK.STONE);
-
-            // Add blacksmith label
-            const bsCanvas = document.createElement('canvas');
-            bsCanvas.width = 128; bsCanvas.height = 32;
-            const bsCtx = bsCanvas.getContext('2d');
-            bsCtx.fillStyle = '#ccaa66'; bsCtx.font = 'bold 14px monospace'; bsCtx.textAlign = 'center';
-            bsCtx.fillText('Blacksmith', 64, 20);
-            const bsTex = new THREE.CanvasTexture(bsCanvas);
-            const bsLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: bsTex, transparent: true, depthWrite: false }));
-            bsLabel.position.y = 2.2; bsLabel.scale.set(1.0, 0.25, 1);
-            bsV.group.add(bsLabel);
+            // Spawn blacksmith shopkeepers — one per skill in vd.smiths (defaults to [3])
+            const smithSkills = vd.smiths || [3];
+            const shopDist = 28;
+            const firstSmithAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
+            for (let si = 0; si < smithSkills.length; si++) {
+                const skill = smithSkills[si];
+                const skillName = SMITH_SKILL_NAMES[skill] || 'Smith';
+                // Space smiths around the village at different angles (reserve one side for magic shop)
+                const angSpread = Math.PI * 0.8; // leave ~40% of circle for other shops
+                const bsAngle = firstSmithAngle + (smithSkills.length === 1 ? 0 : (si / (smithSkills.length - 1) - 0.5) * angSpread);
+                const bsX = vd.x + Math.cos(bsAngle) * shopDist;
+                const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
+                const bsY = this.world.getHeight(bsX, bsZ);
+                const bsV = makeVillager(this.scene, bsX, bsZ, bsY, 0.8 + si * 0.13);
+                bsV._shopType = 'blacksmith';
+                bsV._smithSkill = skill;
+                bsV._smithSkillName = skillName;
+                bsV._stayHome = true;
+                bsV.homeX = bsX; bsV.homeZ = bsZ;
+                bsV._shirtMat.color.setHex(0x3a2a1a);
+                this.villagers.push(bsV);
+                buildShopBuilding(bsX, bsZ, BLOCK.STONE, BLOCK.STONE, BLOCK.STONE);
+                // Label
+                const bsCanvas = document.createElement('canvas');
+                bsCanvas.width = 200; bsCanvas.height = 32;
+                const bsCtx = bsCanvas.getContext('2d');
+                bsCtx.fillStyle = '#ccaa66'; bsCtx.font = 'bold 13px monospace'; bsCtx.textAlign = 'center';
+                bsCtx.fillText(skillName + ' Blacksmith', 100, 20);
+                const bsTex = new THREE.CanvasTexture(bsCanvas);
+                const bsLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: bsTex, transparent: true, depthWrite: false }));
+                bsLabel.position.y = 2.2; bsLabel.scale.set(1.6, 0.25, 1);
+                bsV.group.add(bsLabel);
+            }
 
             // Spawn magic shop keeper
-            const msAngle = bsAngle + Math.PI; // opposite side of village
+            const msAngle = firstSmithAngle + Math.PI; // opposite side of village
             const msX = vd.x + Math.cos(msAngle) * shopDist;
             const msZ = vd.z + Math.sin(msAngle) * shopDist;
             const msY = this.world.getHeight(msX, msZ);

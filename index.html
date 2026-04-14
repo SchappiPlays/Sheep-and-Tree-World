@@ -11302,7 +11302,8 @@ function openShop(type) {
 
 function updateShopUI() {
     const items = shopType === 'blacksmith' ? BLACKSMITH_SHOP : shopType === 'armor' ? ARMOR_SHOP : MAGIC_SHOP;
-    const title = shopType === 'blacksmith' ? 'Blacksmith' : shopType === 'armor' ? 'Armour Shop' : 'Magic Supply';
+    const smithName = (shopType === 'blacksmith' && window._currentSmith && window._currentSmith._smithSkillName) ? window._currentSmith._smithSkillName + ' ' : '';
+    const title = shopType === 'blacksmith' ? smithName + 'Blacksmith' : shopType === 'armor' ? 'Armour Shop' : 'Magic Supply';
     const totalMoney = getTotalCopper();
     let html = `<div style="color:rgba(220,200,160,0.9);font:bold 16px Georgia,serif;text-align:center;margin-bottom:4px;">${title}</div>`;
     html += `<div style="color:rgba(200,180,120,0.7);font:12px monospace;text-align:center;margin-bottom:10px;">Your money: ${formatPrice(totalMoney)}</div>`;
@@ -11472,11 +11473,16 @@ window._shopSell = (item) => {
 };
 window._shopSalvage = (item) => {
     if (!inventory[item] || inventory[item] <= 0) return;
-    if (!spendCopper(5)) return; // 5 copper fee
+    const skill = (window._currentSmith && window._currentSmith._smithSkill) || 3;
+    // Fee drops with skill: 1→5c, 3→4c, 5→3c, 7→2c, 9→1c
+    const fee = Math.max(1, 6 - Math.ceil(skill / 2));
+    if (!spendCopper(fee)) return;
+    // Return multiplier: 1→0.4, 2→0.5, 3→0.6, ... 9→1.1
+    const returnMult = 0.3 + skill * 0.1;
 
     // Determine what materials to return
     const mats = {};
-    const addMat = (m, n) => { if (m) mats[m] = (mats[m] || 0) + n; };
+    const addMat = (m, n) => { if (m) mats[m] = (mats[m] || 0) + Math.max(1, Math.round(n * returnMult)); };
 
     if (item.startsWith('csword_') && window._customSwords && window._customSwords[item]) {
         // Custom sword — return blade, guard, handle, pommel materials
@@ -12171,7 +12177,7 @@ function doPlace(e) {
                         v.angle = Math.atan2(-dx, -dz);
                         v.group.rotation.y = v.angle;
                         v.walking = false; v.wanderTimer = 5;
-                        if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
+                        if (v._shopType === 'blacksmith') { window._currentSmith = v; openShop('blacksmith'); return false; }
                         if (v._shopType === 'magic') { openShop('magic'); return false; }
                         if (v._shopType === 'armor') { openShop('armor'); return false; }
                         if (v._shopType === 'stable') { openStableUI(); return false; }
@@ -12331,7 +12337,7 @@ function doPlace(e) {
                 v.walking = false;
                 v.wanderTimer = 5;
                 // Shop villagers open shop instead of dialogue
-                if (v._shopType === 'blacksmith') { openShop('blacksmith'); return false; }
+                if (v._shopType === 'blacksmith') { window._currentSmith = v; openShop('blacksmith'); return false; }
                 if (v._shopType === 'magic') { openShop('magic'); return false; }
                 if (v._shopType === 'armor') { openShop('armor'); return false; }
                 if (v._shopType === 'stable') { openStableUI(); return false; }
