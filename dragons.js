@@ -1155,13 +1155,14 @@ export class DragonManager {
 
             // ── Shoulder dragon (baby on player's shoulder) ──
             if (bd._onShoulder) {
-                // Position on player's shoulder
-                bd.x = player.position.x;
-                bd.z = player.position.z;
-                const sy = player.position.y + 1.5;
+                // Offset sideways onto the right shoulder (perpendicular to facing)
+                const angle = player.group.rotation.y;
+                const sideOff = 0.28; // world units offset onto shoulder
+                bd.x = player.position.x + Math.cos(angle) * sideOff;
+                bd.z = player.position.z - Math.sin(angle) * sideOff;
+                const sy = player.position.y + 1.45;
                 bd.group.position.set(bd.x, sy, bd.z);
                 bd.group.rotation.y = player.group.rotation.y;
-                // Scale down further for shoulder
                 bd.group.scale.setScalar(gs * 0.7);
                 continue;
             }
