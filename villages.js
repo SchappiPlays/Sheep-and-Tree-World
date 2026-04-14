@@ -447,6 +447,10 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
                 if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16) continue;
                 if (by < 0 || by >= WORLD_HEIGHT) continue;
                 chunkData[(by * 16 + lz) * 16 + lx] = hb.b;
+                // Also register in _modifiedBlocks so the LOD mesh renders it
+                if (hb.b !== BLOCK.AIR) {
+                    world._modifiedBlocks.set(bx + ',' + by + ',' + bz, hb.b);
+                }
             }
         }
     }
@@ -484,6 +488,10 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
             if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
             if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
             chunkData[(by2 * 16 + lz2) * 16 + lx2] = hb.b;
+            // Register in _modifiedBlocks so the LOD mesh renders it
+            if (hb.b !== BLOCK.AIR) {
+                world._modifiedBlocks.set(bx2 + ',' + by2 + ',' + bz2, hb.b);
+            }
         }
     }
 }

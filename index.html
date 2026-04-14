@@ -1089,6 +1089,7 @@ let _farCenterX = 0, _farCenterZ = 0; // track where skip zone is centered
 let _playerBlocksMesh = null;
 let _playerBlocksDirty = false;
 let _playerBlocksRebuildTimer = 0;
+let _lastModBlocksSize = 0;
 function markPlayerBlocksDirty() { _playerBlocksDirty = true; }
 function rebuildPlayerBlocksMesh() {
     _playerBlocksDirty = false;
@@ -1143,7 +1144,7 @@ function rebuildPlayerBlocksMesh() {
     // Hide this mesh near the player — the real chunk meshes show instead
     mat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 45.0 };
+        shader.uniforms._cutoutR = { value: 25.0 };
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
@@ -1370,160 +1371,10 @@ function buildFarTerrain(centerX, centerZ) {
     farTerrain.receiveShadow = true;
     scene.add(farTerrain);
 
-    // LOD structure markers — simple colored shapes visible from far away
+    // Hardcoded LOD structures removed — block-level LOD now handles all structures
+    // (via _modifiedBlocks which is populated by fortress/castle/village building code)
     for (const m of _lodStructures) scene.remove(m);
     _lodStructures.length = 0;
-    const _addLodBox = (wx, wz, w, h, d, color) => {
-        const y = getTerrainHeight(wx, wz);
-        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-        mesh.position.set(wx, y + h/2, wz);
-        mesh.castShadow = true;
-        scene.add(mesh);
-        _lodStructures.push(mesh);
-    };
-    const _addLodTower = (wx, wz, r, h, color) => {
-        const y = getTerrainHeight(wx, wz);
-        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
-        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r*0.7, r, h, 6), mat);
-        mesh.position.set(wx, y + h/2, wz);
-        mesh.castShadow = true;
-        scene.add(mesh);
-        _lodStructures.push(mesh);
-    };
-    // Western Castle (-400, 20) — 60x50 blocks = ~28x24 world
-    const wcX = -400, wcZ = 20, wcHW = 14.25, wcHD = 11.9;
-    _addLodBox(wcX, wcZ - wcHD, wcHW * 2 + 2, 8.5, 1.2, 0x808080);
-    _addLodBox(wcX, wcZ + wcHD, wcHW * 2 + 2, 8.5, 1.2, 0x808080);
-    _addLodBox(wcX - wcHW, wcZ, 1.2, 8.5, wcHD * 2 + 2, 0x808080);
-    _addLodBox(wcX + wcHW, wcZ, 1.2, 8.5, wcHD * 2 + 2, 0x808080);
-    _addLodTower(wcX - wcHW, wcZ - wcHD, 2.4, 12, 0x777777);
-    _addLodTower(wcX + wcHW, wcZ - wcHD, 2.4, 12, 0x777777);
-    _addLodTower(wcX - wcHW, wcZ + wcHD, 2.4, 12, 0x777777);
-    _addLodTower(wcX + wcHW, wcZ + wcHD, 2.4, 12, 0x777777);
-    _addLodBox(wcX, wcZ, 11, 13, 9.5, 0x8a8a8a); // central keep
-
-    // Ruined Fortress (-505, -335) — walls partially crumbled
-    const rfX = -505, rfZ = -335, rfHW = 19, rfHD = 19;
-    _addLodBox(rfX, rfZ - rfHD, rfHW * 2 + 2, 5.7, 1.2, 0x6a6a5a);
-    _addLodBox(rfX, rfZ + rfHD, rfHW * 2 + 2, 4.2, 1.2, 0x5a5a50); // back wall lower (ruined)
-    _addLodBox(rfX - rfHW, rfZ, 1.2, 5.7, rfHD * 2 + 2, 0x6a6a5a);
-    _addLodBox(rfX + rfHW, rfZ, 1.2, 4.8, rfHD * 2 + 2, 0x5a5a50); // east wall crumbled
-    _addLodTower(rfX - rfHW, rfZ - rfHD, 2, 10, 0x5a5a50);
-    _addLodTower(rfX + rfHW, rfZ - rfHD, 2, 8, 0x5a5a50); // shorter (damaged)
-    _addLodTower(rfX - rfHW, rfZ + rfHD, 2, 10, 0x5a5a50);
-    _addLodTower(rfX + rfHW, rfZ + rfHD, 2, 6, 0x4a4a44); // most damaged
-    _addLodTower(rfX, rfZ - rfHD, 1.5, 8, 0x5a5a50);
-    _addLodTower(rfX, rfZ + rfHD, 1.5, 7, 0x5a5a50);
-    _addLodBox(rfX, rfZ, 14, 8, 11, 0x7a7a6a); // central keep
-
-    // Scorched Castle (-300, 280) — blackened fortress, 60W×50D
-    const scX = -300, scZ = 280, scHW = 14.25, scHD = 11.9;
-    _addLodBox(scX, scZ - scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
-    _addLodBox(scX, scZ + scHD, scHW * 2 + 2, 4.75, 1.2, 0x2a2020);
-    _addLodBox(scX - scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
-    _addLodBox(scX + scHW, scZ, 1.2, 4.75, scHD * 2 + 2, 0x2a2020);
-    _addLodTower(scX - scHW, scZ - scHD, 1.4, 6.65, 0x221818);
-    _addLodTower(scX + scHW, scZ - scHD, 1.4, 6.65, 0x221818);
-    _addLodTower(scX - scHW, scZ + scHD, 1.4, 6.65, 0x221818);
-    _addLodTower(scX + scHW, scZ + scHD, 1.4, 6.65, 0x221818);
-    _addLodTower(scX, scZ - scHD, 1.2, 5.7, 0x221818); // mid-wall
-    _addLodTower(scX, scZ + scHD, 1.2, 5.7, 0x221818);
-    _addLodBox(scX + 2, scZ, 7.6, 6.2, 5.7, 0x332828); // keep
-    _addLodBox(scX - 6, scZ, 4.75, 7, 3.3, 0x332828); // throne room tower
-
-    // Ancient Forest Gate Towers (4 gates around hill ring at (-30,-350) r=170)
-    // Each gate has twin towers ~10.5h, positioned at ring edge
-    const _gateH = 10.5, _gateR = 1.9, _gateSpread = 6;
-    _addLodTower(80, -350-_gateSpread, _gateR, _gateH, 0x6a6a5a); // East gate — towers along Z
-    _addLodTower(80, -350+_gateSpread, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-140, -350-_gateSpread, _gateR, _gateH, 0x6a6a5a); // West gate — towers along Z
-    _addLodTower(-140, -350+_gateSpread, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30-_gateSpread, -460, _gateR, _gateH, 0x6a6a5a); // North gate — towers along X
-    _addLodTower(-30+_gateSpread, -460, _gateR, _gateH, 0x6a6a5a);
-    _addLodTower(-30-_gateSpread, -240, _gateR, _gateH, 0x6a6a5a); // South gate — towers along X
-    _addLodTower(-30+_gateSpread, -240, _gateR, _gateH, 0x6a6a5a);
-
-    // === SW Fortress at (-900, 575) — high detail LOD ===
-    // 120x100 blocks = ~57×47.5 world. Walls 18 blocks = ~8.55. Towers 28 = ~13.3. Keep towers 36 = ~17.1
-    const swFX = -900, swFZ = 575;
-    const swHW = 28.5; // half-width in world units (60 blocks * 0.475)
-    const swHD = 23.75; // half-depth (50 blocks * 0.475)
-    const swWallH = 8.55;
-    const swDark = 0x3a3a3e;
-    const swDarkLight = 0x4a4a50;
-    // Outer walls — 4 wall pieces (so we don't fill the inside)
-    _addLodBox(swFX, swFZ - swHD, swHW * 2 + 2, swWallH, 1.5, swDark); // north wall
-    _addLodBox(swFX, swFZ + swHD, swHW * 2 + 2, swWallH, 1.5, swDark); // south wall
-    _addLodBox(swFX - swHW, swFZ, 1.5, swWallH, swHD * 2 + 2, swDark); // west wall
-    _addLodBox(swFX + swHW, swFZ, 1.5, swWallH, swHD * 2 + 2, swDark); // east wall
-    // Corner towers (28 blocks tall = 13.3)
-    _addLodTower(swFX - swHW, swFZ - swHD, 2.4, 13.3, swDarkLight);
-    _addLodTower(swFX + swHW, swFZ - swHD, 2.4, 13.3, swDarkLight);
-    _addLodTower(swFX - swHW, swFZ + swHD, 2.4, 13.3, swDarkLight);
-    _addLodTower(swFX + swHW, swFZ + swHD, 2.4, 13.3, swDarkLight);
-    // Mid-wall towers (24 blocks = 11.4)
-    _addLodTower(swFX - swHW/2, swFZ - swHD, 1.9, 11.4, swDarkLight);
-    _addLodTower(swFX + swHW/2, swFZ - swHD, 1.9, 11.4, swDarkLight);
-    _addLodTower(swFX - swHW/2, swFZ + swHD, 1.9, 11.4, swDarkLight);
-    _addLodTower(swFX + swHW/2, swFZ + swHD, 1.9, 11.4, swDarkLight);
-    _addLodTower(swFX + swHW, swFZ - swHD/2, 1.9, 11.4, swDarkLight);
-    _addLodTower(swFX + swHW, swFZ + swHD/2, 1.9, 11.4, swDarkLight);
-    // Gate flanking towers (3 wide tower = 1.4 radius, 20 high = 9.5)
-    _addLodTower(swFX - 4, swFZ - swHD, 1.4, 9.5, swDarkLight); // N gate
-    _addLodTower(swFX + 4, swFZ - swHD, 1.4, 9.5, swDarkLight);
-    _addLodTower(swFX + swHW, swFZ - 4, 1.4, 9.5, swDarkLight); // E gate
-    _addLodTower(swFX + swHW, swFZ + 4, 1.4, 9.5, swDarkLight);
-    _addLodTower(swFX - 4, swFZ + swHD, 1.4, 9.5, swDarkLight); // S gate
-    _addLodTower(swFX + 4, swFZ + swHD, 1.4, 9.5, swDarkLight);
-    // Central great keep (30x24 blocks = 14.25 x 11.4, 26h = 12.35)
-    _addLodBox(swFX, swFZ, 14.25, 12.35, 11.4, 0x4a4a52);
-    // Keep corner towers (36 blocks tall = 17.1)
-    _addLodTower(swFX - 7, swFZ - 5.7, 2, 17.1, swDarkLight);
-    _addLodTower(swFX + 7, swFZ - 5.7, 2, 17.1, swDarkLight);
-    _addLodTower(swFX - 7, swFZ + 5.7, 2, 17.1, swDarkLight);
-    _addLodTower(swFX + 7, swFZ + 5.7, 2, 17.1, swDarkLight);
-    // Dragon enclosure walls (west of fortress)
-    const swEncW = 14.25; // 30 blocks
-    const swEncD = 19; // 40 blocks
-    const swEncH = 9.5; // 20 blocks
-    _addLodBox(swFX - swHW - swEncW, swFZ - swEncD/2, swEncW, swEncH, 1.5, swDark); // north
-    _addLodBox(swFX - swHW - swEncW, swFZ + swEncD/2, swEncW, swEncH, 1.5, swDark); // south
-    _addLodBox(swFX - swHW - swEncW * 2, swFZ, 1.5, swEncH, swEncD, swDark); // west (ocean side)
-    // Enclosure corner towers
-    _addLodTower(swFX - swHW - swEncW * 2, swFZ - swEncD/2, 1.4, 11.4, swDarkLight);
-    _addLodTower(swFX - swHW - swEncW * 2, swFZ + swEncD/2, 1.4, 11.4, swDarkLight);
-
-    // Village markers — replicate actual house positions from village system
-    const _lodVillages = [
-        {x:80,z:16,houses:5},{x:-100,z:-50,houses:4},{x:200,z:60,houses:6},
-        {x:-200,z:100,houses:3},{x:50,z:-150,houses:4},{x:-150,z:200,houses:3},
-        {x:100,z:550,houses:5,desert:true},{x:-120,z:620,houses:4,desert:true},{x:250,z:680,houses:3,desert:true},
-    ];
-    const _houseSizes = [{w:5.7,d:4.75,wallH:4.75,roofH:1.9},{w:7.1,d:5.7,wallH:4.75,roofH:2.4},{w:8.55,d:6.65,wallH:5.7,roofH:2.85}];
-    const _BS = BLOCK_SIZE;
-    for (const vd of _lodVillages) {
-        const vbx = Math.floor(vd.x / _BS), vbz = Math.floor(vd.z / _BS);
-        const wallCol = vd.desert ? 0xc4a860 : 0x8a6a3a;
-        const roofCol = vd.desert ? 0xb09850 : 0x6a4a1a;
-        const pillarCol = vd.desert ? 0x888888 : 0x5a3518;
-        for (let hi = 0; hi < vd.houses; hi++) {
-            const angle = (hi / vd.houses) * Math.PI * 2 + vd.x * 0.01;
-            const dist = 20 + (hi * 17) % 30;
-            const hx = (vbx + Math.round(Math.cos(angle) * dist)) * _BS;
-            const hz = (vbz + Math.round(Math.sin(angle) * dist)) * _BS;
-            const hs = _houseSizes[hi % 3];
-            // Walls
-            _addLodBox(hx + hs.w/2, hz + hs.d/2, hs.w, hs.wallH, hs.d, wallCol);
-            // Roof (peaked — slightly wider)
-            _addLodBox(hx + hs.w/2, hz + hs.d/2, hs.w + 0.5, hs.roofH, hs.d + 0.5, roofCol);
-            // Corner pillars
-            _addLodTower(hx, hz, 0.2, hs.wallH + 0.5, pillarCol);
-            _addLodTower(hx + hs.w, hz, 0.2, hs.wallH + 0.5, pillarCol);
-            _addLodTower(hx, hz + hs.d, 0.2, hs.wallH + 0.5, pillarCol);
-            _addLodTower(hx + hs.w, hz + hs.d, 0.2, hs.wallH + 0.5, pillarCol);
-        }
-    }
 
     // Water plane — simple flat plane, shader-based cutout near player
     const outerR = range * 2;
@@ -1914,6 +1765,7 @@ function startGame(loadSlotName) {
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
     buildSouthwestFortress(world);
+    markPlayerBlocksDirty();
     buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
     buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
     buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)
@@ -13231,7 +13083,13 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
 
-    // Rebuild player-placed blocks LOD mesh if dirty (throttled — every ~1s)
+    // Rebuild structure LOD mesh if modified blocks changed (throttled — every ~1s)
+    if (world && world._modifiedBlocks) {
+        if (world._modifiedBlocks.size !== _lastModBlocksSize) {
+            _lastModBlocksSize = world._modifiedBlocks.size;
+            _playerBlocksDirty = true;
+        }
+    }
     if (_playerBlocksDirty) {
         _playerBlocksRebuildTimer = (_playerBlocksRebuildTimer || 0) - dt;
         if (_playerBlocksRebuildTimer <= 0) {
