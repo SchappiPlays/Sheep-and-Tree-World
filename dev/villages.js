@@ -921,6 +921,64 @@ export class VillageManager {
             buildShopBuilding(stX, stZ, BLOCK.WOOD, BLOCK.PLANKS, BLOCK.DIRT);
         }
 
+        // ── Spawn castle NPCs when player approaches the castle ──
+        {
+            const ccx = CASTLE.wx + 40; // castle block bounds 0..160 → world 0..80 → center at 40
+            const ccz = CASTLE.wz + 32.5;
+            const cdx = ccx - playerX, cdz = ccz - playerZ;
+            if (cdx * cdx + cdz * cdz < 70 * 70 && !this.spawnedVillages.has('__castle__')) {
+                this.spawnedVillages.add('__castle__');
+                // Layout positions relative to castle origin (CASTLE.wx, CASTLE.wz)
+                // Castle courtyard is roughly the central area; place NPCs there and a few guards at walls/gate
+                const npcs = [
+                    { dx: 40, dz: 32, role: 'king',     name: 'King',          shirt: 0x882233, pants: 0x2a2a3a },
+                    { dx: 44, dz: 30, role: 'queen',    name: 'Queen',         shirt: 0x8844aa, pants: 0x2a2a3a },
+                    { dx: 38, dz: 35, role: 'advisor',  name: 'Royal Advisor', shirt: 0x2a4488, pants: 0x1a1a2a },
+                    { dx: 30, dz: 40, role: 'knight',   name: 'Knight',        shirt: 0x556677, pants: 0x334455 },
+                    { dx: 50, dz: 40, role: 'knight',   name: 'Knight',        shirt: 0x556677, pants: 0x334455 },
+                    { dx: 20, dz: 30, role: 'guard',    name: 'Guard',         shirt: 0x3a3a3a, pants: 0x2a2a2a },
+                    { dx: 60, dz: 30, role: 'guard',    name: 'Guard',         shirt: 0x3a3a3a, pants: 0x2a2a2a },
+                    { dx: 40, dz: 12, role: 'guard',    name: 'Gate Guard',    shirt: 0x3a3a3a, pants: 0x2a2a2a },
+                    { dx: 40, dz: 53, role: 'guard',    name: 'Rear Guard',    shirt: 0x3a3a3a, pants: 0x2a2a2a },
+                    { dx: 35, dz: 25, role: 'servant',  name: 'Servant',       shirt: 0xaa9966, pants: 0x553322 },
+                    { dx: 45, dz: 25, role: 'servant',  name: 'Servant',       shirt: 0xaa9966, pants: 0x553322 },
+                    { dx: 42, dz: 38, role: 'noble',    name: 'Noble',         shirt: 0x884466, pants: 0x2a1a2a },
+                    { dx: 48, dz: 35, role: 'scholar',  name: 'Scholar',       shirt: 0x445522, pants: 0x2a2a1a },
+                    { dx: 32, dz: 38, role: 'cook',     name: 'Cook',          shirt: 0xbbaa88, pants: 0x664433 },
+                    { dx: 55, dz: 45, role: 'stablehand', name: 'Stablehand',  shirt: 0x886644, pants: 0x443322 },
+                ];
+                for (let i = 0; i < npcs.length; i++) {
+                    const n = npcs[i];
+                    const wx = CASTLE.wx + n.dx;
+                    const wz = CASTLE.wz + n.dz;
+                    const wy = this.world.getHeight(wx, wz);
+                    const seed = this.world._hash(wx + 11, wz + 13);
+                    const v = makeVillager(this.scene, wx, wz, wy, seed);
+                    v._shirtMat.color.setHex(n.shirt);
+                    v._pantsMat.color.setHex(n.pants);
+                    v._castleRole = n.role;
+                    v._stayHome = true;
+                    v.homeX = wx; v.homeZ = wz;
+                    // Label
+                    const nc = document.createElement('canvas');
+                    nc.width = 128; nc.height = 32;
+                    const nctx = nc.getContext('2d');
+                    const nameColor = (n.role === 'king' || n.role === 'queen') ? '#ffcc44' :
+                                      (n.role === 'knight' || n.role === 'guard') ? '#cccccc' :
+                                      (n.role === 'noble') ? '#cc99cc' : '#e8c89a';
+                    nctx.fillStyle = nameColor;
+                    nctx.font = 'bold 12px monospace';
+                    nctx.textAlign = 'center';
+                    nctx.fillText(n.name, 64, 20);
+                    const nt = new THREE.CanvasTexture(nc);
+                    const nl = new THREE.Sprite(new THREE.SpriteMaterial({ map: nt, transparent: true, depthWrite: false }));
+                    nl.position.y = 2.2; nl.scale.set(1.0, 0.25, 1);
+                    v.group.add(nl);
+                    this.villagers.push(v);
+                }
+            }
+        }
+
         // Spawn wandering merchants on paths near player
         if (!this._merchantTimer) this._merchantTimer = 0;
         this._merchantTimer -= dt;
@@ -977,6 +1035,7 @@ export class VillageManager {
                         this.spawnedVillages.delete(vd.x + ',' + vd.z);
                     }
                 }
+                if (v._castleRole) this.spawnedVillages.delete('__castle__');
             }
         }
 
