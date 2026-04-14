@@ -898,7 +898,7 @@ export class DragonManager {
                 const fdx = Math.sin(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
                 const fdy = -Math.sin(bd._fireDirPitch);
                 const fdz = Math.cos(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
-                this._emitFire(mx, my, mz, fdx, fdy, fdz, 2, 1, bd._iceBreath ? 1 : 0);
+                this._emitFire(mx, my, mz, fdx, fdy, fdz, 2, 1, bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0));
             }
         }
     }
@@ -1338,7 +1338,7 @@ export class DragonManager {
                     const tdy = (target.group.position.y || 0) - my;
                     const tdx = target.x - mx;
                     const tdz = target.z - mz;
-                    this._emitFire(mx, my, mz, tdx, tdy, tdz, 2, 0, bd._iceBreath ? 1 : 0);
+                    this._emitFire(mx, my, mz, tdx, tdy, tdz, 2, 0, bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0));
                     if (bd._fireBreathTimer <= 0) {
                         bd._fireBreathTimer = 0.33;
                         target.hp -= dragonFireDmg;
@@ -1643,7 +1643,7 @@ export class DragonManager {
             const dy = -Math.sin(lookPitch);
             const dz = Math.cos(lookYaw) * Math.cos(lookPitch);
             // Emit particles — long-range mode (ice if dragon breathes ice), inherit dragon velocity
-            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._iceBreath ? 1 : 0, bd._velX || 0, bd._velY || 0, bd._velZ || 0);
+            this._emitFire(mx, my, mz, dx, dy, dz, 3, 1, bd._lightningBreath ? 2 : (bd._iceBreath ? 1 : 0), bd._velX || 0, bd._velY || 0, bd._velZ || 0);
             // Damage creatures in cone — every 0.33s for 3 dmg/sec
             if (bd._fireBreathTimer <= 0) {
                 bd._fireBreathTimer = 0.33;
