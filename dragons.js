@@ -299,9 +299,16 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     const wingBoneColor = baseHue.clone().multiplyScalar(0.8);
     const bellyColor = baseHue.clone().lerp(new THREE.Color(0xc4a032), 0.7);
     const memColor = wingColor ? new THREE.Color(wingColor) : darker;
-    // Accent color for horns, spikes, and wrist claws — varies by dragon type
-    const accentHex = isLightning ? 0x2C2C2B : (isIce ? 0x9FB9D4 : 0xE8DCC8);
-    const accentColor = new THREE.Color(accentHex);
+    // Accent color for horns, spikes, and wrist claws — varies by dragon type.
+    // Fire wyverns: ~half roll the ivory accent, others keep a body-derived bone tone.
+    const ivoryRoll = ((eggColor * 0x9E3779B1) >>> 0) / 0xFFFFFFFF;
+    const fireUsesIvory = !!isWyvern && ivoryRoll < 0.5;
+    let accentHex;
+    if (isLightning) accentHex = 0x2C2C2B;
+    else if (isIce) accentHex = 0x9FB9D4;
+    else if (fireUsesIvory) accentHex = 0xE8DCC8;
+    else accentHex = null; // fall through to body-derived bone color
+    const accentColor = accentHex !== null ? new THREE.Color(accentHex) : baseHue.clone().multiplyScalar(0.25);
 
     const bTop = new THREE.MeshStandardMaterial({ color: baseHue, roughness: 0.55, metalness: 0.2 });
     const bMid = new THREE.MeshStandardMaterial({ color: midHue, roughness: 0.5, metalness: 0.18 });
