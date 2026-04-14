@@ -644,6 +644,32 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
 // ── Dragon Manager ──
 export { makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane };
 
+// Lightning bolt system — jagged polylines used by lightning dragons
+const LIGHTNING_BOLT_MAX = 24;
+const LIGHTNING_BOLT_SEGS = 10; // 10 points = 9 segments
+function _initLightningBolts(scene) {
+    const bolts = [];
+    for (let i = 0; i < LIGHTNING_BOLT_MAX; i++) {
+        const positions = new Float32Array(LIGHTNING_BOLT_SEGS * 3);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const mat = new THREE.LineBasicMaterial({
+            color: 0xbbeeff,
+            transparent: true,
+            opacity: 0.0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            linewidth: 2,
+        });
+        const line = new THREE.Line(geo, mat);
+        line.frustumCulled = false;
+        line.visible = false;
+        scene.add(line);
+        bolts.push({ line, positions, active: false, age: 0, life: 0.1 });
+    }
+    return bolts;
+}
+
 // Fire breath particle system — shared across all dragons
 const FIRE_PARTICLE_MAX = 200;
 function _initFireParticles(scene) {
@@ -680,6 +706,7 @@ export class DragonManager {
         this.eggs = [];
         this.dragons = [];
         this._fireParticles = _initFireParticles(scene);
+        this._lightningBolts = _initLightningBolts(scene);
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
@@ -974,6 +1001,7 @@ export class DragonManager {
         const px = player.position.x, pz = player.position.z, py = player.position.y;
         // Update fire particles every frame
         this._updateFireParticles(dt);
+        this._updateLightningBolts(dt);
 
 
         // ── Update carried egg visual ──
@@ -2552,10 +2580,91 @@ export class DragonManager {
     }
 
     // Emit fire particles from a position in a direction
+    _spawnLightningBolt(ox, oy, oz, dx, dy, dz, length, forkChance) {
+        const bolts = this._lightningBolts;
+        if (!bolts) return;
+        let slot = -1;
+        for (let i = 0; i < bolts.length; i++) {
+            if (!bolts[i].active) { slot = i; break; }
+        }
+        if (slot < 0) return;
+        const b = bolts[slot];
+        // Perpendicular basis
+        let ux = -dz, uy = 0, uz = dx;
+        const uLen = Math.sqrt(ux*ux + uz*uz) || 1;
+        ux /= uLen; uz /= uLen;
+        const vx = dy * uz - dz * uy;
+        const vy = dz * ux - dx * uz;
+        const vz = dx * uy - dy * ux;
+        // Zig-zag from origin along direction with lateral noise
+        const jitter = 0.9;
+        for (let i = 0; i < LIGHTNING_BOLT_SEGS; i++) {
+            const t = i / (LIGHTNING_BOLT_SEGS - 1);
+            const baseX = ox + dx * length * t;
+            const baseY = oy + dy * length * t;
+            const baseZ = oz + dz * length * t;
+            // Taper jitter toward endpoints (0 at start and end)
+            const taper = Math.sin(t * Math.PI);
+            const j1 = (Math.random() - 0.5) * 2 * jitter * taper;
+            const j2 = (Math.random() - 0.5) * 2 * jitter * taper;
+            const pi = i * 3;
+            b.positions[pi]     = baseX + ux * j1 + vx * j2;
+            b.positions[pi + 1] = baseY + uy * j1 + vy * j2;
+            b.positions[pi + 2] = baseZ + uz * j1 + vz * j2;
+        }
+        b.line.geometry.attributes.position.needsUpdate = true;
+        b.line.geometry.computeBoundingSphere();
+        b.active = true;
+        b.age = 0;
+        b.life = 0.08 + Math.random() * 0.07;
+        b.line.visible = true;
+        b.line.material.opacity = 1.0;
+        // Branch forks
+        if (forkChance === undefined) forkChance = 0.6;
+        if (Math.random() < forkChance) {
+            // Fork from a midpoint with deflected direction
+            const midT = 0.35 + Math.random() * 0.35;
+            const mx = ox + dx * length * midT;
+            const my = oy + dy * length * midT;
+            const mz = oz + dz * length * midT;
+            const defl = 0.7;
+            const fdx = dx + ux * (Math.random() - 0.5) * defl + vx * (Math.random() - 0.5) * defl;
+            const fdy = dy + uy * (Math.random() - 0.5) * defl + vy * (Math.random() - 0.5) * defl;
+            const fdz = dz + uz * (Math.random() - 0.5) * defl + vz * (Math.random() - 0.5) * defl;
+            const fLen = Math.sqrt(fdx*fdx + fdy*fdy + fdz*fdz) || 1;
+            this._spawnLightningBolt(mx, my, mz, fdx / fLen, fdy / fLen, fdz / fLen, length * (0.3 + Math.random() * 0.3), 0);
+        }
+    }
+
+    _updateLightningBolts(dt) {
+        const bolts = this._lightningBolts;
+        if (!bolts) return;
+        for (let i = 0; i < bolts.length; i++) {
+            const b = bolts[i];
+            if (!b.active) continue;
+            b.age += dt;
+            const t = b.age / b.life;
+            if (t >= 1) {
+                b.active = false;
+                b.line.visible = false;
+                continue;
+            }
+            // Quick bright → fade
+            b.line.material.opacity = (1 - t) * (0.6 + Math.random() * 0.4);
+        }
+    }
+
     _emitFire(ox, oy, oz, dx, dy, dz, count, longRange, iceMode, dragonVx, dragonVy, dragonVz) {
         const fp = this._fireParticles;
         const _len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
         dx /= _len; dy /= _len; dz /= _len;
+        // Lightning mode — spawn bolts + a few sparks
+        if (iceMode === 2) {
+            const boltLen = longRange ? (22 + Math.random() * 8) : (12 + Math.random() * 4);
+            this._spawnLightningBolt(ox, oy, oz, dx, dy, dz, boltLen);
+            if (Math.random() < 0.5) this._spawnLightningBolt(ox, oy, oz, dx, dy, dz, boltLen * (0.8 + Math.random() * 0.3));
+            count = Math.min(count, 2); // keep 1-2 sparks at mouth
+        }
         const dvx = dragonVx || 0, dvy = dragonVy || 0, dvz = dragonVz || 0;
         for (let i = 0; i < count; i++) {
             // Find an inactive slot
