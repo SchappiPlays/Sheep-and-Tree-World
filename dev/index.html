@@ -3621,7 +3621,7 @@ function startGame(loadSlotName) {
 
     // === Lightning Dragon Nest — deep desert ===
     {
-        const nestX = 100, nestZ = 720;
+        const nestX = 220, nestZ = 1080;
         const nestY = getTerrainHeight(nestX, nestZ);
         const yOff = 128;
         const BS = BLOCK_SIZE;
@@ -3632,14 +3632,14 @@ function startGame(loadSlotName) {
 
         const nestGrp = new THREE.Group();
         nestGrp.position.set(nestX, nestY, nestZ);
-        // Ring of fulgurite-like fused glass stones + dark rocks
-        for (let a = 0; a < 36; a++) {
-            const ang = (a / 36) * Math.PI * 2;
-            const r = 12 + (Math.random() - 0.5) * 1.5;
+        // Ring of fulgurite-like fused glass stones + dark rocks (scaled for massive dragon)
+        for (let a = 0; a < 64; a++) {
+            const ang = (a / 64) * Math.PI * 2;
+            const r = 40 + (Math.random() - 0.5) * 4;
             const sx = Math.cos(ang) * r;
             const sz = Math.sin(ang) * r;
-            const sw = 1.6 + Math.random() * 1.0;
-            const sh = 1.4 + Math.random() * 1.8;
+            const sw = 3.5 + Math.random() * 2.5;
+            const sh = 3.0 + Math.random() * 3.5;
             const mat = (a % 3 === 0) ? glassMat : ((a % 3 === 1) ? darkStoneMat : sandMat);
             const stone = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sw), mat);
             stone.position.set(sx, sh / 2, sz);
@@ -3647,19 +3647,19 @@ function startGame(loadSlotName) {
             stone.castShadow = true; stone.receiveShadow = true;
             nestGrp.add(stone);
         }
-        for (let a = 0; a < 24; a++) {
-            const ang = (a / 24) * Math.PI * 2 + 0.05;
-            const r = 8;
-            const stone = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), sandMat);
-            stone.position.set(Math.cos(ang) * r, 0.35, Math.sin(ang) * r);
+        for (let a = 0; a < 40; a++) {
+            const ang = (a / 40) * Math.PI * 2 + 0.05;
+            const r = 28;
+            const stone = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.2, 2.0), sandMat);
+            stone.position.set(Math.cos(ang) * r, 0.6, Math.sin(ang) * r);
             stone.castShadow = true; nestGrp.add(stone);
         }
         // Fulgurite spires — jagged fused-sand shards pointing skyward
-        for (let i = 0; i < 6; i++) {
-            const ang = (i / 6) * Math.PI * 2;
-            const sr = 10.5;
-            const sp = new THREE.Mesh(new THREE.ConeGeometry(0.4, 3.5 + Math.random() * 2, 5), glassMat);
-            sp.position.set(Math.cos(ang) * sr, 1.75, Math.sin(ang) * sr);
+        for (let i = 0; i < 10; i++) {
+            const ang = (i / 10) * Math.PI * 2;
+            const sr = 36;
+            const sp = new THREE.Mesh(new THREE.ConeGeometry(0.9, 8 + Math.random() * 4, 5), glassMat);
+            sp.position.set(Math.cos(ang) * sr, 4, Math.sin(ang) * sr);
             sp.rotation.z = (Math.random() - 0.5) * 0.3;
             sp.castShadow = true;
             nestGrp.add(sp);
@@ -3669,10 +3669,10 @@ function startGame(loadSlotName) {
 
         // 4 lightning dragon eggs
         const ltEggDefs = [
-            { dx: -3, dz:  1, color: 0x7a3dc4, emissive: 0x3a1a5a, veinColor: 0xcc88ff, wingColor: 0x5a2aa0, isWyvern: true, isLightning: true, name: 'Amethyst Lightning Dragon' },
-            { dx:  3, dz:  1, color: 0x20202a, emissive: 0x0a0a1a, veinColor: 0x88aaff, wingColor: 0x1a1a22, isWyvern: true, isLightning: true, name: 'Obsidian Lightning Dragon' },
-            { dx:  0, dz:  3, color: 0xa05a28, emissive: 0x3a1a08, veinColor: 0xffaa44, wingColor: 0x7a4018, isWyvern: true, isLightning: true, name: 'Copper Lightning Dragon' },
-            { dx:  0, dz: -3, color: 0x2878f0, emissive: 0x0a2a7a, veinColor: 0x88ccff, wingColor: 0x1858c0, isWyvern: true, isLightning: true, name: 'Electric Blue Lightning Dragon' },
+            { dx: -14, dz:   6, color: 0x7a3dc4, emissive: 0x3a1a5a, veinColor: 0xcc88ff, wingColor: 0x5a2aa0, isWyvern: true, isLightning: true, name: 'Amethyst Lightning Dragon' },
+            { dx:  14, dz:   6, color: 0x20202a, emissive: 0x0a0a1a, veinColor: 0x88aaff, wingColor: 0x1a1a22, isWyvern: true, isLightning: true, name: 'Obsidian Lightning Dragon' },
+            { dx:   0, dz:  14, color: 0xa05a28, emissive: 0x3a1a08, veinColor: 0xffaa44, wingColor: 0x7a4018, isWyvern: true, isLightning: true, name: 'Copper Lightning Dragon' },
+            { dx:   0, dz: -14, color: 0x2878f0, emissive: 0x0a2a7a, veinColor: 0x88ccff, wingColor: 0x1858c0, isWyvern: true, isLightning: true, name: 'Electric Blue Lightning Dragon' },
         ];
         const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
         const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
@@ -3716,8 +3716,8 @@ function startGame(loadSlotName) {
 
         // Spawn the giant lightning wyvern at the nest (dark grey/black)
         const ltDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0x1a1a22, 0x2a2a3a, true, true);
-        ltDragon.age = 7200;
-        ltDragon.growthScale = 2.0;
+        ltDragon.age = 14400;
+        ltDragon.growthScale = 5.0;
         ltDragon.group.scale.setScalar(ltDragon.growthScale);
         ltDragon.footOffset = 0.95 * 2.55 * ltDragon.growthScale;
         ltDragon.state = 'alive';
@@ -3730,7 +3730,7 @@ function startGame(loadSlotName) {
         ltDragon._nestX = nestX;
         ltDragon._nestZ = nestZ;
         ltDragon._ltState = 'sleeping';
-        ltDragon.maxHP = 250; ltDragon.hp = 250;
+        ltDragon.maxHP = 600; ltDragon.hp = 600;
         ltDragon.x = nestX; ltDragon.z = nestZ;
         ltDragon.group.position.set(nestX, nestY + ltDragon.footOffset, nestZ);
         scene.add(ltDragon.group);
