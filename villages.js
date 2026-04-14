@@ -947,13 +947,16 @@ export class VillageManager {
                     { dx: 32, dz: 38, role: 'cook',     name: 'Cook',          shirt: 0xbbaa88, pants: 0x664433 },
                     { dx: 55, dz: 45, role: 'stablehand', name: 'Stablehand',  shirt: 0x886644, pants: 0x443322 },
                 ];
+                // Castle floor Y — use center terrain + one block so NPCs stand on the floor
+                const castleFloorY = this.world.getHeight(ccx, ccz) + BLOCK_SIZE;
                 for (let i = 0; i < npcs.length; i++) {
                     const n = npcs[i];
                     const wx = CASTLE.wx + n.dx;
                     const wz = CASTLE.wz + n.dz;
-                    const wy = this.world.getHeight(wx, wz);
+                    const wy = castleFloorY;
                     const seed = this.world._hash(wx + 11, wz + 13);
                     const v = makeVillager(this.scene, wx, wz, wy, seed);
+                    v._floorY = castleFloorY;
                     v._shirtMat.color.setHex(n.shirt);
                     v._pantsMat.color.setHex(n.pants);
                     v._castleRole = n.role;
@@ -1048,7 +1051,7 @@ export class VillageManager {
             // Dead villagers — fall backward animation then stay on ground
             if (v.dead) {
                 v.deathTimer += dt;
-                const terrainY = this.world.getHeight(v.x, v.z);
+                const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
                 if (v.deathTimer < 0.6) {
                     // Falling backward
                     const t = v.deathTimer / 0.6;
@@ -1075,7 +1078,8 @@ export class VillageManager {
             if (v._stayHome && !v.fleeing) {
                 v.walking = false; v.speed = 0;
                 v.x = v.homeX; v.z = v.homeZ;
-                v.group.position.set(v.x, this.world.getHeight(v.x, v.z), v.z);
+                const fy = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
+                v.group.position.set(v.x, fy, v.z);
                 // Idle animation still runs below
             }
 
@@ -1127,7 +1131,7 @@ export class VillageManager {
                 v.z += Math.cos(v.group.rotation.y) * v.speed * dt;
             }
 
-            const terrainY = this.world.getHeight(v.x, v.z);
+            const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
             v.group.position.set(v.x, terrainY, v.z);
 
             // Walk animation — same as player
