@@ -12719,9 +12719,11 @@ function animate() {
         player.bowHeld.visible = true;
         const drawT = Math.min(1, (_bowDrawTime || 0) / 0.6);
         const tipY = player.bowHeld._tipY || 0.8;
-        const tipZ = player.bowHeld._tipZ || -0.14; // string attach point at tips
-        const STRING_REST_Z = -0.05, STRING_PULL = 0.5;
-        const nockZ = STRING_REST_Z - drawT * STRING_PULL; // where the arrow nock is
+        const tipZ = player.bowHeld._tipZ || -0.14;
+        // At rest, the nock sits at the same Z as the tips so the string is straight
+        const STRING_REST_Z = tipZ;
+        const STRING_PULL = 0.5;
+        const nockZ = STRING_REST_Z - drawT * STRING_PULL;
         // Bowstring as two segments: upperTip → nock, nock → lowerTip
         if (player.bowHeld._bowstring) {
             const str = player.bowHeld._bowstring;
@@ -12748,11 +12750,13 @@ function animate() {
         player.rightArm.shoulder.rotation.y = 0.25;   // inverted — bend inward across body
         player.rightArm.shoulder.rotation.z = -0.4;   // inverted roll
         player.rightArm.elbow.rotation.x = -0.1;
-        // LEFT arm (sword hand) reaches across to the bowstring and pulls back
-        player.leftArm.shoulder.rotation.x = -1.5;
-        player.leftArm.shoulder.rotation.y = -0.5 + drawT * 0.15;  // inverted — bend inward
-        player.leftArm.shoulder.rotation.z = 0.2;                  // inverted
-        player.leftArm.elbow.rotation.x = -0.2 - drawT * 1.5;
+        // LEFT arm (sword hand) — shoulder raises UP and back as drawn, elbow bends inward
+        // At rest (drawT=0): arm forward to touch string at rest position
+        // Fully drawn (drawT=1): shoulder raised/back, elbow sharply bent pulling string to cheek
+        player.leftArm.shoulder.rotation.x = -1.5 + drawT * 0.8;   // raise UP (less forward pitch)
+        player.leftArm.shoulder.rotation.y = -0.3 + drawT * 0.2;   // slight cross-body
+        player.leftArm.shoulder.rotation.z = 0.2 + drawT * 0.5;    // raise shoulder outward/up
+        player.leftArm.elbow.rotation.x = -0.2 - drawT * 2.0;      // elbow bends sharply
 
     }
 
