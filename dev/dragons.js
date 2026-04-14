@@ -1125,8 +1125,7 @@ export class DragonManager {
         for (let bi = this.dragons.length - 1; bi >= 0; bi--) {
             const bd = this.dragons[bi];
             if (bd.state === 'dead') {
-                this.scene.remove(bd.group);
-                this.dragons.splice(bi, 1);
+                if (!bd._isCorpse) this._toCorpse(bd);
                 continue;
             }
             if (bd.state !== 'alive') continue;
@@ -2410,6 +2409,53 @@ export class DragonManager {
                 bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
             }
             bd._breathingFire = false;
+        }
+    }
+
+    _toCorpse(bd) {
+        bd._isCorpse = true;
+        bd.flying = false;
+        bd.walking = false;
+        bd._breathingFire = false;
+        bd._biting = false;
+        bd._dragonFalling = false;
+        // Lay on ground — lower than standing footOffset since belly touches dirt
+        const gy = this.getHeight ? this.getHeight(bd.x, bd.z) : 0;
+        bd.group.position.set(bd.x, gy + bd.footOffset * 0.35, bd.z);
+        bd.group.rotation.x = 0;
+        bd.group.rotation.z = 0;
+        // Sleeping-style drooped head + slack neck
+        if (bd.neckGrp) bd.neckGrp.rotation.x = 0.5;
+        if (bd.neckSegs) for (const s of bd.neckSegs) s.rotation.set(0.12, 0, 0);
+        if (bd.headGrp) { bd.headGrp.rotation.x = 0.5; bd.headGrp.rotation.y = 0; bd.headGrp.rotation.z = 0; }
+        // Mouth open (corpse detail)
+        if (bd.jawGrp) bd.jawGrp.rotation.x = 0.65;
+        // Eyes closed
+        if (bd.eyes) for (const e of bd.eyes) e.scale.y = 0.08;
+        // Tail limp, slight curl
+        if (bd.tailSegs) for (let i = 0; i < bd.tailSegs.length; i++) {
+            bd.tailSegs[i].rotation.set(0, 0.05 * (i % 2 === 0 ? 1 : -1), 0);
+        }
+        // Legs splayed outward
+        if (bd.legs) {
+            for (let i = 0; i < bd.legs.length; i++) {
+                const leg = bd.legs[i];
+                if (!leg || !leg.visible) continue;
+                const side = (i % 2 === 0) ? -1 : 1;
+                leg.rotation.set(0.2, 0, side * 0.35);
+            }
+        }
+        // Wings folded flat against body
+        if (bd.wings) {
+            for (const w of bd.wings) {
+                if (w._elbow) w._elbow.rotation.set(0, 0, 0);
+                if (w._hand) w._hand.rotation.set(0, 0, 0);
+                if (w.rotation) w.rotation.set(0, 0, 0);
+            }
+        }
+        if (this.ridingRef === bd) {
+            this.ridingDragon = false;
+            this.ridingRef = null;
         }
     }
 
