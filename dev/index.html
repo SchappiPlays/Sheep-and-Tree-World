@@ -1515,6 +1515,7 @@ function collectSaveData() {
             eggColor: bd.eggColor, wingColor: bd.wingColor, isWyvern: bd.isWyvern,
             dragonName: bd.dragonName, hp: bd.hp, iceBreath: !!bd._iceBreath,
             lightningBreath: !!bd._lightningBreath, isLightning: !!bd._isLightning,
+            hasTusks: !!bd._hasTusks,
         })),
         pickedUpEggs: dragonMgr.eggs.filter(e => e.pickedUp).map((e, i) => dragonMgr.eggs.indexOf(e)),
         chests: JSON.parse(JSON.stringify(chestData)),
@@ -3742,7 +3743,8 @@ function startGame(loadSlotName) {
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
-        const fortDragon = dragonMgr._makeDragon(-505, -335, getTerrainHeight(-505, -335), 0x0a0a0a, 0xcc7733, true);
+        const fortDragon = dragonMgr._makeDragon(-505, -335, getTerrainHeight(-505, -335), 0x0a0a0a, 0xcc7733, true, false, false, true);
+        fortDragon._hasTusks = true;
         // Make it massive and fully grown
         fortDragon.age = 7200; // elder
         fortDragon.growthScale = 4.0; // 4x normal adult size
@@ -3775,6 +3777,52 @@ function startGame(loadSlotName) {
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
+
+        // Black-and-gold dragon egg on a small altar inside the fortress
+        {
+            const ex = -505 + 4, ez = -335 + 2;
+            const ey = getTerrainHeight(ex, ez);
+            const eggGrp = new THREE.Group();
+            const altarMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
+            const altarGeo = new THREE.DodecahedronGeometry(0.22, 0);
+            for (let ni = 0; ni < 8; ni++) {
+                const na = (ni / 8) * Math.PI * 2;
+                const nrs = 0.18 + Math.random() * 0.14;
+                const nr = new THREE.Mesh(altarGeo, altarMat);
+                nr.scale.setScalar(nrs / 0.22);
+                nr.position.set(Math.cos(na) * 0.65, nrs * 0.4, Math.sin(na) * 0.65);
+                nr.rotation.set(Math.random(), Math.random(), Math.random());
+                eggGrp.add(nr);
+            }
+            const eggMat = new THREE.MeshStandardMaterial({
+                color: 0x0a0a0a, roughness: 0.35, metalness: 0.3,
+                emissive: 0x332208, emissiveIntensity: 0.2,
+            });
+            const eggMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), eggMat);
+            eggMesh.scale.set(1.0, 1.35, 1.0);
+            eggMesh.position.y = 0.3;
+            eggGrp.add(eggMesh);
+            const veinMat = new THREE.MeshStandardMaterial({
+                color: 0xffcc44, emissive: 0xffcc44, emissiveIntensity: 0.35, roughness: 0.2, metalness: 0.4,
+            });
+            const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
+            for (let vi = 0; vi < 6; vi++) {
+                const va = (vi / 6) * Math.PI * 2;
+                const vein = new THREE.Mesh(veinGeo, veinMat);
+                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
+                vein.rotation.z = (Math.random() - 0.5) * 0.4;
+                eggGrp.add(vein);
+            }
+            eggGrp.position.set(ex, ey, ez);
+            scene.add(eggGrp);
+            dragonMgr.eggs.push({
+                group: eggGrp, x: ex, z: ez, pickedUp: false,
+                color: 0x0a0a0a, emissive: 0x332208, veinColor: 0xffcc44,
+                wingColor: 0xcc7733,
+                isWyvern: true, hasTusks: true,
+                name: 'Black & Gold Wyvern',
+            });
+        }
     }
 
     // === Southwest Fortress: THE Necromancer + Silver Dragon + Skeleton Guards ===
@@ -5288,7 +5336,8 @@ function startGame(loadSlotName) {
                     const _iceColorsCheck = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
                     const restoreLightning = !!(dd.lightningBreath || dd.isLightning) && _lightningColors.includes(dd.eggColor);
                     const restoreIce = !!dd.iceBreath && _iceColorsCheck.includes(dd.eggColor);
-                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern, restoreLightning, restoreIce);
+                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern, restoreLightning, restoreIce, !!dd.hasTusks);
+                    if (dd.hasTusks) bd._hasTusks = true;
                     bd.age = dd.age || 0;
                     bd.dragonName = dd.dragonName || 'Dragon';
                     bd.hp = dd.hp || bd.maxHP;

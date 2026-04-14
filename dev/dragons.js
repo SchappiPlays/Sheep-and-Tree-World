@@ -287,7 +287,7 @@ function getDragonMaxHP(age) {
 
 
 // ── makeBabyDragon — exact mesh from game.html ──
-function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce) {
+function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce, hasTusks) {
     const S = 2.55;
     const babyScale = 0.04;
     const g = new THREE.Group();
@@ -301,8 +301,9 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     const memColor = wingColor ? new THREE.Color(wingColor) : darker;
     // Accent color for horns, spikes, and wrist claws — varies by dragon type.
     // Fire wyverns: ~half roll the ivory accent, others keep a body-derived bone tone.
+    // Tusked dragons always use the body-derived (original) bone tone.
     const ivoryRoll = ((eggColor * 0x9E3779B1) >>> 0) / 0xFFFFFFFF;
-    const fireUsesIvory = !!isWyvern && ivoryRoll < 0.5;
+    const fireUsesIvory = !!isWyvern && !hasTusks && ivoryRoll < 0.5;
     let accentHex;
     if (isLightning) accentHex = 0x2C2C2B;
     else if (isIce) accentHex = 0x9FB9D4;
@@ -402,6 +403,21 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         for (let s = -1; s <= 1; s += 2) {
             makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
             makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
+        }
+    }
+    // Curved tusks — sweep down and forward from the cheek, chained segments form the arc
+    if (hasTusks) {
+        for (let s = -1; s <= 1; s += 2) {
+            // Arc points: start behind jaw line, curve down-and-forward past the snout
+            const p0 = [s*0.26*S, -0.02*S, 0.12*S];
+            const p1 = [s*0.30*S, -0.12*S, 0.26*S];
+            const p2 = [s*0.30*S, -0.26*S, 0.42*S];
+            const p3 = [s*0.22*S, -0.38*S, 0.55*S];
+            const p4 = [s*0.10*S, -0.44*S, 0.62*S];
+            makeDragonBone(p0, p1, 0.065*S, 0.055*S, bHorn, headGrp);
+            makeDragonBone(p1, p2, 0.055*S, 0.040*S, bHorn, headGrp);
+            makeDragonBone(p2, p3, 0.040*S, 0.025*S, bHorn, headGrp);
+            makeDragonBone(p3, p4, 0.025*S, 0.008*S, bHorn, headGrp);
         }
     }
     // Jaw
@@ -1094,7 +1110,8 @@ export class DragonManager {
                         if (this.removeFromInventory) this.removeFromInventory(eggKey);
                         if (this.onEggHatched) this.onEggHatched(eggKey);
                         const hy = this.getHeight(px, pz);
-                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern, egg.isLightning, egg.isIce);
+                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern, egg.isLightning, egg.isIce, egg.hasTusks);
+                        if (egg.hasTusks) bd._hasTusks = true;
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
                         bd.dragonName = egg.name || '';
@@ -2699,8 +2716,8 @@ export class DragonManager {
         }
     }
 
-    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce) {
-        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce);
+    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce, hasTusks) {
+        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce, hasTusks);
     }
 
     // Emit fire particles from a position in a direction
