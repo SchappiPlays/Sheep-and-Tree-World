@@ -495,7 +495,7 @@ import { CreatureManager } from './creatures.js';
 import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
 import { HorseManager } from './horses.js';
 import { Multiplayer } from './multiplayer.js';
-import { VillageManager, placeVillageInChunk } from './villages.js';
+import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle } from './villages.js';
 
 function mix(a, b, t) { return a + (b - a) * t; }
 
@@ -1765,6 +1765,8 @@ function startGame(loadSlotName) {
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
     buildSouthwestFortress(world);
+    // Pre-populate village/castle blocks so LOD shows them before you visit
+    preplaceVillagesAndCastle(world);
     markPlayerBlocksDirty();
     buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
     buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)

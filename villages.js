@@ -93,29 +93,36 @@ const CASTLE = { wx: -400, wz: 20 }; // world coords
 
 function getCastleBlocks() {
     const blocks = [];
-    const S = BLOCK.STONE, P = BLOCK.PLANKS, W = BLOCK.WOOD;
-    // Castle dimensions in blocks
-    const wallW = 60, wallD = 50, wallH = 18, crenH = 2;
-    const towerR = 5, towerH = 26;
-    const keepW = 24, keepD = 20, keepH = 28;
+    const S = BLOCK.STONE, P = BLOCK.PLANKS, W = BLOCK.WOOD, DS = BLOCK.DARK_STONE, A = BLOCK.AIR, PATH = BLOCK.PATH, TORCH = BLOCK.TORCH;
+    // Castle dimensions in blocks — MUCH larger than before
+    const wallW = 160, wallD = 130, wallH = 14, crenH = 2;
+    const towerR = 6, towerH = 30;
+    // Inner wall
+    const innerOffX = 40, innerOffZ = 40;
+    const innerW = 80, innerD = 60, innerH = 16;
+    const innerTowerR = 5, innerTowerH = 24;
+    // Central keep
+    const keepW = 24, keepD = 24, keepH = 40;
     const gateW = 6, gateH = 12;
 
     // ── Foundation (flatten ground) ──
-    for (let x = -3; x <= wallW + 3; x++)
-        for (let z = -3; z <= wallD + 3; z++)
+    for (let x = -5; x <= wallW + 5; x++)
+        for (let z = -5; z <= wallD + 5; z++)
             for (let fy = -25; fy <= 0; fy++)
                 blocks.push({ x, y: fy, z, b: S });
 
-    // ── Outer walls ──
+    // ── Outer curtain walls (thick: 2 blocks) ──
     for (let y = 1; y <= wallH; y++) {
         for (let x = 0; x <= wallW; x++) {
-            // Front and back walls
             blocks.push({ x, y, z: 0, b: S });
+            blocks.push({ x, y, z: 1, b: S });
+            blocks.push({ x, y, z: wallD - 1, b: S });
             blocks.push({ x, y, z: wallD, b: S });
         }
         for (let z = 0; z <= wallD; z++) {
-            // Left and right walls
             blocks.push({ x: 0, y, z, b: S });
+            blocks.push({ x: 1, y, z, b: S });
+            blocks.push({ x: wallW - 1, y, z, b: S });
             blocks.push({ x: wallW, y, z, b: S });
         }
     }
@@ -132,6 +139,24 @@ function getCastleBlocks() {
             blocks.push({ x: 0, y: wallH + cy, z, b: S });
             blocks.push({ x: wallW, y: wallH + cy, z, b: S });
         }
+    }
+    // Wall-walk path on top of walls
+    for (let x = 1; x < wallW; x++) {
+        blocks.push({ x, y: wallH, z: 2, b: PATH });
+        blocks.push({ x, y: wallH, z: wallD - 2, b: PATH });
+    }
+    for (let z = 1; z < wallD; z++) {
+        blocks.push({ x: 2, y: wallH, z, b: PATH });
+        blocks.push({ x: wallW - 2, y: wallH, z, b: PATH });
+    }
+    // Torches along the outer wall tops (every 8 blocks)
+    for (let x = 6; x < wallW; x += 8) {
+        blocks.push({ x, y: wallH + 1, z: 2, b: TORCH });
+        blocks.push({ x, y: wallH + 1, z: wallD - 2, b: TORCH });
+    }
+    for (let z = 6; z < wallD; z += 8) {
+        blocks.push({ x: 2, y: wallH + 1, z, b: TORCH });
+        blocks.push({ x: wallW - 2, y: wallH + 1, z, b: TORCH });
     }
 
     // ── Gate (front wall center) ──
@@ -150,9 +175,13 @@ function getCastleBlocks() {
     // Remove wall blocks where gate opening is
     // (we'll handle this by not placing them — done by checking in wall loop)
 
-    // ── 4 Corner towers ──
+    // ── Corner + mid-wall towers ──
     const towerCenters = [
-        [0, 0], [wallW, 0], [0, wallD], [wallW, wallD]
+        [0, 0], [wallW, 0], [0, wallD], [wallW, wallD],                 // 4 corners
+        [Math.floor(wallW/2), 0], [Math.floor(wallW/2), wallD],          // front/back mid
+        [0, Math.floor(wallD/2)], [wallW, Math.floor(wallD/2)],          // left/right mid
+        [Math.floor(wallW/4), 0], [Math.floor(3*wallW/4), 0],           // front quarters
+        [Math.floor(wallW/4), wallD], [Math.floor(3*wallW/4), wallD],   // back quarters
     ];
     for (const [tcx, tcz] of towerCenters) {
         for (let y = 1; y <= towerH; y++) {
@@ -184,9 +213,69 @@ function getCastleBlocks() {
         for (let z = 1; z < wallD; z++)
             blocks.push({ x, y: 0, z, b: S });
 
-    // ── Central Keep ──
-    const kx = Math.floor(wallW / 2) - Math.floor(keepW / 2);
-    const kz = Math.floor(wallD / 2) - Math.floor(keepD / 2) + 5;
+    // ── Back gate (sally port) ──
+    const bgStart = Math.floor(wallW / 2) - 2;
+    for (let y = 1; y <= 8; y++) {
+        for (let x = bgStart; x < bgStart + 4; x++) {
+            blocks.push({ x, y, z: wallD - 1, b: A });
+            blocks.push({ x, y, z: wallD, b: A });
+        }
+    }
+
+    // ── Inner curtain wall ──
+    const iwX1 = innerOffX, iwX2 = innerOffX + innerW;
+    const iwZ1 = innerOffZ, iwZ2 = innerOffZ + innerD;
+    for (let y = 1; y <= innerH; y++) {
+        for (let x = iwX1; x <= iwX2; x++) {
+            blocks.push({ x, y, z: iwZ1, b: DS });
+            blocks.push({ x, y, z: iwZ2, b: DS });
+        }
+        for (let z = iwZ1; z <= iwZ2; z++) {
+            blocks.push({ x: iwX1, y, z, b: DS });
+            blocks.push({ x: iwX2, y, z, b: DS });
+        }
+    }
+    // Inner wall crenellations
+    for (let x = iwX1; x <= iwX2; x += 2) {
+        blocks.push({ x, y: innerH + 1, z: iwZ1, b: DS });
+        blocks.push({ x, y: innerH + 1, z: iwZ2, b: DS });
+    }
+    for (let z = iwZ1; z <= iwZ2; z += 2) {
+        blocks.push({ x: iwX1, y: innerH + 1, z, b: DS });
+        blocks.push({ x: iwX2, y: innerH + 1, z, b: DS });
+    }
+    // Inner wall 4 corner towers
+    for (const [tcx, tcz] of [[iwX1, iwZ1], [iwX2, iwZ1], [iwX1, iwZ2], [iwX2, iwZ2]]) {
+        for (let y = 1; y <= innerTowerH; y++) {
+            for (let dx = -innerTowerR; dx <= innerTowerR; dx++) {
+                for (let dz = -innerTowerR; dz <= innerTowerR; dz++) {
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist <= innerTowerR && dist > innerTowerR - 1.5) {
+                        blocks.push({ x: tcx + dx, y, z: tcz + dz, b: DS });
+                    }
+                }
+            }
+        }
+    }
+    // Inner wall gate (front of inner wall)
+    const igStart = Math.floor((iwX1 + iwX2) / 2) - 2;
+    for (let y = 1; y <= 10; y++) {
+        for (let x = igStart; x < igStart + 4; x++) {
+            blocks.push({ x, y, z: iwZ1, b: A });
+        }
+    }
+
+    // ── Path from outer gate to inner gate ──
+    const gateCenter = Math.floor(wallW / 2);
+    for (let z = 1; z < iwZ1; z++) {
+        for (let x = gateCenter - 2; x <= gateCenter + 2; x++) {
+            blocks.push({ x, y: 1, z, b: PATH });
+        }
+    }
+
+    // ── Central Keep — positioned in center of inner ward ──
+    const kx = Math.floor((iwX1 + iwX2) / 2) - Math.floor(keepW / 2);
+    const kz = Math.floor((iwZ1 + iwZ2) / 2) - Math.floor(keepD / 2);
     // Keep walls
     for (let y = 1; y <= keepH; y++) {
         for (let x = kx; x <= kx + keepW; x++) {
@@ -381,6 +470,39 @@ function getCastleBlocks() {
     }
 
     return blocks;
+}
+
+// Force-generate all chunks containing villages and the castle so their
+// blocks end up in world._modifiedBlocks and show in distant LOD immediately
+export function preplaceVillagesAndCastle(world) {
+    const yOff = 128;
+    const getChunksForBBox = (minBx, maxBx, minBz, maxBz) => {
+        const result = [];
+        const minCx = Math.floor(minBx / 16), maxCx = Math.floor(maxBx / 16);
+        const minCz = Math.floor(minBz / 16), maxCz = Math.floor(maxBz / 16);
+        for (let cx = minCx; cx <= maxCx; cx++) {
+            for (let cz = minCz; cz <= maxCz; cz++) result.push([cx, cz]);
+        }
+        return result;
+    };
+    const chunks = new Set();
+    // Villages — each house spans up to ~22 blocks from the village center
+    for (const vd of VILLAGE_DEFS) {
+        const vbx = Math.floor(vd.x / BLOCK_SIZE);
+        const vbz = Math.floor(vd.z / BLOCK_SIZE);
+        // Villages extend up to 50 blocks from center (houses 20+30 out + 22 size + shops 28+shop size)
+        const r = 60;
+        for (const [cx, cz] of getChunksForBBox(vbx - r, vbx + r, vbz - r, vbz + r)) chunks.add(cx + ',' + cz);
+    }
+    // Castle at (-400, 20), 60x50 blocks
+    const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
+    const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
+    for (const [cx, cz] of getChunksForBBox(cbx - 10, cbx + 80, cbz - 10, cbz + 70)) chunks.add(cx + ',' + cz);
+    // Force chunks to generate — blocks get registered in _modifiedBlocks
+    for (const key of chunks) {
+        const [cx, cz] = key.split(',').map(Number);
+        world.getOrCreateChunk(cx, cz);
+    }
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {
