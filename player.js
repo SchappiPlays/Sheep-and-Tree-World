@@ -129,6 +129,12 @@ export class Player {
         this.staffHeld.position.y = 0.02;
         this.leftArm.handGrp.add(this.staffHeld);
 
+        this.bowHeld = this._makeBow();
+        this.bowHeld.visible = false;
+        this.bowHeld.rotation.set(0, Math.PI / 2, -Math.PI / 2); // rotate so it's held sideways like drawing a bow
+        this.bowHeld.position.set(0, 0.02, 0.1);
+        this.leftArm.handGrp.add(this.bowHeld);
+
         // Sheathed sword — on hip (one-handed) or back (two-handed)
         this.sheathedSword = this._makeSword();
         this.sheathedSword.visible = false;
@@ -840,6 +846,56 @@ export class Player {
         g._voidLight = voidLight;
 
         g.add(voidGrp);
+        return g;
+    }
+
+    _makeBow() {
+        // Longbow: tall, slender wooden bow with curved limbs
+        const g = new THREE.Group();
+        const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1f, roughness: 0.8 });
+        const stringMat = new THREE.MeshStandardMaterial({ color: 0xeee8d0, roughness: 0.9 });
+        // Bow body — 1.6 world units tall (realistic longbow size ~1.8m in-world)
+        const bowH = 1.6;
+        const segments = 8;
+        // Curved limbs — arc using multiple segments
+        for (let i = 0; i < segments; i++) {
+            const t = i / (segments - 1) - 0.5; // -0.5 to 0.5
+            const y = t * bowH;
+            const curve = Math.cos(t * Math.PI) * 0.08; // curve outward
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(0.03, bowH / segments + 0.01, 0.04), woodMat);
+            seg.position.set(0, y, curve);
+            // Tilt segments so they form a smooth arc
+            const nextT = (i + 1) / (segments - 1) - 0.5;
+            const nextCurve = Math.cos(nextT * Math.PI) * 0.08;
+            const dAngle = Math.atan2(nextCurve - curve, bowH / segments);
+            seg.rotation.x = -dAngle;
+            seg.castShadow = true;
+            g.add(seg);
+        }
+        // Grip (center, wrapped leather)
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.06), new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.7 }));
+        grip.position.set(0, 0, 0.08);
+        g.add(grip);
+        // Bowstring — from top tip to bottom tip, straight by default
+        const stringGeo = new THREE.BoxGeometry(0.008, bowH, 0.008);
+        const bowstring = new THREE.Mesh(stringGeo, stringMat);
+        bowstring.position.set(0, 0, -0.05);
+        g.add(bowstring);
+        g._bowstring = bowstring;
+        // Nocked arrow (visible when drawn)
+        const arrowShaftMat = new THREE.MeshStandardMaterial({ color: 0x9a7a4a, roughness: 0.8 });
+        const arrowHeadMat = new THREE.MeshStandardMaterial({ color: 0x777777, metalness: 0.6 });
+        const nockedArrow = new THREE.Group();
+        const arrowShaft = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 0.9), arrowShaftMat);
+        arrowShaft.position.z = 0; nockedArrow.add(arrowShaft);
+        const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4), arrowHeadMat);
+        arrowHead.rotation.x = -Math.PI / 2; arrowHead.position.z = 0.5; nockedArrow.add(arrowHead);
+        const fletching = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.1), new THREE.MeshStandardMaterial({ color: 0xdddddd }));
+        fletching.position.z = -0.4; nockedArrow.add(fletching);
+        nockedArrow.visible = false;
+        nockedArrow.position.set(0, 0, 0.1);
+        g.add(nockedArrow);
+        g._nockedArrow = nockedArrow;
         return g;
     }
 
