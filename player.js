@@ -135,7 +135,7 @@ export class Player {
         // bow +90° around Z to make its limbs align with world vertical when the arm is level.
         this.bowHeld = this._makeBow();
         this.bowHeld.visible = false;
-        this.bowHeld.rotation.set(Math.PI / 2, 0, 0);
+        this.bowHeld.rotation.set(Math.PI / 2, 0, Math.PI); // flip on Z to swap top/bottom without affecting string depth
         this.bowHeld.position.set(0, 0, 0);
         this.rightArm.handGrp.add(this.bowHeld);
 
