@@ -1099,21 +1099,39 @@ function rebuildPlayerBlocksMesh() {
     const _c = new THREE.Color();
     let v = 0;
     // Only render non-AIR placed blocks (mined-air would be empty space, don't render)
+    // Build a set for fast neighbor lookup (so we can skip faces between placed blocks)
+    const placedSet = new Set();
     for (const [key, blockType] of world._modifiedBlocks) {
-        if (blockType === 0 || blockType === BLOCK.AIR) continue; // skip air
+        if (blockType && blockType !== 0) placedSet.add(key);
+    }
+    const isPlaced = (bx, by, bz) => placedSet.has(bx + ',' + by + ',' + bz);
+    const _pushFace = (x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3) => {
+        positions.push(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3);
+        for (let i = 0; i < 4; i++) colors.push(_c.r, _c.g, _c.b);
+        indices.push(v, v+1, v+2, v, v+2, v+3);
+        v += 4;
+    };
+    for (const [key, blockType] of world._modifiedBlocks) {
+        if (blockType === 0 || blockType === BLOCK.AIR) continue;
         if (blockType === BLOCK.WATER || blockType === BLOCK.LEAVES || blockType === BLOCK.PINE_LEAVES) continue;
         if (blockType === BLOCK.FLOWER_RED || blockType === BLOCK.FLOWER_YELLOW || blockType === BLOCK.FLOWER_BLUE || blockType === BLOCK.FLOWER_WHITE) continue;
         const [bx, by, bz] = key.split(',').map(Number);
         const wx = bx * BS, wy = (by - yOff) * BS, wz = bz * BS;
         const col = BLOCK_COLORS[blockType] || 0xffffff;
-        _c.setHex(col);
-        // Simple top-only quad to save geometry (looks like a flat colored dot)
-        const s = BS * 0.5;
-        const y = wy + BS * 0.5;
-        positions.push(wx - s, y, wz - s, wx - s, y, wz + s, wx + s, y, wz + s, wx + s, y, wz - s);
-        for (let i = 0; i < 4; i++) colors.push(_c.r, _c.g, _c.b);
-        indices.push(v, v + 1, v + 2, v, v + 2, v + 3);
-        v += 4;
+        const x0 = wx, y0 = wy, z0 = wz, x1 = wx + BS, y1 = wy + BS, z1 = wz + BS;
+        // Render 6 faces, skip faces adjacent to another placed block (interior culling)
+        // Top (+Y)
+        if (!isPlaced(bx, by+1, bz)) { _c.setHex(col); _c.multiplyScalar(1.0); _pushFace(x0,y1,z0, x0,y1,z1, x1,y1,z1, x1,y1,z0); }
+        // Bottom (-Y)
+        if (!isPlaced(bx, by-1, bz)) { _c.setHex(col); _c.multiplyScalar(0.55); _pushFace(x0,y0,z1, x0,y0,z0, x1,y0,z0, x1,y0,z1); }
+        // +X
+        if (!isPlaced(bx+1, by, bz)) { _c.setHex(col); _c.multiplyScalar(0.85); _pushFace(x1,y0,z0, x1,y1,z0, x1,y1,z1, x1,y0,z1); }
+        // -X
+        if (!isPlaced(bx-1, by, bz)) { _c.setHex(col); _c.multiplyScalar(0.75); _pushFace(x0,y0,z1, x0,y1,z1, x0,y1,z0, x0,y0,z0); }
+        // +Z
+        if (!isPlaced(bx, by, bz+1)) { _c.setHex(col); _c.multiplyScalar(0.8); _pushFace(x1,y0,z1, x1,y1,z1, x0,y1,z1, x0,y0,z1); }
+        // -Z
+        if (!isPlaced(bx, by, bz-1)) { _c.setHex(col); _c.multiplyScalar(0.7); _pushFace(x0,y0,z0, x0,y1,z0, x1,y1,z0, x1,y0,z0); }
     }
     if (positions.length === 0) return;
     const geo = new THREE.BufferGeometry();
