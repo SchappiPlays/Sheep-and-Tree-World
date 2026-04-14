@@ -312,7 +312,7 @@ export class ChunkManager {
                         const nby = y + face.dir[1] * S;
                         const nbz = bz + face.dir[2] * S;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
-                        const _neighborSolid = neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES && neighbor !== BLOCK.PINE_LEAVES;
+                        const _neighborSolid = neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES && neighbor !== BLOCK.PINE_LEAVES && neighbor !== BLOCK.TORCH && neighbor !== BLOCK.CAMPFIRE;
                         // For sloped blocks, force-render side faces if any edge corner is dropped (might be visible)
                         let _forceRender = false;
                         if (_isSlopeable && fi !== 2 && fi !== 3) {

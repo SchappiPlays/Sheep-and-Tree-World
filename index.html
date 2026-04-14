@@ -10092,28 +10092,36 @@ const _torchStickMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughne
 const _torchHeadMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0xff6611, emissiveIntensity: 1.0 });
 const _torchFlameMat = new THREE.MeshBasicMaterial({ color: 0xffcc55, transparent: true, opacity: 0.85, fog: false });
 
-function createTorchModel(wx, wy, wz) {
+function createTorchModel(wx, wy, wz, wallDir) {
     const BS = BLOCK_SIZE;
-    const g = new THREE.Group();
-    // Stick
+    // Inner group: the actual torch (stick + head + flame + light)
+    const inner = new THREE.Group();
     const stick = new THREE.Mesh(new THREE.BoxGeometry(BS*0.12, BS*0.6, BS*0.12), _torchStickMat);
     stick.position.y = BS*0.3;
-    g.add(stick);
-    // Burning head (emissive)
+    inner.add(stick);
     const head = new THREE.Mesh(new THREE.BoxGeometry(BS*0.2, BS*0.16, BS*0.2), _torchHeadMat);
     head.position.y = BS*0.65;
-    g.add(head);
-    // Flame
+    inner.add(head);
     const flame = new THREE.Mesh(new THREE.OctahedronGeometry(BS*0.22), _torchFlameMat);
     flame.position.y = BS*0.85; flame.scale.set(0.55, 1.3, 0.55);
-    g.add(flame);
-    g._flame = flame;
-    // Point light
+    inner.add(flame);
+    inner._flame = flame;
     const light = new THREE.PointLight(0xffaa55, 0.9, BS*12, 1.5);
     light.position.y = BS*0.7;
-    g.add(light);
-    g._light = light;
-    g.position.set(wx, wy, wz);
+    inner.add(light);
+
+    // Outer group: centers in block and handles wall tilt
+    const g = new THREE.Group();
+    g.add(inner);
+    // Center the torch in the block (block origin is at corner, cell center is +0.5 on each axis)
+    g.position.set(wx + BS*0.5, wy, wz + BS*0.5);
+    if (wallDir) {
+        // Tilt outward from the wall and offset against it
+        const [dx, dz] = wallDir;
+        inner.position.set(dx * BS * 0.2, BS * 0.25, dz * BS * 0.2);
+        inner.rotation.x = dz * 0.4;
+        inner.rotation.z = -dx * 0.4;
+    }
     scene.add(g);
     return g;
 }
@@ -10124,7 +10132,19 @@ function placeTorchModel(px, py, pz) {
     const wx = px * BS, wy = (py - yOff) * BS, wz = pz * BS;
     const key = px + ',' + py + ',' + pz;
     if (torchModels.has(key)) return;
-    torchModels.set(key, createTorchModel(wx, wy, wz));
+    // Detect wall placement — check adjacent blocks for a solid neighbor
+    let wallDir = null;
+    if (!world.isSolid((px + 0.5) * BS, (py - yOff - 0.5) * BS, (pz + 0.5) * BS)) {
+        // No solid below — check sides for a wall
+        const checks = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (const [dx, dz] of checks) {
+            if (world.isSolid((px + 0.5 + dx) * BS, (py - yOff + 0.5) * BS, (pz + 0.5 + dz) * BS)) {
+                wallDir = [-dx, -dz]; // tilt points away from the wall
+                break;
+            }
+        }
+    }
+    torchModels.set(key, createTorchModel(wx, wy, wz, wallDir));
 }
 
 function removeTorchModel(px, py, pz) {
