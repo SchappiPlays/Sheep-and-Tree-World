@@ -3599,7 +3599,7 @@ function startGame(loadSlotName) {
         }
 
         // Spawn the giant ice dragon at the nest
-        const iceDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0xddeeff, 0xa8c8e8, true);
+        const iceDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0xddeeff, 0xa8c8e8, true, false, true);
         iceDragon.age = 7200;
         iceDragon.growthScale = 2.0;
         iceDragon.group.scale.setScalar(iceDragon.growthScale);
@@ -5285,8 +5285,10 @@ function startGame(loadSlotName) {
                     if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
                     const _lightningColors = [0x7a3dc4, 0x20202a, 0xa05a28, 0x2878f0];
+                    const _iceColorsCheck = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
                     const restoreLightning = !!(dd.lightningBreath || dd.isLightning) && _lightningColors.includes(dd.eggColor);
-                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern, restoreLightning);
+                    const restoreIce = !!dd.iceBreath && _iceColorsCheck.includes(dd.eggColor);
+                    const bd = dragonMgr._makeDragon(dd.x, dd.z, hy, dd.eggColor, dd.wingColor, dd.isWyvern, restoreLightning, restoreIce);
                     bd.age = dd.age || 0;
                     bd.dragonName = dd.dragonName || 'Dragon';
                     bd.hp = dd.hp || bd.maxHP;

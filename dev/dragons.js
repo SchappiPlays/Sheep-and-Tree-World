@@ -287,7 +287,7 @@ function getDragonMaxHP(age) {
 
 
 // ── makeBabyDragon — exact mesh from game.html ──
-function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning) {
+function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce) {
     const S = 2.55;
     const babyScale = 0.04;
     const g = new THREE.Group();
@@ -296,16 +296,33 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     const midHue = baseHue.clone().multiplyScalar(1.15);
     midHue.r = Math.min(midHue.r, 1); midHue.g = Math.min(midHue.g, 1); midHue.b = Math.min(midHue.b, 1);
     const darker = baseHue.clone().multiplyScalar(0.55);
-    const boneColor = baseHue.clone().multiplyScalar(0.25);
+    const wingBoneColor = baseHue.clone().multiplyScalar(0.8);
     const bellyColor = baseHue.clone().lerp(new THREE.Color(0xc4a032), 0.7);
     const memColor = wingColor ? new THREE.Color(wingColor) : darker;
+    // Accent color for horns, spikes, and wrist claws — varies by dragon type
+    const accentHex = isLightning ? 0x2C2C2B : (isIce ? 0x9FB9D4 : 0xE8DCC8);
+    const accentColor = new THREE.Color(accentHex);
 
     const bTop = new THREE.MeshStandardMaterial({ color: baseHue, roughness: 0.55, metalness: 0.2 });
     const bMid = new THREE.MeshStandardMaterial({ color: midHue, roughness: 0.5, metalness: 0.18 });
     const bDark = new THREE.MeshStandardMaterial({ color: darker, roughness: 0.45, metalness: 0.25 });
     const bBelly = new THREE.MeshStandardMaterial({ color: bellyColor, roughness: 0.65 });
-    const bHorn = new THREE.MeshStandardMaterial({ color: boneColor, roughness: 0.35, metalness: 0.4 });
-    const bBone = new THREE.MeshStandardMaterial({ color: boneColor, roughness: 0.4, metalness: 0.3 });
+    const bHorn = new THREE.MeshStandardMaterial({
+        color: accentColor,
+        roughness: isIce ? 0.15 : 0.35,
+        metalness: isIce ? 0.1 : 0.4,
+        transparent: !!isIce,
+        opacity: isIce ? 0.9 : 1.0,
+    });
+    const bSpike = new THREE.MeshStandardMaterial({
+        color: accentColor,
+        roughness: isIce ? 0.15 : 0.4,
+        metalness: isIce ? 0.1 : 0.3,
+        transparent: !!isIce,
+        opacity: isIce ? 0.9 : 1.0,
+    });
+    // Wing bones blend with body tone so they don't read as separate hardware
+    const bBone = new THREE.MeshStandardMaterial({ color: wingBoneColor, roughness: 0.55, metalness: 0.15 });
     const bMem = new THREE.MeshStandardMaterial({ color: memColor, roughness: 0.75, side: THREE.DoubleSide });
 
     // Body
@@ -324,7 +341,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     for (let i = 0; i < 8; i++) {
         const t = i / 7;
         const h = 0.12 + Math.sin(t * Math.PI) * 0.15;
-        const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.04*S, h*S, 4), bDark);
+        const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.04*S, h*S, 4), bSpike);
         ridge.position.set(0, 0.42*S, 0.6*S - i*0.22*S); ridge.castShadow = true; g.add(ridge);
     }
     // Neck — chained groups so rotations propagate (allowing real bend)
@@ -1070,7 +1087,7 @@ export class DragonManager {
                         if (this.removeFromInventory) this.removeFromInventory(eggKey);
                         if (this.onEggHatched) this.onEggHatched(eggKey);
                         const hy = this.getHeight(px, pz);
-                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern, egg.isLightning);
+                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern, egg.isLightning, egg.isIce);
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
                         bd.dragonName = egg.name || '';
@@ -2675,8 +2692,8 @@ export class DragonManager {
         }
     }
 
-    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning) {
-        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning);
+    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce) {
+        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning, isIce);
     }
 
     // Emit fire particles from a position in a direction
