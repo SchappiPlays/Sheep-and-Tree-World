@@ -287,7 +287,7 @@ function getDragonMaxHP(age) {
 
 
 // ── makeBabyDragon — exact mesh from game.html ──
-function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
+function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning) {
     const S = 2.55;
     const babyScale = 0.04;
     const g = new THREE.Group();
@@ -361,9 +361,24 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
         eyes.push(eye);
     }
     // Horns — taper from wide base to pointy tip at top
-    for (let s = -1; s <= 1; s += 2) {
-        makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
-        makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
+    if (isLightning) {
+        // 3 pairs of backward-sweeping horns
+        for (let s = -1; s <= 1; s += 2) {
+            // Top pair — upper rear
+            makeDragonBone([s*0.15*S, 0.28*S, -0.1*S], [s*0.17*S, 0.32*S, -0.45*S], 0.05*S, 0.06*S, bHorn, headGrp);
+            makeDragonBone([s*0.17*S, 0.32*S, -0.45*S], [s*0.19*S, 0.34*S, -0.8*S], 0.02*S, 0.05*S, bHorn, headGrp);
+            // Middle pair — outer side
+            makeDragonBone([s*0.28*S, 0.15*S, -0.1*S], [s*0.34*S, 0.16*S, -0.45*S], 0.05*S, 0.06*S, bHorn, headGrp);
+            makeDragonBone([s*0.34*S, 0.16*S, -0.45*S], [s*0.38*S, 0.16*S, -0.82*S], 0.02*S, 0.05*S, bHorn, headGrp);
+            // Bottom pair — lower rear
+            makeDragonBone([s*0.22*S, 0.0*S, -0.1*S], [s*0.26*S, -0.04*S, -0.45*S], 0.05*S, 0.06*S, bHorn, headGrp);
+            makeDragonBone([s*0.26*S, -0.04*S, -0.45*S], [s*0.3*S, -0.08*S, -0.8*S], 0.02*S, 0.05*S, bHorn, headGrp);
+        }
+    } else {
+        for (let s = -1; s <= 1; s += 2) {
+            makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
+            makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
+        }
     }
     // Jaw
     const jawGrp = new THREE.Group();
@@ -708,7 +723,7 @@ export class DragonManager {
     removeWorldDragons() {
         for (let i = this.dragons.length - 1; i >= 0; i--) {
             const bd = this.dragons[i];
-            if (bd._fortressGuardian || bd._stationary || bd._iceDragon) {
+            if (bd._fortressGuardian || bd._stationary || bd._iceDragon || bd._lightningDragon) {
                 this.scene.remove(bd.group);
                 this.dragons.splice(i, 1);
             }
@@ -733,7 +748,7 @@ export class DragonManager {
         for (const bd of this.dragons) {
             if (bd.state !== 'alive') continue;
             if (bd._isRemote) continue; // never broadcast phantoms
-            if (bd._fortressGuardian || bd._stationary || bd._iceDragon) continue; // world dragons exist locally for everyone
+            if (bd._fortressGuardian || bd._stationary || bd._iceDragon || bd._lightningDragon) continue; // world dragons exist locally for everyone
             if (!bd._ownerPid) bd._ownerPid = myPid; // claim unowned dragons
             if (bd._ownerPid !== myPid) continue;
             if (!bd._mpId) {
@@ -756,6 +771,7 @@ export class DragonManager {
                 wk: bd.walking ? 1 : 0,
                 bf: bd._breathingFire ? 1 : 0,
                 ib: bd._iceBreath ? 1 : 0,
+                il: bd._lightningBreath ? 1 : 0,
                 ic: bd._iceDragon ? 1 : 0,
                 fy: bd._fireDirYaw !== undefined ? +bd._fireDirYaw.toFixed(2) : 999,
                 fp: bd._fireDirPitch !== undefined ? +bd._fireDirPitch.toFixed(2) : 0,
@@ -804,6 +820,7 @@ export class DragonManager {
             bd.flying = !!d.fl;
             bd._breathingFire = !!d.bf;
             bd._iceBreath = !!d.ib;
+            bd._lightningBreath = !!d.il;
             if (d.fy !== 999) {
                 bd._fireDirYaw = d.fy;
                 bd._fireDirPitch = d.fp;
@@ -1025,11 +1042,12 @@ export class DragonManager {
                         if (this.removeFromInventory) this.removeFromInventory(eggKey);
                         if (this.onEggHatched) this.onEggHatched(eggKey);
                         const hy = this.getHeight(px, pz);
-                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern);
+                        const bd = makeBabyDragon(px, pz, hy, egg.color, egg.wingColor, egg.isWyvern, egg.isLightning);
                         this.scene.add(bd.group);
                         this.dragons.push(bd);
                         bd.dragonName = egg.name || '';
                         if (egg.isIce) bd._iceBreath = true;
+                        if (egg.isLightning) { bd._lightningBreath = true; bd._isLightning = true; }
                         this.heldEgg = null;
                         // Prompt player to name the dragon
                         if (this.onDragonHatched) this.onDragonHatched(bd);
@@ -1087,6 +1105,11 @@ export class DragonManager {
             // Ice dragon — runs its own AI even though it's stationary-marked
             if (bd._iceDragon) {
                 this._updateIceDragon(dt, bd, player);
+                this._animateDragon(dt, bd);
+                continue;
+            }
+            if (bd._lightningDragon) {
+                this._updateLightningDragon(dt, bd, player);
                 this._animateDragon(dt, bd);
                 continue;
             }
@@ -2355,6 +2378,129 @@ export class DragonManager {
         }
     }
 
+    _updateLightningDragon(dt, bd, player) {
+        const tod = (this._timeOfDay !== undefined) ? this._timeOfDay : 0.5;
+        const isDay = tod >= 0.22 && tod <= 0.78;
+        const px = player.position.x, pz = player.position.z;
+        const dx = px - bd.x, dz = pz - bd.z;
+        const distXZ = Math.sqrt(dx*dx + dz*dz);
+        const sprinting = (player.sprintBlend || 0) > 0.5;
+        if (!bd._ltState) bd._ltState = 'sleeping';
+        if (!bd._ltTimer) bd._ltTimer = 0;
+        bd._ltTimer -= dt;
+        bd._fireBreathTimer = (bd._fireBreathTimer || 0) - dt;
+        const gs = bd.growthScale;
+        const gy = (this.getHeight ? this.getHeight(bd.x, bd.z) : 0);
+
+        // Sleep during DAY, hunt during NIGHT. Sprint near during day wakes it.
+        if (bd._ltState === 'sleeping') {
+            if (!isDay || (sprinting && distXZ < 32)) {
+                bd._ltState = 'circling';
+                bd.flying = true;
+                bd.flyHeight = gy + 30 + gs * 10;
+                bd._ltCircleAngle = Math.random() * Math.PI * 2;
+            }
+        } else if (isDay && bd._ltState !== 'defending' && bd._ltState !== 'returning' && !(sprinting && distXZ < 50)) {
+            bd._ltState = 'returning';
+        } else if (bd._ltState === 'circling') {
+            if (distXZ < 45) { bd._ltState = 'defending'; }
+        } else if (bd._ltState === 'defending' && distXZ > 70) {
+            bd._ltState = 'circling';
+        } else if (bd._ltState === 'returning') {
+            const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
+            if (Math.sqrt(ndx*ndx + ndz*ndz) < 5 && !bd.flying) {
+                bd._ltState = 'sleeping';
+                bd.walking = false;
+            }
+        }
+
+        // Eye open/close
+        if (bd.eyes && bd.eyes.length) {
+            const eyeOpenTarget = (bd._ltState === 'sleeping') ? 0.08 : 1.0;
+            bd._ltEyeT = (bd._ltEyeT === undefined ? 0.08 : bd._ltEyeT);
+            bd._ltEyeT += (eyeOpenTarget - bd._ltEyeT) * Math.min(1, 6 * dt);
+            for (const eye of bd.eyes) eye.scale.y = bd._ltEyeT;
+        }
+
+        if (bd._ltState === 'sleeping') {
+            bd.x = bd._nestX; bd.z = bd._nestZ;
+            bd.flying = false; bd.walking = false;
+            bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            bd._breathingFire = false;
+            if (bd.headGrp) bd.headGrp.rotation.x = 0.4;
+        } else if (bd._ltState === 'circling') {
+            // Circle the nest at altitude
+            bd._ltCircleAngle += dt * 0.35;
+            const radius = 28 + gs * 8;
+            const targetX = bd._nestX + Math.cos(bd._ltCircleAngle) * radius;
+            const targetZ = bd._nestZ + Math.sin(bd._ltCircleAngle) * radius;
+            const speed = 20 + gs * 6;
+            const mvX = targetX - bd.x, mvZ = targetZ - bd.z;
+            const mvD = Math.sqrt(mvX*mvX + mvZ*mvZ) || 1;
+            bd.x += (mvX / mvD) * speed * dt;
+            bd.z += (mvZ / mvD) * speed * dt;
+            bd.angle = Math.atan2(mvX, mvZ);
+            bd.flying = true;
+            bd.flyHeight = gy + 30 + gs * 10;
+            bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            bd.group.rotation.y = bd.angle;
+            bd._breathingFire = false;
+        } else if (bd._ltState === 'defending') {
+            // Dive-circle closer, breathe lightning
+            bd._ltCircleAngle += dt * 0.6;
+            const radius = 16 + gs * 4;
+            const targetX = px + Math.cos(bd._ltCircleAngle) * radius;
+            const targetZ = pz + Math.sin(bd._ltCircleAngle) * radius;
+            const speed = 24 + gs * 6;
+            const mvX = targetX - bd.x, mvZ = targetZ - bd.z;
+            const mvD = Math.sqrt(mvX*mvX + mvZ*mvZ) || 1;
+            bd.x += (mvX / mvD) * speed * dt;
+            bd.z += (mvZ / mvD) * speed * dt;
+            bd.angle = Math.atan2(px - bd.x, pz - bd.z);
+            bd.flying = true;
+            bd.flyHeight = gy + 18 + gs * 6;
+            bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+            bd.group.rotation.y = bd.angle;
+            bd._breathingFire = true;
+            const ddx = px - bd.x, ddz = pz - bd.z;
+            const aimY = (player.position.y || 0) - bd.group.position.y;
+            const aimHoriz = Math.sqrt(ddx*ddx + ddz*ddz) || 1;
+            bd._fireDirYaw = Math.atan2(ddx, ddz);
+            bd._fireDirPitch = -Math.atan2(aimY, aimHoriz);
+            this._aimDragonHead(bd, true);
+            this._getMouthWorld(bd, _afv);
+            const mx = _afv.x, my = _afv.y, mz = _afv.z;
+            const fdx = Math.sin(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+            const fdy = -Math.sin(bd._fireDirPitch);
+            const fdz = Math.cos(bd._fireDirYaw) * Math.cos(bd._fireDirPitch);
+            this._emitFire(mx, my, mz, fdx, fdy, fdz, 6, 1, 2);
+            if (bd._fireBreathTimer <= 0) {
+                bd._fireBreathTimer = 0.35;
+                this._damageInFireCone(mx, my, mz, fdx, fdy, fdz, 5, 30, player);
+            }
+        } else if (bd._ltState === 'returning') {
+            const ndx = bd._nestX - bd.x, ndz = bd._nestZ - bd.z;
+            const nDist = Math.sqrt(ndx*ndx + ndz*ndz);
+            bd.angle = Math.atan2(ndx, ndz);
+            bd.group.rotation.y = bd.angle;
+            if (nDist > 5) {
+                const sp = 24 * dt;
+                bd.x += (ndx / nDist) * sp;
+                bd.z += (ndz / nDist) * sp;
+                bd.flying = true;
+                const targetH = gy + (nDist > 10 ? 25 : 6);
+                bd.flyHeight += (targetH - bd.flyHeight) * 2 * dt;
+                bd.group.position.set(bd.x, bd.flyHeight, bd.z);
+                if (nDist < 6 && bd.flyHeight < gy + 6) bd.flying = false;
+            } else {
+                bd.flying = false;
+                bd.x = bd._nestX; bd.z = bd._nestZ;
+                bd.group.position.set(bd.x, gy + bd.footOffset, bd.z);
+            }
+            bd._breathingFire = false;
+        }
+    }
+
     // Aim head/neck so the snout points along bd._fireDirYaw / _fireDirPitch
     // The bend is distributed across all neck segments + head, producing a real curve
     _aimDragonHead(bd, snap) {
@@ -2401,8 +2547,8 @@ export class DragonManager {
         }
     }
 
-    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern) {
-        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern);
+    _makeDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning) {
+        return makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightning);
     }
 
     // Emit fire particles from a position in a direction
@@ -2422,18 +2568,20 @@ export class DragonManager {
             fp.px[slot] = ox + (Math.random() - 0.5) * 0.3;
             fp.py[slot] = oy + (Math.random() - 0.5) * 0.3;
             fp.pz[slot] = oz + (Math.random() - 0.5) * 0.3;
-            const speed = longRange ? (32 + Math.random() * 8) : (18 + Math.random() * 6);
-            const spread = longRange ? 0.06 : 0.15;
+            const isLightning = (iceMode === 2);
+            const baseSpeed = longRange ? (32 + Math.random() * 8) : (18 + Math.random() * 6);
+            const speed = isLightning ? baseSpeed * 1.7 : baseSpeed;
+            const spread = isLightning ? 0.35 : (longRange ? 0.06 : 0.15);
             fp.vx[slot] = dx * speed + (Math.random() - 0.5) * spread * speed + dvx;
             fp.vy[slot] = dy * speed + (Math.random() - 0.5) * spread * speed + dvy;
             fp.vz[slot] = dz * speed + (Math.random() - 0.5) * spread * speed + dvz;
             fp.age[slot] = 0;
-            fp.life[slot] = longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4);
-            fp.size[slot] = 0.6 + Math.random() * 0.5;
-            fp.damping[slot] = longRange ? 0.995 : 0.96;
-            // Ice has slight DOWNWARD gravity (mist falls); fire has upward drift
-            fp.gravity[slot] = iceMode ? -1.5 : (longRange ? 0.5 : 4.0);
-            fp.iceMode[slot] = iceMode ? 1 : 0;
+            fp.life[slot] = isLightning ? (0.35 + Math.random() * 0.25) : (longRange ? (1.6 + Math.random() * 0.6) : (0.7 + Math.random() * 0.4));
+            fp.size[slot] = isLightning ? (0.3 + Math.random() * 0.35) : (0.6 + Math.random() * 0.5);
+            fp.damping[slot] = isLightning ? 0.99 : (longRange ? 0.995 : 0.96);
+            // Ice has slight DOWNWARD gravity (mist falls); fire has upward drift; lightning ~zero
+            fp.gravity[slot] = isLightning ? 0.0 : (iceMode ? -1.5 : (longRange ? 0.5 : 4.0));
+            fp.iceMode[slot] = iceMode | 0;
         }
     }
 
@@ -2463,7 +2611,12 @@ export class DragonManager {
             // Compute color (yellow → orange → red → smoke for fire; white → cyan → blue for ice)
             const t = fp.age[i] / fp.life[i];
             let r, g, b;
-            if (fp.iceMode[i]) {
+            if (fp.iceMode[i] === 2) {
+                // Lightning: bright white → electric blue → violet
+                if (t < 0.25) { r = 1.0; g = 1.0; b = 1.0; }
+                else if (t < 0.65) { const u = (t - 0.25) / 0.4; r = 0.7 - u * 0.3; g = 0.9 - u * 0.5; b = 1.0; }
+                else { const u = (t - 0.65) / 0.35; r = 0.4 + u * 0.2; g = 0.4 - u * 0.3; b = 1.0 - u * 0.2; }
+            } else if (fp.iceMode[i]) {
                 if (t < 0.3) { r = 0.85; g = 0.95; b = 1.0; }
                 else if (t < 0.7) { r = 0.55 - (t - 0.3) * 0.3; g = 0.75 - (t - 0.3) * 0.2; b = 1.0; }
                 else { const u = (t - 0.7) / 0.3; r = 0.4 - u * 0.2; g = 0.55 - u * 0.3; b = 0.95 - u * 0.3; }

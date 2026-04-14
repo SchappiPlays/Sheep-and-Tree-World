@@ -3619,6 +3619,125 @@ function startGame(loadSlotName) {
         world._iceDragon = iceDragon;
     }
 
+    // === Lightning Dragon Nest — deep desert ===
+    {
+        const nestX = 100, nestZ = 720;
+        const nestY = getTerrainHeight(nestX, nestZ);
+        const yOff = 128;
+        const BS = BLOCK_SIZE;
+
+        const sandMat = new THREE.MeshStandardMaterial({ color: 0xc4a068, roughness: 0.95 });
+        const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x2a2a32, roughness: 0.85 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x4a4a66, roughness: 0.2, metalness: 0.6, emissive: 0x221144, emissiveIntensity: 0.3 });
+
+        const nestGrp = new THREE.Group();
+        nestGrp.position.set(nestX, nestY, nestZ);
+        // Ring of fulgurite-like fused glass stones + dark rocks
+        for (let a = 0; a < 36; a++) {
+            const ang = (a / 36) * Math.PI * 2;
+            const r = 12 + (Math.random() - 0.5) * 1.5;
+            const sx = Math.cos(ang) * r;
+            const sz = Math.sin(ang) * r;
+            const sw = 1.6 + Math.random() * 1.0;
+            const sh = 1.4 + Math.random() * 1.8;
+            const mat = (a % 3 === 0) ? glassMat : ((a % 3 === 1) ? darkStoneMat : sandMat);
+            const stone = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sw), mat);
+            stone.position.set(sx, sh / 2, sz);
+            stone.rotation.y = Math.random() * Math.PI;
+            stone.castShadow = true; stone.receiveShadow = true;
+            nestGrp.add(stone);
+        }
+        for (let a = 0; a < 24; a++) {
+            const ang = (a / 24) * Math.PI * 2 + 0.05;
+            const r = 8;
+            const stone = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), sandMat);
+            stone.position.set(Math.cos(ang) * r, 0.35, Math.sin(ang) * r);
+            stone.castShadow = true; nestGrp.add(stone);
+        }
+        // Fulgurite spires — jagged fused-sand shards pointing skyward
+        for (let i = 0; i < 6; i++) {
+            const ang = (i / 6) * Math.PI * 2;
+            const sr = 10.5;
+            const sp = new THREE.Mesh(new THREE.ConeGeometry(0.4, 3.5 + Math.random() * 2, 5), glassMat);
+            sp.position.set(Math.cos(ang) * sr, 1.75, Math.sin(ang) * sr);
+            sp.rotation.z = (Math.random() - 0.5) * 0.3;
+            sp.castShadow = true;
+            nestGrp.add(sp);
+        }
+        scene.add(nestGrp);
+        world._lightningDragonNest = nestGrp;
+
+        // 4 lightning dragon eggs
+        const ltEggDefs = [
+            { dx: -3, dz:  1, color: 0x7a3dc4, emissive: 0x3a1a5a, veinColor: 0xcc88ff, wingColor: 0x5a2aa0, isWyvern: true, isLightning: true, name: 'Amethyst Lightning Dragon' },
+            { dx:  3, dz:  1, color: 0x20202a, emissive: 0x0a0a1a, veinColor: 0x88aaff, wingColor: 0x1a1a22, isWyvern: true, isLightning: true, name: 'Obsidian Lightning Dragon' },
+            { dx:  0, dz:  3, color: 0xa05a28, emissive: 0x3a1a08, veinColor: 0xffaa44, wingColor: 0x7a4018, isWyvern: true, isLightning: true, name: 'Copper Lightning Dragon' },
+            { dx:  0, dz: -3, color: 0x2878f0, emissive: 0x0a2a7a, veinColor: 0x88ccff, wingColor: 0x1858c0, isWyvern: true, isLightning: true, name: 'Electric Blue Lightning Dragon' },
+        ];
+        const eggGeo = new THREE.SphereGeometry(0.22, 12, 10);
+        const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
+        const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.95 });
+        const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
+        for (const ed of ltEggDefs) {
+            const ex = nestX + ed.dx, ez = nestZ + ed.dz;
+            const ey = getTerrainHeight(ex, ez);
+            const eggGrp = new THREE.Group();
+            for (let ni = 0; ni < 8; ni++) {
+                const na = (ni / 8) * Math.PI * 2;
+                const nrs = 0.15 + Math.random() * 0.15;
+                const nr = new THREE.Mesh(nestRockGeo, nestRockMat);
+                nr.scale.setScalar(nrs / 0.2);
+                nr.position.set(Math.cos(na) * 0.6, nrs * 0.4, Math.sin(na) * 0.6);
+                nr.rotation.set(Math.random(), Math.random(), Math.random());
+                eggGrp.add(nr);
+            }
+            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.3, metalness: 0.25, emissive: ed.emissive, emissiveIntensity: 0.2 });
+            const eggMesh = new THREE.Mesh(eggGeo, eggMat);
+            eggMesh.scale.set(1.0, 1.35, 1.0);
+            eggMesh.position.y = 0.3;
+            eggGrp.add(eggMesh);
+            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.35, roughness: 0.2 });
+            for (let vi = 0; vi < 5; vi++) {
+                const va = (vi / 5) * Math.PI * 2;
+                const vein = new THREE.Mesh(veinGeo, veinMat);
+                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
+                vein.rotation.z = (Math.random() - 0.5) * 0.4;
+                eggGrp.add(vein);
+            }
+            eggGrp.position.set(ex, ey, ez);
+            scene.add(eggGrp);
+            dragonMgr.eggs.push({
+                group: eggGrp, x: ex, z: ez, pickedUp: false,
+                color: ed.color, emissive: ed.emissive, veinColor: ed.veinColor,
+                wingColor: ed.wingColor || null,
+                isWyvern: !!ed.isWyvern, isLightning: !!ed.isLightning, name: ed.name || 'Lightning Dragon',
+            });
+        }
+
+        // Spawn the giant lightning wyvern at the nest (dark grey/black)
+        const ltDragon = dragonMgr._makeDragon(nestX, nestZ, nestY, 0x1a1a22, 0x2a2a3a, true, true);
+        ltDragon.age = 7200;
+        ltDragon.growthScale = 2.0;
+        ltDragon.group.scale.setScalar(ltDragon.growthScale);
+        ltDragon.footOffset = 0.95 * 2.55 * ltDragon.growthScale;
+        ltDragon.state = 'alive';
+        ltDragon.dragonName = 'Stormfang the Thundered';
+        ltDragon._lightningDragon = true;
+        ltDragon._isLightning = true;
+        ltDragon._lightningBreath = true;
+        ltDragon._stationary = true;
+        ltDragon._unrideable = true;
+        ltDragon._nestX = nestX;
+        ltDragon._nestZ = nestZ;
+        ltDragon._ltState = 'sleeping';
+        ltDragon.maxHP = 250; ltDragon.hp = 250;
+        ltDragon.x = nestX; ltDragon.z = nestZ;
+        ltDragon.group.position.set(nestX, nestY + ltDragon.footOffset, nestZ);
+        scene.add(ltDragon.group);
+        dragonMgr.dragons.push(ltDragon);
+        world._lightningDragon = ltDragon;
+    }
+
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
