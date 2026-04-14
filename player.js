@@ -135,7 +135,7 @@ export class Player {
         // bow +90° around Z to make its limbs align with world vertical when the arm is level.
         this.bowHeld = this._makeBow();
         this.bowHeld.visible = false;
-        this.bowHeld.rotation.set(Math.PI / 2, 0, 0); // rotate so limbs point "up/down" relative to extended arm
+        this.bowHeld.rotation.set(Math.PI / 2, Math.PI, 0); // flipped 180° so it tilts to the left instead of right
         this.bowHeld.position.set(0, 0.0, 0);
         this.rightArm.handGrp.add(this.bowHeld);
 
