@@ -405,6 +405,35 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
             makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
         }
+        // Some ice dragons grow an extra crown of icicle-like spikes across the head
+        const iceCrownRoll = ((eggColor * 0x85EBCA77) >>> 0) / 0xFFFFFFFF;
+        if (isIce && iceCrownRoll < 0.5) {
+            // Icicles along the top and sides of the cranium, varied lengths, slight lean
+            const spikes = [
+                [ 0.00,  0.34, -0.28, 0.45, 0.0],
+                [ 0.00,  0.36, -0.05, 0.55, 0.0],
+                [ 0.08,  0.34,  0.05, 0.40, 0.1],
+                [-0.08,  0.34,  0.05, 0.40,-0.1],
+                [ 0.14,  0.30, -0.10, 0.35, 0.25],
+                [-0.14,  0.30, -0.10, 0.35,-0.25],
+                [ 0.22,  0.20, -0.05, 0.30, 0.45],
+                [-0.22,  0.20, -0.05, 0.30,-0.45],
+                [ 0.05,  0.35,  0.20, 0.30, 0.0],
+                [-0.05,  0.35,  0.20, 0.30, 0.0],
+                [ 0.15,  0.28,  0.12, 0.28, 0.15],
+                [-0.15,  0.28,  0.12, 0.28,-0.15],
+            ];
+            for (const sp of spikes) {
+                const [x, y, z, len, lean] = sp;
+                const ico = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.04*S, len*S, 5),
+                    bHorn
+                );
+                ico.position.set(x*S, y*S + len*S*0.5, z*S);
+                ico.rotation.z = lean;
+                headGrp.add(ico);
+            }
+        }
     }
     // Curved tusks — sweep down and forward from the cheek, chained segments form the arc
     if (hasTusks) {
