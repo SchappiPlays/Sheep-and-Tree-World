@@ -1140,6 +1140,25 @@ function rebuildPlayerBlocksMesh() {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    // Hide this mesh near the player — the real chunk meshes show instead
+    mat.onBeforeCompile = (shader) => {
+        shader.uniforms._playerPos = { value: new THREE.Vector3() };
+        shader.uniforms._cutoutR = { value: 45.0 };
+        shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <fog_vertex>',
+            'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            float _dx = vWPos.x - _playerPos.x;
+            float _dz = vWPos.z - _playerPos.z;
+            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+        );
+        mat._shader = shader;
+    };
     _playerBlocksMesh = new THREE.Mesh(geo, mat);
     _playerBlocksMesh.renderOrder = 0;
     scene.add(_playerBlocksMesh);
@@ -13220,6 +13239,9 @@ function animate() {
     // Update far terrain + water cutout position (shader-based, follows player every frame)
     if (farTerrain && farTerrain.material._shader) {
         farTerrain.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
+    }
+    if (_playerBlocksMesh && _playerBlocksMesh.material._shader) {
+        _playerBlocksMesh.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
     }
     if (farWater && farWater.material._shader) {
         farWater.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
