@@ -1219,21 +1219,20 @@ function buildFarTerrain(centerX, centerZ) {
         vi += 4; ii += 6;
     };
 
-    // Known structure bounding boxes — skip far terrain here so the block LOD shows through
-    const STRUCTURE_BOXES = [
-        [-400-10, 20-10, -400+170, 20+140],     // Western Castle (160x130)
-        [-505-40, -335-40, -505+40, -335+40],  // Ruined Fortress
-        [-900-60, 575-60, -900+60, 575+60],    // SW Fortress (bigger)
-        [-300-30, 280-30, -300+30, 280+30],    // Scorched Fortress
+    // Skip tree rendering inside structures (trees poking through walls look bad)
+    const _TREE_SKIP_BOXES = [
+        [-400-5, 20-5, -400+165, 20+135],     // Western Castle
+        [-505-25, -335-25, -505+25, -335+25], // Ruined Fortress
+        [-900-50, 575-50, -900+50, 575+50],   // SW Fortress
+        [-300-20, 280-20, -300+20, 280+20],   // Scorched Fortress
     ];
-    const _inStructure = (wx, wz) => {
-        for (const [x1, z1, x2, z2] of STRUCTURE_BOXES) {
+    const _noTrees = (wx, wz) => {
+        for (const [x1, z1, x2, z2] of _TREE_SKIP_BOXES) {
             if (wx >= x1 && wx <= x2 && wz >= z1 && wz <= z2) return true;
         }
-        // Also check villages (smaller radius)
         for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200},{x:100,z:550},{x:-120,z:620},{x:250,z:680}]) {
             const dx = wx - vd.x, dz = wz - vd.z;
-            if (dx*dx + dz*dz < 55*55) return true;
+            if (dx*dx + dz*dz < 40*40) return true;
         }
         return false;
     };
@@ -1243,7 +1242,6 @@ function buildFarTerrain(centerX, centerZ) {
             const wx = gx * S, wz = gz * S;
             const rawTH = getTerrainHeight(wx, wz);
             if (rawTH < 0.01) continue; // skip ocean cells (outside island boundary)
-            if (_inStructure(wx, wz)) continue; // structure areas handled by block LOD
             const snapH = gH(gx, gz);
             const top = snapH + BS;
 
@@ -1298,7 +1296,7 @@ function buildFarTerrain(centerX, centerZ) {
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
             const plains = getPlainsBlend(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50) {
+            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
                 if (plains > 0.5) continue; // skip trees in plains entirely
