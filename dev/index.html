@@ -1219,12 +1219,31 @@ function buildFarTerrain(centerX, centerZ) {
         vi += 4; ii += 6;
     };
 
+    // Known structure bounding boxes — skip far terrain here so the block LOD shows through
+    const STRUCTURE_BOXES = [
+        [-400-10, 20-10, -400+170, 20+140],     // Western Castle (160x130)
+        [-505-40, -335-40, -505+40, -335+40],  // Ruined Fortress
+        [-900-60, 575-60, -900+60, 575+60],    // SW Fortress (bigger)
+        [-300-30, 280-30, -300+30, 280+30],    // Scorched Fortress
+    ];
+    const _inStructure = (wx, wz) => {
+        for (const [x1, z1, x2, z2] of STRUCTURE_BOXES) {
+            if (wx >= x1 && wx <= x2 && wz >= z1 && wz <= z2) return true;
+        }
+        // Also check villages (smaller radius)
+        for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200},{x:100,z:550},{x:-120,z:620},{x:250,z:680}]) {
+            const dx = wx - vd.x, dz = wz - vd.z;
+            if (dx*dx + dz*dz < 55*55) return true;
+        }
+        return false;
+    };
     for (let gx = -gridSize; gx <= gridSize; gx++) {
         for (let gz = -gridSize; gz <= gridSize; gz++) {
             // Shader handles the cutout dynamically — no mesh skip needed
             const wx = gx * S, wz = gz * S;
             const rawTH = getTerrainHeight(wx, wz);
             if (rawTH < 0.01) continue; // skip ocean cells (outside island boundary)
+            if (_inStructure(wx, wz)) continue; // structure areas handled by block LOD
             const snapH = gH(gx, gz);
             const top = snapH + BS;
 
