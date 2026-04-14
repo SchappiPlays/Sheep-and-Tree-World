@@ -414,10 +414,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             const p2 = [s*0.30*S, -0.26*S, 0.42*S];
             const p3 = [s*0.22*S, -0.38*S, 0.55*S];
             const p4 = [s*0.10*S, -0.44*S, 0.62*S];
-            makeDragonBone(p0, p1, 0.065*S, 0.055*S, bHorn, headGrp);
-            makeDragonBone(p1, p2, 0.055*S, 0.040*S, bHorn, headGrp);
-            makeDragonBone(p2, p3, 0.040*S, 0.025*S, bHorn, headGrp);
-            makeDragonBone(p3, p4, 0.025*S, 0.008*S, bHorn, headGrp);
+            makeDragonBone(p0, p1, 0.055*S, 0.065*S, bHorn, headGrp);
+            makeDragonBone(p1, p2, 0.040*S, 0.055*S, bHorn, headGrp);
+            makeDragonBone(p2, p3, 0.025*S, 0.040*S, bHorn, headGrp);
+            makeDragonBone(p3, p4, 0.008*S, 0.025*S, bHorn, headGrp);
         }
     }
     // Jaw
