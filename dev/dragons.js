@@ -1039,6 +1039,7 @@ export class DragonManager {
     // Called each frame
     update(dt, player, keys) {
         const px = player.position.x, pz = player.position.z, py = player.position.y;
+        this._playerX = px; this._playerZ = pz;
         // Update fire particles every frame
         this._updateFireParticles(dt);
         this._updateLightningBolts(dt);
@@ -2067,6 +2068,15 @@ export class DragonManager {
 
     _animateDragon(dt, bd) {
         const gs = bd.growthScale;
+        // Distance-based LOD for wing membrane rebuild — expensive computeVertexNormals calls
+        // are skipped when the dragon is far from the player. Pose rotations still apply so
+        // distant silhouettes animate correctly.
+        const _pX = this._playerX !== undefined ? this._playerX : 0;
+        const _pZ = this._playerZ !== undefined ? this._playerZ : 0;
+        const _ddx = bd.x - _pX, _ddz = bd.z - _pZ;
+        const _distSq = _ddx * _ddx + _ddz * _ddz;
+        const _memLODDist = 80 + gs * 25; // bigger dragons visible further
+        bd._skipMembrane = _distSq > _memLODDist * _memLODDist;
         if (bd.flying) {
             bd.walkPhase += dt * 12;
             bd._flapT = (bd._flapT || 0) + dt;
@@ -2093,7 +2103,7 @@ export class DragonManager {
                     _afv.set(tx, ty, tz).applyMatrix4(_afInvMat);
                     w._patP0[0] = _afv.x; w._patP0[1] = _afv.y; w._patP0[2] = _afv.z;
                 }
-                updateWyvernMembrane(w);
+                if (!bd._skipMembrane) updateWyvernMembrane(w);
             }
             for (const leg of bd.legs) leg.rotation.x = 0.6;
             // Grabbing: rear legs extend forward/down to grab
@@ -2170,7 +2180,7 @@ export class DragonManager {
                     _afv.set(tx, ty, tz).applyMatrix4(_afInvMat);
                     w._afBodyPt = [_afv.x, _afv.y, _afv.z];
                 }
-                updateWyvernMembrane(w);
+                if (!bd._skipMembrane) updateWyvernMembrane(w);
             }
             for (let ti = 0; ti < bd.tailSegs.length; ti++) {
                 bd.tailSegs[ti].rotation.y = Math.sin(bd.walkPhase * 1.5 + ti * 0.4) * 0.15;
@@ -2202,6 +2212,11 @@ export class DragonManager {
     }
 
     _animateDragonSleep(dt, bd) {
+        const _pX = this._playerX !== undefined ? this._playerX : 0;
+        const _pZ = this._playerZ !== undefined ? this._playerZ : 0;
+        const _ddx = bd.x - _pX, _ddz = bd.z - _pZ;
+        const _memLODDist = 80 + (bd.growthScale || 1) * 25;
+        bd._skipMembrane = (_ddx * _ddx + _ddz * _ddz) > _memLODDist * _memLODDist;
         // Smoothly transition into sleep pose
         const t = Math.min(1, (bd._sleepBlend || 0) + dt * 2);
         bd._sleepBlend = t;
@@ -2279,7 +2294,7 @@ export class DragonManager {
                 _afv.set(0, 0, -0.3 * S).applyMatrix4(_afInvMat);
                 w._patP0[0] = _afv.x; w._patP0[1] = _afv.y; w._patP0[2] = _afv.z;
             }
-            updateWyvernMembrane(w);
+            if (!bd._skipMembrane) updateWyvernMembrane(w);
         }
 
         // Tail flat on ground, curves more to same side as head
