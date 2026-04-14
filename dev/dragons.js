@@ -1458,14 +1458,16 @@ export class DragonManager {
 
             // Take off: sprinting, far away, riding, or combat
             const shouldFly = this._playerSprinting || bDist > 15 || this._playerRiding || (target && targetDist < 20);
-            if (shouldFly && !bd.flying) {
+            if (shouldFly && !bd.flying && !bd._landing) {
                 bd.flying = true;
-                bd.flyHeight = bd.group.position.y + 4 + Math.random() * 12 * gs;
+                // Start from current ground position — height will rise gradually
+                bd.flyHeight = bd.group.position.y;
+                bd._takingOff = true;
             }
-            // Land: not sprinting, close enough, not riding, no combat
-            if (!shouldFly && bd.flying && bDist < 10) {
-                bd.flying = false;
-                bd.flyHeight = 0;
+            // Trigger landing — still "flying" until on ground
+            if (!shouldFly && bd.flying && !bd._landing) {
+                bd._landing = true;
+                bd._takingOff = false;
             }
 
             const maxSpd = 8 + gs * 6;
@@ -1499,8 +1501,28 @@ export class DragonManager {
                     if (gd < 3) bd._flyGoalTimer = 0;
                 }
                 bd.x += moveX; bd.z += moveZ;
-                const targetH = Math.max(py + 3, this.getHeight(bd.x, bd.z) + bd.footOffset + 6 + Math.sin((bd._flyGoalTimer || 0) * 0.8) * 4 * gs);
-                bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                // Determine target height based on state
+                const groundY = this.getHeight(bd.x, bd.z) + bd.footOffset;
+                let targetH;
+                if (bd._landing) {
+                    // Descend smoothly toward ground
+                    targetH = groundY;
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 1.5;
+                    // Once close to ground, finish landing
+                    if (bd.flyHeight - groundY < 0.3) {
+                        bd.flying = false;
+                        bd._landing = false;
+                        bd.flyHeight = 0;
+                    }
+                } else if (bd._takingOff) {
+                    // Rise smoothly to cruise height
+                    targetH = Math.max(py + 3, groundY + 6 + Math.random() * 4 * gs);
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 1.2;
+                    if (bd.flyHeight > targetH - 0.5) bd._takingOff = false;
+                } else {
+                    targetH = Math.max(py + 3, groundY + 6 + Math.sin((bd._flyGoalTimer || 0) * 0.8) * 4 * gs);
+                    bd.flyHeight += (targetH - bd.flyHeight) * dt * 2;
+                }
                 bd.walking = false;
             } else if (bDist > bd.followDist) {
                 // Walking — go toward player
