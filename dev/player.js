@@ -855,36 +855,57 @@ export class Player {
 
     _makeBow() {
         // Longbow — limbs along local Y (vertical). Arrow fires along local +Z.
-        // String is at z = -0.05 (pulled back toward player). Grip at origin.
         const g = new THREE.Group();
         const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1f, roughness: 0.8 });
         const stringMat = new THREE.MeshStandardMaterial({ color: 0xeee8d0, roughness: 0.9 });
         const bowH = 1.6;
-        // Upper limb (straight, tapered at top) — one solid piece, no gaps
-        const upper = new THREE.Mesh(new THREE.BoxGeometry(0.04, bowH * 0.45, 0.05), woodMat);
-        upper.position.y = bowH * 0.27;
-        upper.castShadow = true;
-        g.add(upper);
-        // Lower limb
-        const lower = new THREE.Mesh(new THREE.BoxGeometry(0.04, bowH * 0.45, 0.05), woodMat);
-        lower.position.y = -bowH * 0.27;
-        lower.castShadow = true;
-        g.add(lower);
-        // Upper tip (slightly thinner)
+        // Curved limbs — upper and lower each made of several short segments forming an arc
+        const buildLimb = (sign) => {
+            // sign = +1 for upper, -1 for lower
+            const parent = new THREE.Group();
+            const steps = 6;
+            const limbLen = bowH * 0.5;
+            for (let i = 0; i < steps; i++) {
+                const t = (i + 0.5) / steps; // 0..1 along limb
+                const y = sign * t * limbLen;
+                const curveZ = -Math.sin(t * Math.PI * 0.5) * 0.14; // curve backward (−Z) so bow is recurved
+                const seg = new THREE.Mesh(new THREE.BoxGeometry(0.04, limbLen / steps + 0.015, 0.05), woodMat);
+                seg.position.set(0, y, curveZ);
+                // Tilt each segment tangent to the arc
+                const tangentAngle = Math.cos(t * Math.PI * 0.5) * 0.25; // small tilt
+                seg.rotation.x = sign * tangentAngle;
+                seg.castShadow = true;
+                parent.add(seg);
+            }
+            return parent;
+        };
+        g.add(buildLimb(1));
+        g.add(buildLimb(-1));
+        // Upper/lower tips (where string attaches) — record their positions for string curve
+        const tipY = bowH * 0.5;
+        const tipZ = -Math.sin(Math.PI * 0.5) * 0.14; // at t=1 of the curve
         const upTip = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.08, 0.03), woodMat);
-        upTip.position.y = bowH * 0.5;
+        upTip.position.set(0, tipY, tipZ);
         g.add(upTip);
         const loTip = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.08, 0.03), woodMat);
-        loTip.position.y = -bowH * 0.5;
+        loTip.position.set(0, -tipY, tipZ);
         g.add(loTip);
+        g._tipY = tipY;
+        g._tipZ = tipZ;
         // Grip (leather wrapped, in the middle)
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.08), new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.7 }));
         g.add(grip);
-        // Bowstring — from upper tip down to lower tip, runs behind bow (−Z side)
-        const bowstring = new THREE.Mesh(new THREE.BoxGeometry(0.01, bowH, 0.01), stringMat);
-        bowstring.position.set(0, 0, -0.05);
-        g.add(bowstring);
-        g._bowstring = bowstring;
+        // Bowstring — two segments (upper tip → nock point, nock point → lower tip)
+        // Built as two oriented boxes so they always connect tip to nock
+        const stringGrp = new THREE.Group();
+        const upperStr = new THREE.Mesh(new THREE.BoxGeometry(0.01, 1, 0.01), stringMat);
+        const lowerStr = new THREE.Mesh(new THREE.BoxGeometry(0.01, 1, 0.01), stringMat);
+        stringGrp.add(upperStr);
+        stringGrp.add(lowerStr);
+        stringGrp._upper = upperStr;
+        stringGrp._lower = lowerStr;
+        g.add(stringGrp);
+        g._bowstring = stringGrp;
         // Nocked arrow — shaft along +Z, head at front (+Z end), fletching at back (−Z end)
         const arrowShaftMat = new THREE.MeshStandardMaterial({ color: 0x9a7a4a, roughness: 0.8 });
         const arrowHeadMat = new THREE.MeshStandardMaterial({ color: 0x777777, metalness: 0.6 });

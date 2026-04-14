@@ -12718,18 +12718,29 @@ function animate() {
     if (holdingBow) {
         player.bowHeld.visible = true;
         const drawT = Math.min(1, (_bowDrawTime || 0) / 0.6);
-        // String pulls back (toward player, which is −Z in bow local since string starts at z=−0.05)
-        const STRING_REST = -0.05, STRING_PULL = 0.5; // how far back to pull (bow local +Z = toward player now)
+        const tipY = player.bowHeld._tipY || 0.8;
+        const tipZ = player.bowHeld._tipZ || -0.14; // string attach point at tips
+        const STRING_REST_Z = -0.05, STRING_PULL = 0.5;
+        const nockZ = STRING_REST_Z - drawT * STRING_PULL; // where the arrow nock is
+        // Bowstring as two segments: upperTip → nock, nock → lowerTip
         if (player.bowHeld._bowstring) {
-            player.bowHeld._bowstring.position.z = STRING_REST - drawT * STRING_PULL;
+            const str = player.bowHeld._bowstring;
+            // Upper segment: from (0, tipY, tipZ) to (0, 0, nockZ)
+            const midU_y = tipY * 0.5;
+            const midU_z = (tipZ + nockZ) * 0.5;
+            const lenU = Math.sqrt(tipY * tipY + (tipZ - nockZ) * (tipZ - nockZ));
+            str._upper.position.set(0, midU_y, midU_z);
+            str._upper.scale.y = lenU;
+            str._upper.rotation.x = -Math.atan2(tipZ - nockZ, tipY);
+            // Lower segment (mirror)
+            str._lower.position.set(0, -midU_y, midU_z);
+            str._lower.scale.y = lenU;
+            str._lower.rotation.x = Math.atan2(tipZ - nockZ, tipY);
         }
-        // Nocked arrow: fletching end stays at string position, arrow extends forward (−Z in bow local since arrow fires backward from bow perspective)
-        // Arrow's back = z of fletching ≈ -0.4 (local). We want fletching's world-pos to track string.
-        // Shift the entire arrow group so fletching.z aligns with string.z.
+        // Nocked arrow — fletching at nock position
         if (player.bowHeld._nockedArrow) {
             player.bowHeld._nockedArrow.visible = drawT > 0.05 && inventory['arrow'] > 0;
-            // arrow group offset so fletching (z=-0.4 local) sits at string z position
-            player.bowHeld._nockedArrow.position.z = (STRING_REST - drawT * STRING_PULL) + 0.4;
+            player.bowHeld._nockedArrow.position.z = nockZ + 0.4;
         }
         // RIGHT arm (non-sword) holds bow extended forward, slightly angled across body
         player.rightArm.shoulder.rotation.x = -1.4;
