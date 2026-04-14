@@ -1085,6 +1085,48 @@ let farTerrain = null, farWater = null;
 const _lodStructures = [];
 let _farCenterX = 0, _farCenterZ = 0; // track where skip zone is centered
 
+// Persistent mesh showing player-placed blocks so bases are visible from far away
+let _playerBlocksMesh = null;
+let _playerBlocksDirty = false;
+let _playerBlocksRebuildTimer = 0;
+function markPlayerBlocksDirty() { _playerBlocksDirty = true; }
+function rebuildPlayerBlocksMesh() {
+    _playerBlocksDirty = false;
+    if (_playerBlocksMesh) { scene.remove(_playerBlocksMesh); _playerBlocksMesh.geometry.dispose(); _playerBlocksMesh = null; }
+    if (!world || !world._modifiedBlocks || world._modifiedBlocks.size === 0) return;
+    const BS = BLOCK_SIZE, yOff = 128;
+    const positions = [], colors = [], indices = [];
+    const _c = new THREE.Color();
+    let v = 0;
+    // Only render non-AIR placed blocks (mined-air would be empty space, don't render)
+    for (const [key, blockType] of world._modifiedBlocks) {
+        if (blockType === 0 || blockType === BLOCK.AIR) continue; // skip air
+        if (blockType === BLOCK.WATER || blockType === BLOCK.LEAVES || blockType === BLOCK.PINE_LEAVES) continue;
+        if (blockType === BLOCK.FLOWER_RED || blockType === BLOCK.FLOWER_YELLOW || blockType === BLOCK.FLOWER_BLUE || blockType === BLOCK.FLOWER_WHITE) continue;
+        const [bx, by, bz] = key.split(',').map(Number);
+        const wx = bx * BS, wy = (by - yOff) * BS, wz = bz * BS;
+        const col = BLOCK_COLORS[blockType] || 0xffffff;
+        _c.setHex(col);
+        // Simple top-only quad to save geometry (looks like a flat colored dot)
+        const s = BS * 0.5;
+        const y = wy + BS * 0.5;
+        positions.push(wx - s, y, wz - s, wx - s, y, wz + s, wx + s, y, wz + s, wx + s, y, wz - s);
+        for (let i = 0; i < 4; i++) colors.push(_c.r, _c.g, _c.b);
+        indices.push(v, v + 1, v + 2, v, v + 2, v + 3);
+        v += 4;
+    }
+    if (positions.length === 0) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    _playerBlocksMesh = new THREE.Mesh(geo, mat);
+    _playerBlocksMesh.renderOrder = 0;
+    scene.add(_playerBlocksMesh);
+}
+
 function buildFarTerrain(centerX, centerZ) {
     if (farTerrain) { scene.remove(farTerrain); farTerrain.geometry.dispose(); scene.remove(farWater); farWater.geometry.dispose(); }
     _farCenterX = centerX || 0;
@@ -3171,16 +3213,18 @@ function startGame(loadSlotName) {
         _placeRuinChest(-28, -194, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
     }
 
-    // Hook setBlock to broadcast changes in multiplayer
+    // Hook setBlock to broadcast changes in multiplayer + mark LOD dirty
     const origSetBlock = world.setBlock.bind(world);
     world.setBlock = (bx, by, bz, block) => {
         origSetBlock(bx, by, bz, block);
+        markPlayerBlocksDirty();
         if (mp.active) mp.sendBlockChange(bx, by, bz, block);
     };
 
     // Receive remote block changes
     mp.onBlockChange = (bx, by, bz, block) => {
         origSetBlock(bx, by, bz, block);
+        markPlayerBlocksDirty();
         chunkManager.rebuildChunkAt(bx, bz);
         // Rebuild adjacent chunks if block is on a chunk border
         const lx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -5133,6 +5177,7 @@ function startGame(loadSlotName) {
                 for (const t of torchModels.values()) scene.remove(t);
                 torchModels.clear();
                 for (const [tx, ty, tz] of torchPositions) placeTorchModel(tx, ty, tz);
+                markPlayerBlocksDirty();
                 // Cluster anvil blocks into 2x2x2 origins, campfires into 2x1x2
                 const _clusterOrigins = (blockSet, dy) => {
                     const origins = new Set();
@@ -13142,6 +13187,15 @@ function animate() {
 
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
+
+    // Rebuild player-placed blocks LOD mesh if dirty (throttled — every ~1s)
+    if (_playerBlocksDirty) {
+        _playerBlocksRebuildTimer = (_playerBlocksRebuildTimer || 0) - dt;
+        if (_playerBlocksRebuildTimer <= 0) {
+            _playerBlocksRebuildTimer = 1.0;
+            rebuildPlayerBlocksMesh();
+        }
+    }
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
