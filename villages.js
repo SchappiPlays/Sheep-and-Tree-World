@@ -497,7 +497,7 @@ export function preplaceVillagesAndCastle(world) {
     // Castle at (-400, 20), 60x50 blocks
     const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
     const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
-    for (const [cx, cz] of getChunksForBBox(cbx - 10, cbx + 80, cbz - 10, cbz + 70)) chunks.add(cx + ',' + cz);
+    for (const [cx, cz] of getChunksForBBox(cbx - 10, cbx + 170, cbz - 10, cbz + 140)) chunks.add(cx + ',' + cz);
     // Force chunks to generate — blocks get registered in _modifiedBlocks
     for (const key of chunks) {
         const [cx, cz] = key.split(',').map(Number);
@@ -580,18 +580,18 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
     // ── Western Castle ──
     const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
     const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
-    // Check if castle overlaps this chunk (castle is ~60x50 blocks)
-    if (cbx + 70 >= ox && cbx - 10 <= ox + 15 && cbz + 60 >= oz && cbz - 10 <= oz + 15) {
-        // Get base height
-        const castleBaseY = world.getBaseHeightBlocks(cbx + 30, cbz + 25) + yOff;
+    // Check if castle overlaps this chunk (castle is now 160x130 blocks)
+    if (cbx + 170 >= ox && cbx - 10 <= ox + 15 && cbz + 140 >= oz && cbz - 10 <= oz + 15) {
+        // Get base height from center of castle
+        const castleBaseY = world.getBaseHeightBlocks(cbx + 80, cbz + 65) + yOff;
         // Get or generate castle blocks (cache for performance)
         if (!world._castleBlocks) world._castleBlocks = getCastleBlocks();
         const castleBlocks = world._castleBlocks;
 
         // Clear area first
-        for (let ix = -5; ix < 65; ix++) {
-            for (let iz = -5; iz < 55; iz++) {
-                for (let iy = 1; iy <= 35; iy++) {
+        for (let ix = -5; ix < 165; ix++) {
+            for (let iz = -5; iz < 135; iz++) {
+                for (let iy = 1; iy <= 45; iy++) {
                     const bx2 = cbx + ix, bz2 = cbz + iz, by2 = castleBaseY + iy;
                     const lx2 = bx2 - ox, lz2 = bz2 - oz;
                     if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
