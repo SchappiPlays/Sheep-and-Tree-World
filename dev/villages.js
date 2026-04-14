@@ -498,7 +498,7 @@ export function preplaceVillagesAndCastle(world) {
 
     // Process in batches spread over frames
     const queue = [...chunks];
-    const PER_FRAME = 8;
+    const PER_FRAME = 2;
     function step() {
         let n = 0;
         while (queue.length > 0 && n < PER_FRAME) {
@@ -507,9 +507,9 @@ export function preplaceVillagesAndCastle(world) {
             try { world.getOrCreateChunk(cx, cz); } catch (e) {}
             n++;
         }
-        if (queue.length > 0) setTimeout(step, 16);
+        if (queue.length > 0) setTimeout(step, 50);
     }
-    setTimeout(step, 100);
+    setTimeout(step, 500);
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {

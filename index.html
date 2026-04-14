@@ -1117,6 +1117,8 @@ function rebuildPlayerBlocksMesh() {
         if (blockType === BLOCK.WATER || blockType === BLOCK.LEAVES || blockType === BLOCK.PINE_LEAVES) continue;
         if (blockType === BLOCK.FLOWER_RED || blockType === BLOCK.FLOWER_YELLOW || blockType === BLOCK.FLOWER_BLUE || blockType === BLOCK.FLOWER_WHITE) continue;
         const [bx, by, bz] = key.split(',').map(Number);
+        // Skip foundation blocks below sea level — never seen from far away, massive count
+        if (by < 128) continue;
         const wx = bx * BS, wy = (by - yOff) * BS, wz = bz * BS;
         const col = BLOCK_COLORS[blockType] || 0xffffff;
         const x0 = wx, y0 = wy, z0 = wz, x1 = wx + BS, y1 = wy + BS, z1 = wz + BS;
@@ -13102,17 +13104,17 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
 
-    // Rebuild structure LOD mesh if modified blocks changed (throttled — every ~1s)
+    // Rebuild structure LOD mesh if modified blocks changed — throttled heavily
     if (world && world._modifiedBlocks) {
         if (world._modifiedBlocks.size !== _lastModBlocksSize) {
             _lastModBlocksSize = world._modifiedBlocks.size;
             _playerBlocksDirty = true;
+            _playerBlocksRebuildTimer = 3.0; // wait 3s of stability before rebuilding
         }
     }
     if (_playerBlocksDirty) {
-        _playerBlocksRebuildTimer = (_playerBlocksRebuildTimer || 0) - dt;
+        _playerBlocksRebuildTimer -= dt;
         if (_playerBlocksRebuildTimer <= 0) {
-            _playerBlocksRebuildTimer = 1.0;
             rebuildPlayerBlocksMesh();
         }
     }
