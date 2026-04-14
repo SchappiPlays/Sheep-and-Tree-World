@@ -473,9 +473,9 @@ function getCastleBlocks() {
 }
 
 // Force-generate all chunks containing villages and the castle so their
-// blocks end up in world._modifiedBlocks and show in distant LOD immediately
+// blocks end up in world._modifiedBlocks and show in distant LOD immediately.
+// Async — spread over multiple frames so the game doesn't hang at load.
 export function preplaceVillagesAndCastle(world) {
-    const yOff = 128;
     const getChunksForBBox = (minBx, maxBx, minBz, maxBz) => {
         const result = [];
         const minCx = Math.floor(minBx / 16), maxCx = Math.floor(maxBx / 16);
@@ -486,23 +486,30 @@ export function preplaceVillagesAndCastle(world) {
         return result;
     };
     const chunks = new Set();
-    // Villages — each house spans up to ~22 blocks from the village center
     for (const vd of VILLAGE_DEFS) {
         const vbx = Math.floor(vd.x / BLOCK_SIZE);
         const vbz = Math.floor(vd.z / BLOCK_SIZE);
-        // Villages extend up to 50 blocks from center (houses 20+30 out + 22 size + shops 28+shop size)
         const r = 60;
         for (const [cx, cz] of getChunksForBBox(vbx - r, vbx + r, vbz - r, vbz + r)) chunks.add(cx + ',' + cz);
     }
-    // Castle at (-400, 20), 60x50 blocks
     const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
     const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
     for (const [cx, cz] of getChunksForBBox(cbx - 10, cbx + 170, cbz - 10, cbz + 140)) chunks.add(cx + ',' + cz);
-    // Force chunks to generate — blocks get registered in _modifiedBlocks
-    for (const key of chunks) {
-        const [cx, cz] = key.split(',').map(Number);
-        world.getOrCreateChunk(cx, cz);
+
+    // Process in batches spread over frames
+    const queue = [...chunks];
+    const PER_FRAME = 8;
+    function step() {
+        let n = 0;
+        while (queue.length > 0 && n < PER_FRAME) {
+            const key = queue.shift();
+            const [cx, cz] = key.split(',').map(Number);
+            try { world.getOrCreateChunk(cx, cz); } catch (e) {}
+            n++;
+        }
+        if (queue.length > 0) setTimeout(step, 16);
     }
+    setTimeout(step, 100);
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {
