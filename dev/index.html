@@ -1150,7 +1150,7 @@ function rebuildPlayerBlocksMesh() {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     // Hide this mesh near the player — the real chunk meshes show instead
     mat.onBeforeCompile = (shader) => {
         shader.uniforms._playerPos = { value: new THREE.Vector3() };
