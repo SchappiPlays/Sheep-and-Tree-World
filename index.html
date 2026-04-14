@@ -1793,7 +1793,7 @@ function startGame(loadSlotName) {
     buildRuinedFortress(world);
     buildSouthwestFortress(world);
     markPlayerBlocksDirty();
-    // Preplace disabled — caused load lag. Structures appear in LOD as you explore.
+    preplaceVillagesAndCastle(world);
     buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
     buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
     buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)

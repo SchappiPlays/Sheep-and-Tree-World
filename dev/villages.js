@@ -472,44 +472,43 @@ function getCastleBlocks() {
     return blocks;
 }
 
-// Force-generate all chunks containing villages and the castle so their
-// blocks end up in world._modifiedBlocks and show in distant LOD immediately.
-// Async — spread over multiple frames so the game doesn't hang at load.
+// Lightweight LOD-only preplace — fills world._structureBlocks with village
+// house blocks and castle blocks so they appear in the distant terrain LOD
+// without running full chunk generation. Fast.
 export function preplaceVillagesAndCastle(world) {
-    const getChunksForBBox = (minBx, maxBx, minBz, maxBz) => {
-        const result = [];
-        const minCx = Math.floor(minBx / 16), maxCx = Math.floor(maxBx / 16);
-        const minCz = Math.floor(minBz / 16), maxCz = Math.floor(maxBz / 16);
-        for (let cx = minCx; cx <= maxCx; cx++) {
-            for (let cz = minCz; cz <= maxCz; cz++) result.push([cx, cz]);
-        }
-        return result;
+    const yOff = 128;
+    if (!world._structureBlocks) world._structureBlocks = new Map();
+    const add = (bx, by, bz, b) => {
+        if (b === BLOCK.AIR || b === 0) return;
+        world._structureBlocks.set(bx + ',' + by + ',' + bz, b);
     };
-    const chunks = new Set();
+    // Villages
     for (const vd of VILLAGE_DEFS) {
         const vbx = Math.floor(vd.x / BLOCK_SIZE);
         const vbz = Math.floor(vd.z / BLOCK_SIZE);
-        const r = 60;
-        for (const [cx, cz] of getChunksForBBox(vbx - r, vbx + r, vbz - r, vbz + r)) chunks.add(cx + ',' + cz);
+        for (let hi = 0; hi < vd.houses; hi++) {
+            const angle = (hi / vd.houses) * Math.PI * 2 + vd.x * 0.01;
+            const dist = 20 + (hi * 17) % 30;
+            const hx = vbx + Math.round(Math.cos(angle) * dist);
+            const hz = vbz + Math.round(Math.sin(angle) * dist);
+            const seed = world._hash(hx * 0.37, hz * 0.53);
+            const sizeIdx = hi % 3;
+            const sizeRef = [{ w: 12, d: 10 }, { w: 15, d: 12 }, { w: 18, d: 14 }][sizeIdx % 3];
+            const pts = [[hx, hz], [hx + sizeRef.w, hz], [hx, hz + sizeRef.d], [hx + sizeRef.w, hz + sizeRef.d], [hx + (sizeRef.w >> 1), hz + (sizeRef.d >> 1)]];
+            let maxH = -Infinity;
+            for (const [px, pz] of pts) { const th = world.getBaseHeightBlocks(px, pz); if (th > maxH) maxH = th; }
+            const baseY = maxH + yOff;
+            const houseBlocks = getHouseBlocks(seed, sizeIdx, vd.biome);
+            for (const hb of houseBlocks) add(hx + hb.x, baseY + hb.y, hz + hb.z, hb.b);
+        }
     }
+    // Castle
     const cbx = Math.floor(CASTLE.wx / BLOCK_SIZE);
     const cbz = Math.floor(CASTLE.wz / BLOCK_SIZE);
-    for (const [cx, cz] of getChunksForBBox(cbx - 10, cbx + 170, cbz - 10, cbz + 140)) chunks.add(cx + ',' + cz);
-
-    // Process in batches spread over frames
-    const queue = [...chunks];
-    const PER_FRAME = 2;
-    function step() {
-        let n = 0;
-        while (queue.length > 0 && n < PER_FRAME) {
-            const key = queue.shift();
-            const [cx, cz] = key.split(',').map(Number);
-            try { world.getOrCreateChunk(cx, cz); } catch (e) {}
-            n++;
-        }
-        if (queue.length > 0) setTimeout(step, 50);
-    }
-    setTimeout(step, 500);
+    const castleBaseY = world.getBaseHeightBlocks(cbx + 80, cbz + 65) + yOff;
+    const castleBlocks = world._castleBlocks || getCastleBlocks();
+    world._castleBlocks = castleBlocks;
+    for (const hb of castleBlocks) add(cbx + hb.x, castleBaseY + hb.y, cbz + hb.z, hb.b);
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {
