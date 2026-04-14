@@ -1094,7 +1094,11 @@ function markPlayerBlocksDirty() { _playerBlocksDirty = true; }
 function rebuildPlayerBlocksMesh() {
     _playerBlocksDirty = false;
     if (_playerBlocksMesh) { scene.remove(_playerBlocksMesh); _playerBlocksMesh.geometry.dispose(); _playerBlocksMesh = null; }
-    if (!world || !world._modifiedBlocks || world._modifiedBlocks.size === 0) return;
+    if (!world) return;
+    const sources = [];
+    if (world._modifiedBlocks && world._modifiedBlocks.size > 0) sources.push(world._modifiedBlocks);
+    if (world._structureBlocks && world._structureBlocks.size > 0) sources.push(world._structureBlocks);
+    if (sources.length === 0) return;
     const BS = BLOCK_SIZE, yOff = 128;
     const positions = [], colors = [], indices = [];
     const _c = new THREE.Color();
@@ -1102,8 +1106,10 @@ function rebuildPlayerBlocksMesh() {
     // Only render non-AIR placed blocks (mined-air would be empty space, don't render)
     // Build a set for fast neighbor lookup (so we can skip faces between placed blocks)
     const placedSet = new Set();
-    for (const [key, blockType] of world._modifiedBlocks) {
-        if (blockType && blockType !== 0) placedSet.add(key);
+    for (const src of sources) {
+        for (const [key, blockType] of src) {
+            if (blockType && blockType !== 0) placedSet.add(key);
+        }
     }
     const isPlaced = (bx, by, bz) => placedSet.has(bx + ',' + by + ',' + bz);
     const _pushFace = (x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3) => {
@@ -1112,7 +1118,8 @@ function rebuildPlayerBlocksMesh() {
         indices.push(v, v+1, v+2, v, v+2, v+3);
         v += 4;
     };
-    for (const [key, blockType] of world._modifiedBlocks) {
+    for (const src of sources) {
+    for (const [key, blockType] of src) {
         if (blockType === 0 || blockType === BLOCK.AIR) continue;
         if (blockType === BLOCK.WATER || blockType === BLOCK.LEAVES || blockType === BLOCK.PINE_LEAVES) continue;
         if (blockType === BLOCK.FLOWER_RED || blockType === BLOCK.FLOWER_YELLOW || blockType === BLOCK.FLOWER_BLUE || blockType === BLOCK.FLOWER_WHITE) continue;
@@ -1135,6 +1142,7 @@ function rebuildPlayerBlocksMesh() {
         if (!isPlaced(bx, by, bz+1)) { _c.setHex(col); _c.multiplyScalar(0.8); _pushFace(x1,y0,z1, x1,y1,z1, x0,y1,z1, x0,y0,z1); }
         // -Z
         if (!isPlaced(bx, by, bz-1)) { _c.setHex(col); _c.multiplyScalar(0.7); _pushFace(x0,y0,z0, x0,y1,z0, x1,y1,z0, x1,y0,z0); }
+    }
     }
     if (positions.length === 0) return;
     const geo = new THREE.BufferGeometry();
@@ -1803,7 +1811,9 @@ function startGame(loadSlotName) {
 
         const _placeBlock = (bx, by, bz, block) => {
             if (by < 0 || by >= 256) return;
-            w._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
+            // Use structureBlocks (not modifiedBlocks) so these don't bloat saves
+            if (!w._structureBlocks) w._structureBlocks = new Map();
+            w._structureBlocks.set(bx + ',' + by + ',' + bz, block);
             const mcx = Math.floor(bx / CHUNK_SIZE), mcz = Math.floor(bz / CHUNK_SIZE);
             const mlx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
             const mlz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -2335,7 +2345,9 @@ function startGame(loadSlotName) {
 
         const _placeBlock = (bx, by, bz, block) => {
             if (by < 0 || by >= 256) return;
-            w._modifiedBlocks.set(bx + ',' + by + ',' + bz, block);
+            // Use structureBlocks (not modifiedBlocks) so these don't bloat saves
+            if (!w._structureBlocks) w._structureBlocks = new Map();
+            w._structureBlocks.set(bx + ',' + by + ',' + bz, block);
             const mcx = Math.floor(bx / CHUNK_SIZE), mcz = Math.floor(bz / CHUNK_SIZE);
             const mlx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
             const mlz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -13103,12 +13115,13 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
 
-    // Rebuild structure LOD mesh if modified blocks changed — throttled heavily
+    // Rebuild structure LOD mesh if block counts changed — throttled heavily
     if (world && world._modifiedBlocks) {
-        if (world._modifiedBlocks.size !== _lastModBlocksSize) {
-            _lastModBlocksSize = world._modifiedBlocks.size;
+        const totalSize = world._modifiedBlocks.size + (world._structureBlocks ? world._structureBlocks.size : 0);
+        if (totalSize !== _lastModBlocksSize) {
+            _lastModBlocksSize = totalSize;
             _playerBlocksDirty = true;
-            _playerBlocksRebuildTimer = 3.0; // wait 3s of stability before rebuilding
+            _playerBlocksRebuildTimer = 3.0;
         }
     }
     if (_playerBlocksDirty) {
