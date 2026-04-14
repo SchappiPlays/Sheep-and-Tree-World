@@ -12742,17 +12742,18 @@ function animate() {
             player.bowHeld._nockedArrow.visible = drawT > 0.05 && inventory['arrow'] > 0;
             player.bowHeld._nockedArrow.position.z = nockZ + 0.4;
         }
-        // RIGHT arm (non-sword) holds bow extended forward, slightly angled across body
-        player.rightArm.shoulder.rotation.x = -1.4;
-        player.rightArm.shoulder.rotation.y = 0.35;
-        player.rightArm.shoulder.rotation.z = -0.1;
-        player.rightArm.elbow.rotation.x = -0.2;
-        // LEFT arm (sword hand) reaches forward to string, then pulls back as drawT increases
-        // At drawT=0: arm extends forward matching bow; at drawT=1: elbow bent, hand near cheek
-        player.leftArm.shoulder.rotation.x = -1.4 + drawT * 0.3;
-        player.leftArm.shoulder.rotation.y = -0.2 + drawT * 0.1;
-        player.leftArm.shoulder.rotation.z = 0.05;
-        player.leftArm.elbow.rotation.x = -0.15 - drawT * 1.6;
+        // RIGHT arm (non-sword) holds bow extended forward, angled slightly inward toward center
+        player.rightArm.shoulder.rotation.x = -1.55;
+        player.rightArm.shoulder.rotation.y = -0.25; // bend INWARD (across body)
+        player.rightArm.shoulder.rotation.z = 0.4;   // roll to tilt bow left (top leans left)
+        player.rightArm.elbow.rotation.x = -0.1;
+        // LEFT arm (sword hand) reaches across to the bowstring and pulls back
+        // Reaches across body (positive y rotation to cross), with elbow bending as drawn
+        player.leftArm.shoulder.rotation.x = -1.5;
+        player.leftArm.shoulder.rotation.y = 0.5 - drawT * 0.15;   // reach across to the right side
+        player.leftArm.shoulder.rotation.z = -0.2;
+        player.leftArm.elbow.rotation.x = -0.2 - drawT * 1.5; // elbow bends back as draw increases
+
     }
 
     // Held torch light
