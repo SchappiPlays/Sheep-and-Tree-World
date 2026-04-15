@@ -495,7 +495,7 @@ import { CreatureManager } from './creatures.js';
 import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
 import { HorseManager } from './horses.js';
 import { Multiplayer } from './multiplayer.js';
-import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle } from './villages.js';
+import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle, makeVillager } from './villages.js';
 
 function mix(a, b, t) { return a + (b - a) * t; }
 
@@ -3396,105 +3396,77 @@ function startGame(loadSlotName) {
 
         w._easternFortress = { x: FX, z: FZ };
 
-        // === RED DRAGON CORPSE ===
+        // === RED DRAGON CORPSE — uses real dragon model ===
         const CORP_X = FX + 4, CORP_Z = FZ + 6;
-        const CORP_Y = (gy - yOff) * BS + 0.08;
-        const DCS = 4.5;
-        const dBodyMat_r = new THREE.MeshStandardMaterial({ color: 0x7A1800, roughness: 0.92, metalness: 0.03 });
-        const dBoneMat_r = new THREE.MeshStandardMaterial({ color: 0xD4C8A0, roughness: 0.9 });
-        const dWingMat_r = new THREE.MeshStandardMaterial({ color: 0x5A0E00, roughness: 0.95, side: THREE.DoubleSide });
-        const dDarkMat_r = new THREE.MeshStandardMaterial({ color: 0x1A0500, roughness: 0.95 });
+        const corpseTerrainY = getTerrainHeight(CORP_X, CORP_Z);
 
-        const drpGrp = new THREE.Group();
-        drpGrp.position.set(CORP_X, CORP_Y, CORP_Z);
-        drpGrp.rotation.y = 0.35;
-        scene.add(drpGrp);
-
-        // Body lying on side along z-axis
-        const dBody_r = new THREE.Mesh(new THREE.CylinderGeometry(0.55*DCS, 0.32*DCS, 3.0*DCS, 10), dBodyMat_r);
-        dBody_r.rotation.x = Math.PI/2; dBody_r.rotation.z = 0.18;
-        dBody_r.position.set(0, 0.48*DCS, 0); drpGrp.add(dBody_r);
-        // Exposed ribs
-        for(let i=0;i<7;i++){
-            const ribH=(0.55-i*0.02)*DCS;
-            const rib=new THREE.Mesh(new THREE.CylinderGeometry(0.022*DCS,0.038*DCS,ribH,4),dBoneMat_r);
-            rib.position.set(-0.72*DCS+i*0.24*DCS,0.88*DCS,0.05*DCS);
-            rib.rotation.z=-0.35+i*0.04; rib.rotation.x=0.15-i*0.02;
-            drpGrp.add(rib);
-        }
-        // Neck
-        const dNeck_r = new THREE.Mesh(new THREE.CylinderGeometry(0.16*DCS,0.28*DCS,1.4*DCS,7),dBodyMat_r);
-        dNeck_r.position.set(1.45*DCS,0.42*DCS,0.25*DCS);
-        dNeck_r.rotation.z=Math.PI*0.52; dNeck_r.rotation.y=0.22; drpGrp.add(dNeck_r);
-        // Head resting on ground
-        const dHead_r = new THREE.Mesh(new THREE.BoxGeometry(0.6*DCS,0.28*DCS,0.4*DCS),dBodyMat_r);
-        dHead_r.position.set(2.05*DCS,0.14*DCS,0.55*DCS); dHead_r.rotation.y=-0.4; drpGrp.add(dHead_r);
-        const dJaw_r = new THREE.Mesh(new THREE.BoxGeometry(0.54*DCS,0.1*DCS,0.35*DCS),dBodyMat_r);
-        dJaw_r.position.set(2.05*DCS,0.04*DCS,0.56*DCS); dJaw_r.rotation.y=-0.4; dJaw_r.rotation.z=0.15; drpGrp.add(dJaw_r);
-        const dEye_r = new THREE.Mesh(new THREE.SphereGeometry(0.06*DCS,4,4),dDarkMat_r);
-        dEye_r.position.set(2.32*DCS,0.19*DCS,0.32*DCS); drpGrp.add(dEye_r);
-        // Skull horns
-        [[1.92*DCS,0.46*DCS,0.22*DCS,-0.7,0.3],[2.08*DCS,0.42*DCS,0.8*DCS,-0.5,-0.35]].forEach(([ox,oy,oz,rz,rx])=>{
-            const h=new THREE.Mesh(new THREE.ConeGeometry(0.045*DCS,0.4*DCS,5),dBoneMat_r);
-            h.position.set(ox,oy,oz); h.rotation.z=rz; h.rotation.x=rx; drpGrp.add(h);
+        // Build dragon using the real model (same as baby dragons), scale to large adult
+        const redCorpse = makeBabyDragon(0, 0, 0, 0xA02010, 0x620800, false, false, false, false);
+        const cg = redCorpse.group;
+        cg.scale.setScalar(1.8); // large elder — babyScale starts at 0.04, this makes it adult+
+        // Fallen pose: tilt heavily onto side
+        cg.rotation.z = 1.3;    // ~74° lean, nearly on side
+        cg.rotation.y = 0.3;    // slight direction twist
+        // Lift the group so the body side rests on ground (compensate for tilt)
+        cg.position.set(CORP_X, corpseTerrainY + 2.2, CORP_Z);
+        // Dead pose: jaw hanging open, neck drooping, tail draped
+        redCorpse.jawGrp.rotation.x = 0.65;
+        if (redCorpse.neckSegs) redCorpse.neckSegs.forEach((s, i) => { s.rotation.x = 0.18 + i * 0.12; });
+        if (redCorpse.tailSegs) redCorpse.tailSegs.forEach((s, i) => { s.rotation.x = 0.08 * (i + 1); });
+        // Wings collapsed — fold them down alongside the body
+        if (redCorpse.wings) redCorpse.wings.forEach((wg, i) => {
+            wg.rotation.z = i % 2 === 0 ? -1.1 : 1.1;
         });
-        // Tail
-        const dTail_r = new THREE.Mesh(new THREE.CylinderGeometry(0.04*DCS,0.22*DCS,2.8*DCS,7),dBodyMat_r);
-        dTail_r.position.set(-1.95*DCS,0.2*DCS,-0.35*DCS);
-        dTail_r.rotation.x=Math.PI/2; dTail_r.rotation.y=-0.45; dTail_r.rotation.z=0.15; drpGrp.add(dTail_r);
-        const dTailTip_r = new THREE.Mesh(new THREE.ConeGeometry(0.05*DCS,0.45*DCS,5),dBoneMat_r);
-        dTailTip_r.position.set(-3.25*DCS,0.07*DCS,-0.75*DCS);
-        dTailTip_r.rotation.z=-0.3; dTailTip_r.rotation.y=-0.45; drpGrp.add(dTailTip_r);
-        // Back spines
-        for(let i=0;i<5;i++){
-            const sp=new THREE.Mesh(new THREE.ConeGeometry(0.04*DCS,(0.55-i*0.06)*DCS,4),dBoneMat_r);
-            sp.position.set(-0.6*DCS+i*0.3*DCS,1.05*DCS,0); sp.rotation.z=-0.18+i*0.06; drpGrp.add(sp);
-        }
-        // Wings spread on ground
-        const mkCorpseWing = (side) => {
-            const pts=[[0,0],[side*1.6*DCS,0.25*DCS],[side*3.2*DCS,0.6*DCS],[side*4.0*DCS,0],[side*3.5*DCS,-1.1*DCS],[side*2.0*DCS,-1.6*DCS],[side*0.4*DCS,-1.1*DCS],[0,0]];
-            const shp=new THREE.Shape(); shp.moveTo(pts[0][0],pts[0][1]);
-            for(let pi=1;pi<pts.length;pi++) shp.lineTo(pts[pi][0],pts[pi][1]);
-            const m=new THREE.Mesh(new THREE.ShapeGeometry(shp),dWingMat_r);
-            m.rotation.x=-Math.PI/2; return m;
-        };
-        const wL_r=mkCorpseWing(1); wL_r.position.set(-0.4*DCS,0.06*DCS,0.55*DCS); wL_r.rotation.y=0.15; drpGrp.add(wL_r);
-        const wR_r=mkCorpseWing(-1); wR_r.position.set(-0.4*DCS,0.06*DCS,-0.55*DCS); wR_r.rotation.y=-0.2; drpGrp.add(wR_r);
-        // Legs sprawled
-        [[0.75*DCS,0.06*DCS,0.72*DCS,0.45],[0.75*DCS,0.06*DCS,-0.72*DCS,-0.45],
-         [-0.6*DCS,0.06*DCS,0.8*DCS,0.6],[-0.6*DCS,0.06*DCS,-0.8*DCS,-0.6]].forEach(([lx,ly,lz,ry_],idx)=>{
-            const r2=idx<2?0.14:0.12, r1=idx<2?0.09:0.08, lh=idx<2?0.85:0.75;
-            const leg=new THREE.Mesh(new THREE.CylinderGeometry(r1*DCS,r2*DCS,lh*DCS,6),dBodyMat_r);
-            leg.position.set(lx,ly,lz); leg.rotation.z=Math.PI/2; leg.rotation.y=ry_; drpGrp.add(leg);
-        });
+        scene.add(cg);
 
-        // === SCHOLARS gathered around the corpse ===
-        const sMat1_e = new THREE.MeshStandardMaterial({ color: 0x1e2b50, roughness: 0.88 });
-        const sMat2_e = new THREE.MeshStandardMaterial({ color: 0x3a2410, roughness: 0.88 });
-        const sHead_e = new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.8 });
-        const sScroll_e = new THREE.MeshStandardMaterial({ color: 0xe8d8a0, roughness: 0.85 });
-        const mkScholar = (wx, wz, ry, crouching, mat) => {
-            const by_s = (gy - yOff) * BS;
-            const grp = new THREE.Group();
-            grp.position.set(wx, by_s, wz); grp.rotation.y = ry;
-            const bodyH = crouching ? 0.38 : 0.55, bodyY = crouching ? 0.28 : 0.4;
-            const bodyM = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, bodyH, 6), mat);
-            bodyM.position.y = bodyY; grp.add(bodyM);
-            const headM = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.18), sHead_e);
-            headM.position.y = crouching ? 0.58 : 0.75; grp.add(headM);
-            const hoodM = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.18, 6), mat);
-            hoodM.position.y = crouching ? 0.71 : 0.88; grp.add(hoodM);
-            const scrollM = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.28, 5), sScroll_e);
-            scrollM.rotation.x = crouching ? 0.9 : 0.5; scrollM.position.set(0.13, crouching ? 0.44 : 0.55, 0.08);
-            grp.add(scrollM);
-            scene.add(grp);
+        // === NPCS — villager model, correct terrain Y ===
+        // Helper: spawn villager and optionally pose them
+        const spawnNPC = (wx, wz, seed, poseAngle, lookDown) => {
+            const ty = getTerrainHeight(wx, wz);
+            const v = makeVillager(scene, wx, wz, ty, seed);
+            v.group.rotation.y = poseAngle;
+            if (lookDown) {
+                v.headGroup.rotation.x = -0.45; // looking down at dragon
+                v.leftArm.shoulder.rotation.x = 0.6; // arm reaching forward
+            }
+            return v;
         };
-        mkScholar(CORP_X+3.2, CORP_Z+1.8, Math.PI*1.1, false, sMat1_e);
-        mkScholar(CORP_X-1.8, CORP_Z+3.0, Math.PI*0.75, true, sMat2_e);
-        mkScholar(CORP_X+4.2, CORP_Z-0.8, Math.PI*1.45, false, sMat1_e);
-        mkScholar(CORP_X-2.8, CORP_Z-2.2, Math.PI*0.28, false, sMat2_e);
-        mkScholar(CORP_X+1.2, CORP_Z-3.2, 0, true, sMat1_e);
-        mkScholar(CORP_X-3.8, CORP_Z+0.6, Math.PI*1.78, false, sMat2_e);
+
+        // Close observers — crouching/leaning in near the dragon head and body
+        const obs1 = spawnNPC(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true);
+        obs1.body.position.y = 0.65; obs1.spine.rotation.x = 0.55; // crouch
+        const obs2 = spawnNPC(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true);
+        obs2.body.position.y = 0.65; obs2.spine.rotation.x = 0.5;
+
+        // Mid-ring — standing scholars with scrolls/notes
+        spawnNPC(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
+        spawnNPC(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
+        spawnNPC(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
+        spawnNPC(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
+
+        // Outer ring — arriving, writing notes, discussing
+        spawnNPC(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        spawnNPC(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
+        spawnNPC(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
+
+        // Two guards near the inner dividing wall gate
+        const guardZ = FZ + (-10) * 0; // inner wall in world coords ≈ FZ - 9.5
+        const divWorldZ = (Math.round(FZ / BS) - 10) * BS;
+        spawnNPC(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
+        spawnNPC(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
+
+        // ── LEADER: Archon Vael — head of the expedition ──
+        // Stands prominently north of the corpse, facing it
+        const leaderX = CORP_X - 6, leaderZ = CORP_Z - 5;
+        const leader = spawnNPC(leaderX, leaderZ, 0.42, Math.PI * 0.15, true);
+        // Distinctive appearance: crimson robes, grey hair, larger scale
+        leader._shirtMat.color.setHex(0x8B0000);  // deep crimson
+        leader._pantsMat.color.setHex(0x4a2200);  // dark brown
+        leader._hairMat.color.setHex(0xaaaaaa);   // grey/white hair
+        leader.group.scale.setScalar(1.12);        // taller
+        // Arm raised slightly — gesturing as if explaining
+        leader.rightArm.shoulder.rotation.x = -0.5;
+        leader.rightArm.shoulder.rotation.z = -0.3;
     }
 
     // Naturally spawning chests in ruins

@@ -718,6 +718,7 @@ function makeVillager(scene, x, z, terrainY, seed) {
     };
 }
 
+export { makeVillager };
 export class VillageManager {
     constructor(scene, world) {
         this.scene = scene;
