@@ -10833,30 +10833,6 @@ function updateAnvilUI() {
         html += '</div>';
     }
 
-    // Salvage damaged dragonsteel weapons
-    const _damagedInInv = Object.entries(window._customSwords || {}).filter(
-        ([id, cs]) => cs.tier === 'damaged_dragonsteel' && (inventory[id] || 0) > 0
-    );
-    const salvageCollapsed = _anvilCollapsed['_salvage'];
-    if (_damagedInInv.length > 0) {
-        html += '<div style="margin-top:12px;border-top:1px solid rgba(200,120,60,0.4);padding-top:10px;">';
-        html += `<div data-toggle="_salvage" style="color:rgba(220,160,90,0.85);font:bold 11px monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${salvageCollapsed ? '▶' : '▼'} Salvage Dragonsteel</div>`;
-        html += `<div style="${salvageCollapsed ? 'display:none;' : ''}">`;
-        html += '<div style="font:10px monospace;color:rgba(180,150,100,0.6);margin-bottom:8px;">Break down damaged weapons into dragonsteel ingots, then forge your own.</div>';
-        for (const [sid, cs] of _damagedInInv) {
-            const ingots = cs.isBattleaxe ? 4 : 3;
-            const label = cs.name || 'Damaged Dragonsteel Weapon';
-            html += `<div class="craft-row" data-salvage-id="${sid}" style="cursor:pointer;">
-                <span class="craft-icon" style="background:#1a1a28;border:1px solid rgba(100,90,160,0.5);"></span>
-                <span style="flex:1;font:10px monospace;color:rgba(210,190,140,0.85);">${label}</span>
-                <span class="craft-arrow">→</span>
-                <span class="craft-icon" style="background:#1a1a28;border:1px solid rgba(100,90,160,0.5);"></span>
-                <span style="font:10px monospace;color:rgba(150,200,120,0.8);">${ingots}× Dragonsteel Ingot</span>
-            </div>`;
-        }
-        html += '</div></div>';
-    }
-
     // Custom sword forge
     const _sel = (id, opts, cur) => {
         let s = `<select id="${id}" style="width:100%;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
@@ -10988,28 +10964,6 @@ function updateAnvilUI() {
         });
     });
 
-    // Wire up salvage buttons
-    anvilMenuEl.querySelectorAll('[data-salvage-id]').forEach(row => {
-        row.addEventListener('click', () => {
-            const sid = row.dataset.salvageId;
-            const cs = window._customSwords?.[sid];
-            if (!cs || !(inventory[sid] > 0)) return;
-            const ingots = cs.isBattleaxe ? 4 : 3;
-            // Remove weapon from inventory and hotbar
-            delete inventory[sid];
-            for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === sid) hotbarSlots[i] = 0;
-            // Give dragonsteel ingots
-            inventory['dragonsteel_ingot'] = (inventory['dragonsteel_ingot'] || 0) + ingots;
-            // Fill empty hotbar slot if dragonsteel_ingot isn't already slotted
-            if (!hotbarSlots.includes('dragonsteel_ingot')) {
-                const emptyIdx = hotbarSlots.indexOf(0);
-                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = 'dragonsteel_ingot';
-            }
-            showToast(`Salvaged: +${ingots}× Dragonsteel Ingot`);
-            refreshUI();
-            updateAnvilUI();
-        });
-    });
 
     // Wire up standard recipe clicks
     anvilMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
