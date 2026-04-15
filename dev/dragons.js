@@ -1006,7 +1006,7 @@ export class DragonManager {
         // ── Eggs — exact colours from game.html ──
         const eggDefs = [
             // Wyverns
-            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, isWyvern: true, name: 'Dark Red Wyvern' },
+            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, wingColor: 0xff5533, isWyvern: true, name: 'Dark Red Wyvern' },
             { dx: 4, dz: -1, color: 0x443388, emissive: 0x221155, veinColor: 0x7744cc, glowColor: 0x7744ff, isWyvern: true, name: 'Purple Wyvern' },
             { dx: -2, dz: -4, color: 0x228844, emissive: 0x114422, veinColor: 0x22cc66, glowColor: 0x22ff66, isWyvern: true, name: 'Emerald Wyvern' },
             { dx: 5, dz: 3, color: 0x4488cc, emissive: 0x224466, veinColor: 0xccaa33, glowColor: 0x44aaff, wingColor: 0xccaa33, isWyvern: true, name: 'Steel Blue Wyvern' },

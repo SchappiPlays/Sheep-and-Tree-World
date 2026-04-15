@@ -499,6 +499,44 @@ import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle } from '
 
 function mix(a, b, t) { return a + (b - a) * t; }
 
+// Shared double-bit axe head builder. Returns a Group to attach to a sword mesh's
+// _bladeGrp. Includes an extended wooden haft (using the given handle material) and
+// two mirrored heads so the silhouette reads as a proper double-headed battleaxe.
+function buildAxeHead(bladeMat, handleMat) {
+    const grp = new THREE.Group();
+    // Wooden haft extension — spans from just above the guard up to the base of the head
+    const haft = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.55, 0.032), handleMat || bladeMat);
+    haft.position.y = 0.4;
+    grp.add(haft);
+    // Head mounted high on the haft
+    const head = new THREE.Group();
+    head.position.y = 0.70;
+    // Central socket (metal band around the haft where both heads mount)
+    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.05), bladeMat);
+    head.add(socket);
+    // Double-bit: two mirrored heads facing opposite directions
+    for (const sign of [-1, 1]) {
+        const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.025), bladeMat);
+        cheek.position.set(sign * 0.12, 0, 0);
+        head.add(cheek);
+        const edge = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.20, 3), bladeMat);
+        edge.position.set(sign * 0.28, 0, 0);
+        edge.rotation.z = sign * -Math.PI / 2;
+        head.add(edge);
+        const topHorn = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.09, 4), bladeMat);
+        topHorn.position.set(sign * 0.15, 0.14, 0);
+        topHorn.rotation.z = sign * -0.5;
+        head.add(topHorn);
+        const botHorn = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.09, 4), bladeMat);
+        botHorn.position.set(sign * 0.15, -0.14, 0);
+        botHorn.rotation.z = Math.PI - sign * 0.5;
+        head.add(botHorn);
+    }
+    grp.add(head);
+    return grp;
+}
+window.buildAxeHead = buildAxeHead;
+
 const SKY_COLOR = 0x87CEEB;
 
 // ── Renderer ──
@@ -2393,8 +2431,8 @@ function startGame(loadSlotName) {
             const wz = Math.round(-335 + Math.sin(ang) * rad);
             const def = {
                 tier: 'dragonsteel_heavy',
-                damage: 14, // battleaxes hit harder
-                speedMult: 1.4, // but swing slower
+                damage: 8, // scaling base (applied through _getDragonsteelDmg like a normal dragonsteel sword, just higher base)
+                speedMult: 1.4, // swings slower than a sword
                 pommelStyle: 'round', pommelMat: bd.gem,
                 handleMat: bd.handle,
                 guardStyle: 'wide', guardMat: 'dragonsteel_ingot',
@@ -3560,20 +3598,19 @@ function startGame(loadSlotName) {
             const bLenS = (cs.bladeLength || 2) / 2;
             sm._bladeGrp.scale.set(cs.bladeThickness || 1, bLenS, cs.bladeThickness || 1);
             sm._bladeGrp.position.y = 0.1 * (1 - bLenS);
-            // Battleaxe silhouette — add a wide axe-head wedge and hide default blade/tip
+            // Battleaxe silhouette — double-bit head + extended haft.
             if (cs.isBattleaxe && !sm._axeHead) {
+                sm._bladeGrp.scale.set(1, 1, 1);
+                sm._bladeGrp.position.y = 0;
+                // Hide the default blade/tip and guard — an axe has no crossguard
                 for (const child of sm._bladeGrp.children) child.visible = false;
-                const axeMat = sm._bladeMat;
-                const axeGrp = new THREE.Group();
-                axeGrp.position.y = 0.28;
-                const head = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), axeMat);
-                head.position.y = 0; axeGrp.add(head);
-                const fanL = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.26, 3), axeMat);
-                fanL.rotation.z = Math.PI; fanL.position.set(0.10, 0.01, 0); axeGrp.add(fanL);
-                const fanR = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.20, 3), axeMat);
-                fanR.rotation.z = 0; fanR.position.set(-0.07, 0.01, 0); axeGrp.add(fanR);
-                sm._bladeGrp.add(axeGrp);
-                sm._axeHead = axeGrp;
+                if (sm._guardMesh) sm._guardMesh.visible = false;
+                if (sm._guardExtra1) sm._guardExtra1.visible = false;
+                if (sm._guardExtra2) sm._guardExtra2.visible = false;
+                if (sm._trimStripe) sm._trimStripe.visible = false;
+                if (sm._trimStripe2) sm._trimStripe2.visible = false;
+                sm._axeHead = buildAxeHead(sm._bladeMat, sm._handleMat);
+                sm._bladeGrp.add(sm._axeHead);
             }
             // Position in world — stuck in ground at angle
             const gy = getTerrainHeight(fs.wx, fs.wz);
@@ -10760,6 +10797,7 @@ let anvilSwordConfig = {
     bladeMat: 'iron_ingot', bladeLength: 2, bladeThickness: 1,
     trimMat: '',
     name: '',
+    isBattleaxe: false,
 };
 
 const _anvilCollapsed = {}; // track which categories are collapsed
@@ -10847,12 +10885,19 @@ function updateAnvilUI() {
 
     // 6. Blade name
     html += `<div style="${_row}"><span style="${_lbl}width:55px;">Name</span>`;
-    html += `<input type="text" id="anvilName" maxlength="24" placeholder="Unnamed Blade" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
+    html += `<input type="text" id="anvilName" maxlength="24" placeholder="${anvilSwordConfig.isBattleaxe ? 'Unnamed Battleaxe' : 'Unnamed Blade'}" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
     html += `</div>`;
+
+    // 7. Battleaxe toggle — swaps the forged weapon for a double-bit axe with bigger
+    // per-hit damage but slower swing speed.
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Battleaxe</span>`;
+    html += `<label style="flex:1;display:flex;align-items:center;gap:6px;font:10px monospace;color:rgba(200,180,140,0.8);cursor:pointer;">`;
+    html += `<input type="checkbox" id="anvilIsBattleaxe" ${anvilSwordConfig.isBattleaxe ? 'checked' : ''}>`;
+    html += `<span>Forge as double-bit battleaxe (+50% damage, 40% slower swing)</span></label></div>`;
 
     // Cost summary + forge button
     html += '<div id="anvilCostSummary" style="margin-top:6px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
-    html += '<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Sword</button>';
+    html += `<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">${anvilSwordConfig.isBattleaxe ? 'Forge Battleaxe' : 'Forge Sword'}</button>`;
     html += '</div></div>'; // close sword collapsible + outer div
 
     // ── Custom Staff Forge ──
@@ -10948,6 +10993,7 @@ function updateAnvilUI() {
         c.bladeThickness = Number(document.getElementById('anvilBladeThick')?.value || 10) / 10;
         c.trimMat = document.getElementById('anvilTrimMat')?.value || '';
         c.name = document.getElementById('anvilName')?.value?.trim() || '';
+        c.isBattleaxe = !!document.getElementById('anvilIsBattleaxe')?.checked;
         // Parse mat keys back to numbers if needed
         if (!isNaN(c.pommelMat)) c.pommelMat = Number(c.pommelMat);
         if (!isNaN(c.handleMat)) c.handleMat = Number(c.handleMat);
@@ -10987,6 +11033,11 @@ function updateAnvilUI() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', _updateCost);
     }
+    const _axeToggle = document.getElementById('anvilIsBattleaxe');
+    if (_axeToggle) _axeToggle.addEventListener('change', () => {
+        anvilSwordConfig.isBattleaxe = _axeToggle.checked;
+        updateAnvilUI();
+    });
     for (const id of ['anvilBladeLen','anvilBladeThick']) {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', () => {
@@ -11024,6 +11075,7 @@ function updateAnvilUI() {
         // Create custom sword
         const swordId = 'csword_' + Date.now();
         if (!window._customSwords) window._customSwords = {};
+        const weaponLabel = c.isBattleaxe ? 'battleaxe' : 'sword';
         window._customSwords[swordId] = {
             tier, damage: BLADE_DAMAGE[c.bladeMat] || 3,
             pommelStyle: c.pommelStyle, pommelMat: c.pommelMat,
@@ -11031,14 +11083,16 @@ function updateAnvilUI() {
             guardStyle: c.guardStyle, guardMat: c.guardMat,
             bladeMat: c.bladeMat, bladeLength: c.bladeLength, bladeThickness: c.bladeThickness,
             trimMat: c.trimMat,
-            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' Sword'),
+            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' ' + (c.isBattleaxe ? 'Battleaxe' : 'Sword')),
+            isBattleaxe: !!c.isBattleaxe,
+            speedMult: c.isBattleaxe ? 1.4 : 1.0,
         };
         inventory[swordId] = 1;
         const emptyIdx = hotbarSlots.indexOf(0);
         if (emptyIdx >= 0) hotbarSlots[emptyIdx] = swordId;
         refreshUI();
         updateAnvilUI();
-        showToast('Forged: ' + (c.name || tier + ' sword'));
+        showToast('Forged: ' + (c.name || tier + ' ' + weaponLabel));
     });
 
     // ── Staff forge wiring ──
@@ -11158,9 +11212,14 @@ const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight
 const _getSwordDamage = (held) => {
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
         const cs = window._customSwords[held];
-        // Plain 'dragonsteel' tier keeps the level-scaled base so named fortress swords
-        // stay consistent. Sub-tiers (damaged_dragonsteel, dragonsteel_heavy) use flat damage.
-        if (cs.tier === 'dragonsteel' && !cs.damage) return _getDragonsteelDmg(5);
+        if (cs.tier === 'damaged_dragonsteel') return Math.max(1, Math.floor(_getDragonsteelDmg(5) / 2));
+        if (cs.isBattleaxe) {
+            // Battleaxes: dragonsteel scales like a normal dragonsteel sword but with a
+            // higher base (8 vs 5); non-dragonsteel adds +50% flat damage for the slower swing.
+            if (cs.tier === 'dragonsteel' || cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(8);
+            return Math.floor((cs.damage || 6) * 1.5);
+        }
+        if (cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(cs.damage || 8);
         if (cs.tier === 'dragonsteel') return _getDragonsteelDmg(5);
         return cs.damage || 6;
     }
@@ -13316,7 +13375,31 @@ function animate() {
                     ss._trimStripe.visible = false;
                     ss._trimStripe2.visible = false;
                 }
-                isTwoH = (bLen > 2.3);
+                // Battleaxe silhouette for the sheathed version
+                const _defBlade = ss._bladeGrp.children[0];
+                const _defTip = ss._bladeGrp.children[1];
+                if (cs.isBattleaxe) {
+                    ss._bladeGrp.scale.set(1, 1, 1);
+                    ss._bladeGrp.position.y = 0;
+                    if (_defBlade) _defBlade.visible = false;
+                    if (_defTip) _defTip.visible = false;
+                    ss._trimStripe.visible = false;
+                    ss._trimStripe2.visible = false;
+                    if (ss._guardMesh) ss._guardMesh.visible = false;
+                    if (ss._guardExtra1) ss._guardExtra1.visible = false;
+                    if (ss._guardExtra2) ss._guardExtra2.visible = false;
+                    if (!ss._axeHead) {
+                        ss._axeHead = window.buildAxeHead(ss._bladeMat, ss._handleMat);
+                        ss._bladeGrp.add(ss._axeHead);
+                    }
+                    ss._axeHead.visible = true;
+                } else {
+                    if (ss._axeHead) ss._axeHead.visible = false;
+                    if (_defBlade) _defBlade.visible = true;
+                    if (_defTip) _defTip.visible = true;
+                    if (ss._guardMesh) ss._guardMesh.visible = true;
+                }
+                isTwoH = (bLen > 2.3) || cs.isBattleaxe;
             } else {
                 // Standard sword — apply tier colors to all parts
                 const SC = {
@@ -13335,6 +13418,9 @@ function animate() {
                 ss._pommelMat.color.setHex(c.pommel); ss._pommelMat.needsUpdate = true;
                 ss._bladeGrp.scale.set(1, 1, 1);
                 ss._bladeGrp.position.y = 0;
+                if (ss._axeHead) ss._axeHead.visible = false;
+                if (ss._bladeGrp.children[0]) ss._bladeGrp.children[0].visible = true;
+                if (ss._bladeGrp.children[1]) ss._bladeGrp.children[1].visible = true;
             }
             if (isTwoH) {
                 // On back: blade pointing up, flat against back, slight diagonal tilt
