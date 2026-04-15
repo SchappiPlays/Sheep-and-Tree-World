@@ -508,28 +508,32 @@ function buildAxeHead(bladeMat, handleMat) {
     const haft = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.55, 0.032), handleMat || bladeMat);
     haft.position.y = 0.4;
     grp.add(haft);
-    // Head mounted high on the haft
+    // Head mounted high on the haft — flattened in Z so the silhouette reads 2D
     const head = new THREE.Group();
     head.position.y = 0.70;
+    head.scale.z = 0.45; // squash the head along the axe's thin axis
     // Central socket (metal band around the haft where both heads mount)
-    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.05), bladeMat);
+    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.08), bladeMat);
     head.add(socket);
     // Double-bit: two mirrored heads facing opposite directions
     for (const sign of [-1, 1]) {
-        const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.025), bladeMat);
+        const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.055), bladeMat);
         cheek.position.set(sign * 0.12, 0, 0);
         head.add(cheek);
-        const edge = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.20, 3), bladeMat);
+        const edge = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.20, 4), bladeMat);
         edge.position.set(sign * 0.28, 0, 0);
         edge.rotation.z = sign * -Math.PI / 2;
+        edge.rotation.y = Math.PI / 4;
         head.add(edge);
-        const topHorn = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.09, 4), bladeMat);
+        const topHorn = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), bladeMat);
         topHorn.position.set(sign * 0.15, 0.14, 0);
         topHorn.rotation.z = sign * -0.5;
+        topHorn.rotation.y = Math.PI / 4;
         head.add(topHorn);
-        const botHorn = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.09, 4), bladeMat);
+        const botHorn = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), bladeMat);
         botHorn.position.set(sign * 0.15, -0.14, 0);
         botHorn.rotation.z = Math.PI - sign * 0.5;
+        botHorn.rotation.y = Math.PI / 4;
         head.add(botHorn);
     }
     grp.add(head);
