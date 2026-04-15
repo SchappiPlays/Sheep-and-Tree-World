@@ -38,10 +38,10 @@ function makePatagium(p0, p1, maxW, mat, parent) {
     return mesh;
 }
 
-// Two-tone spike: skinMat on bottom ~38%, boneMat on top ~62%. Group with base at y=0, tip pointing up.
+// Two-tone spike: skinMat on bottom ~22%, boneMat on top ~78%. Group with base at y=0, tip pointing up.
 function gradientSpike(r, h, segs, skinMat, boneMat) {
     const grp = new THREE.Group();
-    const splitFrac = 0.38;
+    const splitFrac = 0.22;
     const baseH = h * splitFrac;
     const tipH = h * (1 - splitFrac);
     const splitR = r * (1 - splitFrac * 0.45);
@@ -426,9 +426,14 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         }
     } else {
         for (let s = -1; s <= 1; s += 2) {
-            // Base segment: skin colour if gradient, else bone
-            const hornBaseMat = useBoneGrad ? bTop : bHorn;
-            makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, hornBaseMat, headGrp);
+            if (useBoneGrad) {
+                // Skin only on the bottom ~25% of the horn (midpoint of first segment)
+                const pHMid = [s*0.215*S, 0.375*S, -0.175*S];
+                makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], pHMid, 0.045*S, 0.05*S, bTop, headGrp);
+                makeDragonBone(pHMid, [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.045*S, bHorn, headGrp);
+            } else {
+                makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
+            }
             makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
         }
         // Some ice dragons grow an extra crown of icicle-like spikes across the head
@@ -470,10 +475,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             const p2 = [s*0.32*S, -0.15*S, 0.72*S];
             const p3 = [s*0.24*S, -0.20*S, 1.00*S];
             const p4 = [s*0.12*S, -0.22*S, 1.22*S];
-            // First two segments at the root use skin colour, outer two taper to bone
+            // Only the root segment (~25% of arc) uses skin colour, rest tapers to bone
             const tuskRootMat = useBoneGrad ? bTop : bHorn;
             makeDragonBone(p0, p1, 0.085*S, 0.100*S, tuskRootMat, headGrp);
-            makeDragonBone(p1, p2, 0.065*S, 0.085*S, tuskRootMat, headGrp);
+            makeDragonBone(p1, p2, 0.065*S, 0.085*S, bHorn, headGrp);
             makeDragonBone(p2, p3, 0.040*S, 0.065*S, bHorn, headGrp);
             makeDragonBone(p3, p4, 0.015*S, 0.040*S, bHorn, headGrp);
         }
