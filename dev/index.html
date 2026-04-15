@@ -3400,23 +3400,39 @@ function startGame(loadSlotName) {
         const CORP_X = FX + 4, CORP_Z = FZ + 6;
         const corpseTerrainY = getTerrainHeight(CORP_X, CORP_Z);
 
-        // Build dragon using the real model (same as baby dragons), scale to large adult
-        const redCorpse = makeBabyDragon(0, 0, 0, 0xA02010, 0x620800, false, false, false, false);
+        // Build wyvern corpse using the real dragon model (isWyvern=true)
+        const redCorpse = makeBabyDragon(0, 0, 0, 0xA02010, 0x620800, true, false, false, false);
         const cg = redCorpse.group;
-        cg.scale.setScalar(1.8); // large elder — babyScale starts at 0.04, this makes it adult+
-        // Fallen pose: tilt heavily onto side
-        cg.rotation.z = 1.3;    // ~74° lean, nearly on side
-        cg.rotation.y = 0.3;    // slight direction twist
-        // Lift the group so the body side rests on ground (compensate for tilt)
-        cg.position.set(CORP_X, corpseTerrainY + 2.2, CORP_Z);
-        // Dead pose: jaw hanging open, neck drooping, tail draped
-        redCorpse.jawGrp.rotation.x = 0.65;
-        if (redCorpse.neckSegs) redCorpse.neckSegs.forEach((s, i) => { s.rotation.x = 0.18 + i * 0.12; });
-        if (redCorpse.tailSegs) redCorpse.tailSegs.forEach((s, i) => { s.rotation.x = 0.08 * (i + 1); });
-        // Wings collapsed — fold them down alongside the body
-        if (redCorpse.wings) redCorpse.wings.forEach((wg, i) => {
-            wg.rotation.z = i % 2 === 0 ? -1.1 : 1.1;
-        });
+        const corpseScale = 1.8;
+        cg.scale.setScalar(corpseScale);
+        const corpseFootOffset = 0.95 * 2.55 * corpseScale;
+        // Proper death pose (mirrors _toCorpse logic)
+        cg.rotation.x = 0;
+        cg.rotation.z = 0;
+        cg.rotation.y = 0.3;
+        cg.position.set(CORP_X, corpseTerrainY + corpseFootOffset * 0.35, CORP_Z);
+        // Drooped head + slack neck
+        if (redCorpse.neckGrp) redCorpse.neckGrp.rotation.x = 0.5;
+        if (redCorpse.neckSegs) for (const s of redCorpse.neckSegs) s.rotation.set(0.12, 0, 0);
+        if (redCorpse.headGrp) { redCorpse.headGrp.rotation.x = 0.5; redCorpse.headGrp.rotation.y = 0; redCorpse.headGrp.rotation.z = 0; }
+        if (redCorpse.jawGrp) redCorpse.jawGrp.rotation.x = 0.65;
+        if (redCorpse.eyes) for (const e of redCorpse.eyes) e.scale.y = 0.08;
+        if (redCorpse.tailSegs) for (let i = 0; i < redCorpse.tailSegs.length; i++) {
+            redCorpse.tailSegs[i].rotation.set(0, 0.05 * (i % 2 === 0 ? 1 : -1), 0);
+        }
+        // Hind legs splayed (wyvern front legs are hidden)
+        if (redCorpse.legs) for (let i = 0; i < redCorpse.legs.length; i++) {
+            const leg = redCorpse.legs[i];
+            if (!leg || !leg.visible) continue;
+            const side = (i % 2 === 0) ? -1 : 1;
+            leg.rotation.set(0.2, 0, side * 0.35);
+        }
+        // Wyvern wings folded flat (hierarchical arm structure: shoulder → elbow → hand)
+        if (redCorpse.wings) for (const w of redCorpse.wings) {
+            if (w._elbow) w._elbow.rotation.set(0, 0, 0);
+            if (w._hand) w._hand.rotation.set(0, 0, 0);
+            if (w.rotation) w.rotation.set(0, 0, 0);
+        }
         scene.add(cg);
 
         // === NPCS — villager model, correct terrain Y ===
