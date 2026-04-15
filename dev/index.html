@@ -2292,8 +2292,8 @@ function startGame(loadSlotName) {
         const swordId = 'csword_fortress_blade';
         if (!window._customSwords) window._customSwords = {};
         window._customSwords[swordId] = {
-            tier: 'dragonsteel',
-            damage: 12,
+            tier: 'damaged_dragonsteel',
+            damage: 5, speedMult: 1.6,
             pommelStyle: 'gem',
             pommelMat: 'ruby',
             handleMat: 'dragonsteel_ingot',
@@ -2313,7 +2313,7 @@ function startGame(loadSlotName) {
         // Wyrmblade — long thin rapier with sapphire pommel
         const s2 = 'csword_fortress_wyrm';
         window._customSwords[s2] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'gem', pommelMat: 'sapphire',
             handleMat: 'gold_ingot', guardStyle: 'ring', guardMat: 'gold_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.9, bladeThickness: 0.7,
@@ -2324,7 +2324,7 @@ function startGame(loadSlotName) {
         // Flamecleaver — wide heavy sword with emerald and gold
         const s3 = 'csword_fortress_flame';
         window._customSwords[s3] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'skull', pommelMat: 'gold_ingot',
             handleMat: 'iron_ingot', guardStyle: 'wide', guardMat: 'gold_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.2, bladeThickness: 1.8,
@@ -2335,7 +2335,7 @@ function startGame(loadSlotName) {
         // Nightfang — sleek dagger with topaz
         const s4 = 'csword_fortress_night';
         window._customSwords[s4] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'claw', pommelMat: 'topaz',
             handleMat: 'stick', guardStyle: 'straight', guardMat: 'dragonsteel_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 1.2, bladeThickness: 0.8,
@@ -2346,7 +2346,7 @@ function startGame(loadSlotName) {
         // Stormbreaker — massive two-hander with diamond and steel
         const s5 = 'csword_fortress_storm';
         window._customSwords[s5] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'round', pommelMat: 'diamond',
             handleMat: 'steel_ingot', guardStyle: 'spiked', guardMat: 'steel_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 3.8, bladeThickness: 1.6,
@@ -2357,7 +2357,7 @@ function startGame(loadSlotName) {
         // Duskrend — elegant sword with ruby guard and wolf pommel
         const s6 = 'csword_fortress_dusk';
         window._customSwords[s6] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'wolf', pommelMat: 'ruby',
             handleMat: 'gold_ingot', guardStyle: 'curved', guardMat: 'ruby',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.4, bladeThickness: 1.0,
@@ -2368,7 +2368,7 @@ function startGame(loadSlotName) {
         // Voidpiercer — stone-handled with emerald accents
         const s7 = 'csword_fortress_void';
         window._customSwords[s7] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'gem', pommelMat: 'emerald',
             handleMat: BLOCK.STONE, guardStyle: 'wide', guardMat: 'iron_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.8, bladeThickness: 1.2,
@@ -2401,7 +2401,7 @@ function startGame(loadSlotName) {
             const trimMat = hasTrim ? _gemPool[Math.floor(_hash01(i + 77) * _gemPool.length)] : null;
             const def = {
                 tier: 'damaged_dragonsteel',
-                damage: 6, // half of the 12 named dragonsteel baseline
+                damage: 5,
                 speedMult: 2.0, // attack twice as slow
                 pommelStyle, pommelMat: pommelGem,
                 handleMat,
@@ -2434,14 +2434,14 @@ function startGame(loadSlotName) {
             const wx = Math.round(-505 + Math.cos(ang) * rad);
             const wz = Math.round(-335 + Math.sin(ang) * rad);
             const def = {
-                tier: 'dragonsteel_heavy',
-                damage: 8, // scaling base (applied through _getDragonsteelDmg like a normal dragonsteel sword, just higher base)
-                speedMult: 1.4, // swings slower than a sword
+                tier: 'damaged_dragonsteel',
+                damage: 5,
+                speedMult: 1.8, // damaged axe is sluggish
                 pommelStyle: 'round', pommelMat: bd.gem,
                 handleMat: bd.handle,
                 guardStyle: 'wide', guardMat: 'dragonsteel_ingot',
                 bladeMat: 'dragonsteel_ingot',
-                bladeLength: 0.8, bladeThickness: 3.0, // wide axe-head silhouette
+                bladeLength: 0.8, bladeThickness: 3.0,
                 trimMat: bd.trim, name: bd.name,
                 isBattleaxe: true,
             };
@@ -10833,6 +10833,30 @@ function updateAnvilUI() {
         html += '</div>';
     }
 
+    // Salvage damaged dragonsteel weapons
+    const _damagedInInv = Object.entries(window._customSwords || {}).filter(
+        ([id, cs]) => cs.tier === 'damaged_dragonsteel' && (inventory[id] || 0) > 0
+    );
+    const salvageCollapsed = _anvilCollapsed['_salvage'];
+    if (_damagedInInv.length > 0) {
+        html += '<div style="margin-top:12px;border-top:1px solid rgba(200,120,60,0.4);padding-top:10px;">';
+        html += `<div data-toggle="_salvage" style="color:rgba(220,160,90,0.85);font:bold 11px monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${salvageCollapsed ? '▶' : '▼'} Salvage Dragonsteel</div>`;
+        html += `<div style="${salvageCollapsed ? 'display:none;' : ''}">`;
+        html += '<div style="font:10px monospace;color:rgba(180,150,100,0.6);margin-bottom:8px;">Break down damaged weapons into dragonsteel ingots, then forge your own.</div>';
+        for (const [sid, cs] of _damagedInInv) {
+            const ingots = cs.isBattleaxe ? 4 : 3;
+            const label = cs.name || 'Damaged Dragonsteel Weapon';
+            html += `<div class="craft-row" data-salvage-id="${sid}" style="cursor:pointer;">
+                <span class="craft-icon" style="background:#1a1a28;border:1px solid rgba(100,90,160,0.5);"></span>
+                <span style="flex:1;font:10px monospace;color:rgba(210,190,140,0.85);">${label}</span>
+                <span class="craft-arrow">→</span>
+                <span class="craft-icon" style="background:#1a1a28;border:1px solid rgba(100,90,160,0.5);"></span>
+                <span style="font:10px monospace;color:rgba(150,200,120,0.8);">${ingots}× Dragonsteel Ingot</span>
+            </div>`;
+        }
+        html += '</div></div>';
+    }
+
     // Custom sword forge
     const _sel = (id, opts, cur) => {
         let s = `<select id="${id}" style="width:100%;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
@@ -10960,6 +10984,29 @@ function updateAnvilUI() {
         el.addEventListener('click', () => {
             const key = el.dataset.toggle;
             _anvilCollapsed[key] = !_anvilCollapsed[key];
+            updateAnvilUI();
+        });
+    });
+
+    // Wire up salvage buttons
+    anvilMenuEl.querySelectorAll('[data-salvage-id]').forEach(row => {
+        row.addEventListener('click', () => {
+            const sid = row.dataset.salvageId;
+            const cs = window._customSwords?.[sid];
+            if (!cs || !(inventory[sid] > 0)) return;
+            const ingots = cs.isBattleaxe ? 4 : 3;
+            // Remove weapon from inventory and hotbar
+            delete inventory[sid];
+            for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === sid) hotbarSlots[i] = 0;
+            // Give dragonsteel ingots
+            inventory['dragonsteel_ingot'] = (inventory['dragonsteel_ingot'] || 0) + ingots;
+            // Fill empty hotbar slot if dragonsteel_ingot isn't already slotted
+            if (!hotbarSlots.includes('dragonsteel_ingot')) {
+                const emptyIdx = hotbarSlots.indexOf(0);
+                if (emptyIdx >= 0) hotbarSlots[emptyIdx] = 'dragonsteel_ingot';
+            }
+            showToast(`Salvaged: +${ingots}× Dragonsteel Ingot`);
+            refreshUI();
             updateAnvilUI();
         });
     });
@@ -11216,7 +11263,7 @@ const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight
 const _getSwordDamage = (held) => {
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
         const cs = window._customSwords[held];
-        if (cs.tier === 'damaged_dragonsteel') return Math.max(1, Math.floor(_getDragonsteelDmg(5) / 2));
+        if (cs.tier === 'damaged_dragonsteel') return 5; // flat — salvage & reforge at a blacksmith for full power
         if (cs.isBattleaxe) {
             // Battleaxes: dragonsteel scales like a normal dragonsteel sword but with a
             // higher base (8 vs 5); non-dragonsteel adds +50% flat damage for the slower swing.
