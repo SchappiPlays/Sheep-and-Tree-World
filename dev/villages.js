@@ -14,6 +14,7 @@ const VILLAGE_DEFS = [
     { x: 100, z: 550, houses: 5, name: 'Desert Crossing', biome: 'desert', smiths: [9, 6, 6] },
     { x: -120, z: 620, houses: 4, name: 'Sunstone', biome: 'desert', smiths: [8, 5] },
     { x: 250, z: 680, houses: 3, name: 'Dune\'s End', biome: 'desert', smiths: [7] },
+    { x: 1020, z: 30, houses: 8, name: 'Eastgate', smiths: [5, 4] },
 ];
 const SMITH_SKILL_NAMES = { 1:'Apprentice', 2:'Novice', 3:'Journeyman', 4:'Skilled', 5:'Expert', 6:'Master', 7:'Veteran', 8:'Grandmaster', 9:'Legendary' };
 

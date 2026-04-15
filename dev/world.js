@@ -177,6 +177,10 @@ function getPlainsBlend(x, z) {
     const cp4x = (x - (-250)) / 170, cp4z = (z - 200) / 120;
     const cp4 = cp4x*cp4x + cp4z*cp4z;
     if (cp4 < 1) { const t = 1 - cp4; p = Math.max(p, t*t*(3-2*t)); }
+    // Far-east plain — open ground around Eastgate village
+    const cp5x = (x - 1020) / 130, cp5z = (z - 30) / 110;
+    const cp5 = cp5x*cp5x + cp5z*cp5z;
+    if (cp5 < 1) { const t = 1 - cp5; p = Math.max(p, t*t*(3-2*t)); }
     return p;
 }
 
@@ -247,6 +251,8 @@ function getRiverBlend(x, z, riv) {
 // Path flattening points from game.html (structures removed, terrain-only kept)
 const pathFlat = [
     {x:0,z:0},{x:14,z:14},{x:70,z:16},{x:85,z:16},{x:77,z:8},{x:85,z:7},{x:85,z:25},{x:77,z:25},
+    // Eastgate village centre
+    {x:1020,z:30},{x:1012,z:22},{x:1028,z:22},{x:1012,z:38},{x:1028,z:38},
 ];
 
 // Pond locations from game.html
@@ -278,8 +284,8 @@ const PATH_ROUTES = [
     [[-150,200],[-110,190],[-70,170],[-30,140],[10,110],[40,80],[60,50],[80,16]],
     // Branch: Forest Edge → Ruined Fortress (-505, -335)
     [[-100,-50],[-150,-70],[-210,-95],[-270,-125],[-330,-160],[-390,-200],[-440,-250],[-480,-290],[-505,-335]],
-    // Branch: Hillside Town → east
-    [[200,60],[230,50],[260,70],[280,90]],
+    // Branch: Hillside Town (200,60) → Eastgate (1020,30)
+    [[200,60],[260,55],[330,50],[420,42],[510,38],[610,32],[700,28],[790,30],[880,28],[960,30],[1020,30]],
     // Branch: Northwatch → north toward ancient forest
     [[50,-150],[40,-170],[30,-190],[20,-210]],
 ];
@@ -413,6 +419,10 @@ function getTerrainHeight(x, z) {
         mh += (Math.sin(x*0.05+z*0.045)*1.5 + Math.cos(x*0.04-z*0.05)*1) * feMtn;
         h += mh;
     }
+
+    // Eastgate village plain — flatten to ~h=4
+    {const evDx=(x-1020)/65,evDz=(z-30)/58,evD=evDx*evDx+evDz*evDz;
+    if(evD<1){const t=1-evD;const s=t*t*(3-2*t);h=h*(1-s*0.7)+4*s*0.7;}}
 
     // Frozen mountains (north) — large ring with glacial basin
     // Max world height is ~121. Base ring ~55, peaks up to +30, noise ~+10 = ~95 max
