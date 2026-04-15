@@ -1780,6 +1780,8 @@ function startGame(loadSlotName) {
     // Clear anvil and campfire models
     for (const [k, m] of anvilModels) scene.remove(m);
     anvilModels.clear();
+    for (const [k, m] of steelAnvilModels) scene.remove(m);
+    steelAnvilModels.clear();
     for (const [k, m] of campfireModels) scene.remove(m);
     campfireModels.clear();
 
@@ -5473,6 +5475,7 @@ function startGame(loadSlotName) {
             // Restore modified blocks + rebuild chunk index
             if (s.modifiedBlocks) {
                 const anvilOrigins = new Set();
+                const steelAnvilOrigins = new Set();
                 const campfireOrigins = new Set();
                 const torchPositions = [];
                 for (const [key, val] of Object.entries(s.modifiedBlocks)) {
@@ -5487,6 +5490,7 @@ function startGame(loadSlotName) {
                     world._modsByChunk.get(ck).push({ lx: mlx, y: mby, lz: mlz, block: val });
                     // Collect anvil/campfire block positions for clustering after loop
                     if (val === BLOCK.ANVIL) anvilOrigins.add(mbx + ',' + mby + ',' + mbz);
+                    if (val === BLOCK.STEEL_ANVIL) steelAnvilOrigins.add(mbx + ',' + mby + ',' + mbz);
                     if (val === BLOCK.CAMPFIRE) campfireOrigins.add(mbx + ',' + mby + ',' + mbz);
                     if (val === BLOCK.TORCH) torchPositions.push([mbx, mby, mbz]);
                 }
@@ -5528,6 +5532,12 @@ function startGame(loadSlotName) {
                 for (const key of _clusterOrigins(anvilOrigins, 1)) {
                     const [ax, ay, az] = key.split(',').map(Number);
                     placeAnvilModel(ax, ay, az);
+                }
+                for (const [k, m] of steelAnvilModels) scene.remove(m);
+                steelAnvilModels.clear();
+                for (const key of _clusterOrigins(steelAnvilOrigins, 1)) {
+                    const [ax, ay, az] = key.split(',').map(Number);
+                    placeSteelAnvilModel(ax, ay, az);
                 }
                 for (const key of _clusterOrigins(campfireOrigins, 0)) {
                     const [cx, cy, cz] = key.split(',').map(Number);
@@ -8870,7 +8880,8 @@ function getItemInfo(key) {
     if (key === 'raw_pork') return { name: 'Raw Pork', top: '#dd8888', front: '#bb6666' };
     if (key === 'raw_venison') return { name: 'Raw Venison', top: '#bb5544', front: '#993322' };
     if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
-    if (key === 'anvil_block') return { name: 'Anvil', top: '#666', front: '#444' };
+    if (key === 'anvil_block') return { name: 'Iron Anvil', top: '#666', front: '#444' };
+    if (key === 'steel_anvil_block') return { name: 'Steel Anvil', top: '#607080', front: '#506070' };
     if (key === 'blast_furnace_block') return { name: 'Blast Furnace', top: '#555560', front: '#3a3a40' };
     if (key === 'campfire_block') return { name: 'Campfire', top: '#cc6622', front: '#8a4a1a' };
     if (key === 'chest_block') return { name: 'Chest', top: '#8a6535', front: '#6b4a20' };
@@ -9847,6 +9858,7 @@ const BREAK_TIME = {
     [BLOCK.FURNACE]: [4.0, 2.0, 1.0, 0.6],
     15: [4.0, 2.0, 1.0, 0.6],
     [BLOCK.ANVIL]: [Infinity, Infinity, 3.0, 1.5],
+    [BLOCK.STEEL_ANVIL]: [Infinity, Infinity, 3.5, 1.5],
     19: [Infinity, Infinity, 3.0, 1.5],
     [BLOCK.RUBY_ORE]: [Infinity, Infinity, Infinity, 2.0],
     21: [Infinity, Infinity, Infinity, 2.0],
@@ -10142,6 +10154,7 @@ function getBlockDrop(blockType) {
     if (blockType === BLOCK.EMERALD_ORE) return 'emerald';
     if (blockType === BLOCK.TOPAZ_ORE) return 'topaz';
     if (blockType === BLOCK.ANVIL) return 'anvil_block';
+    if (blockType === BLOCK.STEEL_ANVIL) return 'steel_anvil_block';
     if (blockType === BLOCK.BLAST_FURNACE) return 'blast_furnace_block';
     if (blockType === BLOCK.CAMPFIRE) return 'campfire_block';
     if (blockType === BLOCK.CHEST) return 'chest_block';
@@ -10155,6 +10168,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
 
     // Remove anvil/campfire model if breaking
     if (hit.block === BLOCK.ANVIL) removeAnvilModel(hit.x, hit.y, hit.z);
+    if (hit.block === BLOCK.STEEL_ANVIL) removeSteelAnvilModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CAMPFIRE) removeCampfireModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.TORCH) removeTorchModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CHEST) {
@@ -10284,6 +10298,7 @@ const WB_CATEGORIES = [
         { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1 },
         { from: 3, to: 'furnace_block', fc: 8, tc: 1 },
         { from: 'iron_ingot', to: 'anvil_block', fc: 5, tc: 1 },
+        { from: 'steel_ingot', fromAlt: 'iron_ingot', to: 'steel_anvil_block', fc: 5, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: BLOCK.STONE, to: 'blast_furnace_block', fc: 5, fcAlt: 8, tc: 1, multi: true },
         { from: BLOCK.WOOD, fromAlt: 'coal', to: 'campfire_block', fc: 4, fcAlt: 1, tc: 1, multi: true },
         { from: BLOCK.WOOD, to: 'chest_block', fc: 8, tc: 1 },
@@ -10684,8 +10699,57 @@ function removeAnvilModel(px, py, pz) {
             }
 }
 
+// ── Steel Anvil 3D models ──
+const steelAnvilModels = new Map();
+const _steelAnvilDarkMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, metalness: 0.9, roughness: 0.2 });
+const _steelAnvilLightMat = new THREE.MeshStandardMaterial({ color: 0x6080a0, metalness: 0.85, roughness: 0.22 });
+
+function createSteelAnvilModel(wx, wy, wz) {
+    const BS = BLOCK_SIZE;
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(BS * 1.8, BS * 0.4, BS * 1.4), _steelAnvilDarkMat);
+    base.position.y = BS * 0.2; g.add(base);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(BS * 1.0, BS * 0.6, BS * 0.8), _steelAnvilDarkMat);
+    pillar.position.y = BS * 0.7; g.add(pillar);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(BS * 2.0, BS * 0.35, BS * 1.2), _steelAnvilLightMat);
+    top.position.y = BS * 1.2; g.add(top);
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(BS * 0.3, BS * 0.8, 4), _steelAnvilLightMat);
+    horn.position.set(BS * 1.2, BS * 1.2, 0);
+    horn.rotation.z = -Math.PI / 2;
+    g.add(horn);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(BS * 0.5, BS * 0.5, BS * 1.0), _steelAnvilDarkMat);
+    step.position.set(-BS * 0.9, BS * 0.75, 0); g.add(step);
+    // Small decorative steel band on the work surface
+    const band = new THREE.Mesh(new THREE.BoxGeometry(BS * 2.05, BS * 0.07, BS * 0.2), _steelAnvilLightMat);
+    band.position.set(0, BS * 1.39, 0); g.add(band);
+    g.position.set(wx + BS, wy + BS, wz + BS);
+    scene.add(g);
+    return g;
+}
+
+function placeSteelAnvilModel(px, py, pz) {
+    const BS = BLOCK_SIZE; const yOff = 128;
+    const wx = px * BS, wy = (py - yOff) * BS, wz = pz * BS;
+    const key = px + ',' + py + ',' + pz;
+    if (steelAnvilModels.has(key)) return;
+    steelAnvilModels.set(key, createSteelAnvilModel(wx, wy, wz));
+}
+
+function removeSteelAnvilModel(px, py, pz) {
+    for (let dx = 0; dx <= 1; dx++)
+        for (let dy = 0; dy <= 1; dy++)
+            for (let dz = 0; dz <= 1; dz++) {
+                const key = (px-dx) + ',' + (py-dy) + ',' + (pz-dz);
+                if (steelAnvilModels.has(key)) {
+                    scene.remove(steelAnvilModels.get(key));
+                    steelAnvilModels.delete(key);
+                }
+            }
+}
+
 // ── Anvil system — metal tools + custom swords ──
 let anvilOpen = false;
+let currentAnvilTier = 'iron'; // 'iron' or 'steel'
 const anvilMenuEl = document.createElement('div');
 anvilMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.55);backdrop-filter:blur(6px);border:2px solid rgba(160,140,100,0.3);border-radius:8px;padding:16px;min-width:440px;max-height:80vh;overflow-y:auto;user-select:none;';
 document.body.appendChild(anvilMenuEl);
@@ -10743,6 +10807,9 @@ const ANVIL_RECIPES = [
         { from: 'dragonsteel_ingot', fromAlt: 'stick', to: 'dragonsteel_shield', fc: 4, fcAlt: 1, tc: 1, multi: true },
     ]},
 ];
+
+// Materials allowed on the Iron Anvil (steel/diamond/dragonsteel need the Steel Anvil)
+const _IRON_ANVIL_MATS = new Set(['stick', String(BLOCK.STONE), 'copper_ingot', 'iron_ingot', 'gold_ingot']);
 
 // Sword customization options
 const GUARD_STYLES = ['straight', 'curved', 'wide', 'spiked', 'ring'];
@@ -10807,22 +10874,31 @@ let anvilSwordConfig = {
 const _anvilCollapsed = {}; // track which categories are collapsed
 
 function updateAnvilUI() {
-    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Anvil</h2>';
+    const _isSteelAnvil = currentAnvilTier === 'steel';
+    const _tierLabel = _isSteelAnvil ? 'Steel Anvil' : 'Iron Anvil';
+    const _borderColor = _isSteelAnvil ? 'rgba(96,128,160,0.5)' : 'rgba(160,140,100,0.3)';
+    const _headColor = _isSteelAnvil ? 'rgba(160,200,240,0.9)' : 'rgba(220,200,160,0.85)';
+    let html = `<h2 style="color:${_headColor};font:bold 15px monospace;text-align:center;margin-bottom:10px;">${_tierLabel}</h2>`;
+    if (!_isSteelAnvil) html += '<div style="font:10px monospace;color:rgba(160,140,100,0.6);text-align:center;margin-bottom:8px;">Iron-tier materials only — find or craft a Steel Anvil for more</div>';
 
-    // Standard recipes
+    // Standard recipes — iron anvil filters to iron-tier materials only
+    const _recipeAllowed = (r) => _isSteelAnvil || (_IRON_ANVIL_MATS.has(String(r.from)) && (!r.multi || _IRON_ANVIL_MATS.has(String(r.fromAlt || 'stick'))));
     for (const cat of ANVIL_RECIPES) {
+        const filteredRecipes = cat.recipes.filter(_recipeAllowed);
+        if (filteredRecipes.length === 0) continue;
         const collapsed = _anvilCollapsed[cat.name];
         const arrow = collapsed ? '▶' : '▼';
         html += `<div class="craft-cat open" data-toggle="${cat.name}" style="cursor:pointer;user-select:none;">${arrow} ${cat.name}</div><div class="craft-grid" style="${collapsed ? 'display:none;' : ''}">`;
-        for (let ri = 0; ri < cat.recipes.length; ri++) {
-            const r = cat.recipes[ri];
+        for (let ri = 0; ri < filteredRecipes.length; ri++) {
+            const r = filteredRecipes[ri];
+            const origRi = cat.recipes.indexOf(r);
             const has1 = (inventory[r.from] || 0) >= r.fc;
             const has2 = !r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt;
             const canCraft = has1 && has2;
             const outInfo = getItemInfo(r.to);
             const inInfo = getItemInfo(r.from);
             const altInfo = r.multi ? getItemInfo(r.fromAlt) : null;
-            html += `<div class="craft-row${canCraft ? '' : ' disabled'}" data-cat="${cat.name}" data-ri="${ri}" style="cursor:pointer;">
+            html += `<div class="craft-row${canCraft ? '' : ' disabled'}" data-cat="${cat.name}" data-ri="${origRi}" style="cursor:pointer;">
                 <span class="craft-icon" style="background:${inInfo?.front || '#555'}"></span>
                 <span>${r.fc}× ${inInfo?.name || '?'}</span>`;
             if (altInfo) html += `<span>+ ${r.fcAlt}× ${altInfo.name}</span>`;
@@ -10839,7 +10915,8 @@ function updateAnvilUI() {
         for (const o of opts) s += `<option value="${o.value}"${cur == o.value ? ' selected' : ''}>${o.label}</option>`;
         return s + '</select>';
     };
-    const _matOpts = SWORD_MATERIALS.map(m => ({ value: m.key, label: m.name }));
+    const _tierFilter = (m) => _isSteelAnvil || _IRON_ANVIL_MATS.has(String(m.key));
+    const _matOpts = SWORD_MATERIALS.filter(_tierFilter).map(m => ({ value: m.key, label: m.name }));
     const _accentOpts = [..._matOpts, ...ACCENT_MATERIALS.map(m => ({ value: m.key, label: m.name }))];
     const _matOptsWithNone = [{ value: '', label: 'None' }, ..._accentOpts];
     const _styleOpts = (arr) => arr.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
@@ -12807,7 +12884,15 @@ function doPlace(e) {
 
     // Right-click on anvil → open anvil menu
     if (hit.block === BLOCK.ANVIL && placeHoldTime < 0.05) {
-        anvilOpen = true;
+        anvilOpen = true; currentAnvilTier = 'iron';
+        anvilMenuEl.style.display = 'block';
+        updateAnvilUI();
+        placingHeld = false;
+        if (pointerLocked) document.exitPointerLock();
+        return false;
+    }
+    if (hit.block === BLOCK.STEEL_ANVIL && placeHoldTime < 0.05) {
+        anvilOpen = true; currentAnvilTier = 'steel';
         anvilMenuEl.style.display = 'block';
         updateAnvilUI();
         placingHeld = false;
@@ -12842,10 +12927,11 @@ function doPlace(e) {
     const isFurnace = bt === 'furnace_block';
     const isBlastFurnace = bt === 'blast_furnace_block';
     const isAnvil = bt === 'anvil_block';
+    const isSteelAnvil = bt === 'steel_anvil_block';
     const isCampfire = bt === 'campfire_block';
     const isChest = bt === 'chest_block';
-    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isCampfire ? BLOCK.CAMPFIRE : isChest ? BLOCK.CHEST : bt;
-    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isCampfire && !isChest) return false;
+    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isSteelAnvil ? BLOCK.STEEL_ANVIL : isCampfire ? BLOCK.CAMPFIRE : isChest ? BLOCK.CHEST : bt;
+    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isSteelAnvil && !isCampfire && !isChest) return false;
 
     const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
     const BS = BLOCK_SIZE;
@@ -12870,7 +12956,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         placeCampfireModel(px, py, pz);
-    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
+    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.STEEL_ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
         for (let dx = 0; dx <= 1; dx++)
             for (let dy = 0; dy <= 1; dy++)
                 for (let dz = 0; dz <= 1; dz++)
@@ -12879,6 +12965,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
+        if (placeBlock === BLOCK.STEEL_ANVIL) placeSteelAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
     } else if (snapGrid) {
         // Snap placement — uses snapShape
@@ -12957,7 +13044,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     const held = hotbarSlots[selectedSlot];
     if (equippedShield) {
         const info = held ? getItemInfo(held) : null;
-        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
+        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'steel_anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
         if (!isPlaceable) {
             shieldRaised = true;
             return; // don't place blocks while shielding
