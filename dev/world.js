@@ -253,6 +253,8 @@ const pathFlat = [
     {x:0,z:0},{x:14,z:14},{x:70,z:16},{x:85,z:16},{x:77,z:8},{x:85,z:7},{x:85,z:25},{x:77,z:25},
     // Farwatch village centre
     {x:1020,z:30},{x:1012,z:22},{x:1028,z:22},{x:1012,z:38},{x:1028,z:38},
+    // Dragon's Reach approach bridge over river
+    {x:1080,z:22},{x:1080,z:18},{x:1080,z:16},
 ];
 
 // Pond locations from game.html
@@ -286,6 +288,8 @@ const PATH_ROUTES = [
     [[-100,-50],[-150,-70],[-210,-95],[-270,-125],[-330,-160],[-390,-200],[-440,-250],[-480,-290],[-505,-335]],
     // Branch: Hillside Town (200,60) → Farwatch (1020,30)
     [[200,60],[260,55],[330,50],[420,42],[510,38],[610,32],[700,28],[790,30],[880,28],[960,30],[1020,30]],
+    // Farwatch (1020,30) → Dragon's Reach fortress (1080,-5) — crosses river via bridge
+    [[1020,30],[1055,26],[1080,22],[1080,16]],
     // Branch: Northwatch → north toward ancient forest
     [[50,-150],[40,-170],[30,-190],[20,-210]],
 ];

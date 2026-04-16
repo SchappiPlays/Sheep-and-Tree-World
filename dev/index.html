@@ -3396,6 +3396,25 @@ function startGame(loadSlotName) {
 
         w._easternFortress = { x: FX, z: FZ };
 
+        // ── BRIDGE over river south of fortress ───────────────────────────────
+        // River crosses the approach path at approx (FX, 22). The path system
+        // keeps terrain elevated here; add stone blocks for visual clarity.
+        const bBX = cx;
+        const bBZ = Math.round(22 / BS);
+        const bBY = Math.floor(getTerrainHeight(FX, 22) / BS) + yOff;
+        // Deck (5 wide, spanning the river channel)
+        for(let dx=-2;dx<=2;dx++) for(let dz=bBZ-6;dz<=bBZ+6;dz++) _pb(bBX+dx, bBY, dz, S);
+        // Railings on each long side
+        for(let dz=bBZ-5;dz<=bBZ+5;dz++) for(let dy=1;dy<=2;dy++){
+            rb(bBX-3, bBY+dy, dz, DS, R*0.2);
+            rb(bBX+3, bBY+dy, dz, DS, R*0.2);
+        }
+        // Support blocks at each bank
+        for(let dx=-2;dx<=2;dx++) for(let dy=0;dy<=2;dy++){
+            _pb(bBX+dx, bBY-dy, bBZ-6, S);
+            _pb(bBX+dx, bBY-dy, bBZ+6, S);
+        }
+
         // === RED DRAGON CORPSE — uses real dragon model ===
         const CORP_X = FX + 4, CORP_Z = FZ + 6;
         const corpseTerrainY = getTerrainHeight(CORP_X, CORP_Z);
