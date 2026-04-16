@@ -288,8 +288,8 @@ const PATH_ROUTES = [
     [[-100,-50],[-150,-70],[-210,-95],[-270,-125],[-330,-160],[-390,-200],[-440,-250],[-480,-290],[-505,-335]],
     // Branch: Hillside Town (200,60) → Farwatch (1020,30)
     [[200,60],[260,55],[330,50],[420,42],[510,38],[610,32],[700,28],[790,30],[880,28],[960,30],[1020,30]],
-    // Branch off main road — runs east along grass south of river, then turns north to bridge
-    [[880,28],[950,28],[1030,28],[1070,28],[1080,22],[1080,16]],
+    // Branch off main road — runs east along grass south of river, 90° turn north to bridge
+    [[880,28],[950,28],[1030,28],[1080,28],[1080,22],[1080,16]],
     // Branch: Northwatch → north toward ancient forest
     [[50,-150],[40,-170],[30,-190],[20,-210]],
 ];
