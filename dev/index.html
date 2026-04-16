@@ -3300,71 +3300,45 @@ function startGame(loadSlotName) {
             }
         };
 
-        const HW=55, HD=45, wallH=18;
-        const RZ=cz;   // river centreline in block-Z (equals cz — river flows through fortress centre)
-        const RG=6;    // river gate half-gap: opening spans RZ-RG .. RZ+RG (13 blocks wide)
+        const HW=55, HD=45, wallH=16;
 
-        // ── FOUNDATION & CLEARING ────────────────────────────────────────────
+        // Flatten ground
         for(let x=cx-HW-6;x<=cx+HW+6;x++) for(let z=cz-HD-6;z<=cz+HD+6;z++){
-            const inRiver = z>=RZ-RG && z<=RZ+RG;
-            if(!inRiver){ _pb(x,gy,z,S); for(let dy=1;dy<=3;dy++) _pb(x,gy-dy,z,D); }
+            _pb(x,gy,z,S); for(let dy=1;dy<=3;dy++) _pb(x,gy-dy,z,D);
             for(let dy=1;dy<=28;dy++) _pb(x,gy+dy,z,A);
         }
 
-        // ── OUTER WALLS ──────────────────────────────────────────────────────
-        box(cx-HW,gy+1,cz-HD,cx+HW,gy+wallH,cz-HD+1,S,R);          // north (solid)
-        box(cx-HW,gy+1,cz+HD-1,cx+HW,gy+wallH,cz+HD,S,R);           // south (solid)
-        box(cx-HW,gy+1,cz-HD,cx-HW+1,gy+wallH,RZ-RG-2,S,R);         // west-north half
-        box(cx-HW,gy+1,RZ+RG+2,cx-HW+1,gy+wallH,cz+HD,S,R);         // west-south half
-        box(cx+HW-1,gy+1,cz-HD,cx+HW,gy+wallH,RZ-RG-2,S,R);         // east-north half
-        box(cx+HW-1,gy+1,RZ+RG+2,cx+HW,gy+wallH,cz+HD,S,R);         // east-south half
-
-        // ── CRENELLATIONS ────────────────────────────────────────────────────
+        // Outer walls
+        box(cx-HW,gy+1,cz-HD,cx+HW,gy+wallH,cz-HD+1,S,R);
+        box(cx-HW,gy+1,cz+HD-1,cx+HW,gy+wallH,cz+HD,S,R);
+        box(cx-HW,gy+1,cz-HD,cx-HW+1,gy+wallH,cz+HD,S,R);
+        box(cx+HW-1,gy+1,cz-HD,cx+HW,gy+wallH,cz+HD,S,R);
         for(let i=-HW;i<=HW;i++) if(i%2===0){
             rb(cx+i,gy+wallH+1,cz-HD,S,R+0.05); rb(cx+i,gy+wallH+1,cz+HD,S,R+0.05);
         }
-        for(let i=-HD;i<=HD;i++) if(i%2===0 && (cz+i<RZ-RG-1||cz+i>RZ+RG+1)){
+        for(let i=-HD;i<=HD;i++) if(i%2===0){
             rb(cx-HW,gy+wallH+1,cz+i,S,R+0.05); rb(cx+HW,gy+wallH+1,cz+i,S,R+0.05);
         }
-        // Wall-walks
+        // Wall-walk
         for(let i=-HW+2;i<=HW-2;i++){ _pb(cx+i,gy+wallH,cz-HD+1,S); _pb(cx+i,gy+wallH,cz+HD-1,S); }
-        for(let i=-HD+2;i<=HD-2;i++) if(cz+i<RZ-RG-1||cz+i>RZ+RG+1){
-            _pb(cx-HW+1,gy+wallH,cz+i,S); _pb(cx+HW-1,gy+wallH,cz+i,S);
-        }
-        // Arrow slits
+        for(let i=-HD+2;i<=HD-2;i++){ _pb(cx-HW+1,gy+wallH,cz+i,S); _pb(cx+HW-1,gy+wallH,cz+i,S); }
+        // Arrow slits (dark stone)
         for(let i=-HW+8;i<=HW-8;i+=10){
             rb(cx+i,gy+8,cz-HD,DS,0); rb(cx+i,gy+10,cz-HD,DS,0);
             rb(cx+i,gy+8,cz+HD,DS,0); rb(cx+i,gy+10,cz+HD,DS,0);
         }
-        for(let i=-HD+8;i<=HD-8;i+=10) if(cz+i<RZ-RG-2||cz+i>RZ+RG+2){
+        for(let i=-HD+8;i<=HD-8;i+=10){
             rb(cx-HW,gy+8,cz+i,DS,0); rb(cx-HW,gy+10,cz+i,DS,0);
             rb(cx+HW,gy+8,cz+i,DS,0); rb(cx+HW,gy+10,cz+i,DS,0);
         }
 
-        // ── TOWERS ───────────────────────────────────────────────────────────
-        // 4 corner towers
+        // Corner + mid towers
         tower(cx-HW,cz-HD,5,22,R); tower(cx+HW,cz-HD,5,22,R);
         tower(cx-HW,cz+HD,5,22,R); tower(cx+HW,cz+HD,5,22,R);
-        // North gate flanks + mid
-        tower(cx-8,cz-HD,4,22,R); tower(cx+8,cz-HD,4,22,R); tower(cx,cz-HD,3,20,R);
-        // South gate flanks
-        tower(cx-8,cz+HD,4,22,R); tower(cx+8,cz+HD,4,22,R);
-        // E/W river gate flanking towers (one either side of each arch)
-        tower(cx-HW,RZ-RG-5,4,20,R); tower(cx-HW,RZ+RG+5,4,20,R);
-        tower(cx+HW,RZ-RG-5,4,20,R); tower(cx+HW,RZ+RG+5,4,20,R);
+        tower(cx,cz-HD,4,20,R); tower(cx-HW,cz,4,20,R); tower(cx+HW,cz,4,20,R);
+        tower(cx-8,cz+HD,4,22,R); tower(cx+8,cz+HD,4,22,R); // south gate flanks
 
-        // ── NORTH GATE (pedestrian, faces inland) ────────────────────────────
-        for(let dy=0;dy<13;dy++) for(let dx=-3;dx<=3;dx++){
-            _pb(cx+dx,gy+1+dy,cz-HD,A); _pb(cx+dx,gy+1+dy,cz-HD+1,A);
-        }
-        for(let ay=0;ay<3;ay++){ const ins=ay+1;
-            for(let dx=-3+ins;dx<=3-ins;dx++){
-                _pb(cx+dx,gy+14+ay,cz-HD,A); _pb(cx+dx,gy+14+ay,cz-HD+1,A);
-            }
-        }
-        for(let dy=0;dy<=16;dy++){ _pb(cx-4,gy+dy,cz-HD,DS); _pb(cx+4,gy+dy,cz-HD,DS); }
-
-        // ── SOUTH GATE (faces Farwatch) ──────────────────────────────────────
+        // South gate (faces Farwatch)
         for(let dy=0;dy<13;dy++) for(let dx=-3;dx<=3;dx++){
             _pb(cx+dx,gy+1+dy,cz+HD-1,A); _pb(cx+dx,gy+1+dy,cz+HD,A);
         }
@@ -3379,52 +3353,29 @@ function startGame(loadSlotName) {
         _pb(cx-3,gy+17,cz+HD,DS); _pb(cx+3,gy+17,cz+HD,DS);
         _pb(cx-4,gy+16,cz+HD,DS); _pb(cx+4,gy+16,cz+HD,DS);
 
-        // ── EAST / WEST RIVER ARCHES ─────────────────────────────────────────
-        // Large arched water gates where the river passes through the outer wall.
-        const riverArch = (wx) => {
-            // DS pillar columns flanking the arch opening
-            for(let dy=0;dy<=wallH+2;dy++){
-                _pb(wx,gy+dy,RZ-RG-2,DS); _pb(wx,gy+dy,RZ+RG+2,DS);
-            }
-            // Stepped arch lintel cap
-            for(let dz=RZ-RG-1;dz<=RZ+RG+1;dz++) _pb(wx,gy+13,dz,DS);
-            for(let dz=RZ-RG;dz<=RZ+RG;dz++)     _pb(wx,gy+14,dz,DS);
-            for(let dz=RZ-RG+1;dz<=RZ+RG-1;dz++) _pb(wx,gy+15,dz,DS);
-            _pb(wx,gy+16,RZ,DS); // keystone
-        };
-        riverArch(cx-HW); riverArch(cx-HW+1); // west arch (both wall faces)
-        riverArch(cx+HW); riverArch(cx+HW-1); // east arch (both wall faces)
-
-        // ── CANAL WALLS (low parapet flanking river channel inside) ──────────
-        for(let x=cx-HW+2;x<=cx+HW-2;x++){
-            rb(x,gy+1,RZ-RG-1,S,R*0.3); rb(x,gy+2,RZ-RG-1,S,R*0.5);
-            rb(x,gy+1,RZ+RG+1,S,R*0.3); rb(x,gy+2,RZ+RG+1,S,R*0.5);
+        // Inner dividing wall (keep / courtyard)
+        const divZ = cz-10;
+        box(cx-HW+2,gy+1,divZ,cx+HW-2,gy+10,divZ+1,S,R*0.5);
+        for(let dy=0;dy<8;dy++) for(let dx=-3;dx<=3;dx++){
+            _pb(cx+dx,gy+1+dy,divZ,A); _pb(cx+dx,gy+1+dy,divZ+1,A);
         }
+        for(let dx=-3;dx<=3;dx++) _pb(cx+dx,gy+9,divZ,DS);
+        _pb(cx-4,gy+7,divZ,DS); _pb(cx+4,gy+7,divZ,DS);
 
-        // ── STONE BRIDGES over the river channel ─────────────────────────────
-        for(let dz=RZ-RG;dz<=RZ+RG;dz++){
-            _pb(cx-18,gy,dz,S); _pb(cx+18,gy,dz,S);
-        }
-        for(let dy=1;dy<=2;dy++){
-            _pb(cx-18,gy+dy,RZ-RG,DS); _pb(cx-18,gy+dy,RZ+RG,DS);
-            _pb(cx+18,gy+dy,RZ-RG,DS); _pb(cx+18,gy+dy,RZ+RG,DS);
-        }
-
-        // ── NORTH WING: Keep (library / archive) ─────────────────────────────
-        const kx0=cx-HW+2, kx1=cx+HW-2, kz0=cz-HD+3, kz1=RZ-RG-4, kH=12;
+        // Keep (north section)
+        const kx0=cx-HW+2, kx1=cx+HW-2, kz0=cz-HD+3, kz1=divZ-2, kH=12;
         room(kx0,gy,kz0,kx1-kx0+1,kz1-kz0+1,kH,S,R*0.4);
         tower(kx0,kz0,3,kH+4,R*0.5); tower(kx1,kz0,3,kH+4,R*0.5);
         tower(kx0,kz1,3,kH+3,R*0.5); tower(kx1,kz1,3,kH+3,R*0.5);
-        // Keep south door (leads to canal walkway → bridge)
         for(let dy=0;dy<7;dy++) for(let dx=-2;dx<=2;dx++) _pb(cx+dx,gy+1+dy,kz1,A);
-        // Interior divider (library east vs archive west)
+        // Interior east-west divider (library vs archive)
         box(kx0+1,gy+1,cz-HD+16,cx-1,gy+kH-1,cz-HD+16,S,R*0.3);
         for(let dy=0;dy<5;dy++) _pb(cx-4,gy+1+dy,cz-HD+16,A);
-        // Library shelves + tables
+        // Library (east half): bookshelves and tables
         for(let bx=cx+4;bx<=kx1-4;bx+=4) for(let dy=1;dy<=5;dy++) _pb(bx,gy+dy,kz0+2,BLOCK.PLANKS);
         for(let i=0;i<4;i++){ _pb(cx+4+i*5,gy+1,kz0+8,BLOCK.PLANKS); _pb(cx+4+i*5,gy+1,kz0+9,BLOCK.PLANKS); }
         for(let bx=cx+6;bx<=kx1-6;bx+=10){ _pb(bx,gy+7,kz0,DS); _pb(bx,gy+9,kz0,DS); }
-        // Archive ritual altar
+        // Archive (west half): ritual altar
         const altX=cx-16, altZ=kz0+8;
         for(let dx=-4;dx<=4;dx++) for(let dz=-3;dz<=3;dz++)
             if(Math.abs(dx)===4||Math.abs(dz)===3) _pb(altX+dx,gy,altZ+dz,DS);
@@ -3432,22 +3383,21 @@ function startGame(loadSlotName) {
         for(let a=0;a<8;a++){ const rx2=Math.round(Math.cos(a*Math.PI/4)*4),rz2=Math.round(Math.sin(a*Math.PI/4)*4); _pb(altX+rx2,gy+1,altZ+rz2,DS); }
         for(let bx=kx0+6;bx<=cx-6;bx+=10){ _pb(bx,gy+7,kz0,DS); _pb(bx,gy+9,kz0,DS); }
 
-        // ── SOUTH WING: Courtyard ─────────────────────────────────────────────
-        // Scorched floor patches (south of river)
-        for(let bx=cx-HW+3;bx<=cx+HW-3;bx++) for(let bz=RZ+RG+2;bz<=cz+HD-3;bz++)
+        // Courtyard (south section): scorched floor patches
+        for(let bx=cx-HW+3;bx<=cx+HW-3;bx++) for(let bz=divZ+2;bz<=cz+HD-3;bz++)
             if(hash(bx+311,bz+422)<0.2) _pb(bx,gy,bz,DS);
         // Well
-        const wCX=cx-20, wCZ=cz+20;
+        const wCX=cx-20, wCZ=cz+15;
         for(let da=0;da<8;da++){ const wx2=Math.round(Math.cos(da*Math.PI/4)*2),wz2=Math.round(Math.sin(da*Math.PI/4)*2);
             _pb(wCX+wx2,gy+1,wCZ+wz2,S); _pb(wCX+wx2,gy+2,wCZ+wz2,S); }
-        // Storage room
-        room(cx+20,gy,cz+10,14,10,6,S,R*0.3);
-        for(let dy=0;dy<4;dy++) _pb(cx+21,gy+1+dy,cz+10,A);
+        // Storage room (east courtyard)
+        room(cx+20,gy,cz+5,14,10,6,S,R*0.3);
+        for(let dy=0;dy<4;dy++) _pb(cx+21,gy+1+dy,cz+5,A);
 
         w._easternFortress = { x: FX, z: FZ };
 
         // === RED DRAGON CORPSE — uses real dragon model ===
-        const CORP_X = FX - 4, CORP_Z = FZ + 14;  // south courtyard, clear of river
+        const CORP_X = FX + 4, CORP_Z = FZ + 6;
         const corpseTerrainY = getTerrainHeight(CORP_X, CORP_Z);
 
         // Build wyvern corpse using the real dragon model (isWyvern=true)
@@ -3515,9 +3465,11 @@ function startGame(loadSlotName) {
         spawnNPC(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
         spawnNPC(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
 
-        // Two guards at the bridge crossings (south side of river)
-        spawnNPC(FX - 5, FZ + 6, 0.91, Math.PI * 0.5, false);
-        spawnNPC(FX + 5, FZ + 6, 0.08, Math.PI * 1.5, false);
+        // Two guards near the inner dividing wall gate
+        const guardZ = FZ + (-10) * 0; // inner wall in world coords ≈ FZ - 9.5
+        const divWorldZ = (Math.round(FZ / BS) - 10) * BS;
+        spawnNPC(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
+        spawnNPC(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
 
         // ── LEADER: Archon Vael — head of the expedition ──
         // Stands prominently north of the corpse, facing it
