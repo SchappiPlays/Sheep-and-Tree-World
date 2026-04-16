@@ -686,7 +686,21 @@ export class World {
 
     getHeight(wx, wz) {
         const h = getTerrainHeight(wx, wz);
-        return Math.max(BLOCK_SIZE, h + BLOCK_SIZE);
+        const terrainY = Math.max(BLOCK_SIZE, h + BLOCK_SIZE);
+
+        // Scan block column for structures/placed blocks above terrain
+        const bx = Math.floor(wx / BLOCK_SIZE);
+        const bz = Math.floor(wz / BLOCK_SIZE);
+        const baseBy = Math.floor(h / BLOCK_SIZE) + 128;
+        for (let by = baseBy + 25; by > baseBy; by--) {
+            const b = this.getBlockAt(bx, by, bz);
+            if (b !== 0 && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES &&
+                b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE &&
+                b !== BLOCK.FLOWER_WHITE && b !== BLOCK.TORCH) {
+                return Math.max(terrainY, (by - 128 + 1) * BLOCK_SIZE);
+            }
+        }
+        return terrainY;
     }
 
     // Biome at world coordinates
