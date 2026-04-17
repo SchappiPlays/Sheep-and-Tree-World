@@ -1326,30 +1326,36 @@ export class World {
 export class WaterSim {
     constructor(world) {
         this.world = world;
-        this._dirtyChunks = new Set(); // chunk keys needing mesh rebuild
-        this._activeWater = new Set(); // "bx,by,bz" of water blocks to simulate
-        this._sources = []; // { bx, by, bz } infinite source blocks
+        this._dirtyChunks = new Set();
+        // freshness map: "bx,by,bz" → ticks remaining before dry-up
+        // Sources set freshness to max each tick. Water passes freshness
+        // to neighbors (minus 1). Water at 0 freshness dries up.
+        this._freshness = new Map();
+        this._activeWater = new Set(); // blocks that need processing
+        this._sources = [];  // { bx, by, bz }
+        this._sourceSet = new Set(); // fast lookup "bx,by,bz"
         this._yOff = 128;
         this._tickTimer = 0;
-        this._tickRate = 0.25; // seconds between simulation ticks
-        this._simRadius = 50; // block radius around player to simulate
+        this._tickRate = 0.25;
+        this._simRadius = 50;
+        this._maxFresh = 20; // freshness pulses propagate this many blocks from source
         this._playerBX = 0;
         this._playerBZ = 0;
         this._initSources();
     }
 
     _initSources() {
-        // Create a small cluster of source blocks at each river origin
         for (const riv of riverDefs) {
             const [sx, sz] = riv.pts[0];
             const bx = Math.floor(sx / BLOCK_SIZE);
             const bz = Math.floor(sz / BLOCK_SIZE);
             const waterH = riv.heights[0];
             const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
-            // Just a small 3x3 source — water spreads from here
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dz = -1; dz <= 1; dz++) {
-                    this._sources.push({ bx: bx + dx, by, bz: bz + dz });
+                    const s = { bx: bx + dx, by, bz: bz + dz };
+                    this._sources.push(s);
+                    this._sourceSet.add((bx+dx) + ',' + by + ',' + (bz+dz));
                 }
             }
         }
@@ -1360,7 +1366,6 @@ export class WaterSim {
         this._playerBZ = Math.floor(wz / BLOCK_SIZE);
     }
 
-    // Call each frame with dt
     update(dt) {
         this._tickTimer += dt;
         if (this._tickTimer < this._tickRate) return;
@@ -1382,19 +1387,28 @@ export class WaterSim {
         return dist > getIslandRadius(wx, wz) - 80;
     }
 
-    // Called when a block is broken — wake up adjacent water so it flows
     onBlockBroken(bx, by, bz) {
+        // Wake up adjacent water so it flows into the gap.
+        // Give chunk-generated water freshness so it participates in the sim.
         const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
         for (const [dx, dy, dz] of dirs) {
             const nx = bx + dx, ny = by + dy, nz = bz + dz;
             if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
-                this._activeWater.add(nx + ',' + ny + ',' + nz);
+                const key = nx + ',' + ny + ',' + nz;
+                this._activeWater.add(key);
+                // If not yet tracked, give it freshness so it can flow
+                if (!this._freshness.has(key)) {
+                    this._freshness.set(key, this._maxFresh);
+                }
             }
         }
-        // Also check 2 blocks up — water above the broken block should fall
         for (let dy = 1; dy <= 3; dy++) {
             if (this.world.getBlockAt(bx, by + dy, bz) === BLOCK.WATER) {
-                this._activeWater.add(bx + ',' + (by + dy) + ',' + bz);
+                const key = bx + ',' + (by + dy) + ',' + bz;
+                this._activeWater.add(key);
+                if (!this._freshness.has(key)) {
+                    this._freshness.set(key, this._maxFresh);
+                }
             }
         }
     }
@@ -1405,36 +1419,107 @@ export class WaterSim {
         this._dirtyChunks.add(cx + ',' + cz);
     }
 
-    _setWater(bx, by, bz) {
-        if (this.world.getBlockAt(bx, by, bz) === BLOCK.WATER) return false;
-        this.world.setBlock(bx, by, bz, BLOCK.WATER);
-        this._activeWater.add(bx + ',' + by + ',' + bz);
-        this._markDirty(bx, bz);
-        return true;
+    _setWater(bx, by, bz, fresh) {
+        const key = bx + ',' + by + ',' + bz;
+        const isNew = this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER;
+        if (isNew) {
+            this.world.setBlock(bx, by, bz, BLOCK.WATER);
+            this._markDirty(bx, bz);
+        }
+        // Update freshness — always take the higher value
+        const oldFresh = this._freshness.get(key) || 0;
+        if (fresh > oldFresh) {
+            this._freshness.set(key, fresh);
+            this._activeWater.add(key); // re-activate to propagate freshness
+        }
+        return isNew;
     }
 
     _removeWater(bx, by, bz) {
+        const key = bx + ',' + by + ',' + bz;
         if (this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER) return;
         this.world.setBlock(bx, by, bz, BLOCK.AIR);
-        this._activeWater.delete(bx + ',' + by + ',' + bz);
+        this._activeWater.delete(key);
+        this._freshness.delete(key);
         this._markDirty(bx, bz);
     }
 
     _tick() {
         const world = this.world;
+        const maxFresh = this._maxFresh;
 
-        // 1. Spawn water at sources (infinite)
-        for (const s of this._sources) {
-            if (!this._isNearPlayer(s.bx, s.bz)) continue;
-            this._setWater(s.bx, s.by, s.bz);
+        // 0. Sparse scan: register chunk-gen water blocks near player
+        //    so they participate in freshness system. Only scan a slice per tick.
+        this._scanPhase = ((this._scanPhase || 0) + 1) % 10;
+        if (this._scanPhase === 0) {
+            const r = 30; // smaller scan radius for perf
+            const step = 3;
+            const pbx = this._playerBX, pbz = this._playerBZ;
+            for (let dx = -r; dx <= r; dx += step) {
+                for (let dz = -r; dz <= r; dz += step) {
+                    if (dx * dx + dz * dz > r * r) continue;
+                    const bx = pbx + dx, bz = pbz + dz;
+                    // Quick column scan around surface
+                    const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+                    const h = getTerrainHeight(wx, wz);
+                    const surfY = Math.floor(h / BLOCK_SIZE) + this._yOff;
+                    for (let by = surfY - 2; by <= surfY + 5; by++) {
+                        if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
+                            const key = bx + ',' + by + ',' + bz;
+                            if (!this._freshness.has(key)) {
+                                // Give initial freshness — will decay if not fed by source
+                                this._freshness.set(key, maxFresh);
+                                this._activeWater.add(key);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        // 2. Process active water blocks near the player
-        // Only process blocks that have potential to flow (frontier)
-        const toRemove = [];
+        // 1. Sources: place water and set freshness to max
+        for (const s of this._sources) {
+            if (!this._isNearPlayer(s.bx, s.bz)) continue;
+            this._setWater(s.bx, s.by, s.bz, maxFresh);
+        }
+
+        // 2. Decay freshness for all tracked water near player.
+        //    Water at 0 freshness dries up (unless it's chunk-generated ocean).
+        const toDry = [];
+        for (const [key, fresh] of this._freshness) {
+            const parts = key.split(',');
+            const bx = +parts[0], by = +parts[1], bz = +parts[2];
+            if (!this._isNearPlayer(bx, bz)) continue;
+            if (this._sourceSet.has(key)) continue; // sources never decay
+            const newFresh = fresh - 1;
+            if (newFresh <= 0) {
+                // Don't dry up ocean water or water below sea level
+                if (by <= this._yOff) {
+                    this._freshness.set(key, 1); // keep alive
+                } else {
+                    toDry.push({ key, bx, by, bz });
+                }
+            } else {
+                this._freshness.set(key, newFresh);
+            }
+        }
+
+        // Remove dried-up water
+        for (const { key, bx, by, bz } of toDry) {
+            this._removeWater(bx, by, bz);
+            // Wake neighbors — they might need to re-evaluate
+            const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0],[0,-1,0]];
+            for (const [dx, dy, dz] of dirs) {
+                const nk = (bx+dx) + ',' + (by+dy) + ',' + (bz+dz);
+                if (this._freshness.has(nk)) this._activeWater.add(nk);
+            }
+        }
+
+        // 3. Flow simulation — process active water blocks
+        const toDeactivate = [];
         const newWater = [];
         let processed = 0;
-        const maxProcess = 500; // cap how many blocks we check per tick
+        const maxProcess = 500;
 
         for (const key of this._activeWater) {
             if (processed >= maxProcess) break;
@@ -1443,68 +1528,63 @@ export class WaterSim {
             if (!this._isNearPlayer(bx, bz)) continue;
             processed++;
 
-            // Check if this water block still exists
             if (world.getBlockAt(bx, by, bz) !== BLOCK.WATER) {
-                toRemove.push(key);
+                toDeactivate.push(key);
                 continue;
             }
 
-            // Remove if at ocean
+            // Ocean drain
             if (by <= this._yOff && this._isOcean(bx, bz)) {
-                toRemove.push(key);
                 this._removeWater(bx, by, bz);
+                toDeactivate.push(key);
                 continue;
             }
 
-            let settled = true; // assume settled until we find somewhere to flow
+            const myFresh = this._freshness.get(key) || 0;
+            if (myFresh <= 1) { toDeactivate.push(key); continue; }
+            const childFresh = myFresh - 1;
+            let settled = true;
 
-            // Try to flow DOWN first (gravity)
+            // Flow DOWN (gravity)
             const below = world.getBlockAt(bx, by - 1, bz);
             if (below === BLOCK.AIR) {
-                newWater.push({ bx, by: by - 1, bz });
+                newWater.push({ bx, by: by - 1, bz, fresh: childFresh });
                 settled = false;
-                continue; // water falls, don't spread sideways this tick
+                toDeactivate.push(key);
+                continue; // fall, don't spread sideways
             }
 
-            // Try to flow to horizontal neighbors that are lower
+            // Horizontal neighbors
             for (let di = 0; di < 4; di++) {
                 const nx = bx + (di === 0 ? 1 : di === 1 ? -1 : 0);
                 const nz = bz + (di === 2 ? 1 : di === 3 ? -1 : 0);
-                // Check below neighbor (downhill flow)
+                // Downhill (one block lower)
                 const nbLow = world.getBlockAt(nx, by - 1, nz);
                 if (nbLow === BLOCK.AIR) {
-                    const nbLow2 = world.getBlockAt(nx, by - 2, nz);
-                    if (nbLow2 !== BLOCK.AIR) {
-                        newWater.push({ bx: nx, by: by - 1, bz: nz });
-                        settled = false;
-                    } else {
-                        // Drop further — waterfall
-                        newWater.push({ bx: nx, by: by - 1, bz: nz });
-                        settled = false;
-                    }
+                    newWater.push({ bx: nx, by: by - 1, bz: nz, fresh: childFresh });
+                    settled = false;
                     continue;
                 }
-                // Spread at same level only if on solid ground
+                // Same level spread (only on solid ground)
                 const nb = world.getBlockAt(nx, by, nz);
                 if (nb === BLOCK.AIR && below !== BLOCK.AIR) {
-                    newWater.push({ bx: nx, by, bz: nz });
+                    newWater.push({ bx: nx, by, bz: nz, fresh: childFresh });
                     settled = false;
                 }
             }
 
-            // If water can't flow anywhere, it's settled — stop tracking it
-            if (settled) toRemove.push(key);
+            if (settled) toDeactivate.push(key);
         }
 
-        // Clean up settled/removed blocks from active set
-        for (const key of toRemove) this._activeWater.delete(key);
+        for (const key of toDeactivate) this._activeWater.delete(key);
 
-        // Apply new water (limit per tick to prevent lag)
+        // Apply new water (limit per tick)
         let placed = 0;
         const maxPerTick = 60;
-        for (const { bx, by, bz } of newWater) {
+        for (const { bx, by, bz, fresh } of newWater) {
             if (placed >= maxPerTick) break;
-            if (this._setWater(bx, by, bz)) placed++;
+            this._setWater(bx, by, bz, fresh);
+            placed++;
         }
     }
 }
