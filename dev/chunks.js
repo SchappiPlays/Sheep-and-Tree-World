@@ -276,7 +276,6 @@ export class ChunkManager {
                     let _cornerLow = [false, false, false, false];
                     // Use simpler slope styles at higher LODs for performance
                     let _slopeStyle = (typeof window !== 'undefined' && window._slopeStyle) || 'mini';
-                    if (lod >= 2 && _slopeStyle === 'mini') _slopeStyle = 'sloped';
                     if (lod >= 3) _slopeStyle = 'none';
                     const _aboveBlock = this.world.getBlockAt(bx, y + 1, bz);
                     const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
