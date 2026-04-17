@@ -1363,9 +1363,13 @@ export class WaterSim {
         this._tickTimer += dt;
         if (this._tickTimer < this._tickRate) return;
         this._tickTimer = 0;
-        this._dirtyChunks.clear();
         this._tick();
-        return this._dirtyChunks;
+        const dirty = this._dirtyChunks;
+        if (dirty.size > 0) {
+            this._dirtyChunks = new Set();
+            return dirty;
+        }
+        return null;
     }
 
     _isNearPlayer(bx, bz) {
@@ -1413,8 +1417,9 @@ export class WaterSim {
     // Walk downstream from a dam and remove water blocks
     _drainDownstream(startBX, startBY, startBZ, fdx, fdz, riv) {
         // Flood-fill through water blocks downstream, removing them
-        const visited = new Set();
-        const queue = [];
+        // Uses _drainFillQueue/_drainVisited to spread across multiple ticks
+        this._drainVisited = new Set();
+        this._drainFillQueue = [];
         // Start from neighbors of the placed block
         const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0]];
         for (const [dx, dy, dz] of dirs) {
@@ -1423,29 +1428,36 @@ export class WaterSim {
             const dot = dx * fdx + dz * fdz;
             if (dot < -0.1) continue; // upstream side, skip
             if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
-                queue.push({ bx: nx, by: ny, bz: nz });
-                visited.add(nx + ',' + ny + ',' + nz);
+                this._drainFillQueue.push({ bx: nx, by: ny, bz: nz });
+                this._drainVisited.add(nx + ',' + ny + ',' + nz);
             }
         }
-        // Flood-fill and queue for gradual removal
+    }
+
+    // Continue flood-fill exploration, called each tick
+    _continueDrainFill() {
+        if (!this._drainFillQueue || this._drainFillQueue.length === 0) return;
         let filled = 0;
-        const maxFill = 500;
-        while (queue.length > 0 && filled < maxFill) {
-            const { bx, by, bz } = queue.shift();
+        const maxPerTick = 200;
+        while (this._drainFillQueue.length > 0 && filled < maxPerTick) {
+            const { bx, by, bz } = this._drainFillQueue.shift();
             this._drainQueue.push({ bx, by, bz });
             filled++;
-            // Expand to water neighbors
             for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]]) {
                 const nx = bx + dx, ny = by + dy, nz = bz + dz;
                 const key = nx + ',' + ny + ',' + nz;
-                if (visited.has(key)) continue;
-                visited.add(key);
+                if (this._drainVisited.has(key)) continue;
+                this._drainVisited.add(key);
                 if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
-                    // Don't drain ocean
                     if (ny <= this._yOff && this._isOcean(nx, nz)) continue;
-                    queue.push({ bx: nx, by: ny, bz: nz });
+                    this._drainFillQueue.push({ bx: nx, by: ny, bz: nz });
                 }
             }
+        }
+        // Clean up when done
+        if (this._drainFillQueue.length === 0) {
+            this._drainFillQueue = null;
+            this._drainVisited = null;
         }
     }
 
@@ -1472,6 +1484,9 @@ export class WaterSim {
 
     _tick() {
         const world = this.world;
+
+        // 0. Continue flood-fill exploration for drain (spreads across ticks)
+        this._continueDrainFill();
 
         // 1. Process drain queue (gradual — 30 blocks per tick for visual effect)
         let drained = 0;

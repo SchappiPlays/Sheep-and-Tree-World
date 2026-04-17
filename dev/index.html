@@ -1820,6 +1820,7 @@ document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
 
 // ── World (created once, reset on new game) ──
 let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr, waterSim;
+const _waterDirtyCarry = new Set();
 const mp = new Multiplayer(scene);
 
 function startGame(loadSlotName) {
@@ -14223,16 +14224,20 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z);
 
-    // Water simulation — throttle chunk rebuilds to max 2 per frame
+    // Water simulation — throttle chunk rebuilds to max 4 per frame, carry over remainder
     if (waterSim) {
         waterSim.setPlayerPos(player.position.x, player.position.z);
         const dirtyChunks = waterSim.update(dt);
-        if (dirtyChunks && dirtyChunks.size > 0) {
+        if (dirtyChunks) {
+            for (const key of dirtyChunks) _waterDirtyCarry.add(key);
+        }
+        if (_waterDirtyCarry.size > 0) {
             let rebuilt = 0;
-            for (const key of dirtyChunks) {
-                if (rebuilt >= 2) break;
+            for (const key of _waterDirtyCarry) {
+                if (rebuilt >= 4) break;
                 const [cx, cz] = key.split(',').map(Number);
                 chunkManager.rebuildChunkAt(cx * CHUNK_SIZE, cz * CHUNK_SIZE);
+                _waterDirtyCarry.delete(key);
                 rebuilt++;
             }
         }
