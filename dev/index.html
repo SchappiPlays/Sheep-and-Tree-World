@@ -1823,6 +1823,130 @@ let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr, wat
 const _waterDirtyCarry = new Set();
 const mp = new Multiplayer(scene);
 
+// ── Intro Cinematic — aerial tour of the world for new players ──
+let _introActive = false;
+function _playIntroCinematic(onDone) {
+    _introActive = true;
+    gamePaused = false; // allow rendering
+
+    // Cinematic waypoints: { pos: [x,y,z], look: [x,y,z], dur: seconds, label }
+    const shots = [
+        // Wide aerial sweep — whole island from high up
+        { pos: [0, 120, -200], look: [0, 0, 0], dur: 4, label: '' },
+        // Stone Castle (Kingdom) — dramatic approach
+        { pos: [200, 60, 150], look: [260, 10, 105], dur: 4, label: 'The Kingdom' },
+        // Closer castle view
+        { pos: [280, 30, 130], look: [260, 15, 105], dur: 3, label: '' },
+        // Main village — swooping over houses and villagers
+        { pos: [60, 25, 30], look: [80, 5, 16], dur: 3.5, label: 'The Village' },
+        // East mountains & Great Peak panorama
+        { pos: [1400, 100, -200], look: [1640, 40, -80], dur: 4, label: 'The Great Peak' },
+        // Dragon's Reach fortress
+        { pos: [2120, 40, 60], look: [2160, 12, 10], dur: 3.5, label: "Dragon's Reach" },
+        // Ice Castle in the north
+        { pos: [-30, 50, -560], look: [10, 20, -600], dur: 3.5, label: 'The Frozen North' },
+        // Giant ancient forest — atmospheric
+        { pos: [-80, 60, -150], look: [-30, 10, -190], dur: 3, label: 'The Ancient Forest' },
+        // Final — zoom down to player spawn
+        { pos: [0, 80, 20], look: [0, 0, 0], dur: 2.5, label: '' },
+        { pos: [0, 8, 4], look: [0, 2, 0], dur: 3, label: 'Your journey begins...' },
+    ];
+
+    // Overlay for labels and skip hint
+    const overlay = document.createElement('div');
+    overlay.id = 'introOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
+    const labelEl = document.createElement('div');
+    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;text-shadow:0 2px 8px rgba(0,0,0,0.8);opacity:0;transition:opacity 0.8s;';
+    overlay.appendChild(labelEl);
+    const skipEl = document.createElement('div');
+    skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.5);font-family:sans-serif;';
+    skipEl.textContent = 'Click or press any key to skip';
+    overlay.appendChild(skipEl);
+    // Letterbox bars
+    const barT = document.createElement('div');
+    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:50px;background:black;';
+    const barB = document.createElement('div');
+    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:50px;background:black;';
+    overlay.appendChild(barT); overlay.appendChild(barB);
+    document.body.appendChild(overlay);
+
+    let shotIdx = 0, shotTime = 0, done = false;
+    let prevPos = new THREE.Vector3(shots[0].pos[0], shots[0].pos[1], shots[0].pos[2]);
+    let prevLook = new THREE.Vector3(shots[0].look[0], shots[0].look[1], shots[0].look[2]);
+    camera.position.copy(prevPos);
+    camera.lookAt(prevLook);
+
+    const finish = () => {
+        if (done) return;
+        done = true;
+        _introActive = false;
+        gamePaused = true; // pause briefly
+        overlay.remove();
+        // Reset camera to player
+        const spawnY = getTerrainHeight(0, 0);
+        player.position.set(0, spawnY, 0);
+        player.group.position.set(0, spawnY, 0);
+        gamePaused = false;
+        onDone();
+    };
+
+    // Skip on click or key
+    const skipClick = () => finish();
+    const skipKey = (e) => { if (e.key !== 'F11' && e.key !== 'F12') finish(); };
+    overlay.addEventListener('click', skipClick);
+    window.addEventListener('keydown', skipKey);
+
+    const introTick = () => {
+        if (done) return;
+        requestAnimationFrame(introTick);
+
+        const now = performance.now();
+        if (!introTick._prev) introTick._prev = now;
+        const dt = Math.min((now - introTick._prev) / 1000, 0.1);
+        introTick._prev = now;
+
+        shotTime += dt;
+        const shot = shots[shotIdx];
+        const nextShot = shots[Math.min(shotIdx + 1, shots.length - 1)];
+
+        // Smooth interpolation within this shot
+        const t = Math.min(shotTime / shot.dur, 1);
+        const ease = t * t * (3 - 2 * t); // smoothstep
+
+        const targetPos = new THREE.Vector3(shot.pos[0], shot.pos[1], shot.pos[2]);
+        const targetLook = new THREE.Vector3(shot.look[0], shot.look[1], shot.look[2]);
+        // Blend from previous position to current shot target
+        camera.position.lerpVectors(prevPos, targetPos, ease);
+        const lookTarget = new THREE.Vector3().lerpVectors(prevLook, targetLook, ease);
+        camera.lookAt(lookTarget);
+
+        // Label
+        if (shot.label && t > 0.15 && t < 0.85) {
+            labelEl.textContent = shot.label;
+            labelEl.style.opacity = '1';
+        } else if (t >= 0.85 || !shot.label) {
+            labelEl.style.opacity = '0';
+        }
+
+        // Update chunks around camera for the view
+        if (chunkManager) {
+            chunkManager.update(camera.position.x, camera.position.z);
+        }
+        updateWaterTime(now * 0.001);
+        renderer.render(scene, camera);
+
+        if (t >= 1) {
+            prevPos.copy(targetPos);
+            prevLook.copy(targetLook);
+            shotIdx++;
+            shotTime = 0;
+            if (shotIdx >= shots.length) finish();
+        }
+    };
+    requestAnimationFrame(introTick);
+}
+
 function startGame(loadSlotName) {
     mainMenuEl.style.display = 'none';
     previewRunning = false;
@@ -6045,8 +6169,16 @@ function startGame(loadSlotName) {
                 loadText.textContent = 'Ready!';
                 setTimeout(() => {
                     loadingEl.style.display = 'none';
-                    gamePaused = false;
-                    if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                    if (!loadSlotName) {
+                        // New game — play intro cinematic
+                        _playIntroCinematic(() => {
+                            gamePaused = false;
+                            if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                        });
+                    } else {
+                        gamePaused = false;
+                        if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                    }
                 }, 200);
             }, 50);
         } else {
@@ -13467,7 +13599,7 @@ let camInit = false;
 
 function animate() {
     requestAnimationFrame(animate);
-    if (!gameStarted || gamePaused || settingsOpen || !dragonMgr) { prevTime = performance.now(); return; }
+    if (!gameStarted || gamePaused || settingsOpen || !dragonMgr || _introActive) { prevTime = performance.now(); return; }
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
