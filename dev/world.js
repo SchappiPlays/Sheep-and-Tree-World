@@ -199,35 +199,104 @@ function getScorchedBlend(x, z) {
 }
 
 const riverDefs = [
-    // Winding river from Forest Lake area to the east coast
-    { name: 'East River', width: 4, pts: [
-        [-500,200],[-440,190],[-380,170],[-320,160],[-260,180],[-200,190],[-140,170],[-80,150],
-        [-20,130],[40,110],[110,100],[180,110],[240,130],[300,116],[360,90],[420,76],
-        [480,84],[540,110],[600,120],[660,100],[720,70],[780,60],[840,76],[900,100],
-        [960,90],[1020,64],[1080,40],[1140,30],[1200,20],[1280,0],[1360,-16],[1440,-10],
-        [1520,10],[1600,20],[1700,30],[1820,36],[1960,40],[2120,44],[2300,48],
-        [2380,42],[2440,35],[2500,28],[2540,20],[2570,12],[2590,5],[2610,0]
+    // Glacial River — source: frozen mountain basin lake, flows south to east coast
+    { name: 'Glacial River', width: 5, sourceRadius: 18, pts: [
+        [-60,-2100],[-55,-2000],[-45,-1900],[-30,-1800],[-20,-1700],[-15,-1600],
+        [-60,-1520],[-80,-1440],[-60,-1360],[-30,-1280],[0,-1200],[20,-1120],
+        [10,-1040],[-10,-960],[0,-880],[20,-800],[50,-720],[40,-640],[20,-560],
+        [0,-480],[10,-400],[30,-320],[60,-240],[100,-160],[140,-80],[180,0],
+        [240,40],[320,60],[420,70],[520,80],[640,90],[760,70],[880,50],
+        [1000,30],[1120,10],[1240,0],[1360,-10],[1480,0],[1600,10],
+        [1720,20],[1840,30],[1960,36],[2100,40],[2300,44],[2500,30],[2610,0]
     ]},
-    // Southern river — winds through temperate into desert transition
-    { name: 'South River', width: 3, pts: [
+    // Mountain River — source: NW mountains, flows SW to west coast
+    { name: 'Mountain River', width: 4, sourceRadius: 10, pts: [
+        [1020,-260],[960,-240],[900,-210],[840,-180],[780,-150],[720,-120],
+        [660,-90],[600,-60],[540,-30],[480,0],[420,30],[360,60],
+        [300,80],[240,100],[180,120],[120,130],[60,140],[0,150],
+        [-60,160],[-120,170],[-180,180],[-250,190],[-320,200],
+        [-400,200],[-480,190],[-560,170],[-640,160],[-720,140],
+        [-800,120],[-880,100],[-960,80],[-1040,60],[-1120,40],[-1200,20],[-1280,0]
+    ]},
+    // Highland River — source: east mountains, flows east to coast
+    { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
+        [1204,-60],[1260,-40],[1320,-20],[1380,0],[1440,20],[1500,40],
+        [1560,60],[1620,56],[1700,40],[1780,24],[1860,10],[1940,0],
+        [2020,-10],[2100,-20],[2180,-30],[2260,-40],[2340,-50],[2420,-60],
+        [2500,-70],[2580,-80],[2660,-90]
+    ]},
+    // Southern Stream — source: hills south of center, flows south to desert coast
+    { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
         [20,80],[30,140],[50,200],[40,260],[20,320],[30,390],[60,450],[100,500],
-        [90,560],[60,620],[40,680],[50,740],[70,790],[60,840],[30,900]
-    ]},
-    // Western river — from highlands toward the bay
-    { name: 'West River', width: 3, pts: [
-        [-400,200],[-460,180],[-520,160],[-580,170],[-640,190],[-710,180],[-780,160],
-        [-840,140],[-910,120],[-980,100],[-1040,90],[-1110,80],[-1180,70],[-1260,60]
+        [90,560],[60,620],[40,680],[50,740],[70,790],[60,840],[30,900],
+        [10,960],[0,1020],[-10,1100]
     ]},
 ];
-for (const riv of riverDefs) {
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of riv.pts) {
-        if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
-        if (p[1] < minZ) minZ = p[1]; if (p[1] > maxZ) maxZ = p[1];
+
+// Pre-calculate bounding boxes and per-waypoint heights for downhill flow
+function _initRiverHeights() {
+    for (const riv of riverDefs) {
+        // Bounding box
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const p of riv.pts) {
+            if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+            if (p[1] < minZ) minZ = p[1]; if (p[1] > maxZ) maxZ = p[1];
+        }
+        const pad = riv.width + 6;
+        riv.bbMinX = minX - pad; riv.bbMaxX = maxX + pad;
+        riv.bbMinZ = minZ - pad; riv.bbMaxZ = maxZ + pad;
+
+        // Cumulative path distance for each waypoint
+        riv.cumDist = [0];
+        for (let i = 1; i < riv.pts.length; i++) {
+            const dx = riv.pts[i][0] - riv.pts[i-1][0];
+            const dz = riv.pts[i][1] - riv.pts[i-1][1];
+            riv.cumDist.push(riv.cumDist[i-1] + Math.sqrt(dx*dx + dz*dz));
+        }
+        riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
+
+        // Calculate heights: sample raw terrain (skip river carving) at each waypoint
+        // Ensure monotonically decreasing (always downhill from source)
+        riv.heights = [];
+        let prevH = Infinity;
+        for (let i = 0; i < riv.pts.length; i++) {
+            const [px, pz] = riv.pts[i];
+            // Sample terrain height near the bank (offset perpendicular to avoid the carved channel)
+            let bankH;
+            if (i === 0) {
+                bankH = _getRawTerrainHeight(px, pz);
+            } else {
+                // Sample off to the side of the river for bank height
+                const dx = riv.pts[i][0] - riv.pts[Math.max(0,i-1)][0];
+                const dz = riv.pts[i][1] - riv.pts[Math.max(0,i-1)][1];
+                const len = Math.sqrt(dx*dx + dz*dz) || 1;
+                const nx = -dz / len, nz = dx / len;
+                const off = riv.width + 4;
+                const h1 = _getRawTerrainHeight(px + nx * off, pz + nz * off);
+                const h2 = _getRawTerrainHeight(px - nx * off, pz - nz * off);
+                bankH = Math.min(h1, h2); // lower bank
+            }
+            // Water surface sits 0.3 units below the bank
+            let waterH = bankH - 0.3;
+            // Ensure monotonically decreasing — always downhill
+            waterH = Math.min(waterH, prevH - 0.05);
+            // Don't go below sea level (rivers end at ocean)
+            waterH = Math.max(waterH, 0.1);
+            riv.heights.push(waterH);
+            prevH = waterH;
+        }
     }
-    const pad = riv.width + 6;
-    riv.bbMinX = minX - pad; riv.bbMaxX = maxX + pad;
-    riv.bbMinZ = minZ - pad; riv.bbMaxZ = maxZ + pad;
+}
+
+// Temporary flag to avoid recursion when sampling terrain for river heights
+let _skipRivers = false;
+
+// Get terrain height without river carving (for calculating river bank heights)
+function _getRawTerrainHeight(x, z) {
+    _skipRivers = true;
+    const h = getTerrainHeight(x, z);
+    _skipRivers = false;
+    return h;
 }
 
 function getRiverBlend(x, z, riv) {
@@ -248,6 +317,48 @@ function getRiverBlend(x, z, riv) {
     return 1 - (minDist - riv.width * 0.5) / (riv.width * 0.5 + 3);
 }
 
+// Get the water surface height at a river point — interpolated from waypoint heights
+function getRiverWaterHeight(x, z, riv) {
+    if (!riv.heights) return 0.5; // fallback before init
+    const pts = riv.pts;
+    let bestSeg = 0, bestT = 0, bestDist = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const ax = pts[i][0], az = pts[i][1], bx = pts[i+1][0], bz = pts[i+1][1];
+        const dx = bx - ax, dz = bz - az;
+        const len2 = dx * dx + dz * dz;
+        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+        const px = ax + t * dx, pz = az + t * dz;
+        const d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d < bestDist) { bestDist = d; bestSeg = i; bestT = t; }
+    }
+    // Interpolate height between the two endpoints of the closest segment
+    const h0 = riv.heights[bestSeg];
+    const h1 = riv.heights[bestSeg + 1];
+    return h0 + (h1 - h0) * bestT;
+}
+
+// Get flow direction at a river point (normalized dx, dz along the path)
+function getRiverFlowDir(x, z, riv) {
+    const pts = riv.pts;
+    let bestSeg = 0, bestDist = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const ax = pts[i][0], az = pts[i][1], bx = pts[i+1][0], bz = pts[i+1][1];
+        const dx = bx - ax, dz = bz - az;
+        const len2 = dx * dx + dz * dz;
+        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+        const px = ax + t * dx, pz = az + t * dz;
+        const d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d < bestDist) { bestDist = d; bestSeg = i; }
+    }
+    const dx = pts[bestSeg+1][0] - pts[bestSeg][0];
+    const dz = pts[bestSeg+1][1] - pts[bestSeg][1];
+    const len = Math.sqrt(dx*dx + dz*dz) || 1;
+    return [dx/len, dz/len];
+}
+
+// Initialize river heights (must be called after terrain is available)
+function initRivers() { _initRiverHeights(); }
+
 // Path flattening points from game.html (structures removed, terrain-only kept)
 const pathFlat = [
     {x:0,z:0},{x:28,z:28},{x:140,z:32},{x:170,z:32},{x:154,z:16},{x:170,z:14},{x:170,z:50},{x:154,z:50},
@@ -263,6 +374,10 @@ const pondLocs = [
     {x:-120,z:-1020,radius:10},{x:60,z:-1080,radius:7},{x:-200,z:-1120,radius:8},
     {x:20,z:1000,radius:8},{x:1010,z:-40,radius:10},
     {x:-500,z:200,radius:28},{x:-300,z:-1300,radius:36},{x:300,z:1200,radius:24},
+    // River source lakes — sourceDepth creates a bowl instead of flattening to 0
+    {x:-60,z:-2100,radius:18,sourceDepth:4},   // Glacial River source — frozen mountain basin lake
+    {x:1020,z:-260,radius:10,sourceDepth:3},   // Mountain River source — NW mountain spring
+    {x:1204,z:-60,radius:8,sourceDepth:3},     // Highland River source — east mountain spring
 ];
 
 // ── Path system — connects villages, fortress, castle ──
@@ -319,7 +434,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -361,7 +476,15 @@ function getTerrainHeight(x, z) {
     // Pond depressions
     for (const p of pondLocs) {
         const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
-        if (d < p.radius + 6) { const t = Math.max(0, 1 - d / (p.radius + 6)); h *= (1 - t * 0.9); }
+        if (d < p.radius + 6) {
+            const t = Math.max(0, 1 - d / (p.radius + 6));
+            if (p.sourceDepth) {
+                // River source lake — shallow bowl at current terrain height
+                h -= t * t * p.sourceDepth;
+            } else {
+                h *= (1 - t * 0.9);
+            }
+        }
     }
 
     // Western Bay — single large elliptical inlet at the coast
@@ -636,13 +759,21 @@ function getTerrainHeight(x, z) {
     }
 
 
-    // Rivers — paths act as bridges (don't carve terrain there)
-    const onPath = isOnPath(x, z);
-    for (const riv of riverDefs) {
-        const rb = getRiverBlend(x, z, riv);
-        if (rb > 0) {
-            if (onPath) h = Math.max(h, 2); // bridge deck sits above water
-            else h = h * (1 - rb) + 0.1 * rb;
+    // Rivers — carve channels that follow terrain downhill
+    if (!_skipRivers) {
+        const onPath = isOnPath(x, z);
+        for (const riv of riverDefs) {
+            const rb = getRiverBlend(x, z, riv);
+            if (rb > 0) {
+                if (onPath) {
+                    h = Math.max(h, 2); // bridge deck sits above water
+                } else {
+                    // Carve river bed: lower terrain to water height minus channel depth
+                    const waterH = getRiverWaterHeight(x, z, riv);
+                    const bedH = waterH - 0.8; // channel is 0.8 units deep below water surface
+                    h = h * (1 - rb) + bedH * rb;
+                }
+            }
         }
     }
 
@@ -771,21 +902,29 @@ export class World {
                     const pd = Math.sqrt((wx - p.x) ** 2 + (wz - p.z) ** 2);
                     if (pd < p.radius + 1) {
                         inPond = true;
-                        // Water sits at a natural level based on surrounding terrain
-                        pondWaterLevel = Math.floor(1.5 / BLOCK_SIZE) + yOff;
+                        if (p.sourceDepth) {
+                            // River source lake — water fills to bank height
+                            const bankH = _getRawTerrainHeight(p.x, p.z);
+                            pondWaterLevel = Math.floor((bankH - 1.0) / BLOCK_SIZE) + yOff;
+                        } else {
+                            // Regular pond — fixed level near sea level
+                            pondWaterLevel = Math.floor(1.5 / BLOCK_SIZE) + yOff;
+                        }
                         break;
                     }
                 }
-                let inRiver = false;
+                let inRiver = false, riverWaterLevel = yOff;
                 for (const riv of riverDefs) {
                     if (getRiverBlend(wx, wz, riv) > 0.5) {
                         inRiver = true;
+                        // Variable water height — follows terrain downhill from source
+                        const waterH = getRiverWaterHeight(wx, wz, riv);
+                        riverWaterLevel = Math.floor(waterH / BLOCK_SIZE) + yOff;
                         break;
                     }
                 }
                 const onPathBridge = inRiver && isOnPath(wx, wz);
                 if (onPathBridge) inRiver = false; // bridge overrides — no water, no river sand
-                const riverWaterLevel = Math.floor(0.5 / BLOCK_SIZE) + yOff;
 
                 // Near coast = sand. Inland low areas = grass/water
                 const _sz = wz / ISLAND_NS_SCALE;

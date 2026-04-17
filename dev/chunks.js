@@ -1,6 +1,6 @@
 // chunks.js — Chunk meshing and loading/unloading
 
-import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS, getTerrainHeight } from './world.js';
+import { CHUNK_SIZE, WORLD_HEIGHT, BLOCK_SIZE, BLOCK, BLOCK_COLORS, getTerrainHeight, riverDefs, getRiverBlend, getRiverFlowDir } from './world.js';
 
 let RENDER_DIST = 10; // default, updated by settings
 const LOD0_DIST = 6;    // full detail — every block, all faces
@@ -48,6 +48,7 @@ function colorHash(x, y, z) {
     return n - Math.floor(n);
 }
 
+const _waterTime = { value: 0.0 };
 const waterMat = new THREE.MeshStandardMaterial({
     color: 0x3a7ab5,
     transparent: true,
@@ -56,6 +57,70 @@ const waterMat = new THREE.MeshStandardMaterial({
     metalness: 0.1,
     side: THREE.DoubleSide,
 });
+waterMat.onBeforeCompile = (shader) => {
+    shader.uniforms._wTime = _waterTime;
+    // Pass world position + flow direction from vertex to fragment
+    shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        `#include <common>
+        attribute vec2 flow;
+        varying vec3 vWaterWorldPos;
+        varying vec2 vFlow;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        vWaterWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vFlow = flow;`
+    );
+    // Animated directional flow in fragment
+    shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        `#include <common>
+        uniform float _wTime;
+        varying vec3 vWaterWorldPos;
+        varying vec2 vFlow;
+        float waterNoise(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float waterWave(vec2 p, vec2 flowDir, float t) {
+            float flowSpeed = length(flowDir);
+            float w = 0.0;
+            if (flowSpeed > 0.1) {
+                // River water — directional flow
+                vec2 fd = normalize(flowDir);
+                float along = dot(p, fd);
+                float across = dot(p, vec2(-fd.y, fd.x));
+                // Strong directional scroll
+                w += sin(along * 4.0 - t * 3.5) * 0.18;
+                w += sin(along * 7.0 - t * 5.0) * 0.10;
+                // Subtle cross-ripples
+                w += sin(across * 6.0 + t * 1.5) * 0.06;
+                w += sin((along * 3.0 + across * 2.0) - t * 4.0) * 0.08;
+                // Foam-like bright streaks
+                float foam = sin(along * 12.0 - t * 8.0) * sin(across * 8.0 + t * 0.5);
+                w += max(0.0, foam) * 0.12;
+            } else {
+                // Still water — gentle ambient ripples (ocean, ponds)
+                w += sin(p.x * 2.0 + t * 1.2) * 0.08;
+                w += sin(p.y * 2.5 - t * 0.9) * 0.06;
+                w += sin((p.x + p.y) * 3.0 + t * 1.5) * 0.04;
+            }
+            return w;
+        }`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float wv = waterWave(vWaterWorldPos.xz, vFlow, _wTime);
+        // Brightness shimmer
+        diffuseColor.rgb += wv * 0.2;
+        // Subtle alpha variation
+        diffuseColor.a = 0.55 + wv * 0.1;`
+    );
+};
+
+export function updateWaterTime(t) { _waterTime.value = t; }
 
 export class ChunkManager {
     constructor(scene, world) {
@@ -138,12 +203,10 @@ export class ChunkManager {
         uniforms._cmapOZ.value = this._cmapOZ;
     }
 
-    update(px, pz, facingAngle) {
+    update(px, pz) {
         // Convert world position to chunk coordinates
         const pcx = Math.floor(px / (CHUNK_SIZE * BS));
         const pcz = Math.floor(pz / (CHUNK_SIZE * BS));
-        const faceDX = Math.sin(facingAngle || 0);
-        const faceDZ = Math.cos(facingAngle || 0);
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
             this._processQueue(8);
@@ -179,12 +242,8 @@ export class ChunkManager {
                             continue;
                         }
                     }
-                    // Priority: distance + bias toward facing direction
-                    const dot = dx * faceDX + dz * faceDZ;
-                    // Skip chunks far behind the player (saves build time when flying)
-                    if (dot < -3 && d2 > 25) continue;
-                    const facing = dot > 0 ? 0.5 : 1.5; // chunks in front load first
-                    const priority = d2 * facing;
+                    // Priority: pure distance — re-sorted each frame in _processQueue
+                    const priority = d2;
                     this.buildQueue.push({ cx, cz, key, dist: d2, lod, priority });
                     queued.add(key);
                 }
@@ -229,6 +288,21 @@ export class ChunkManager {
     }
 
     _processQueue(maxPerFrame) {
+        if (this.buildQueue.length === 0) return;
+        // Re-sort queue by distance to current player chunk each frame
+        const pcx = this._lastPCX, pcz = this._lastPCZ;
+        if (pcx !== null) {
+            for (let i = 0; i < this.buildQueue.length; i++) {
+                const q = this.buildQueue[i];
+                const dx = q.cx - pcx, dz = q.cz - pcz;
+                const d2 = dx * dx + dz * dz;
+                q.priority = d2;
+                // Update LOD based on current distance
+                const ring = Math.sqrt(d2);
+                q.lod = ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4;
+            }
+            this.buildQueue.sort((a, b) => a.priority - b.priority);
+        }
         let built = 0;
         const t0 = performance.now();
         const timeBudget = 12; // ms per frame budget for chunk building
@@ -264,7 +338,7 @@ export class ChunkManager {
 
         const tPos = [], tNrm = [], tCol = [], tIdx = [];
         let tVert = 0;
-        const wPos = [], wNrm = [], wIdx = [];
+        const wPos = [], wNrm = [], wFlow = [], wIdx = [];
         let wVert = 0;
         const lPos = [], lNrm = [], lCol = [], lIdx = [];
         let lVert = 0;
@@ -297,6 +371,16 @@ export class ChunkManager {
                         if (above === BLOCK.AIR) {
                             const face = FACES[2];
                             const verts = face.verts;
+                            // Compute flow direction for this water block
+                            const wwx = bx * BS, wwz = bz * BS;
+                            let flowX = 0, flowZ = 0;
+                            for (const riv of riverDefs) {
+                                if (getRiverBlend(wwx, wwz, riv) > 0.3) {
+                                    const fd = getRiverFlowDir(wwx, wwz, riv);
+                                    flowX = fd[0]; flowZ = fd[1];
+                                    break;
+                                }
+                            }
                             for (let vi = 0; vi < 4; vi++) {
                                 wPos.push(
                                     (lx + verts[vi][0] * S) * BS,
@@ -304,6 +388,7 @@ export class ChunkManager {
                                     (lz + verts[vi][2] * S) * BS
                                 );
                                 wNrm.push(0, 1, 0);
+                                wFlow.push(flowX, flowZ);
                             }
                             wIdx.push(wVert, wVert+1, wVert+2, wVert+2, wVert+1, wVert+3);
                             wVert += 4;
@@ -800,6 +885,7 @@ export class ChunkManager {
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.Float32BufferAttribute(wPos, 3));
             geo.setAttribute('normal', new THREE.Float32BufferAttribute(wNrm, 3));
+            geo.setAttribute('flow', new THREE.Float32BufferAttribute(wFlow, 2));
             geo.setIndex(wIdx);
             const mesh = new THREE.Mesh(geo, waterMat);
             mesh.position.set(worldOX, 0, worldOZ);
