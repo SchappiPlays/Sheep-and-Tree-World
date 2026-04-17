@@ -941,7 +941,7 @@ export class World {
                 const _forestNoise = (Math.sin(twx * 0.004 + 1.7) * Math.cos(twz * 0.005 + 0.3) +
                     Math.sin(twx * 0.007 - twz * 0.006 + 2.5) * 0.5 +
                     Math.cos(twx * 0.003 + twz * 0.004 - 1.0) * 0.3) / 1.8; // -1 to 1
-                const _treeDensity = _forestNoise > 0.2 ? 0.06 : _forestNoise > -0.1 ? 0.015 : 0.003;
+                const _treeDensity = _forestNoise > 0.5 ? 0.05 : _forestNoise > 0.1 ? 0.015 : 0.003;
                 if (this._hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > _treeDensity) continue;
 
                 const jx = bx + Math.floor(this._hash(bx+11,bz+22)*2);

@@ -1373,7 +1373,7 @@ function buildFarTerrain(centerX, centerZ) {
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
-                const _baseDensity = _fn > 0.2 ? 0.06 : _fn > -0.1 ? 0.015 : 0.003;
+                const _baseDensity = _fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003;
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
                 if (treeChance < _lodDensity * (1 - plains * 0.95)) {
                     // Jitter position to break grid pattern
