@@ -219,15 +219,15 @@ const riverDefs = [
         [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
         [-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
-    // Highland River — source: east mountains, flows north then curves back south past the fort, then east to coast
+    // Highland River — source: NW peak, flows east around mountains, past fort, then east to coast
     { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
-        [620,-50],[630,-80],[640,-110],[635,-140],[620,-170],[600,-200],
-        [570,-220],[530,-210],[500,-180],[490,-150],[500,-120],
-        [520,-90],[540,-60],[550,-30],[555,0],[555,30],[550,50],
-        [560,70],[580,90],[620,100],[680,110],[760,110],
-        [860,100],[960,90],[1060,80],[1160,70],[1260,60],
-        [1400,50],[1560,40],[1720,30],[1880,20],[2040,10],
-        [2200,0],[2400,-10],[2600,-20]
+        [520,-155],[540,-170],[580,-185],[630,-190],[680,-185],[720,-170],
+        [760,-150],[790,-120],[810,-90],[820,-60],[820,-30],[810,0],
+        [790,20],[760,40],[720,55],[680,65],[640,75],[600,80],
+        [560,70],[540,60],[530,50],[540,40],[570,35],
+        [620,40],[700,50],[800,55],[900,55],[1000,50],
+        [1120,45],[1260,40],[1400,35],[1560,30],[1720,25],
+        [1880,20],[2040,10],[2200,0],[2400,-10],[2600,-20]
     ]},
     // Southern Stream — source: hills south of center, flows south to desert coast
     { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
@@ -363,7 +363,7 @@ const pondLocs = [
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
     {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
     {x:510,z:-150,radius:10,sourceDepth:3},    // Mountain River source — NW mountain spring
-    {x:620,z:-50,radius:8,sourceDepth:3},      // Highland River source — east mountain spring
+    {x:520,z:-155,radius:8,sourceDepth:3},     // Highland River source — NW peak spring
 ];
 
 // ── Path system — connects villages, fortress, castle ──
