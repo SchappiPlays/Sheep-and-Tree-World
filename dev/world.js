@@ -219,15 +219,14 @@ const riverDefs = [
         [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
         [-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
-    // Highland River — source: NW peak, flows east around mountains, past fort, then east to coast
+    // Highland River — source: east mountains NW peak, flows north around east side of mountains then south and east past Dragon's Reach to coast
     { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
-        [520,-155],[540,-170],[580,-185],[630,-190],[680,-185],[720,-170],
-        [760,-150],[790,-120],[810,-90],[820,-60],[820,-30],[810,0],
-        [790,20],[760,35],[720,40],[680,42],[640,43],[600,43],
-        [560,43],[520,43],[480,43],[450,43],[420,43],
-        [400,43],[420,45],[480,50],[560,55],[660,55],[780,55],[900,55],[1000,50],
-        [1120,45],[1260,40],[1400,35],[1560,30],[1720,25],
-        [1880,20],[2040,10],[2200,0],[2400,-10],[2600,-20]
+        [560,-100],[540,-130],[530,-160],[540,-185],[570,-200],
+        [610,-210],[660,-200],[710,-185],[750,-160],[780,-130],
+        [800,-100],[815,-70],[820,-40],[820,-10],[815,15],
+        [810,30],[810,38],[820,42],[850,43],[900,43],
+        [1000,43],[1100,43],[1200,43],[1400,43],[1600,43],
+        [1800,43],[2000,43],[2100,43],[2220,43],[2400,30],[2600,20]
     ]},
     // Southern Stream — source: hills south of center, flows south to desert coast
     { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
@@ -363,7 +362,7 @@ const pondLocs = [
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
     {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
     {x:510,z:-150,radius:10,sourceDepth:3},    // Mountain River source — NW mountain spring
-    {x:520,z:-155,radius:8,sourceDepth:3},     // Highland River source — NW peak spring
+    {x:560,z:-100,radius:8,sourceDepth:3},     // Highland River source — east mountains NW peak
 ];
 
 // ── Path system — connects villages, fortress, castle ──
