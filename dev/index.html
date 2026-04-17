@@ -1829,25 +1829,27 @@ function _playIntroCinematic(onDone) {
     _introActive = true;
     gamePaused = false; // allow rendering
 
-    // Each shot has start/end camera positions for movement, plus a fade transition time
-    // from/to: camera position, lookFrom/lookTo: look target, dur: seconds, fade: transition time
+    // Each shot: from/to (camera pos), lookFrom/lookTo (look target), dur, fade, label
+    // preload: [x,z] — position to aggressively load chunks around during fade-in
     const shots = [
-        // Wide aerial sweep — orbit over the island
-        { from: [-200, 140, -300], to: [200, 120, -100], lookFrom: [0, 0, 0], lookTo: [100, 0, 50], dur: 5, label: '' },
-        // Stone Castle — fly in from the south
-        { from: [220, 70, 200], to: [280, 25, 120], lookFrom: [260, 10, 105], lookTo: [260, 15, 105], dur: 5, label: 'The Kingdom', fade: 0.8 },
-        // Main village — low sweep over rooftops
-        { from: [40, 18, 40], to: [110, 12, 10], lookFrom: [80, 4, 16], lookTo: [90, 3, 10], dur: 4.5, label: 'The Village', fade: 0.8 },
-        // Great Peak — dramatic panorama, camera slides along the range
-        { from: [1200, 110, -250], to: [1700, 90, -180], lookFrom: [1640, 50, -80], lookTo: [1640, 30, -80], dur: 5, label: 'The Great Peak', fade: 0.8 },
-        // Dragon's Reach — approach from the sky
-        { from: [2100, 60, 80], to: [2170, 22, 30], lookFrom: [2160, 15, 10], lookTo: [2160, 10, 10], dur: 5, label: "Dragon's Reach", fade: 0.8 },
-        // Ice Castle — pull back reveal
-        { from: [30, 30, -580], to: [-40, 55, -550], lookFrom: [10, 18, -600], lookTo: [10, 25, -600], dur: 4.5, label: 'The Frozen North', fade: 0.8 },
-        // Ancient Forest — moody flyover
-        { from: [-100, 50, -140], to: [0, 40, -210], lookFrom: [-30, 8, -190], lookTo: [-20, 5, -200], dur: 4, label: 'The Ancient Forest', fade: 0.8 },
-        // Final — high above spawn, then dive down
-        { from: [30, 100, 40], to: [0, 5, 3], lookFrom: [0, 0, 0], lookTo: [0, 1, -2], dur: 5, label: 'Your journey begins...', fade: 1.0 },
+        // Wide aerial sweep — orbit over the island from high up
+        { from: [-200, 160, -200], to: [200, 140, 100], lookFrom: [0, 0, 0], lookTo: [100, 0, 50], dur: 5, label: '' },
+        // The Castle (-800, 40) — approach from the east
+        { from: [-700, 50, 90], to: [-820, 25, 30], lookFrom: [-800, 12, 40], lookTo: [-800, 15, 40], dur: 5, label: 'The Castle', fade: 1.0, preload: [-800, 40] },
+        // Meadow Village (160, 32) — low sweep past houses and villagers
+        { from: [120, 15, 55], to: [200, 12, 15], lookFrom: [160, 3, 32], lookTo: [170, 3, 28], dur: 4.5, label: 'Meadow Village', fade: 1.0, preload: [160, 32] },
+        // Ruined Fortress (-1010, -670) — dramatic reveal
+        { from: [-1060, 50, -620], to: [-970, 30, -700], lookFrom: [-1010, 10, -670], lookTo: [-1010, 12, -670], dur: 5, label: 'The Ruined Fortress', fade: 1.0, preload: [-1010, -670] },
+        // Ancient Forest (-60, -700) — moody flyover of the hill ring
+        { from: [-150, 70, -620], to: [30, 55, -780], lookFrom: [-60, 15, -700], lookTo: [-60, 10, -700], dur: 5, label: 'The Ancient Forest', fade: 1.0, preload: [-60, -700] },
+        // Great Peak (1640, -80) — panorama slide along the range
+        { from: [1350, 120, -250], to: [1800, 95, 50], lookFrom: [1640, 50, -80], lookTo: [1640, 30, -80], dur: 5, label: 'The Great Peak', fade: 1.0, preload: [1640, -80] },
+        // Dragon's Reach (2160, 10) — approach from the sky
+        { from: [2100, 55, 70], to: [2180, 22, -10], lookFrom: [2160, 12, 10], lookTo: [2160, 10, 10], dur: 5, label: "Dragon's Reach", fade: 1.0, preload: [2160, 10] },
+        // Frozen Mountains (-60, -2100) — the dragon's nest, epic reveal
+        { from: [-150, 90, -1950], to: [30, 70, -2200], lookFrom: [-60, 30, -2100], lookTo: [-60, 25, -2100], dur: 5, label: 'The Frozen North', fade: 1.0, preload: [-60, -2100] },
+        // Final — high above spawn, then dive down to player
+        { from: [30, 100, 40], to: [0, 5, 3], lookFrom: [0, 0, 0], lookTo: [0, 1, -2], dur: 5, label: 'Your journey begins...', fade: 1.2 },
     ];
 
     // Overlay for labels, skip hint, fade, and letterbox
@@ -1913,15 +1915,18 @@ function _playIntroCinematic(onDone) {
         const fadeDur = shot.fade || FADE_DUR;
 
         if (phase === 'fadein') {
-            // Fade from black → clear
+            // Fade from black → clear, aggressively load chunks while screen is black
             const t = Math.min(phaseTime / fadeDur, 1);
             fadeEl.style.opacity = String(1 - t);
-            // Pre-position camera at shot start and load chunks
+            // Pre-position camera at shot start
             camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
             camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
+            // Load chunks at the preload center (or camera pos)
             if (chunkManager) {
-                chunkManager.update(camera.position.x, camera.position.z);
-                chunkManager._processQueue(6);
+                const plx = shot.preload ? shot.preload[0] : shot.from[0];
+                const plz = shot.preload ? shot.preload[1] : shot.from[2];
+                chunkManager.update(plx, plz);
+                chunkManager._processQueue(12); // aggressive loading while hidden
             }
             if (t >= 1) { phase = 'moving'; phaseTime = 0; }
         }
@@ -1963,21 +1968,23 @@ function _playIntroCinematic(onDone) {
             }
         }
         else if (phase === 'fadeout') {
-            // Fade clear → black
+            // Fade clear → black, start loading next shot's chunks while fading
             const t = Math.min(phaseTime / fadeDur, 1);
             fadeEl.style.opacity = String(t);
+            // Pre-load next shot's area while screen is going black
+            const nextIdx = shotIdx + 1;
+            if (nextIdx < shots.length && chunkManager) {
+                const next = shots[nextIdx];
+                const plx = next.preload ? next.preload[0] : next.from[0];
+                const plz = next.preload ? next.preload[1] : next.from[2];
+                chunkManager.update(plx, plz);
+                chunkManager._processQueue(12);
+            }
             if (t >= 1) {
                 shotIdx++;
                 if (shotIdx >= shots.length) { finish(); return; }
                 phase = 'fadein';
                 phaseTime = 0;
-                // Pre-position for next shot's chunk loading
-                const next = shots[shotIdx];
-                camera.position.set(next.from[0], next.from[1], next.from[2]);
-                if (chunkManager) {
-                    chunkManager.update(camera.position.x, camera.position.z);
-                    chunkManager._processQueue(6);
-                }
             }
         }
 
@@ -1985,14 +1992,16 @@ function _playIntroCinematic(onDone) {
         renderer.render(scene, camera);
     };
 
-    // Give chunks a moment to load at the first position before starting
-    setTimeout(() => {
+    // Aggressively load chunks at the first shot before starting
+    const _preloadIntro = (count) => {
+        if (count <= 0 || done) { requestAnimationFrame(introTick); return; }
         if (chunkManager) {
             chunkManager.update(s0.from[0], s0.from[2]);
-            chunkManager._processQueue(8);
+            chunkManager._processQueue(12);
         }
-        requestAnimationFrame(introTick);
-    }, 100);
+        setTimeout(() => _preloadIntro(count - 1), 16);
+    };
+    _preloadIntro(15); // ~250ms of aggressive chunk loading before first frame
 }
 
 function startGame(loadSlotName) {
