@@ -254,7 +254,7 @@ const pathFlat = [
     // Farwatch village centre
     {x:2040,z:60},{x:2024,z:44},{x:2056,z:44},{x:2024,z:76},{x:2056,z:76},
     // Dragon's Reach approach — along grass south of river, then north to fortress gate
-    {x:1900,z:56},{x:2060,z:56},{x:2140,z:56},{x:2160,z:56},{x:2160,z:52},
+    {x:1900,z:56},{x:2060,z:56},{x:2140,z:56},{x:2160,z:44},{x:2160,z:36},{x:2160,z:32},
 ];
 
 // Pond locations from game.html
@@ -289,7 +289,7 @@ const PATH_ROUTES = [
     // Branch: Hillside Town (400,120) → Farwatch (2040,60)
     [[400,120],[520,110],[660,100],[840,84],[1020,76],[1220,64],[1400,56],[1580,60],[1760,56],[1920,60],[2040,60]],
     // Branch off main road — runs east along grass south of river, 90° turn north to bridge
-    [[1760,56],[1900,56],[2060,56],[2160,56],[2160,52]],
+    [[1760,56],[1900,56],[2060,56],[2160,56],[2160,44],[2160,36],[2160,32]],
     // Branch: Northwatch → north toward ancient forest
     [[100,-300],[80,-340],[60,-380],[40,-420]],
 ];
@@ -428,7 +428,7 @@ function getTerrainHeight(x, z) {
     {const evDx=(x-2040)/130,evDz=(z-60)/116,evD=evDx*evDx+evDz*evDz;
     if(evD<1){const t=1-evD;const s=t*t*(3-2*t);h=h*(1-s*0.7)+4*s*0.7;}}
     // Dragon's Reach fortress plain — flatten to ~h=4
-    {const efDx=(x-2160)/136,efDz=(z-30)/104,efD=efDx*efDx+efDz*efDz;
+    {const efDx=(x-2160)/136,efDz=(z-10)/104,efD=efDx*efDx+efDz*efDz;
     if(efD<1){const t=1-efD;const s=t*t*(3-2*t);h=h*(1-s*0.65)+4*s*0.65;}}
 
     // Frozen mountains (north) — large ring with glacial basin

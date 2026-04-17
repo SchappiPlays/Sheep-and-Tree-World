@@ -1277,7 +1277,7 @@ function buildFarTerrain(centerX, centerZ) {
         [-1010-25, -670-25, -1010+25, -670+25], // Ruined Fortress
         [-1800-50, 1150-50, -1800+50, 1150+50],   // SW Fortress
         [-600-20, 560-20, -600+20, 560+20],   // Scorched Fortress
-        [2160-30, 30-25, 2160+30, 30+25],     // Dragon's Reach
+        [2160-30, 10-25, 2160+30, 10+25],     // Dragon's Reach
     ];
     const _noTrees = (wx, wz) => {
         for (const [x1, z1, x2, z2] of _TREE_SKIP_BOXES) {
@@ -3261,7 +3261,7 @@ function startGame(loadSlotName) {
         // Dragon's Reach — ancient dragon-rider stronghold near Farwatch
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const FX = 2160, FZ = 30;
+        const FX = 2160, FZ = 10;
         const cx = Math.round(FX / BS);
         const cz = Math.round(FZ / BS);
         const gy = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
@@ -8698,7 +8698,7 @@ function drawWorldMap() {
         drawVillage(100, -300, 'Northwatch');
         drawVillage(-300, 400, 'Southmoor');
         drawVillage(2040, 60, 'Farwatch');
-        drawCastle(2160, 30, "Dragon's Reach");
+        drawCastle(2160, 10, "Dragon's Reach");
 
         // Forest Gates (around the ancient forest hill ring at -60, -700)
         drawGate(-280, -700, 'West Gate');
