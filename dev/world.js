@@ -219,13 +219,14 @@ const riverDefs = [
         [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
         [-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
-    // Highland River — source: east mountains (1050,-274), NE around Great Peak's east side, south to z=43, then straight east past Dragon's Reach
+    // Highland River — source: east mountains (1050,-274), NE around Great Peak (1640,-80) east side, south to z=43, then east past Dragon's Reach
+    // Great Peak extends to ~x=1800, z=-220 to +60 — river must clear x>1850
     { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
-        [1050,-274],[1060,-240],[1070,-200],[1070,-160],[1060,-120],
-        [1040,-80],[1020,-50],[1000,-25],[980,0],[960,20],
-        [950,35],[950,43],
-        [1000,43],[1100,43],[1250,43],[1400,43],[1550,43],[1700,43],
-        [1850,43],[2000,43],[2100,43],[2220,43],[2400,30],[2600,20]
+        [1050,-274],[1100,-280],[1200,-280],[1300,-275],[1400,-265],
+        [1500,-250],[1600,-230],[1700,-210],[1780,-180],[1840,-145],
+        [1870,-100],[1880,-50],[1870,0],[1850,30],[1830,43],
+        [1850,43],[1900,43],[2000,43],[2100,43],[2220,43],
+        [2400,30],[2600,20]
     ]},
     // Southern Stream — source: hills south of center, flows south to desert coast
     { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
