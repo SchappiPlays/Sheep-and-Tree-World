@@ -199,31 +199,33 @@ function getScorchedBlend(x, z) {
 }
 
 const riverDefs = [
-    // Glacial River — source: southern foot of frozen mountains, flows south to east coast
+    // Glacial River — source: southern foot of frozen mountains, flows south then SE to east coast
+    // Stays in negative-Z territory until turning east, avoiding overlap with Mountain River
     { name: 'Glacial River', width: 5, sourceRadius: 12, pts: [
         [-60,-1650],[-55,-1580],[-45,-1500],[-30,-1420],[-20,-1340],[-15,-1260],
-        [-30,-1180],[-10,-1100],[0,-1020],[20,-940],
-        [10,-1040],[-10,-960],[0,-880],[20,-800],[50,-720],[40,-640],[20,-560],
-        [0,-480],[10,-400],[30,-320],[60,-240],[100,-160],[140,-80],[180,0],
-        [240,40],[320,60],[420,70],[520,80],[640,90],[760,70],[880,50],
-        [1000,30],[1120,10],[1240,0],[1360,-10],[1480,0],[1600,10],
-        [1720,20],[1840,30],[1960,36],[2100,40],[2300,44],[2500,30],[2610,0]
+        [-30,-1180],[-10,-1100],[0,-1020],[20,-940],[0,-860],[20,-780],
+        [50,-700],[40,-620],[20,-540],[0,-460],[10,-380],[30,-300],
+        [60,-240],[120,-190],[200,-160],[300,-140],[420,-130],[540,-120],
+        [660,-115],[780,-110],[900,-105],[1020,-100],[1140,-95],
+        [1260,-90],[1380,-85],[1500,-80],[1620,-75],[1740,-70],
+        [1860,-65],[1980,-60],[2100,-55],[2300,-50],[2500,-40],[2610,-30]
     ]},
     // Mountain River — source: NW mountains, flows SW to west coast
+    // Stays in positive-Z territory (south side) to avoid crossing Glacial River
     { name: 'Mountain River', width: 4, sourceRadius: 10, pts: [
         [1020,-260],[960,-240],[900,-210],[840,-180],[780,-150],[720,-120],
-        [660,-90],[600,-60],[540,-30],[480,0],[420,30],[360,60],
-        [300,80],[240,100],[180,120],[120,130],[60,140],[0,150],
-        [-60,160],[-120,170],[-180,180],[-250,190],[-320,200],
-        [-400,200],[-480,190],[-560,170],[-640,160],[-720,140],
-        [-800,120],[-880,100],[-960,80],[-1040,60],[-1120,40],[-1200,20],[-1280,0]
+        [660,-90],[600,-60],[540,0],[480,30],[420,60],[360,90],
+        [300,110],[240,130],[180,150],[120,170],[60,180],[0,190],
+        [-60,200],[-120,210],[-180,220],[-250,230],[-320,240],
+        [-400,240],[-480,230],[-560,220],[-640,210],[-720,200],
+        [-800,180],[-880,160],[-960,140],[-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
-    // Highland River — source: east mountains, flows east to coast
+    // Highland River — source: far east mountains, flows east to second continent coast
+    // Starts further east to avoid Mountain River's path
     { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
-        [1204,-60],[1260,-40],[1320,-20],[1380,0],[1440,20],[1500,40],
-        [1560,60],[1620,56],[1700,40],[1780,24],[1860,10],[1940,0],
-        [2020,-10],[2100,-20],[2180,-30],[2260,-40],[2340,-50],[2420,-60],
-        [2500,-70],[2580,-80],[2660,-90]
+        [1500,-40],[1560,-20],[1620,0],[1700,10],[1780,15],[1860,10],
+        [1940,0],[2020,-10],[2100,-20],[2180,-30],[2260,-40],[2340,-50],
+        [2420,-60],[2500,-70],[2580,-80],[2660,-90]
     ]},
     // Southern Stream — source: hills south of center, flows south to desert coast
     { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
@@ -359,7 +361,7 @@ const pondLocs = [
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
     {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
     {x:1020,z:-260,radius:10,sourceDepth:3},   // Mountain River source — NW mountain spring
-    {x:1204,z:-60,radius:8,sourceDepth:3},     // Highland River source — east mountain spring
+    {x:1500,z:-40,radius:8,sourceDepth:3},     // Highland River source — far east mountain spring
 ];
 
 // ── Path system — connects villages, fortress, castle ──
