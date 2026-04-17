@@ -1327,20 +1327,15 @@ export class WaterSim {
     constructor(world) {
         this.world = world;
         this._dirtyChunks = new Set();
-        // freshness map: "bx,by,bz" → ticks remaining before dry-up
-        // Sources set freshness to max each tick. Water passes freshness
-        // to neighbors (minus 1). Water at 0 freshness dries up.
-        this._freshness = new Map();
-        this._activeWater = new Set(); // blocks that need processing
-        this._sources = [];  // { bx, by, bz }
-        this._sourceSet = new Set(); // fast lookup "bx,by,bz"
+        this._activeWater = new Set(); // blocks that need flow processing
+        this._sources = [];
         this._yOff = 128;
         this._tickTimer = 0;
         this._tickRate = 0.25;
         this._simRadius = 50;
-        this._maxFresh = 20; // freshness pulses propagate this many blocks from source
         this._playerBX = 0;
         this._playerBZ = 0;
+        this._drainQueue = []; // pending downstream drain operations
         this._initSources();
     }
 
@@ -1353,9 +1348,7 @@ export class WaterSim {
             const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dz = -1; dz <= 1; dz++) {
-                    const s = { bx: bx + dx, by, bz: bz + dz };
-                    this._sources.push(s);
-                    this._sourceSet.add((bx+dx) + ',' + by + ',' + (bz+dz));
+                    this._sources.push({ bx: bx + dx, by, bz: bz + dz });
                 }
             }
         }
@@ -1387,27 +1380,70 @@ export class WaterSim {
         return dist > getIslandRadius(wx, wz) - 80;
     }
 
+    // Called when a block is broken — wake adjacent water to flow
     onBlockBroken(bx, by, bz) {
-        // Wake up adjacent water so it flows into the gap.
-        // Give chunk-generated water freshness so it participates in the sim.
         const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
         for (const [dx, dy, dz] of dirs) {
             const nx = bx + dx, ny = by + dy, nz = bz + dz;
             if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
-                const key = nx + ',' + ny + ',' + nz;
-                this._activeWater.add(key);
-                // If not yet tracked, give it freshness so it can flow
-                if (!this._freshness.has(key)) {
-                    this._freshness.set(key, this._maxFresh);
-                }
+                this._activeWater.add(nx + ',' + ny + ',' + nz);
             }
         }
         for (let dy = 1; dy <= 3; dy++) {
             if (this.world.getBlockAt(bx, by + dy, bz) === BLOCK.WATER) {
-                const key = bx + ',' + (by + dy) + ',' + bz;
-                this._activeWater.add(key);
-                if (!this._freshness.has(key)) {
-                    this._freshness.set(key, this._maxFresh);
+                this._activeWater.add(bx + ',' + (by + dy) + ',' + bz);
+            }
+        }
+    }
+
+    // Called when a block is placed — if in a river, drain downstream
+    onBlockPlaced(bx, by, bz) {
+        const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+        // Check if block was placed in a river channel
+        for (const riv of riverDefs) {
+            if (getRiverBlend(wx, wz, riv) > 0.3) {
+                // Get flow direction and drain downstream
+                const fd = getRiverFlowDir(wx, wz, riv);
+                this._drainDownstream(bx, by, bz, fd[0], fd[1], riv);
+                break;
+            }
+        }
+    }
+
+    // Walk downstream from a dam and remove water blocks
+    _drainDownstream(startBX, startBY, startBZ, fdx, fdz, riv) {
+        // Flood-fill through water blocks downstream, removing them
+        const visited = new Set();
+        const queue = [];
+        // Start from neighbors of the placed block
+        const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0]];
+        for (const [dx, dy, dz] of dirs) {
+            const nx = startBX + dx, ny = startBY + dy, nz = startBZ + dz;
+            // Only start on the downstream side
+            const dot = dx * fdx + dz * fdz;
+            if (dot < -0.1) continue; // upstream side, skip
+            if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                queue.push({ bx: nx, by: ny, bz: nz });
+                visited.add(nx + ',' + ny + ',' + nz);
+            }
+        }
+        // Flood-fill and queue for gradual removal
+        let filled = 0;
+        const maxFill = 500;
+        while (queue.length > 0 && filled < maxFill) {
+            const { bx, by, bz } = queue.shift();
+            this._drainQueue.push({ bx, by, bz });
+            filled++;
+            // Expand to water neighbors
+            for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]]) {
+                const nx = bx + dx, ny = by + dy, nz = bz + dz;
+                const key = nx + ',' + ny + ',' + nz;
+                if (visited.has(key)) continue;
+                visited.add(key);
+                if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                    // Don't drain ocean
+                    if (ny <= this._yOff && this._isOcean(nx, nz)) continue;
+                    queue.push({ bx: nx, by: ny, bz: nz });
                 }
             }
         }
@@ -1419,103 +1455,41 @@ export class WaterSim {
         this._dirtyChunks.add(cx + ',' + cz);
     }
 
-    _setWater(bx, by, bz, fresh) {
-        const key = bx + ',' + by + ',' + bz;
-        const isNew = this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER;
-        if (isNew) {
-            this.world.setBlock(bx, by, bz, BLOCK.WATER);
-            this._markDirty(bx, bz);
-        }
-        // Update freshness — always take the higher value
-        const oldFresh = this._freshness.get(key) || 0;
-        if (fresh > oldFresh) {
-            this._freshness.set(key, fresh);
-            this._activeWater.add(key); // re-activate to propagate freshness
-        }
-        return isNew;
+    _setWater(bx, by, bz) {
+        if (this.world.getBlockAt(bx, by, bz) === BLOCK.WATER) return false;
+        this.world.setBlock(bx, by, bz, BLOCK.WATER);
+        this._activeWater.add(bx + ',' + by + ',' + bz);
+        this._markDirty(bx, bz);
+        return true;
     }
 
     _removeWater(bx, by, bz) {
-        const key = bx + ',' + by + ',' + bz;
         if (this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER) return;
         this.world.setBlock(bx, by, bz, BLOCK.AIR);
-        this._activeWater.delete(key);
-        this._freshness.delete(key);
+        this._activeWater.delete(bx + ',' + by + ',' + bz);
         this._markDirty(bx, bz);
     }
 
     _tick() {
         const world = this.world;
-        const maxFresh = this._maxFresh;
 
-        // 0. Sparse scan: register chunk-gen water blocks near player
-        //    so they participate in freshness system. Only scan a slice per tick.
-        this._scanPhase = ((this._scanPhase || 0) + 1) % 10;
-        if (this._scanPhase === 0) {
-            const r = 30; // smaller scan radius for perf
-            const step = 3;
-            const pbx = this._playerBX, pbz = this._playerBZ;
-            for (let dx = -r; dx <= r; dx += step) {
-                for (let dz = -r; dz <= r; dz += step) {
-                    if (dx * dx + dz * dz > r * r) continue;
-                    const bx = pbx + dx, bz = pbz + dz;
-                    // Quick column scan around surface
-                    const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
-                    const h = getTerrainHeight(wx, wz);
-                    const surfY = Math.floor(h / BLOCK_SIZE) + this._yOff;
-                    for (let by = surfY - 2; by <= surfY + 5; by++) {
-                        if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
-                            const key = bx + ',' + by + ',' + bz;
-                            if (!this._freshness.has(key)) {
-                                // Give initial freshness — will decay if not fed by source
-                                this._freshness.set(key, maxFresh);
-                                this._activeWater.add(key);
-                            }
-                        }
-                    }
-                }
+        // 1. Process drain queue (gradual — 30 blocks per tick for visual effect)
+        let drained = 0;
+        while (this._drainQueue.length > 0 && drained < 30) {
+            const { bx, by, bz } = this._drainQueue.shift();
+            if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
+                this._removeWater(bx, by, bz);
+                drained++;
             }
         }
 
-        // 1. Sources: place water and set freshness to max
+        // 2. Spawn water at sources
         for (const s of this._sources) {
             if (!this._isNearPlayer(s.bx, s.bz)) continue;
-            this._setWater(s.bx, s.by, s.bz, maxFresh);
+            this._setWater(s.bx, s.by, s.bz);
         }
 
-        // 2. Decay freshness for all tracked water near player.
-        //    Water at 0 freshness dries up (unless it's chunk-generated ocean).
-        const toDry = [];
-        for (const [key, fresh] of this._freshness) {
-            const parts = key.split(',');
-            const bx = +parts[0], by = +parts[1], bz = +parts[2];
-            if (!this._isNearPlayer(bx, bz)) continue;
-            if (this._sourceSet.has(key)) continue; // sources never decay
-            const newFresh = fresh - 1;
-            if (newFresh <= 0) {
-                // Don't dry up ocean water or water below sea level
-                if (by <= this._yOff) {
-                    this._freshness.set(key, 1); // keep alive
-                } else {
-                    toDry.push({ key, bx, by, bz });
-                }
-            } else {
-                this._freshness.set(key, newFresh);
-            }
-        }
-
-        // Remove dried-up water
-        for (const { key, bx, by, bz } of toDry) {
-            this._removeWater(bx, by, bz);
-            // Wake neighbors — they might need to re-evaluate
-            const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0],[0,-1,0]];
-            for (const [dx, dy, dz] of dirs) {
-                const nk = (bx+dx) + ',' + (by+dy) + ',' + (bz+dz);
-                if (this._freshness.has(nk)) this._activeWater.add(nk);
-            }
-        }
-
-        // 3. Flow simulation — process active water blocks
+        // 3. Flow simulation — process active water
         const toDeactivate = [];
         const newWater = [];
         let processed = 0;
@@ -1540,35 +1514,30 @@ export class WaterSim {
                 continue;
             }
 
-            const myFresh = this._freshness.get(key) || 0;
-            if (myFresh <= 1) { toDeactivate.push(key); continue; }
-            const childFresh = myFresh - 1;
             let settled = true;
 
             // Flow DOWN (gravity)
             const below = world.getBlockAt(bx, by - 1, bz);
             if (below === BLOCK.AIR) {
-                newWater.push({ bx, by: by - 1, bz, fresh: childFresh });
+                newWater.push({ bx, by: by - 1, bz });
                 settled = false;
                 toDeactivate.push(key);
-                continue; // fall, don't spread sideways
+                continue;
             }
 
             // Horizontal neighbors
             for (let di = 0; di < 4; di++) {
                 const nx = bx + (di === 0 ? 1 : di === 1 ? -1 : 0);
                 const nz = bz + (di === 2 ? 1 : di === 3 ? -1 : 0);
-                // Downhill (one block lower)
                 const nbLow = world.getBlockAt(nx, by - 1, nz);
                 if (nbLow === BLOCK.AIR) {
-                    newWater.push({ bx: nx, by: by - 1, bz: nz, fresh: childFresh });
+                    newWater.push({ bx: nx, by: by - 1, bz: nz });
                     settled = false;
                     continue;
                 }
-                // Same level spread (only on solid ground)
                 const nb = world.getBlockAt(nx, by, nz);
                 if (nb === BLOCK.AIR && below !== BLOCK.AIR) {
-                    newWater.push({ bx: nx, by, bz: nz, fresh: childFresh });
+                    newWater.push({ bx: nx, by, bz: nz });
                     settled = false;
                 }
             }
@@ -1578,13 +1547,11 @@ export class WaterSim {
 
         for (const key of toDeactivate) this._activeWater.delete(key);
 
-        // Apply new water (limit per tick)
         let placed = 0;
         const maxPerTick = 60;
-        for (const { bx, by, bz, fresh } of newWater) {
+        for (const { bx, by, bz } of newWater) {
             if (placed >= maxPerTick) break;
-            this._setWater(bx, by, bz, fresh);
-            placed++;
+            if (this._setWater(bx, by, bz)) placed++;
         }
     }
 }

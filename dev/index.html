@@ -13321,14 +13321,17 @@ function doPlace(e) {
         world.setBlock(px, py, pz, placeBlock);
         rebuildNear(px, pz);
         placeTorchModel(px, py, pz);
+        if (waterSim) waterSim.onBlockPlaced(px, py, pz);
     } else if (placeBlock === BLOCK.CAMPFIRE) {
         // 2x1x2 campfire
         for (let dx = 0; dx <= 1; dx++)
             for (let dz = 0; dz <= 1; dz++)
                 world.setBlock(px + dx, py, pz + dz, placeBlock);
         for (let dx = 0; dx <= 1; dx++)
-            for (let dz = 0; dz <= 1; dz++)
+            for (let dz = 0; dz <= 1; dz++) {
                 rebuildNear(px + dx, pz + dz);
+                if (waterSim) waterSim.onBlockPlaced(px + dx, py, pz + dz);
+            }
         placeCampfireModel(px, py, pz);
     } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.STEEL_ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
         for (let dx = 0; dx <= 1; dx++)
@@ -13336,8 +13339,10 @@ function doPlace(e) {
                 for (let dz = 0; dz <= 1; dz++)
                     world.setBlock(px + dx, py + dy, pz + dz, placeBlock);
         for (let dx = 0; dx <= 1; dx++)
-            for (let dz = 0; dz <= 1; dz++)
+            for (let dz = 0; dz <= 1; dz++) {
                 rebuildNear(px + dx, pz + dz);
+                if (waterSim) waterSim.onBlockPlaced(px + dx, py, pz + dz);
+            }
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.STEEL_ANVIL) placeSteelAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
@@ -13360,7 +13365,10 @@ function doPlace(e) {
         for (let i = 0; i < activeCount - 1; i++) { if (!removeFromInventory(bt)) break; }
         for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++)
             if (getSnapBlock(dy,dz,dx)) world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
-        for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) rebuildNear(sx+dx, sz+dz);
+        for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) {
+            rebuildNear(sx+dx, sz+dz);
+            for (let dy = 0; dy < 2; dy++) if (getSnapBlock(dy,dx,dz) && waterSim) waterSim.onBlockPlaced(sx+dx, sy+dy, sz+dz);
+        }
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
         // Determine horizontal axis for brush
@@ -13393,10 +13401,12 @@ function doPlace(e) {
             if (!placedFirst) {
                 world.setBlock(bx, by, bz, bt);
                 rebuildNear(bx, bz);
+                if (waterSim) waterSim.onBlockPlaced(bx, by, bz);
                 placedFirst = true;
             } else if (removeFromInventory(bt)) {
                 world.setBlock(bx, by, bz, bt);
                 rebuildNear(bx, bz);
+                if (waterSim) waterSim.onBlockPlaced(bx, by, bz);
             }
         }
     }
