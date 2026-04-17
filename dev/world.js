@@ -956,7 +956,7 @@ export class World {
                 if (h < 1 || h > 50) continue;
                 // Skip trees in plains zones
                 const plainsB = getPlainsBlend(wx, wz);
-                if (plainsB > 0.3 && this._hash(bx * 0.71 + 1234, bz * 0.83 + 5678) < plainsB * 0.9) continue;
+                if (plainsB > 0.15) continue;
                 if (isOnPath(wx, wz)) continue; // no trees on paths
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
