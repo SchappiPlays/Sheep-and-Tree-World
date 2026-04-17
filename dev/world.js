@@ -199,10 +199,10 @@ function getScorchedBlend(x, z) {
 }
 
 const riverDefs = [
-    // Glacial River — source: frozen mountain basin lake, flows south to east coast
-    { name: 'Glacial River', width: 5, sourceRadius: 18, pts: [
-        [-60,-2100],[-55,-2000],[-45,-1900],[-30,-1800],[-20,-1700],[-15,-1600],
-        [-60,-1520],[-80,-1440],[-60,-1360],[-30,-1280],[0,-1200],[20,-1120],
+    // Glacial River — source: southern foot of frozen mountains, flows south to east coast
+    { name: 'Glacial River', width: 5, sourceRadius: 12, pts: [
+        [-60,-1650],[-55,-1580],[-45,-1500],[-30,-1420],[-20,-1340],[-15,-1260],
+        [-30,-1180],[-10,-1100],[0,-1020],[20,-940],
         [10,-1040],[-10,-960],[0,-880],[20,-800],[50,-720],[40,-640],[20,-560],
         [0,-480],[10,-400],[30,-320],[60,-240],[100,-160],[140,-80],[180,0],
         [240,40],[320,60],[420,70],[520,80],[640,90],[760,70],[880,50],
@@ -255,25 +255,17 @@ function _initRiverHeights() {
         }
         riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
 
-        // Calculate heights: linear gradient from source to mouth,
-        // but capped at each waypoint to stay well below surrounding terrain.
+        // Calculate heights: smooth linear gradient from source to mouth.
+        // Start height is low (max 3) so water sits deep in carved channel.
+        // No per-waypoint terrain cap — those cause sudden drops when the
+        // river path crosses any terrain depression.
         const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
-        const startH = Math.min(Math.max(sourceH * 0.15, 1.5), 4);
-        const endH = 0.5; // just above sea level at river mouth
+        const startH = Math.min(Math.max(sourceH * 0.1, 1.2), 3);
+        const endH = 0.3; // just above sea level at river mouth
         riv.heights = [];
-        let prevH = Infinity;
         for (let i = 0; i < riv.pts.length; i++) {
-            const t = riv.cumDist[i] / riv.totalLen; // 0 at source, 1 at mouth
-            let waterH = startH + (endH - startH) * t;
-            // Cap to stay well below terrain at this waypoint
-            const localTerrain = _getRawTerrainHeight(riv.pts[i][0], riv.pts[i][1]);
-            waterH = Math.min(waterH, localTerrain - 1.5);
-            // Must always be downhill
-            waterH = Math.min(waterH, prevH - 0.05);
-            // Don't go below sea level
-            waterH = Math.max(waterH, 0.2);
-            riv.heights.push(waterH);
-            prevH = waterH;
+            const t = riv.cumDist[i] / riv.totalLen;
+            riv.heights.push(startH + (endH - startH) * t);
         }
     }
 }
@@ -365,7 +357,7 @@ const pondLocs = [
     {x:20,z:1000,radius:8},{x:1010,z:-40,radius:10},
     {x:-500,z:200,radius:28},{x:-300,z:-1300,radius:36},{x:300,z:1200,radius:24},
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
-    {x:-60,z:-2100,radius:18,sourceDepth:4},   // Glacial River source — frozen mountain basin lake
+    {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
     {x:1020,z:-260,radius:10,sourceDepth:3},   // Mountain River source — NW mountain spring
     {x:1204,z:-60,radius:8,sourceDepth:3},     // Highland River source — east mountain spring
 ];
