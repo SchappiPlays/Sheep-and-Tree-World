@@ -359,7 +359,7 @@ function getTerrainHeight(x, z) {
     // Western Bay — single large elliptical inlet at the coast
     const bayDx = (x - (-2412)) / 448, bayDz = (z - 30) / 308;
     const bayD = bayDx * bayDx + bayDz * bayDz;
-    if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-3) * s; }
+    if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-12) * s; }
 
     // East mountains
     const mtn = getMountainBlend(x, z);

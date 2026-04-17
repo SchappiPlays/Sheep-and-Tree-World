@@ -1296,7 +1296,7 @@ function buildFarTerrain(centerX, centerZ) {
             const rawTH = getTerrainHeight(wx, wz);
             // Ocean cells — render as flat water tiles
             if (rawTH < 0.01) {
-                pushFace(wx-halfS, -0.3, wz-halfS, wx-halfS, -0.3, wz+halfS, wx+halfS, -0.3, wz+halfS, wx+halfS, -0.3, wz-halfS, 0x2a5a8a);
+                pushFace(wx-halfS, -4, wz-halfS, wx-halfS, -4, wz+halfS, wx+halfS, -4, wz+halfS, wx+halfS, -4, wz-halfS, 0x1a3a6a);
                 continue;
             }
             const snapH = gH(gx, gz);
@@ -1478,7 +1478,7 @@ function buildFarTerrain(centerX, centerZ) {
         waterMat._shader = shader;
     };
     farWater = new THREE.Mesh(farWaterGeo, waterMat);
-    farWater.position.y = -0.5;
+    farWater.position.y = -3;
     farWater.renderOrder = -2;
     scene.add(farWater);
 }
