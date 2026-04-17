@@ -219,12 +219,15 @@ const riverDefs = [
         [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
         [-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
-    // Highland River — source: far east mountains, flows east to second continent coast
-    // Starts further east to avoid Mountain River's path
+    // Highland River — source: east mountains, flows north then curves back south past the fort, then east to coast
     { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
-        [1500,-40],[1560,-20],[1620,0],[1700,10],[1780,15],[1860,10],
-        [1940,0],[2020,-10],[2100,-20],[2180,-30],[2260,-40],[2340,-50],
-        [2420,-60],[2500,-70],[2580,-80],[2660,-90]
+        [620,-50],[630,-80],[640,-110],[635,-140],[620,-170],[600,-200],
+        [570,-220],[530,-210],[500,-180],[490,-150],[500,-120],
+        [520,-90],[540,-60],[550,-30],[555,0],[555,30],[550,50],
+        [560,70],[580,90],[620,100],[680,110],[760,110],
+        [860,100],[960,90],[1060,80],[1160,70],[1260,60],
+        [1400,50],[1560,40],[1720,30],[1880,20],[2040,10],
+        [2200,0],[2400,-10],[2600,-20]
     ]},
     // Southern Stream — source: hills south of center, flows south to desert coast
     { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
@@ -360,7 +363,7 @@ const pondLocs = [
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
     {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
     {x:510,z:-150,radius:10,sourceDepth:3},    // Mountain River source — NW mountain spring
-    {x:1500,z:-40,radius:8,sourceDepth:3},     // Highland River source — far east mountain spring
+    {x:620,z:-50,radius:8,sourceDepth:3},      // Highland River source — east mountain spring
 ];
 
 // ── Path system — connects villages, fortress, castle ──
