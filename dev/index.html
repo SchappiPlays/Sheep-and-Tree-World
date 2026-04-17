@@ -1314,13 +1314,17 @@ function buildFarTerrain(centerX, centerZ) {
             else hex = 0x5a9040;
             // Beach sand — near sea level (overrides grass)
             if (rawTH < 1.5 && snow === 0 && desert === 0 && mtn < 0.3) hex = 0xd4c07a;
-            // Only check the exact cell center for rivers/paths (narrow features)
-            let riverFound = false;
-            for (const riv of riverDefs) {
-                if (getRiverBlend(wx, wz, riv) > 0.5) { riverFound = true; break; }
+            // Sample multiple points per cell for narrow features (rivers/paths)
+            let riverFound = false, pathFound = false;
+            const probeOff = halfS * 0.5;
+            const probes = [[wx,wz],[wx-probeOff,wz],[wx+probeOff,wz],[wx,wz-probeOff],[wx,wz+probeOff]];
+            for (const [px,pz] of probes) {
+                if (!riverFound) for (const riv of riverDefs) { if (getRiverBlend(px, pz, riv) > 0.5) { riverFound = true; break; } }
+                if (!pathFound && isOnPath(px, pz)) pathFound = true;
+                if (riverFound && pathFound) break;
             }
             if (riverFound) hex = 0x4d8dbf; // lighter blue river
-            else if (isOnPath(wx, wz)) hex = 0x8a7a5a;
+            else if (pathFound) hex = 0x8a7a5a;
 
             // Top face
             pushFace(
