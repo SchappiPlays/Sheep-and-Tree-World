@@ -36,77 +36,76 @@ function gaussianPeak(angle, center, width) {
 const ISLAND_NS_SCALE = 1.4;
 
 function getIslandRadius(x, z) {
-    // Scale z to create elliptical shape (wider N-S)
     const sz = z / ISLAND_NS_SCALE;
     const angle = Math.atan2(sz, x);
-    let r = 1100;
-    r += Math.sin(angle * 2.0 + 0.5) * 42;
-    r += Math.cos(angle * 3.0 + 1.2) * 30;
-    r += Math.sin(angle * 4.0 - 0.3) * 20;
-    r += Math.cos(angle * 5.0 + 2.1) * 15;
-    r += gaussianPeak(angle, 0.0, 0.28) * 180;
-    r += gaussianPeak(angle, Math.PI / 2, 0.26) * 180;
-    r += gaussianPeak(angle, Math.PI, 0.30) * 160;
-    r += gaussianPeak(angle, -Math.PI / 2, 0.25) * 180;
-    r -= gaussianPeak(angle, 0.8, 0.22) * 110;
-    r -= gaussianPeak(angle, 1.5, 0.24) * 115;
-    r -= gaussianPeak(angle, -1.0, 0.25) * 120;
+    let r = 2200;
+    r += Math.sin(angle * 2.0 + 0.5) * 84;
+    r += Math.cos(angle * 3.0 + 1.2) * 60;
+    r += Math.sin(angle * 4.0 - 0.3) * 40;
+    r += Math.cos(angle * 5.0 + 2.1) * 30;
+    r += gaussianPeak(angle, 0.0, 0.28) * 360;
+    r += gaussianPeak(angle, Math.PI / 2, 0.26) * 360;
+    r += gaussianPeak(angle, Math.PI, 0.30) * 320;
+    r += gaussianPeak(angle, -Math.PI / 2, 0.25) * 360;
+    r -= gaussianPeak(angle, 0.8, 0.22) * 220;
+    r -= gaussianPeak(angle, 1.5, 0.24) * 230;
+    r -= gaussianPeak(angle, -1.0, 0.25) * 240;
     return r;
 }
 
 function getMountainBlend(x, z) {
-    const mx = (x - 602) / 85, mz = (z - (-30)) / 130;
+    const mx = (x - 1204) / 170, mz = (z - (-60)) / 260;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getNWMountainBlend(x, z) {
-    const mx = (x - 510) / 45, mz = (z - (-130)) / 55;
+    const mx = (x - 1020) / 90, mz = (z - (-260)) / 110;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getSWMountainBlend(x, z) {
-    const mx = (x - 510) / 40, mz = (z - 80) / 50;
+    const mx = (x - 1020) / 80, mz = (z - 160) / 100;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getNEMountainBlend(x, z) {
-    const mx = (x - 730) / 40, mz = (z - (-95)) / 35;
+    const mx = (x - 1460) / 80, mz = (z - (-190)) / 70;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getSEMountainBlend(x, z) {
-    const mx = (x - 735) / 38, mz = (z - 40) / 33;
+    const mx = (x - 1470) / 76, mz = (z - 80) / 66;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getFarEastMountainBlend(x, z) {
-    const mx = (x - 820) / 160, mz = (z - (-40)) / 140;
+    const mx = (x - 1640) / 320, mz = (z - (-80)) / 280;
     const d = mx * mx + mz * mz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
-const FM_CX = -30, FM_CZ = -1050, FM_OUTER = 280, FM_RING_W = 120;
+const FM_CX = -60, FM_CZ = -2100, FM_OUTER = 560, FM_RING_W = 240;
 const FM_INNER = FM_OUTER - FM_RING_W;
 function getFrozenMountainBlend(x, z) {
     const dx = x - FM_CX, dz = z - FM_CZ;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist > FM_OUTER + 30) return 0;
+    if (dist > FM_OUTER + 60) return 0;
     const ringCenter = FM_INNER + FM_RING_W / 2;
     const ringDist = Math.abs(dist - ringCenter);
     const halfW = FM_RING_W / 2;
-    if (ringDist > halfW + 30) {
+    if (ringDist > halfW + 60) {
         if (dist < FM_INNER) { const t = 1 - dist / FM_INNER; return t * t * 0.2; }
         return 0;
     }
-    const t = 1 - Math.min(1, ringDist / (halfW + 30));
+    const t = 1 - Math.min(1, ringDist / (halfW + 60));
     return t * t;
 }
 function getDeepNorthBlend(x, z) {
     const ranges = [
-        [-250, -1350, 150, 55],  // NW ridge
-        [200, -1300, 130, 100],  // NE peaks
-        [50, -1400, 55, 150],    // Central spine
-        [-400, -1200, 100, 70],  // West deep north
-        [380, -1180, 90, 65],    // East deep north
+        [-500, -2700, 300, 110],  // NW ridge
+        [400, -2600, 260, 200],   // NE peaks
+        [100, -2800, 110, 300],   // Central spine
+        [-800, -2400, 200, 140],  // West deep north
+        [760, -2360, 180, 130],   // East deep north
     ];
     for (const r of ranges) {
         const dx = (x - r[0]) / r[2], dz = (z - r[1]) / r[3];
@@ -123,22 +122,22 @@ function getFrozenBasinBlend(x, z) {
     return t * t;
 }
 function getCentralValleyBlend(x, z) {
-    const vx = (x - 545) / 35, vz = (z - (-90)) / 40;
+    const vx = (x - 1090) / 70, vz = (z - (-180)) / 80;
     const d = vx * vx + vz * vz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getWesternValleyBlend(x, z) {
-    const vx = (x - 505) / 30, vz = (z - (-25)) / 40;
+    const vx = (x - 1010) / 60, vz = (z - (-50)) / 80;
     const d = vx * vx + vz * vz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getEnchantedBlend(x, z) {
-    const ex = (x - 715) / 40, ez = (z - (-30)) / 55;
+    const ex = (x - 1430) / 80, ez = (z - (-60)) / 110;
     const d = ex * ex + ez * ez; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
 function getAncientForestHillBlend(x, z) {
-    const hx = (x - (-30)) / 200, hz = (z - (-350)) / 200;
+    const hx = (x - (-60)) / 400, hz = (z - (-700)) / 400;
     const d = Math.sqrt(hx * hx + hz * hz);
     if (d > 0.85 || d < 0.3) return 0;
     // Gate gaps — suppress hills at cardinal directions
@@ -162,39 +161,39 @@ function getAncientForestHillBlend(x, z) {
 function getPlainsBlend(x, z) {
     let p = 0;
     // Central plains — south of spawn
-    const cp1x = (x - 0) / 200, cp1z = (z - 120) / 150;
+    const cp1x = (x - 0) / 400, cp1z = (z - 240) / 300;
     const cp1 = cp1x*cp1x + cp1z*cp1z;
     if (cp1 < 1) { const t = 1 - cp1; p = Math.max(p, t*t*(3-2*t)); }
     // Eastern plains — wide open area
-    const cp2x = (x - 350) / 180, cp2z = (z - (-50)) / 140;
+    const cp2x = (x - 700) / 360, cp2z = (z - (-100)) / 280;
     const cp2 = cp2x*cp2x + cp2z*cp2z;
     if (cp2 < 1) { const t = 1 - cp2; p = Math.max(p, t*t*(3-2*t)); }
     // Northwest plains — between spawn and snow
-    const cp3x = (x - (-180)) / 160, cp3z = (z - (-200)) / 130;
+    const cp3x = (x - (-360)) / 320, cp3z = (z - (-400)) / 260;
     const cp3 = cp3x*cp3x + cp3z*cp3z;
     if (cp3 < 1) { const t = 1 - cp3; p = Math.max(p, t*t*(3-2*t)); }
     // Southwest open area
-    const cp4x = (x - (-250)) / 170, cp4z = (z - 200) / 120;
+    const cp4x = (x - (-500)) / 340, cp4z = (z - 400) / 240;
     const cp4 = cp4x*cp4x + cp4z*cp4z;
     if (cp4 < 1) { const t = 1 - cp4; p = Math.max(p, t*t*(3-2*t)); }
     // Far-east plain — open ground around Farwatch village and Dragon's Reach fortress
-    const cp5x = (x - 1020) / 130, cp5z = (z - 30) / 110;
+    const cp5x = (x - 2040) / 260, cp5z = (z - 60) / 220;
     const cp5 = cp5x*cp5x + cp5z*cp5z;
     if (cp5 < 1) { const t = 1 - cp5; p = Math.max(p, t*t*(3-2*t)); }
     return p;
 }
 
 function getSnowBlend(z) {
-    if (z > -500) return 0; if (z < -650) return 1;
-    return (z - (-500)) / (-650 - (-500));
+    if (z > -1000) return 0; if (z < -1300) return 1;
+    return (z - (-1000)) / (-1300 - (-1000));
 }
 function getDesertBlend(z) {
-    if (z < 500) return 0; if (z > 650) return 1;
-    return (z - 500) / 150;
+    if (z < 1000) return 0; if (z > 1300) return 1;
+    return (z - 1000) / 300;
 }
 function getScorchedBlend(x, z) {
-    const xSpread = x < -300 ? 340 : 220;
-    const sx = (x - (-300)) / xSpread, sz = (z - 280) / 220;
+    const xSpread = x < -600 ? 680 : 440;
+    const sx = (x - (-600)) / xSpread, sz = (z - 560) / 440;
     const d = sx * sx + sz * sz; if (d > 1) return 0;
     const t = 1 - d; return t * t;
 }
@@ -202,21 +201,21 @@ function getScorchedBlend(x, z) {
 const riverDefs = [
     // Winding river from Forest Lake area to the east coast
     { name: 'East River', width: 4, pts: [
-        [-250,100],[-220,95],[-190,85],[-160,80],[-130,90],[-100,95],[-70,85],[-40,75],
-        [-10,65],[20,55],[55,50],[90,55],[120,65],[150,58],[180,45],[210,38],
-        [240,42],[270,55],[300,60],[330,50],[360,35],[390,30],[420,38],[450,50],
-        [480,45],[510,32],[540,20],[570,15],[600,10],[640,0],[680,-8],[720,-5],
-        [760,5],[800,10],[850,15],[910,18],[980,20],[1060,22],[1150,24]
+        [-500,200],[-440,190],[-380,170],[-320,160],[-260,180],[-200,190],[-140,170],[-80,150],
+        [-20,130],[40,110],[110,100],[180,110],[240,130],[300,116],[360,90],[420,76],
+        [480,84],[540,110],[600,120],[660,100],[720,70],[780,60],[840,76],[900,100],
+        [960,90],[1020,64],[1080,40],[1140,30],[1200,20],[1280,0],[1360,-16],[1440,-10],
+        [1520,10],[1600,20],[1700,30],[1820,36],[1960,40],[2120,44],[2300,48]
     ]},
     // Southern river — winds through temperate into desert transition
     { name: 'South River', width: 3, pts: [
-        [10,40],[15,70],[25,100],[20,130],[10,160],[15,195],[30,225],[50,250],
-        [45,280],[30,310],[20,340],[25,370],[35,395],[30,420],[15,450]
+        [20,80],[30,140],[50,200],[40,260],[20,320],[30,390],[60,450],[100,500],
+        [90,560],[60,620],[40,680],[50,740],[70,790],[60,840],[30,900]
     ]},
     // Western river — from highlands toward the bay
     { name: 'West River', width: 3, pts: [
-        [-200,100],[-230,90],[-260,80],[-290,85],[-320,95],[-355,90],[-390,80],
-        [-420,70],[-455,60],[-490,50],[-520,45],[-555,40],[-590,35],[-630,30]
+        [-400,200],[-460,180],[-520,160],[-580,170],[-640,190],[-710,180],[-780,160],
+        [-840,140],[-910,120],[-980,100],[-1040,90],[-1110,80],[-1180,70],[-1260,60]
     ]},
 ];
 for (const riv of riverDefs) {
@@ -250,19 +249,19 @@ function getRiverBlend(x, z, riv) {
 
 // Path flattening points from game.html (structures removed, terrain-only kept)
 const pathFlat = [
-    {x:0,z:0},{x:14,z:14},{x:70,z:16},{x:85,z:16},{x:77,z:8},{x:85,z:7},{x:85,z:25},{x:77,z:25},
+    {x:0,z:0},{x:28,z:28},{x:140,z:32},{x:170,z:32},{x:154,z:16},{x:170,z:14},{x:170,z:50},{x:154,z:50},
     // Farwatch village centre
-    {x:1020,z:30},{x:1012,z:22},{x:1028,z:22},{x:1012,z:38},{x:1028,z:38},
+    {x:2040,z:60},{x:2024,z:44},{x:2056,z:44},{x:2024,z:76},{x:2056,z:76},
     // Dragon's Reach approach — along grass south of river, then north to bridge
-    {x:950,z:28},{x:1030,z:28},{x:1070,z:28},{x:1080,z:22},{x:1080,z:18},{x:1080,z:16},
+    {x:1900,z:56},{x:2060,z:56},{x:2140,z:56},{x:2160,z:44},{x:2160,z:36},{x:2160,z:32},
 ];
 
 // Pond locations from game.html
 const pondLocs = [
-    {x:-25,z:15,radius:4},{x:35,z:-20,radius:3},{x:10,z:40,radius:2.5},
-    {x:-60,z:-510,radius:5},{x:30,z:-540,radius:3.5},{x:-100,z:-560,radius:4},
-    {x:10,z:500,radius:4},{x:505,z:-20,radius:5},
-    {x:-250,z:100,radius:14},{x:-150,z:-650,radius:18},{x:150,z:600,radius:12},
+    {x:-50,z:30,radius:8},{x:70,z:-40,radius:6},{x:20,z:80,radius:5},
+    {x:-120,z:-1020,radius:10},{x:60,z:-1080,radius:7},{x:-200,z:-1120,radius:8},
+    {x:20,z:1000,radius:8},{x:1010,z:-40,radius:10},
+    {x:-500,z:200,radius:28},{x:-300,z:-1300,radius:36},{x:300,z:1200,radius:24},
 ];
 
 // ── Path system — connects villages, fortress, castle ──
@@ -270,28 +269,28 @@ const PATH_HALF_WIDTH = 3; // 6 blocks wide (3 each side)
 // Path routes: arrays of [x, z] waypoints in world coords
 // Paths wind using intermediate waypoints offset from straight lines
 const PATH_ROUTES = [
-    // Meadow Village (80,16) → Hillside Town (200,60)
-    [[80,16],[110,25],[140,30],[170,45],[200,60]],
-    // Meadow Village → Forest Edge (-100,-50)
-    [[80,16],[50,10],[20,0],[-10,-10],[-40,-20],[-70,-35],[-100,-50]],
-    // Meadow Village → Northwatch (50,-150)
-    [[80,16],[75,-10],[70,-40],[65,-70],[58,-100],[52,-130],[50,-150]],
-    // Forest Edge (-100,-50) → Western Hamlet (-200,100)
-    [[-100,-50],[-120,-30],[-140,-10],[-160,20],[-175,50],[-190,75],[-200,100]],
-    // Forest Edge → Northwatch (50,-150)
-    [[-100,-50],[-80,-70],[-55,-90],[-30,-110],[-5,-130],[20,-140],[50,-150]],
-    // Western Hamlet (-200,100) → Southmoor (-150,200)
-    [[-200,100],[-195,120],[-185,140],[-175,160],[-165,180],[-150,200]],
+    // Meadow Village (160,32) → Hillside Town (400,120)
+    [[160,32],[220,50],[280,60],[340,90],[400,120]],
+    // Meadow Village → Forest Edge (-200,-100)
+    [[160,32],[100,20],[40,0],[-20,-20],[-80,-40],[-140,-70],[-200,-100]],
+    // Meadow Village → Northwatch (100,-300)
+    [[160,32],[150,-20],[140,-80],[130,-140],[116,-200],[104,-260],[100,-300]],
+    // Forest Edge (-200,-100) → Western Hamlet (-400,200)
+    [[-200,-100],[-240,-60],[-280,-20],[-320,40],[-350,100],[-380,150],[-400,200]],
+    // Forest Edge → Northwatch (100,-300)
+    [[-200,-100],[-160,-140],[-110,-180],[-60,-220],[-10,-260],[40,-280],[100,-300]],
+    // Western Hamlet (-400,200) → Southmoor (-300,400)
+    [[-400,200],[-390,240],[-370,280],[-350,320],[-330,360],[-300,400]],
     // Southmoor → Meadow Village (loop back via south)
-    [[-150,200],[-110,190],[-70,170],[-30,140],[10,110],[40,80],[60,50],[80,16]],
-    // Branch: Forest Edge → Ruined Fortress (-505, -335)
-    [[-100,-50],[-150,-70],[-210,-95],[-270,-125],[-330,-160],[-390,-200],[-440,-250],[-480,-290],[-505,-335]],
-    // Branch: Hillside Town (200,60) → Farwatch (1020,30)
-    [[200,60],[260,55],[330,50],[420,42],[510,38],[610,32],[700,28],[790,30],[880,28],[960,30],[1020,30]],
+    [[-300,400],[-220,380],[-140,340],[-60,280],[20,220],[80,160],[120,100],[160,32]],
+    // Branch: Forest Edge → Ruined Fortress (-1010, -670)
+    [[-200,-100],[-300,-140],[-420,-190],[-540,-250],[-660,-320],[-780,-400],[-880,-500],[-960,-580],[-1010,-670]],
+    // Branch: Hillside Town (400,120) → Farwatch (2040,60)
+    [[400,120],[520,110],[660,100],[840,84],[1020,76],[1220,64],[1400,56],[1580,60],[1760,56],[1920,60],[2040,60]],
     // Branch off main road — runs east along grass south of river, 90° turn north to bridge
-    [[880,28],[950,28],[1030,28],[1080,28],[1080,22],[1080,16]],
+    [[1760,56],[1900,56],[2060,56],[2160,56],[2160,44],[2160,32]],
     // Branch: Northwatch → north toward ancient forest
-    [[50,-150],[40,-170],[30,-190],[20,-210]],
+    [[100,-300],[80,-340],[60,-380],[40,-420]],
 ];
 
 function isOnPath(wx, wz) {
@@ -323,41 +322,41 @@ function getTerrainHeight(x, z) {
     const distFromCenter = Math.sqrt(x * x + sz * sz);
     const localR = getIslandRadius(x, z);
 
-    if (distFromCenter > localR - 30) return 0;
+    if (distFromCenter > localR - 60) return 0;
 
-    const fadeStart = localR - 70;
-    let edgeFade = distFromCenter > fadeStart ? 1 - (distFromCenter - fadeStart) / 40 : 1;
+    const fadeStart = localR - 140;
+    let edgeFade = distFromCenter > fadeStart ? 1 - (distFromCenter - fadeStart) / 80 : 1;
 
     let h = 0;
     // Large rolling terrain — gentle hills everywhere
-    h += Math.sin(x * 0.04 + 0.5) * Math.cos(z * 0.035) * 5.0;
-    h += Math.sin(x * 0.025 - z * 0.03 + 1.2) * 3.5;
-    h += Math.cos(x * 0.015 + z * 0.02 + 0.7) * 3.0;
+    h += Math.sin(x * 0.02 + 0.5) * Math.cos(z * 0.0175) * 5.0;
+    h += Math.sin(x * 0.0125 - z * 0.015 + 1.2) * 3.5;
+    h += Math.cos(x * 0.0075 + z * 0.01 + 0.7) * 3.0;
     // Medium undulations
-    h += Math.sin(x * 0.08 + z * 0.06) * Math.cos(z * 0.09 - x * 0.04) * 2.0;
-    h += Math.cos(x * 0.07 - 0.8) * Math.sin(z * 0.065 + 0.3) * 1.5;
-    h += Math.sin(x * 0.055 + z * 0.045 - 1.5) * 1.5;
+    h += Math.sin(x * 0.04 + z * 0.03) * Math.cos(z * 0.045 - x * 0.02) * 2.0;
+    h += Math.cos(x * 0.035 - 0.8) * Math.sin(z * 0.0325 + 0.3) * 1.5;
+    h += Math.sin(x * 0.0275 + z * 0.0225 - 1.5) * 1.5;
     // Small detail
-    h += Math.sin(x * 0.15 + z * 0.12) * 0.6;
-    h += Math.cos(x * 0.18 - z * 0.14 + 2.0) * 0.5;
-    h += Math.sin(x * 0.22 + z * 0.19 - 0.5) * 0.3;
+    h += Math.sin(x * 0.075 + z * 0.06) * 0.6;
+    h += Math.cos(x * 0.09 - z * 0.07 + 2.0) * 0.5;
+    h += Math.sin(x * 0.11 + z * 0.095 - 0.5) * 0.3;
     // Clamp so inland terrain is always above sea level
     h = Math.max(h, 1.5);
 
     // Path flattening
     for (const p of pathFlat) {
         const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
-        if (d < 8) { h *= (1 - (1 - d / 8) * 0.7); }
+        if (d < 16) { h *= (1 - (1 - d / 16) * 0.7); }
     }
 
     // Pond depressions
     for (const p of pondLocs) {
         const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
-        if (d < p.radius + 3) { const t = Math.max(0, 1 - d / (p.radius + 3)); h *= (1 - t * 0.9); }
+        if (d < p.radius + 6) { const t = Math.max(0, 1 - d / (p.radius + 6)); h *= (1 - t * 0.9); }
     }
 
     // Western Bay — single large elliptical inlet at the coast
-    const bayDx = (x - (-1174)) / 160, bayDz = (z - 15) / 110;
+    const bayDx = (x - (-2348)) / 320, bayDz = (z - 30) / 220;
     const bayD = bayDx * bayDx + bayDz * bayDz;
     if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-3) * s; }
 
@@ -365,7 +364,7 @@ function getTerrainHeight(x, z) {
     const mtn = getMountainBlend(x, z);
     if (mtn > 0) {
         let mh = mtn * 65;
-        mh += (Math.sin((x-470)*0.12)*Math.cos((z+10)*0.1)*28 + Math.cos((x-495)*0.09)*Math.sin((z+50)*0.08)*22 + Math.sin((x-460)*0.15+1)*Math.cos((z+40)*0.13)*18 + Math.max(0,Math.cos((x-602)*0.07)*25)) * mtn;
+        mh += (Math.sin((x-940)*0.06)*Math.cos((z+20)*0.05)*28 + Math.cos((x-990)*0.045)*Math.sin((z+100)*0.04)*22 + Math.sin((x-920)*0.075+1)*Math.cos((z+80)*0.065)*18 + Math.max(0,Math.cos((x-1204)*0.035)*25)) * mtn;
         mh += (Math.sin(x*0.3+z*0.25)*3 + Math.cos(x*0.22-z*0.28)*2.5) * mtn;
         h += mh;
     }
@@ -374,7 +373,7 @@ function getTerrainHeight(x, z) {
     const nwMtn = getNWMountainBlend(x, z);
     if (nwMtn > 0) {
         let mh = nwMtn * 50;
-        mh += (Math.sin((x-400)*0.11)*Math.cos((z+110)*0.09)*18 + Math.cos((x-380)*0.08)*Math.sin((z+150)*0.07)*14 + Math.sin((x-510)*0.14+0.7)*Math.cos((z+120)*0.12)*10 + Math.max(0,Math.cos((x-510)*0.06+(z+130)*0.04)*16)) * nwMtn;
+        mh += (Math.sin((x-800)*0.055)*Math.cos((z+220)*0.045)*18 + Math.cos((x-760)*0.04)*Math.sin((z+300)*0.035)*14 + Math.sin((x-1020)*0.07+0.7)*Math.cos((z+240)*0.06)*10 + Math.max(0,Math.cos((x-1020)*0.03+(z+260)*0.02)*16)) * nwMtn;
         mh += (Math.sin(x*0.28+z*0.32)*2.5 + Math.cos(x*0.24-z*0.26)*2) * nwMtn;
         h += mh;
     }
@@ -383,7 +382,7 @@ function getTerrainHeight(x, z) {
     const swMtn = getSWMountainBlend(x, z);
     if (swMtn > 0) {
         let mh = swMtn * 55;
-        mh += (Math.sin((x-400)*0.1)*Math.cos((z-70)*0.08)*20 + Math.cos((x-380)*0.07)*Math.sin((z-90)*0.09)*16 + Math.sin((x-510)*0.13+1.3)*Math.cos((z-80)*0.11)*12 + Math.max(0,Math.cos((x-510)*0.05-(z-80)*0.03)*18)) * swMtn;
+        mh += (Math.sin((x-800)*0.05)*Math.cos((z-140)*0.04)*20 + Math.cos((x-760)*0.035)*Math.sin((z-180)*0.045)*16 + Math.sin((x-1020)*0.065+1.3)*Math.cos((z-160)*0.055)*12 + Math.max(0,Math.cos((x-1020)*0.025-(z-160)*0.015)*18)) * swMtn;
         mh += (Math.sin(x*0.26+z*0.3)*2 + Math.cos(x*0.2-z*0.24)*1.8) * swMtn;
         h += mh;
     }
@@ -392,7 +391,7 @@ function getTerrainHeight(x, z) {
     const neMtn = getNEMountainBlend(x, z);
     if (neMtn > 0) {
         let mh = neMtn * 45;
-        mh += (Math.sin((x-820)*0.12)*Math.cos((z+85)*0.1)*16 + Math.cos((x-800)*0.09)*Math.sin((z+105)*0.08)*12 + Math.max(0,Math.cos((x-930)*0.06+(z+95)*0.05)*14)) * neMtn;
+        mh += (Math.sin((x-1640)*0.06)*Math.cos((z+170)*0.05)*16 + Math.cos((x-1600)*0.045)*Math.sin((z+210)*0.04)*12 + Math.max(0,Math.cos((x-1860)*0.03+(z+190)*0.025)*14)) * neMtn;
         mh += (Math.sin(x*0.3+z*0.27)*2.5 + Math.cos(x*0.23-z*0.3)*2) * neMtn;
         h += mh;
     }
@@ -401,7 +400,7 @@ function getTerrainHeight(x, z) {
     const seMtn = getSEMountainBlend(x, z);
     if (seMtn > 0) {
         let mh = seMtn * 40;
-        mh += (Math.sin((x-825)*0.11)*Math.cos((z-30)*0.09)*14 + Math.cos((x-805)*0.08)*Math.sin((z-50)*0.07)*10 + Math.max(0,Math.cos((x-935)*0.07-(z-40)*0.04)*12)) * seMtn;
+        mh += (Math.sin((x-1650)*0.055)*Math.cos((z-60)*0.045)*14 + Math.cos((x-1610)*0.04)*Math.sin((z-100)*0.035)*10 + Math.max(0,Math.cos((x-1870)*0.035-(z-80)*0.02)*12)) * seMtn;
         mh += (Math.sin(x*0.27+z*0.31)*2 + Math.cos(x*0.21-z*0.25)*1.8) * seMtn;
         h += mh;
     }
@@ -410,25 +409,25 @@ function getTerrainHeight(x, z) {
     const feMtn = getFarEastMountainBlend(x, z);
     if (feMtn > 0) {
         let mh = feMtn * 75;
-        const cpDx=(x-820)/65, cpDz=(z+40)/60, cpD=cpDx*cpDx+cpDz*cpDz;
+        const cpDx=(x-1640)/130, cpDz=(z+80)/120, cpD=cpDx*cpDx+cpDz*cpDz;
         if (cpD<1){const t=1-cpD; mh+=t*t*55;}
-        const p2Dx=(x-795)/58,p2Dz=(z+65)/55,p2D=p2Dx*p2Dx+p2Dz*p2Dz;
+        const p2Dx=(x-1590)/116,p2Dz=(z+130)/110,p2D=p2Dx*p2Dx+p2Dz*p2Dz;
         if(p2D<1){const t=1-p2D;mh+=t*t*35;}
-        const p3Dx=(x-850)/55,p3Dz=(z+15)/52,p3D=p3Dx*p3Dx+p3Dz*p3Dz;
+        const p3Dx=(x-1700)/110,p3Dz=(z+30)/104,p3D=p3Dx*p3Dx+p3Dz*p3Dz;
         if(p3D<1){const t=1-p3D;mh+=t*t*30;}
-        const p4Dx=(x-830)/50,p4Dz=(z-10)/46,p4D=p4Dx*p4Dx+p4Dz*p4Dz;
+        const p4Dx=(x-1660)/100,p4Dz=(z-20)/92,p4D=p4Dx*p4Dx+p4Dz*p4Dz;
         if(p4D<1){const t=1-p4D;mh+=t*t*25;}
-        mh += Math.max(0,Math.cos((x-818)*0.02)*10)*feMtn + Math.max(0,Math.sin((x-820)*0.018+(z+40)*0.015)*8)*feMtn + Math.max(0,Math.cos((x-z*0.6-845)*0.018)*6)*feMtn;
-        mh += (Math.sin((x-810)*0.025)*Math.cos((z+30)*0.022)*6 + Math.cos((x-830)*0.022)*Math.sin((z+50)*0.02)*5) * feMtn;
-        mh += (Math.sin(x*0.05+z*0.045)*1.5 + Math.cos(x*0.04-z*0.05)*1) * feMtn;
+        mh += Math.max(0,Math.cos((x-1636)*0.01)*10)*feMtn + Math.max(0,Math.sin((x-1640)*0.009+(z+80)*0.0075)*8)*feMtn + Math.max(0,Math.cos((x-z*0.6-1690)*0.009)*6)*feMtn;
+        mh += (Math.sin((x-1620)*0.0125)*Math.cos((z+60)*0.011)*6 + Math.cos((x-1660)*0.011)*Math.sin((z+100)*0.01)*5) * feMtn;
+        mh += (Math.sin(x*0.025+z*0.0225)*1.5 + Math.cos(x*0.02-z*0.025)*1) * feMtn;
         h += mh;
     }
 
     // Farwatch village plain — flatten to ~h=4
-    {const evDx=(x-1020)/65,evDz=(z-30)/58,evD=evDx*evDx+evDz*evDz;
+    {const evDx=(x-2040)/130,evDz=(z-60)/116,evD=evDx*evDx+evDz*evDz;
     if(evD<1){const t=1-evD;const s=t*t*(3-2*t);h=h*(1-s*0.7)+4*s*0.7;}}
     // Dragon's Reach fortress plain — flatten to ~h=4
-    {const efDx=(x-1080)/68,efDz=(z+5)/52,efD=efDx*efDx+efDz*efDz;
+    {const efDx=(x-2160)/136,efDz=(z+10)/104,efD=efDx*efDx+efDz*efDz;
     if(efD<1){const t=1-efD;const s=t*t*(3-2*t);h=h*(1-s*0.65)+4*s*0.65;}}
 
     // Frozen mountains (north) — large ring with glacial basin
@@ -439,25 +438,25 @@ function getTerrainHeight(x, z) {
     if (frMtn > 0) {
         const ringCenter = FM_INNER + FM_RING_W / 2;
         const ringDist = Math.abs(frDist - ringCenter);
-        const onRing = ringDist < FM_RING_W / 2 + 20;
+        const onRing = ringDist < FM_RING_W / 2 + 40;
         let mh = 0;
         if (onRing) {
-            const ringT = 1 - Math.min(1, ringDist / (FM_RING_W / 2 + 20));
+            const ringT = 1 - Math.min(1, ringDist / (FM_RING_W / 2 + 40));
             mh = ringT * ringT * 85;
             // 12 peaks around the ring
             const peaks = [
-                { a: 0,    h: 50, r: 45 },
-                { a: 0.52, h: 65, r: 40 },
-                { a: 1.05, h: 45, r: 42 },
-                { a: 1.57, h: 60, r: 40 },
-                { a: 2.09, h: 40, r: 45 },
-                { a: 2.62, h: 55, r: 38 },
-                { a: 3.14, h: 45, r: 42 },
-                { a: 3.67, h: 60, r: 40 },
-                { a: 4.19, h: 35, r: 48 },
-                { a: 4.71, h: 50, r: 42 },
-                { a: 5.24, h: 40, r: 45 },
-                { a: 5.76, h: 55, r: 40 },
+                { a: 0,    h: 50, r: 90 },
+                { a: 0.52, h: 65, r: 80 },
+                { a: 1.05, h: 45, r: 84 },
+                { a: 1.57, h: 60, r: 80 },
+                { a: 2.09, h: 40, r: 90 },
+                { a: 2.62, h: 55, r: 76 },
+                { a: 3.14, h: 45, r: 84 },
+                { a: 3.67, h: 60, r: 80 },
+                { a: 4.19, h: 35, r: 96 },
+                { a: 4.71, h: 50, r: 84 },
+                { a: 5.24, h: 40, r: 90 },
+                { a: 5.76, h: 55, r: 80 },
             ];
             for (const pk of peaks) {
                 const px = FM_CX + Math.cos(pk.a) * ringCenter;
@@ -467,8 +466,8 @@ function getTerrainHeight(x, z) {
                 if (pd < 1) { const t = 1 - pd; mh += t * t * pk.h; }
             }
             // Jagged ridgelines
-            mh += Math.abs(Math.sin((x + z * 0.7) * 0.05)) * 18 * ringT;
-            mh += (Math.sin((x + 30) * 0.07) * Math.cos((z + 1050) * 0.09) * 12 + Math.cos((x + 20) * 0.11) * Math.sin((z + 1030) * 0.08) * 10) * ringT;
+            mh += Math.abs(Math.sin((x + z * 0.7) * 0.025)) * 18 * ringT;
+            mh += (Math.sin((x + 60) * 0.035) * Math.cos((z + 2100) * 0.045) * 12 + Math.cos((x + 40) * 0.055) * Math.sin((z + 2060) * 0.04) * 10) * ringT;
         }
         // Raised glacial basin inside
         if (frDist < FM_INNER) {
@@ -489,18 +488,18 @@ function getTerrainHeight(x, z) {
 
     // Mountain passes
     // Frozen mountain pass — south entrance
-    const fpDx=(x-(-30))/30,fpDz=(z-(-830))/24,fpD=fpDx*fpDx+fpDz*fpDz;
+    const fpDx=(x-(-60))/60,fpDz=(z-(-1660))/48,fpD=fpDx*fpDx+fpDz*fpDz;
     if(fpD<1){const t=1-fpD;h-=t*t*50;h=Math.max(3,h);}
     // East pass
-    const fp2Dx=(x-200)/24,fp2Dz=(z-(-1050))/30,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
+    const fp2Dx=(x-400)/48,fp2Dz=(z-(-2100))/60,fp2D=fp2Dx*fp2Dx+fp2Dz*fp2Dz;
     if(fp2D<1){const t=1-fp2D;h-=t*t*45;h=Math.max(3,h);}
-    const npDx=(x-555)/18,npDz=(z-40)/14,npD=npDx*npDx+npDz*npDz;
+    const npDx=(x-1110)/36,npDz=(z-80)/28,npD=npDx*npDx+npDz*npDz;
     if(npD<1){const t=1-npD;h-=t*t*10;h=Math.max(0.5,h);}
-    const spDx2=(x-555)/18,spDz2=(z+95)/14,spD2=spDx2*spDx2+spDz2*spDz2;
+    const spDx2=(x-1110)/36,spDz2=(z+190)/28,spD2=spDx2*spDx2+spDz2*spDz2;
     if(spD2<1){const t=1-spD2;h-=t*t*10;h=Math.max(0.5,h);}
 
     // Desert plateau
-    const plDx=(x-160)/35,plDz=(z-540)/28,plD=plDx*plDx+plDz*plDz;
+    const plDx=(x-320)/70,plDz=(z-1080)/56,plD=plDx*plDx+plDz*plDz;
     if(plD<1.3){
         const plateauH=22;
         if(plD<0.7){h=plateauH+Math.sin(x*0.2+z*0.15)*0.3;}
@@ -523,17 +522,17 @@ function getTerrainHeight(x, z) {
 
     // Elevated terrain features — gradual rises
     // Northern coastal bluffs — high cliffs near north coast
-    const nbDx = (x - (-200)) / 220, nbDz = (z - (-650)) / 150;
+    const nbDx = (x - (-400)) / 440, nbDz = (z - (-1300)) / 300;
     const nbD = nbDx*nbDx + nbDz*nbDz;
     if (nbD < 1) { const t = 1 - nbD; const s = t*t*(3-2*t); h += s * 16 + s * Math.sin(x*0.06+z*0.05)*3; }
 
     // Western highlands — large raised region
-    const whDx = (x - (-450)) / 250, whDz = (z - 50) / 200;
+    const whDx = (x - (-900)) / 500, whDz = (z - 100) / 400;
     const whD = whDx*whDx + whDz*whDz;
     if (whD < 1) { const t = 1 - whD; const s = t*t*(3-2*t); h += s * 14 + s * Math.sin(x*0.04-z*0.05)*2.5; }
 
     // Eastern rolling hills — undulating terrain
-    const ehDx = (x - 300) / 280, ehDz = (z - 200) / 220;
+    const ehDx = (x - 600) / 560, ehDz = (z - 400) / 440;
     const ehD = ehDx*ehDx + ehDz*ehDz;
     if (ehD < 1) {
         const t = 1 - ehD; const s = t*t*(3-2*t);
@@ -541,7 +540,7 @@ function getTerrainHeight(x, z) {
     }
 
     // Southern plateau — flat-topped mesa at desert edge
-    const spDx3 = (x - (-100)) / 100, spDz3 = (z - 280) / 70;
+    const spDx3 = (x - (-200)) / 200, spDz3 = (z - 560) / 140;
     const spD3 = spDx3*spDx3 + spDz3*spDz3;
     if (spD3 < 1.2) {
         const plateauH = 18;
@@ -550,13 +549,13 @@ function getTerrainHeight(x, z) {
     }
 
     // Central-south gentle ridge — long low ridge running east-west
-    const ridgeDz = (z - 150) / 30;
+    const ridgeDz = (z - 300) / 60;
     const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
     // ── Deep North Highlands — terrain rises sharply past z=-900 ──
-    if (z < -900) {
-        const nht = Math.min(1, (z - (-900)) / (-1150 - (-900))); // 0 at -900, 1 at -1150
+    if (z < -1800) {
+        const nht = Math.min(1, (z - (-1800)) / (-2300 - (-1800))); // 0 at -1800, 1 at -2300
         const highlandH = nht * nht * 45;
         h += highlandH;
         // Rugged highland noise
@@ -566,63 +565,63 @@ function getTerrainHeight(x, z) {
 
     // ── Deep North Mountain Ranges ──
     // NW frozen ridge — long east-west range
-    const nwr_dx = (x - (-250)) / 150, nwr_dz = (z - (-1350)) / 55;
+    const nwr_dx = (x - (-500)) / 300, nwr_dz = (z - (-2700)) / 110;
     const nwr_d = nwr_dx*nwr_dx + nwr_dz*nwr_dz;
     if (nwr_d < 1) {
         const t = 1 - nwr_d;
         let mh = t * t * 80;
-        mh += Math.abs(Math.sin((x + 250) * 0.07)) * 25 * t;
-        mh += Math.sin((x + 250) * 0.1) * Math.cos((z + 1350) * 0.12) * 15 * t;
-        const nwrPks = [[-340,-1350,45,40],[-220,-1345,55,35],[-150,-1355,40,38],[-290,-1340,35,32],[-100,-1348,30,30]];
+        mh += Math.abs(Math.sin((x + 500) * 0.035)) * 25 * t;
+        mh += Math.sin((x + 500) * 0.05) * Math.cos((z + 2700) * 0.06) * 15 * t;
+        const nwrPks = [[-680,-2700,45,80],[-440,-2690,55,70],[-300,-2710,40,76],[-580,-2680,35,64],[-200,-2696,30,60]];
         for (const p of nwrPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
     // NE frozen peaks — cluster of sharp peaks
-    const nep_dx = (x - 200) / 130, nep_dz = (z - (-1300)) / 100;
+    const nep_dx = (x - 400) / 260, nep_dz = (z - (-2600)) / 200;
     const nep_d = nep_dx*nep_dx + nep_dz*nep_dz;
     if (nep_d < 1) {
         const t = 1 - nep_d;
         let mh = t * t * 75;
-        mh += Math.abs(Math.sin((x - 200) * 0.08 + (z + 1300) * 0.06)) * 22 * t;
-        const nepPks = [[160,-1280,50,35],[240,-1310,55,32],[190,-1350,42,36],[270,-1270,38,30],[130,-1330,45,34],[210,-1260,35,28]];
+        mh += Math.abs(Math.sin((x - 400) * 0.04 + (z + 2600) * 0.03)) * 22 * t;
+        const nepPks = [[320,-2560,50,70],[480,-2620,55,64],[380,-2700,42,72],[540,-2540,38,60],[260,-2660,45,68],[420,-2520,35,56]];
         for (const p of nepPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
     // Central north spine — ridge running north-south
-    const cns_dx = (x - 50) / 55, cns_dz = (z - (-1400)) / 150;
+    const cns_dx = (x - 100) / 110, cns_dz = (z - (-2800)) / 300;
     const cns_d = cns_dx*cns_dx + cns_dz*cns_dz;
     if (cns_d < 1) {
         const t = 1 - cns_d;
         let mh = t * t * 70;
-        mh += Math.abs(Math.cos((z + 1400) * 0.05)) * 28 * t;
-        mh += Math.sin((x - 50) * 0.15) * 12 * t;
-        const cnsPks = [[50,-1310,45,32],[45,-1420,55,30],[55,-1490,40,34],[40,-1370,48,28],[60,-1450,35,30]];
+        mh += Math.abs(Math.cos((z + 2800) * 0.025)) * 28 * t;
+        mh += Math.sin((x - 100) * 0.075) * 12 * t;
+        const cnsPks = [[100,-2620,45,64],[90,-2840,55,60],[110,-2980,40,68],[80,-2740,48,56],[120,-2900,35,60]];
         for (const p of cnsPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
     // West deep north range
-    const wdn_dx = (x - (-400)) / 100, wdn_dz = (z - (-1200)) / 70;
+    const wdn_dx = (x - (-800)) / 200, wdn_dz = (z - (-2400)) / 140;
     const wdn_d = wdn_dx*wdn_dx + wdn_dz*wdn_dz;
     if (wdn_d < 1) {
         const t = 1 - wdn_d;
         let mh = t * t * 65;
-        mh += Math.abs(Math.sin((x + 400) * 0.09)) * 20 * t;
-        const wdnPks = [[-430,-1200,40,32],[-370,-1210,48,30],[-350,-1180,35,28],[-450,-1230,30,26]];
+        mh += Math.abs(Math.sin((x + 800) * 0.045)) * 20 * t;
+        const wdnPks = [[-860,-2400,40,64],[-740,-2420,48,60],[-700,-2360,35,56],[-900,-2460,30,52]];
         for (const p of wdnPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
 
     // East deep north range
-    const edn_dx = (x - 380) / 90, edn_dz = (z - (-1180)) / 65;
+    const edn_dx = (x - 760) / 180, edn_dz = (z - (-2360)) / 130;
     const edn_d = edn_dx*edn_dx + edn_dz*edn_dz;
     if (edn_d < 1) {
         const t = 1 - edn_d;
         let mh = t * t * 60;
-        mh += Math.abs(Math.cos((x - 380) * 0.08)) * 18 * t;
-        const ednPks = [[350,-1180,42,30],[400,-1170,38,28],[420,-1200,45,32],[360,-1210,32,26]];
+        mh += Math.abs(Math.cos((x - 760) * 0.04)) * 18 * t;
+        const ednPks = [[700,-2360,42,60],[800,-2340,38,56],[840,-2400,45,64],[720,-2420,32,52]];
         for (const p of ednPks) { const pd = ((x-p[0])/p[3])**2+((z-p[1])/p[3])**2; if(pd<1){const pt=1-pd;mh+=pt*pt*p[2];} }
         h += mh;
     }
@@ -782,7 +781,7 @@ export class World {
                 // Near coast = sand. Inland low areas = grass/water
                 const _sz = wz / ISLAND_NS_SCALE;
                 const distFC = Math.sqrt(wx * wx + _sz * _sz);
-                const isCoastal = distFC > getIslandRadius(wx, wz) - 80;
+                const isCoastal = distFC > getIslandRadius(wx, wz) - 160;
 
                 for (let y = 0; y < WORLD_HEIGHT; y++) {
                     let block = BLOCK.AIR;
@@ -874,7 +873,7 @@ export class World {
     _placeTreesInChunk(cx, cz, data, ox, oz) {
         const yOff = 128;
         // Hill ring ancient forest — dense tall trees inside the ring
-        const hillCX = -30, hillCZ = -350, hillR = 170; // inner radius (flat area)
+        const hillCX = -60, hillCZ = -700, hillR = 340; // inner radius (flat area)
         const chunkWX = ox * BLOCK_SIZE, chunkWZ = oz * BLOCK_SIZE;
         const dxH = chunkWX + 8*BLOCK_SIZE - hillCX, dzH = chunkWZ + 8*BLOCK_SIZE - hillCZ;
         const chunkDistToHill = Math.sqrt(dxH*dxH + dzH*dzH);
@@ -1080,7 +1079,7 @@ export class World {
 
     _carveCaves(cx, cz, data, ox, oz) {
         const yOff = 128;
-        const hillCX = -30, hillCZ = -350, hillR = 200;
+        const hillCX = -60, hillCZ = -700, hillR = 400;
 
         // Quick check — skip entirely if chunk is far from the hill ring
         const chunkCenterWX = (ox + 8) * BLOCK_SIZE;
@@ -1098,7 +1097,7 @@ export class World {
 
                 const dxC = wx - hillCX, dzC = wz - hillCZ;
                 const distC = Math.sqrt(dxC * dxC + dzC * dzC);
-                if (distC < 40 || distC > 185) continue;
+                if (distC < 80 || distC > 370) continue;
 
                 const surfaceH = this.getHeightBlocks(bx, bz);
                 const surfaceY = surfaceH + yOff;
@@ -1115,7 +1114,7 @@ export class World {
                                Math.cos(wx * 0.05 + wy * 0.035 + wz * 0.045 + 3.4);
 
                     const caveNoise = Math.max(n1, n2);
-                    const ringFactor = 1 - Math.abs(distC - 110) / 80;
+                    const ringFactor = 1 - Math.abs(distC - 220) / 160;
                     if (ringFactor <= 0) continue;
 
                     // Higher threshold = smaller caves

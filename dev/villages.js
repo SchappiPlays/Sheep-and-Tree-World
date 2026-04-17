@@ -5,16 +5,16 @@ import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath } from './world.js';
 // Village definitions — deterministic positions on the main island
 // Skill levels: 1=Apprentice, 2=Novice, 3=Journeyman, 4=Skilled, 5=Expert, 6=Master, 7=Veteran, 8=Grandmaster, 9=Legendary
 const VILLAGE_DEFS = [
-    { x: 80, z: 16, houses: 5, name: 'Meadow Village', smiths: [1] },
-    { x: -100, z: -50, houses: 4, name: 'Forest Edge', smiths: [3] },
-    { x: 200, z: 60, houses: 6, name: 'Hillside Town', smiths: [5, 5, 2] },
-    { x: -200, z: 100, houses: 3, name: 'Western Hamlet', smiths: [4] },
-    { x: 50, z: -150, houses: 4, name: 'Northwatch', smiths: [6] },
-    { x: -150, z: 200, houses: 3, name: 'Southmoor', smiths: [2] },
-    { x: 100, z: 550, houses: 5, name: 'Desert Crossing', biome: 'desert', smiths: [9, 6, 6] },
-    { x: -120, z: 620, houses: 4, name: 'Sunstone', biome: 'desert', smiths: [8, 5] },
-    { x: 250, z: 680, houses: 3, name: 'Dune\'s End', biome: 'desert', smiths: [7] },
-    { x: 1020, z: 30, houses: 8, name: 'Farwatch', smiths: [2, 1] },
+    { x: 160, z: 32, houses: 5, name: 'Meadow Village', smiths: [1] },
+    { x: -200, z: -100, houses: 4, name: 'Forest Edge', smiths: [3] },
+    { x: 400, z: 120, houses: 6, name: 'Hillside Town', smiths: [5, 5, 2] },
+    { x: -400, z: 200, houses: 3, name: 'Western Hamlet', smiths: [4] },
+    { x: 100, z: -300, houses: 4, name: 'Northwatch', smiths: [6] },
+    { x: -300, z: 400, houses: 3, name: 'Southmoor', smiths: [2] },
+    { x: 200, z: 1100, houses: 5, name: 'Desert Crossing', biome: 'desert', smiths: [9, 6, 6] },
+    { x: -240, z: 1240, houses: 4, name: 'Sunstone', biome: 'desert', smiths: [8, 5] },
+    { x: 500, z: 1360, houses: 3, name: 'Dune\'s End', biome: 'desert', smiths: [7] },
+    { x: 2040, z: 60, houses: 8, name: 'Farwatch', smiths: [2, 1] },
 ];
 const SMITH_SKILL_NAMES = { 1:'Apprentice', 2:'Novice', 3:'Journeyman', 4:'Skilled', 5:'Expert', 6:'Master', 7:'Veteran', 8:'Grandmaster', 9:'Legendary' };
 
@@ -90,7 +90,7 @@ function getHouseBlocks(seed, sizeIdx, biome) {
 
 // Place village structures into world chunk data
 // ── Western Castle ──
-const CASTLE = { wx: -400, wz: 20 }; // world coords
+const CASTLE = { wx: -800, wz: 40 }; // world coords
 
 function getCastleBlocks() {
     const blocks = [];

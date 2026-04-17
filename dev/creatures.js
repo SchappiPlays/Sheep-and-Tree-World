@@ -1140,10 +1140,10 @@ export class CreatureManager {
                     creature = makeCamel(sx, sz, terrainY);
                 } else continue;
             } else if (biome === 'mountain' || biome === 'scorched') {
-                // Goblins only spawn on NW peaks (510,-130) and SW peaks (510,80)
-                const nwDx = sx - 510, nwDz = sz - (-130);
-                const swDx = sx - 510, swDz = sz - 80;
-                const onGoblinMtn = (nwDx*nwDx/(45*45) + nwDz*nwDz/(55*55) < 1) || (swDx*swDx/(40*40) + swDz*swDz/(50*50) < 1);
+                // Goblins only spawn on NW peaks (1020,-260) and SW peaks (1020,160)
+                const nwDx = sx - 1020, nwDz = sz - (-260);
+                const swDx = sx - 1020, swDz = sz - 160;
+                const onGoblinMtn = (nwDx*nwDx/(90*90) + nwDz*nwDz/(110*110) < 1) || (swDx*swDx/(80*80) + swDz*swDz/(100*100) < 1);
                 if (onGoblinMtn && typeHash < 0.5) {
                     creature = makeGoblin(sx, sz, terrainY);
                 } else {
@@ -1151,7 +1151,7 @@ export class CreatureManager {
                 }
             } else if (biome === 'snow' || biome === 'snow_transition') {
                 // Frozen lands — mostly skeletons, rare wolves
-                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
+                const nearSpawn = (sx*sx + sz*sz) < 10000; // within 100u of (0,0)
                 if (typeHash < 0.6) {
                     creature = makeSkeleton(sx, sz, terrainY);
                 } else if (typeHash < 0.68 && !nearSpawn) {
@@ -1171,7 +1171,7 @@ export class CreatureManager {
                     }
                 }
 
-                const nearSpawn = (sx*sx + sz*sz) < 2500; // within 50u of (0,0)
+                const nearSpawn = (sx*sx + sz*sz) < 10000; // within 100u of (0,0)
                 if (isForested && typeHash < 0.4) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);

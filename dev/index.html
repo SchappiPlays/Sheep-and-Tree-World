@@ -556,10 +556,10 @@ document.body.appendChild(renderer.domElement);
 
 // ── Scene ──
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0008); // lighter fog so far terrain visible
+scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0004); // lighter fog so far terrain visible
 
 // ── Camera — same FOV as game.html ──
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 5000);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 10000);
 
 // ── Lighting — same as game.html ──
 const ambient = new THREE.AmbientLight(0x556677, 0.45);
@@ -578,16 +578,16 @@ scene.add(sun.target);
 
 // ── Sun Sphere in Sky ──
 const sunSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(200, 16, 16),
+    new THREE.SphereGeometry(400, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false })
 );
-sunSphere.position.set(400, 600, -300);
+sunSphere.position.set(800, 600, -600);
 sunSphere.renderOrder = -10;
 scene.add(sunSphere);
 
 // Sun glow (larger transparent sphere)
 const sunGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(350, 16, 16),
+    new THREE.SphereGeometry(700, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false })
 );
 sunGlow.position.copy(sunSphere.position);
@@ -596,16 +596,16 @@ scene.add(sunGlow);
 
 // ── Moon ──
 const moonSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(150, 16, 16),
+    new THREE.SphereGeometry(300, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false })
 );
-moonSphere.position.set(-400, 600, 300);
+moonSphere.position.set(-800, 600, 600);
 moonSphere.renderOrder = -10;
 moonSphere.visible = false;
 scene.add(moonSphere);
 
 const moonGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(250, 16, 16),
+    new THREE.SphereGeometry(500, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false })
 );
 moonGlow.position.copy(moonSphere.position);
@@ -623,7 +623,7 @@ const _starCount = 1800;
 const _starPos = new Float32Array(_starCount * 3);
 const _starSizes = new Float32Array(_starCount);
 const _starColors = new Float32Array(_starCount * 3);
-const _starR = 4500;
+const _starR = 9000;
 for (let i = 0; i < _starCount; i++) {
     // Uniform distribution on sphere (above horizon only)
     const u = Math.random(), v = Math.random();
@@ -771,8 +771,8 @@ function makeCloud(x, y, z) {
 
 // Spawn clouds in a grid pattern with randomness
 for (let i = 0; i < 20; i++) {
-    const x = (Math.random() - 0.5) * 2000;
-    const z = (Math.random() - 0.5) * 2000;
+    const x = (Math.random() - 0.5) * 4000;
+    const z = (Math.random() - 0.5) * 4000;
     const y = 180 + Math.random() * 80;
     clouds.push(makeCloud(x, y, z));
 }
@@ -782,10 +782,10 @@ function updateClouds(dt) {
         c.group.position.x += c.speed * dt;
         c.group.position.z += c.drift * dt;
         // Wrap around when too far
-        if (c.group.position.x > 1200) c.group.position.x -= 2400;
-        if (c.group.position.x < -1200) c.group.position.x += 2400;
-        if (c.group.position.z > 1200) c.group.position.z -= 2400;
-        if (c.group.position.z < -1200) c.group.position.z += 2400;
+        if (c.group.position.x > 2400) c.group.position.x -= 4800;
+        if (c.group.position.x < -2400) c.group.position.x += 4800;
+        if (c.group.position.z > 2400) c.group.position.z -= 4800;
+        if (c.group.position.z < -2400) c.group.position.z += 4800;
     }
 }
 
@@ -808,7 +808,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     const BS = BLOCK_SIZE;
     const step = 5; // sample every 5th block for performance
     const S = BS * step; // world-space step size
-    const range = 150; // world units in each direction
+    const range = 300; // world units in each direction
     const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
     const _getBiome = (wx, wz) => {
         const glacial = getFrozenBasinBlend(wx, wz);
@@ -988,13 +988,13 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Gate structures matching in-game gates
     const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.8 });
-    const hillCX = -30, hillCZ = -350;
+    const hillCX = -60, hillCZ = -700;
     // [gateX, gateZ, axis, innerOffsetX, innerOffsetZ] — inner offset points toward hill ring center
     const _gateData = [
-        [-140, -350, 'z', 15, 0],   // west, inner = east
-        [80, -350, 'z', -15, 0],     // east, inner = west
-        [-30, -460, 'x', 0, 15],     // north, inner = south
-        [-30, -240, 'x', 0, -15],     // south, inner = north
+        [-280, -700, 'z', 15, 0],   // west, inner = east
+        [160, -700, 'z', -15, 0],     // east, inner = west
+        [-60, -920, 'x', 0, 15],     // north, inner = south
+        [-60, -480, 'x', 0, -15],     // south, inner = north
     ];
     for (const [gx, gz, axis, iox, ioz] of _gateData) {
         const gy = getTerrainHeight(gx, gz);
@@ -1043,7 +1043,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Boss figures — positioned on INNER side of each gate
     // Colossus (west gate, inner = east of gate)
-    const colBX = -140 + 15, colBZ = -350;
+    const colBX = -280 + 15, colBZ = -700;
     const colBY = getTerrainHeight(colBX, colBZ);
     const colFig = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, 3.5), new THREE.MeshStandardMaterial({ color: 0x777777 }));
     colFig.position.set(colBX, colBY + 4.5, colBZ); titleScene.add(colFig);
@@ -1055,7 +1055,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     colHead.position.set(colBX, colBY + 11, colBZ); titleScene.add(colHead);
 
     // Skeleton (east gate, inner = west of gate)
-    const skBX = 80 - 15, skBZ = -350;
+    const skBX = 160 - 15, skBZ = -700;
     const skBY = getTerrainHeight(skBX, skBZ);
     const skelFig = new THREE.Mesh(new THREE.BoxGeometry(1.8, 8, 1.2), new THREE.MeshStandardMaterial({ color: 0xd8d0c0 }));
     skelFig.position.set(skBX, skBY + 4, skBZ); titleScene.add(skelFig);
@@ -1067,7 +1067,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     }
 
     // Dark Knight (north gate, inner = south of gate)
-    const dkBX = -30, dkBZ = -300 + 15;
+    const dkBX = -60, dkBZ = -600 + 15;
     const dkBY = getTerrainHeight(dkBX, dkBZ);
     const dkFig = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5, 1), new THREE.MeshStandardMaterial({ color: 0x1a1a2a }));
     dkFig.position.set(dkBX, dkBY + 2.5, dkBZ); titleScene.add(dkFig);
@@ -1078,7 +1078,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     dkChest.position.set(dkBX, dkBY + 2.5, dkBZ + 0.6); titleScene.add(dkChest);
 
     // Hobgoblin (south gate, inner = north of gate)
-    const hgBX = -30, hgBZ = -80 - 15;
+    const hgBX = -60, hgBZ = -160 - 15;
     const hgBY = getTerrainHeight(hgBX, hgBZ);
     const hobFig = new THREE.Mesh(new THREE.BoxGeometry(2, 4.5, 1.8), new THREE.MeshStandardMaterial({ color: 0x3a5a1a }));
     hobFig.position.set(hgBX, hgBY + 2.3, hgBZ); titleScene.add(hobFig);
@@ -1101,9 +1101,9 @@ function animateTitle() {
     requestAnimationFrame(animateTitle);
     titleAngle += 0.0015;
     const r = 180, h = 70;
-    // Orbit around the hill ring center (-30, -350)
-    titleCam.position.set(-30 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -350 + Math.cos(titleAngle) * r);
-    titleCam.lookAt(-30, 5, -350);
+    // Orbit around the hill ring center (-60, -700)
+    titleCam.position.set(-60 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -700 + Math.cos(titleAngle) * r);
+    titleCam.lookAt(-60, 5, -700);
     titleRenderer.render(titleScene, titleCam);
 }
 animateTitle();
@@ -1222,7 +1222,7 @@ function buildFarTerrain(centerX, centerZ) {
     _farCenterX = centerX || 0;
     _farCenterZ = centerZ || 0;
     const BS = BLOCK_SIZE;
-    const range = 1600;
+    const range = 3200;
     const step = 6;
     const S = BS * step;
     const halfS = S * 0.5;
@@ -1273,17 +1273,17 @@ function buildFarTerrain(centerX, centerZ) {
 
     // Skip tree rendering inside structures (trees poking through walls look bad)
     const _TREE_SKIP_BOXES = [
-        [-400-5, 20-5, -400+165, 20+135],     // Western Castle
-        [-505-25, -335-25, -505+25, -335+25], // Ruined Fortress
-        [-900-50, 575-50, -900+50, 575+50],   // SW Fortress
-        [-300-20, 280-20, -300+20, 280+20],   // Scorched Fortress
-        [1080-30, -5-25, 1080+30, -5+25],     // Dragon's Reach
+        [-800-5, 40-5, -800+165, 40+135],     // Western Castle
+        [-1010-25, -670-25, -1010+25, -670+25], // Ruined Fortress
+        [-1800-50, 1150-50, -1800+50, 1150+50],   // SW Fortress
+        [-600-20, 560-20, -600+20, 560+20],   // Scorched Fortress
+        [2160-30, -10-25, 2160+30, -10+25],     // Dragon's Reach
     ];
     const _noTrees = (wx, wz) => {
         for (const [x1, z1, x2, z2] of _TREE_SKIP_BOXES) {
             if (wx >= x1 && wx <= x2 && wz >= z1 && wz <= z2) return true;
         }
-        for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200},{x:100,z:550},{x:-120,z:620},{x:250,z:680}]) {
+        for (const vd of [{x:160,z:32},{x:-200,z:-100},{x:400,z:120},{x:-400,z:200},{x:100,z:-300},{x:-300,z:400},{x:200,z:1100},{x:-240,z:1240},{x:500,z:1360}]) {
             const dx = wx - vd.x, dz = wz - vd.z;
             if (dx*dx + dz*dz < 40*40) return true;
         }
@@ -1835,26 +1835,26 @@ function startGame(loadSlotName) {
     horseMgr = new HorseManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
-    // ── Giant Ruined Fortress at (-505, -335) ──
+    // ── Giant Ruined Fortress at (-1010, -670) ──
     _initMagicShopStaffs();
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
     buildSouthwestFortress(world);
     markPlayerBlocksDirty();
     preplaceVillagesAndCastle(world);
-    buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
-    buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
-    buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)
-    buildForestGate(world, -30, -240, 'x', false);      // south gate (intact)
+    buildForestGate(world, -280, -700, 'z', false);   // west gate (intact)
+    buildForestGate(world, 160, -700, 'z', true);       // east gate (half shattered)
+    buildForestGate(world, -60, -920, 'x', false);     // north gate (intact)
+    buildForestGate(world, -60, -480, 'x', false);      // south gate (intact)
     buildForestRuins(world);
     buildEasternFortress(world);
 
     function buildRuinedFortress(w) {
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const centerX = Math.round(-505 / BS);
-        const centerZ = Math.round(-335 / BS);
-        const groundY = Math.floor(getTerrainHeight(-505, -335) / BS) + yOff;
+        const centerX = Math.round(-1010 / BS);
+        const centerZ = Math.round(-670 / BS);
+        const groundY = Math.floor(getTerrainHeight(-1010, -670) / BS) + yOff;
         const S = BLOCK.DARK_STONE, G = BLOCK.GRAVEL, P = BLOCK.PLANKS, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
 
@@ -2311,7 +2311,7 @@ function startGame(loadSlotName) {
         };
         // All fortress swords
         const fortressSwords = [
-            { id: swordId, wx: -505, wz: -332, data: window._customSwords[swordId] },
+            { id: swordId, wx: -1010, wz: -664, data: window._customSwords[swordId] },
         ];
 
         // Wyrmblade — long thin rapier with sapphire pommel
@@ -2323,7 +2323,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.9, bladeThickness: 0.7,
             trimMat: 'sapphire', name: 'Wyrmblade',
         };
-        fortressSwords.push({ id: s2, wx: -520, wz: -325, data: window._customSwords[s2] });
+        fortressSwords.push({ id: s2, wx: -1040, wz: -650, data: window._customSwords[s2] });
 
         // Flamecleaver — wide heavy sword with emerald and gold
         const s3 = 'csword_fortress_flame';
@@ -2334,7 +2334,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.2, bladeThickness: 1.8,
             trimMat: 'emerald', name: 'Flamecleaver',
         };
-        fortressSwords.push({ id: s3, wx: -498, wz: -345, data: window._customSwords[s3] });
+        fortressSwords.push({ id: s3, wx: -996, wz: -690, data: window._customSwords[s3] });
 
         // Nightfang — sleek dagger with topaz
         const s4 = 'csword_fortress_night';
@@ -2345,7 +2345,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 1.2, bladeThickness: 0.8,
             trimMat: 'topaz', name: 'Nightfang',
         };
-        fortressSwords.push({ id: s4, wx: -510, wz: -350, data: window._customSwords[s4] });
+        fortressSwords.push({ id: s4, wx: -1020, wz: -700, data: window._customSwords[s4] });
 
         // Stormbreaker — massive two-hander with diamond and steel
         const s5 = 'csword_fortress_storm';
@@ -2356,7 +2356,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 3.8, bladeThickness: 1.6,
             trimMat: 'diamond', name: 'Stormbreaker',
         };
-        fortressSwords.push({ id: s5, wx: -490, wz: -330, data: window._customSwords[s5] });
+        fortressSwords.push({ id: s5, wx: -980, wz: -660, data: window._customSwords[s5] });
 
         // Duskrend — elegant sword with ruby guard and wolf pommel
         const s6 = 'csword_fortress_dusk';
@@ -2367,7 +2367,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.4, bladeThickness: 1.0,
             trimMat: 'gold_ingot', name: 'Duskrend',
         };
-        fortressSwords.push({ id: s6, wx: -515, wz: -338, data: window._customSwords[s6] });
+        fortressSwords.push({ id: s6, wx: -1030, wz: -676, data: window._customSwords[s6] });
 
         // Voidpiercer — stone-handled with emerald accents
         const s7 = 'csword_fortress_void';
@@ -2378,7 +2378,7 @@ function startGame(loadSlotName) {
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.8, bladeThickness: 1.2,
             trimMat: 'emerald', name: 'Voidpiercer',
         };
-        fortressSwords.push({ id: s7, wx: -500, wz: -342, data: window._customSwords[s7] });
+        fortressSwords.push({ id: s7, wx: -1000, wz: -684, data: window._customSwords[s7] });
 
         // === 24 damaged dragonsteel swords scattered around the fort ===
         // Half damage (tier uses numeric damage field), half attack speed.
@@ -2393,8 +2393,8 @@ function startGame(loadSlotName) {
             const h = _hash01(i + 1000);
             const ang = (i / 24) * Math.PI * 2 + _hash01(i + 500) * 0.3;
             const rad = 18 + _hash01(i + 200) * 14;
-            const wx = Math.round(-505 + Math.cos(ang) * rad);
-            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const wx = Math.round(-1010 + Math.cos(ang) * rad);
+            const wz = Math.round(-670 + Math.sin(ang) * rad);
             const pommelStyle = _pommelPool[Math.floor(_hash01(i + 11) * _pommelPool.length)];
             const pommelGem = _gemPool[Math.floor(_hash01(i + 22) * _gemPool.length)];
             const guardStyle = _guardPool[Math.floor(_hash01(i + 33) * _guardPool.length)];
@@ -2435,8 +2435,8 @@ function startGame(loadSlotName) {
             const id = 'csword_battleaxe_' + i;
             const ang = Math.PI * 0.15 + i * 0.22;
             const rad = 9 + (i % 2) * 4;
-            const wx = Math.round(-505 + Math.cos(ang) * rad);
-            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const wx = Math.round(-1010 + Math.cos(ang) * rad);
+            const wz = Math.round(-670 + Math.sin(ang) * rad);
             const def = {
                 tier: 'damaged_dragonsteel',
                 damage: 5,
@@ -2465,8 +2465,8 @@ function startGame(loadSlotName) {
         for (let i = 0; i < 28; i++) {
             const ang = (i / 28) * Math.PI * 2 + _shash(i + 13) * 0.5;
             const rad = 10 + _shash(i + 27) * 22;
-            const wx = -505 + Math.cos(ang) * rad;
-            const wz = -335 + Math.sin(ang) * rad;
+            const wx = -1010 + Math.cos(ang) * rad;
+            const wz = -670 + Math.sin(ang) * rad;
             const yaw = _shash(i + 41) * Math.PI * 2;
             // Loot: 1-2 armor pieces + 30% chance for a tool
             const lootCount = 1 + (_shash(i + 53) < 0.4 ? 1 : 0);
@@ -2487,7 +2487,7 @@ function startGame(loadSlotName) {
     function buildSouthwestFortress(w) {
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const FX = -900, FZ = 575;
+        const FX = -1800, FZ = 1150;
         const centerX = Math.round(FX / BS);
         const centerZ = Math.round(FZ / BS);
         const groundY = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
@@ -3020,12 +3020,12 @@ function startGame(loadSlotName) {
             _pb(bx, by, bz, block);
         };
 
-        const hillCX = -30, hillCZ = -350;
+        const hillCX = -60, hillCZ = -700;
 
-        // Ruin 1: Broken temple with pillars (-60, -210)
+        // Ruin 1: Broken temple with pillars (-120, -420)
         {
-            const rx = Math.round(-60 / BS), rz = Math.round(-210 / BS);
-            const gy = Math.floor(getTerrainHeight(-60, -210) / BS) + yOff;
+            const rx = Math.round(-120 / BS), rz = Math.round(-420 / BS);
+            const gy = Math.floor(getTerrainHeight(-120, -420) / BS) + yOff;
             // Floor
             for (let dx = -6; dx <= 6; dx++) for (let dz = -4; dz <= 4; dz++)
                 rb(rx+dx, gy, rz+dz, S, 0.15);
@@ -3043,10 +3043,10 @@ function startGame(loadSlotName) {
             rb(rx, gy+2, rz, SM, 0.05);
         }
 
-        // Ruin 2: Collapsed tower (-10, -160)
+        // Ruin 2: Collapsed tower (-20, -320)
         {
-            const rx = Math.round(-10 / BS), rz = Math.round(-160 / BS);
-            const gy = Math.floor(getTerrainHeight(-10, -160) / BS) + yOff;
+            const rx = Math.round(-20 / BS), rz = Math.round(-320 / BS);
+            const gy = Math.floor(getTerrainHeight(-20, -320) / BS) + yOff;
             // Circular base
             for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
                 if (dx*dx+dz*dz > 18) continue;
@@ -3068,10 +3068,10 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 3: Stone archway (-50, -335)
+        // Ruin 3: Stone archway (-100, -670)
         {
-            const rx = Math.round(-50 / BS), rz = Math.round(-335 / BS);
-            const gy = Math.floor(getTerrainHeight(-50, -335) / BS) + yOff;
+            const rx = Math.round(-100 / BS), rz = Math.round(-670 / BS);
+            const gy = Math.floor(getTerrainHeight(-100, -670) / BS) + yOff;
             // Two pillars
             for (let y = 0; y < 8; y++) {
                 rb(rx, gy+y, rz-3, S, 0.05);
@@ -3088,10 +3088,10 @@ function startGame(loadSlotName) {
                 rb(rx+dx, gy, rz+dz, S, 0.12);
         }
 
-        // Ruin 4: Overgrown wall fragments (10, -200)
+        // Ruin 4: Overgrown wall fragments (20, -400)
         {
-            const rx = Math.round(10 / BS), rz = Math.round(-200 / BS);
-            const gy = Math.floor(getTerrainHeight(10, -200) / BS) + yOff;
+            const rx = Math.round(20 / BS), rz = Math.round(-400 / BS);
+            const gy = Math.floor(getTerrainHeight(20, -400) / BS) + yOff;
             // L-shaped wall
             for (let dx = 0; dx <= 10; dx++) {
                 const h = 4 - Math.floor(hash(rx+dx, rz) * 2);
@@ -3106,10 +3106,10 @@ function startGame(loadSlotName) {
             _pb(rx+6, gy+2, rz, BLOCK.AIR);
         }
 
-        // Ruin 5: Stone circle / ritual site (-20, -220)
+        // Ruin 5: Stone circle / ritual site (-40, -440)
         {
-            const rx = Math.round(-20 / BS), rz = Math.round(-220 / BS);
-            const gy = Math.floor(getTerrainHeight(-20, -220) / BS) + yOff;
+            const rx = Math.round(-40 / BS), rz = Math.round(-440 / BS);
+            const gy = Math.floor(getTerrainHeight(-40, -440) / BS) + yOff;
             // Standing stones in circle
             for (let i = 0; i < 8; i++) {
                 const a = (i / 8) * Math.PI * 2;
@@ -3129,10 +3129,10 @@ function startGame(loadSlotName) {
             rb(rx, gy+1, rz, SM, 0.02);
         }
 
-        // Ruin 6: Staircase to nowhere (0, -180)
+        // Ruin 6: Staircase to nowhere (0, -360)
         {
-            const rx = Math.round(0 / BS), rz = Math.round(-180 / BS);
-            const gy = Math.floor(getTerrainHeight(0, -180) / BS) + yOff;
+            const rx = Math.round(0 / BS), rz = Math.round(-360 / BS);
+            const gy = Math.floor(getTerrainHeight(0, -360) / BS) + yOff;
             // Wide stairs going up
             for (let step = 0; step < 8; step++) {
                 const w = 5 - Math.floor(step * 0.4);
@@ -3144,10 +3144,10 @@ function startGame(loadSlotName) {
                 rb(rx+dx, gy+8, rz-8+dz, S, 0.2);
         }
 
-        // Ruin 7: Foundation outline (-40, -350)
+        // Ruin 7: Foundation outline (-80, -700)
         {
-            const rx = Math.round(-40 / BS), rz = Math.round(-350 / BS);
-            const gy = Math.floor(getTerrainHeight(-40, -350) / BS) + yOff;
+            const rx = Math.round(-80 / BS), rz = Math.round(-700 / BS);
+            const gy = Math.floor(getTerrainHeight(-80, -700) / BS) + yOff;
             // Rectangular foundation — just low walls
             for (let dx = -8; dx <= 8; dx++) {
                 rb(rx+dx, gy, rz-6, S, 0.1); rb(rx+dx, gy+1, rz-6, S, 0.2);
@@ -3164,7 +3164,7 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-30, -350)
+        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-60, -700)
         {
             const rx = Math.round(hillCX / BS), rz = Math.round(hillCZ / BS);
             const gy = Math.floor(getTerrainHeight(hillCX, hillCZ) / BS) + yOff;
@@ -3257,7 +3257,7 @@ function startGame(loadSlotName) {
         // Dragon's Reach — ancient dragon-rider stronghold near Farwatch
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const FX = 1080, FZ = -5;
+        const FX = 2160, FZ = -10;
         const cx = Math.round(FX / BS);
         const cz = Math.round(FZ / BS);
         const gy = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
@@ -3521,18 +3521,18 @@ function startGame(loadSlotName) {
             chestData[key] = { items: { ...loot } };
         };
 
-        // Chest in Broken Temple (-60, -210) — near the altar
-        _placeRuinChest(-58, -210, { 'iron_ingot': 3, 'gold_ingot': 1, 'stick': 6 });
-        // Chest in Collapsed Tower (-10, -160) — in the rubble
-        _placeRuinChest(-8, -160, { 'diamond': 1, 'coal': 8, [BLOCK.STONE]: 16 });
-        // Chest at Stone Circle (-20, -220) — ritual offering
-        _placeRuinChest(-20, -218, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
-        // Chest in Staircase ruins (0, -180) — hidden under steps
-        _placeRuinChest(2, -180, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
-        // Chest in Foundation ruins (-40, -350) — corner stash
-        _placeRuinChest(-46, -350, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
+        // Chest in Broken Temple (-120, -420) — near the altar
+        _placeRuinChest(-116, -420, { 'iron_ingot': 3, 'gold_ingot': 1, 'stick': 6 });
+        // Chest in Collapsed Tower (-20, -320) — in the rubble
+        _placeRuinChest(-16, -320, { 'diamond': 1, 'coal': 8, [BLOCK.STONE]: 16 });
+        // Chest at Stone Circle (-40, -440) — ritual offering
+        _placeRuinChest(-40, -436, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
+        // Chest in Staircase ruins (0, -360) — hidden under steps
+        _placeRuinChest(4, -360, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
+        // Chest in Foundation ruins (-80, -700) — corner stash
+        _placeRuinChest(-92, -700, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
         // Central ruin — behind the altar
-        _placeRuinChest(-28, -194, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
+        _placeRuinChest(-56, -388, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
     }
 
     // Hook setBlock to broadcast changes in multiplayer + mark LOD dirty
@@ -4103,7 +4103,7 @@ function startGame(loadSlotName) {
 
     // === Lightning Dragon Nest — deep desert ===
     {
-        const nestX = 220, nestZ = 1080;
+        const nestX = 440, nestZ = 2160;
         const nestY = getTerrainHeight(nestX, nestZ);
         const yOff = 128;
         const BS = BLOCK_SIZE;
@@ -4223,7 +4223,7 @@ function startGame(loadSlotName) {
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
-        const fortDragon = dragonMgr._makeDragon(-505, -335, getTerrainHeight(-505, -335), 0x0a0a0a, 0xcc7733, true, false, false, true);
+        const fortDragon = dragonMgr._makeDragon(-1010, -670, getTerrainHeight(-1010, -670), 0x0a0a0a, 0xcc7733, true, false, false, true);
         fortDragon._hasTusks = true;
         // Make it massive and fully grown
         fortDragon.age = 7200; // elder
@@ -4251,16 +4251,16 @@ function startGame(loadSlotName) {
         scene.add(fireMesh);
         fortDragon._fireMesh = fireMesh;
         fortDragon._fireMat = fireMat;
-        fortDragon.x = -505;
-        fortDragon.z = -335;
-        fortDragon.group.position.set(-505, getTerrainHeight(-505, -335) + 40, -335);
+        fortDragon.x = -1010;
+        fortDragon.z = -670;
+        fortDragon.group.position.set(-1010, getTerrainHeight(-1010, -670) + 40, -670);
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
 
         // Black-and-gold dragon egg on a small altar inside the fortress
         {
-            const ex = -505 + 4, ez = -335 + 2;
+            const ex = -1010 + 4, ez = -670 + 2;
             const ey = getTerrainHeight(ex, ez);
             const eggGrp = new THREE.Group();
             const altarMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
@@ -4576,7 +4576,7 @@ function startGame(loadSlotName) {
 
     // === Giant Skeleton Boss at east gate ===
     if (!killedBosses.has('The Ancient One')) {
-        const bossX = 80, bossZ = -350;
+        const bossX = 160, bossZ = -700;
 
         // Pre-generate the sword it will drop and wield
         const _bossRng = () => Math.random();
@@ -4756,7 +4756,7 @@ function startGame(loadSlotName) {
 
     // === Earth Colossus Boss near the western gate ===
     if (!killedBosses.has('Colossus of the Gate')) {
-        const colX = -155, colZ = -350;
+        const colX = -310, colZ = -700;
         const colY = getTerrainHeight(colX, colZ);
         const colossus = {
             group: new THREE.Group(), legs: [], headGrp: new THREE.Group(),
@@ -4879,7 +4879,7 @@ function startGame(loadSlotName) {
 
     // === Dark Knight Boss at north gate ===
     if (!killedBosses.has('The Dark Knight')) {
-        const dkX = -30, dkZ = -300;
+        const dkX = -60, dkZ = -600;
         const dkY = getTerrainHeight(dkX, dkZ);
 
         // Pre-generate the knight's sword
@@ -4957,7 +4957,7 @@ function startGame(loadSlotName) {
 
     // === Necromancer Boss at central ancient forest ruin ===
     if (!killedBosses.has('The Necromancer')) {
-        const necX = -30, necZ = -350;
+        const necX = -60, necZ = -700;
         const necY = getTerrainHeight(necX, necZ) + 1.5; // on the altar platform
 
         const necro = new Player(scene, world);
@@ -5212,7 +5212,7 @@ function startGame(loadSlotName) {
 
     // === Hobgoblin Warchief + Goblins at south gate ===
     if (!killedBosses.has('Grokthak the Warchief')) {
-        const hgX = -30, hgZ = -230; // south gate inner side (gate at z=-240)
+        const hgX = -60, hgZ = -460; // south gate inner side (gate at z=-480)
         const hgY = getTerrainHeight(hgX, hgZ);
 
         // Spawn 6 goblin minions around the gate
@@ -5354,7 +5354,7 @@ function startGame(loadSlotName) {
 
     // === Scorched Fortress & Ember Lord Boss ===
     {
-        const sfX = -300, sfZ = 280; // center of scorched lands
+        const sfX = -600, sfZ = 560; // center of scorched lands
         const BS = BLOCK_SIZE;
         const yOff = 128;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
@@ -5446,7 +5446,7 @@ function startGame(loadSlotName) {
 
     // === Ember Lord Boss ===
     if (!killedBosses.has('The Ember Lord')) {
-        const elX = -300, elZ = 280;
+        const elX = -600, elZ = 560;
         const elY = getTerrainHeight(elX, elZ) + 1;
 
         const emberLord = new Player(scene, world);
@@ -5818,8 +5818,8 @@ function startGame(loadSlotName) {
                     // Skip silver wyvern, fortress dragon, and other named fortress entities
                     if (dd.dragonName === 'The Silver Wyvern' || dd.dragonName === 'Kaelthrazor the Ancient') continue;
                     // Skip dragons at known fortress positions
-                    if (Math.abs(dd.x - (-505)) < 2 && Math.abs(dd.z - (-335)) < 2) continue; // ruined fortress
-                    if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
+                    if (Math.abs(dd.x - (-1010)) < 2 && Math.abs(dd.z - (-670)) < 2) continue; // ruined fortress
+                    if (Math.abs(dd.x - (-1800)) < 50 && Math.abs(dd.z - 1150) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
                     const _lightningColors = [0x7a3dc4, 0x20202a, 0xa05a28, 0x2878f0];
                     const _iceColorsCheck = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
@@ -8295,7 +8295,7 @@ const worldMapEl = document.getElementById('worldMap');
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 let mapOpen = false;
-let mapViewX = 0, mapViewZ = 0, mapViewSize = 1600;
+let mapViewX = 0, mapViewZ = 0, mapViewSize = 3200;
 let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
 let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
 
@@ -8667,61 +8667,61 @@ function drawWorldMap() {
         };
 
         // Castle (the western castle from villages.js)
-        drawCastle(-400, 20, 'The Castle');
+        drawCastle(-800, 40, 'The Castle');
 
         // Ruined Fortress
-        drawRuins(-505, -335, 'Ruined Fortress');
+        drawRuins(-1010, -670, 'Ruined Fortress');
 
         // Mountains
-        drawMountain(602, -30, 'East Mountains', 10);
-        drawMountain(510, -130, 'NW Peaks', 7);
-        drawMountain(510, 80, 'SW Hills', 6);
-        drawMountain(820, -40, 'Great Peak', 12);
-        drawMountain(730, -95, 'NE Ridge', 6);
-        drawMountain(735, 40, 'SE Ridge', 6);
-        drawMountain(-30, -1050, 'Frozen Mountains', 14);
-        drawMountain(-250, -1350, 'Frostfang Ridge', 10);
-        drawMountain(200, -1300, 'Icespire Peaks', 9);
-        drawMountain(50, -1400, 'Pale Spine', 8);
-        drawMountain(-400, -1200, 'Howling Crags', 8);
-        drawMountain(380, -1180, 'Rimestone Peaks', 8);
+        drawMountain(1204, -60, 'East Mountains', 10);
+        drawMountain(1020, -260, 'NW Peaks', 7);
+        drawMountain(1020, 160, 'SW Hills', 6);
+        drawMountain(1640, -80, 'Great Peak', 12);
+        drawMountain(1460, -190, 'NE Ridge', 6);
+        drawMountain(1470, 80, 'SE Ridge', 6);
+        drawMountain(-60, -2100, 'Frozen Mountains', 14);
+        drawMountain(-500, -2700, 'Frostfang Ridge', 10);
+        drawMountain(400, -2600, 'Icespire Peaks', 9);
+        drawMountain(100, -2800, 'Pale Spine', 8);
+        drawMountain(-800, -2400, 'Howling Crags', 8);
+        drawMountain(760, -2360, 'Rimestone Peaks', 8);
 
         // Villages
-        drawVillage(80, 16, 'Meadow Village');
-        drawVillage(-100, -50, 'Forest Edge');
-        drawVillage(200, 60, 'Hillside Town');
-        drawVillage(-200, 100, 'Western Hamlet');
-        drawVillage(50, -150, 'Northwatch');
-        drawVillage(-150, 200, 'Southmoor');
-        drawVillage(1020, 30, 'Farwatch');
-        drawCastle(1080, -5, "Dragon's Reach");
+        drawVillage(160, 32, 'Meadow Village');
+        drawVillage(-200, -100, 'Forest Edge');
+        drawVillage(400, 120, 'Hillside Town');
+        drawVillage(-400, 200, 'Western Hamlet');
+        drawVillage(100, -300, 'Northwatch');
+        drawVillage(-300, 400, 'Southmoor');
+        drawVillage(2040, 60, 'Farwatch');
+        drawCastle(2160, -10, "Dragon's Reach");
 
-        // Forest Gates (around the ancient forest hill ring at -30, -350)
-        drawGate(-140, -350, 'West Gate');
-        drawGate(80, -350, 'East Gate');
-        drawGate(-30, -460, 'North Gate');
-        drawGate(-30, -240, 'South Gate');
+        // Forest Gates (around the ancient forest hill ring at -60, -700)
+        drawGate(-280, -700, 'West Gate');
+        drawGate(160, -700, 'East Gate');
+        drawGate(-60, -920, 'North Gate');
+        drawGate(-60, -480, 'South Gate');
 
         // Gate bosses
-        drawDanger(-125, -350, 'Colossus');
-        drawDanger(65, -350, 'Skeleton');
-        drawDanger(-30, -285, 'Dark Knight');
-        drawDanger(-30, -95, 'Hobgoblin');
+        drawDanger(-250, -700, 'Colossus');
+        drawDanger(130, -700, 'Skeleton');
+        drawDanger(-60, -570, 'Dark Knight');
+        drawDanger(-60, -190, 'Hobgoblin');
 
         // Goblin camps
-        drawDanger(-115, 35, 'Goblin Outpost');
+        drawDanger(-230, 70, 'Goblin Outpost');
 
         // Ancient forest — large italic label
-        drawLabel(-30, -350, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
+        drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
 
         // Forest ruins (inside the ancient forest)
         const ruinStyle = 'rgba(80, 55, 30, 0.5)';
-        drawLabel(-60, -210, 'Broken Temple', ruinStyle, 8);
-        drawLabel(-10, -160, 'Old Tower', ruinStyle, 8);
-        drawLabel(-20, -220, 'Stone Circle', ruinStyle, 8);
+        drawLabel(-120, -420, 'Broken Temple', ruinStyle, 8);
+        drawLabel(-20, -320, 'Old Tower', ruinStyle, 8);
+        drawLabel(-40, -440, 'Stone Circle', ruinStyle, 8);
 
         // Dragon altar
-        const altX = toX(-505), altY = toY(-335);
+        const altX = toX(-1010), altY = toY(-670);
         if (altX > -20 && altX < w+20 && altY > -20 && altY < h+20) {
             const s = Math.max(3, Math.min(7, 5 * scale));
             mapCtx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; mapCtx.lineWidth = 1.5;
@@ -8737,7 +8737,7 @@ function drawWorldMap() {
         }
 
         // Cave entrance
-        const caveX = toX(560), caveY = toY(-50);
+        const caveX = toX(1120), caveY = toY(-100);
         if (caveX > -20 && caveX < w+20 && caveY > -20 && caveY < h+20) {
             const s = Math.max(3, Math.min(6, 4 * scale));
             mapCtx.fillStyle = 'rgba(40, 30, 20, 0.6)';
@@ -8750,13 +8750,13 @@ function drawWorldMap() {
         }
 
         // Abandoned Village
-        drawRuins(0, -540, 'Abandoned Village');
+        drawRuins(0, -1080, 'Abandoned Village');
 
         // Scorched Lands region label
-        drawLabel(-300, 260, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
+        drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
 
         // Enchanted Forest region label
-        drawLabel(715, -30, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
+        drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
 
         // Compass rose (top-right corner)
         const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
@@ -8847,7 +8847,7 @@ mapCanvas.addEventListener('wheel', e => {
     if (!mapOpen) return;
     e.preventDefault(); e.stopPropagation();
     const zf = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-    mapViewSize = Math.max(50, Math.min(3500, mapViewSize * zf));
+    mapViewSize = Math.max(50, Math.min(7000, mapViewSize * zf));
     drawWorldMap();
 }, { passive: false });
 
@@ -13926,7 +13926,7 @@ function animate() {
     sun.target.updateMatrixWorld();
 
     // Sun sphere — arc from east to west, tilted south so it never goes directly overhead
-    const sunSkyDist = 2000;
+    const sunSkyDist = 4000;
     sunSphere.position.set(
         player.position.x + Math.cos(sunAngle) * sunSkyDist,
         Math.sin(sunAngle) * sunSkyDist * 0.8,
@@ -14695,7 +14695,7 @@ function animate() {
     // Context music — boss > fortress > village > calm
     {
         const aliveBosses = creatures.creatures.filter(c => c._isBoss && !c.dead);
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
+        const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const cur = musicSystem.currentName;
 
@@ -14715,7 +14715,7 @@ function animate() {
         }
 
         // Check if near a village
-        const villageLocs = [[80,16],[-100,-50],[200,60],[-200,100],[50,-150],[-150,200]];
+        const villageLocs = [[160,32],[-200,-100],[400,120],[-400,200],[100,-300],[-300,400]];
         let nearVillage = false;
         for (const [vx, vz] of villageLocs) {
             const vdx = player.position.x - vx, vdz = player.position.z - vz;
@@ -14754,7 +14754,7 @@ function animate() {
         fd._lastHitTime = (fd._lastHitTime === undefined ? 1000 : fd._lastHitTime + dt);
         if (fd._lastHitTime > 10 && fd.hp < fd.maxHP) fd.hp = Math.min(fd.maxHP, fd.hp + fd.maxHP * 0.02 * dt);
         if (fd.hp <= 0) { fd.state = 'dead'; }
-        const fortCX = -505, fortCZ = -335;
+        const fortCX = -1010, fortCZ = -670;
         const landX = fortCX + 20, landZ = fortCZ + 15; // landing spot near fortress
         const landY = getTerrainHeight(landX, landZ);
         fd._flapT = (fd._flapT || 0) + dt;
@@ -14854,7 +14854,7 @@ function animate() {
         }
 
         // Fire breath — attack player if too close to fortress (only while flying)
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
+        const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 
