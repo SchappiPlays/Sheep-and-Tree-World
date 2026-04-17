@@ -3531,10 +3531,11 @@ function startGame(loadSlotName) {
         scene.add(cg);
 
         // === NPCS — real villagers that study the dragon half the day, wander the other half ===
+        const fortFloorY = getTerrainHeight(FX, FZ) + BS; // ground level + stone floor
         const spawnDRVillager = (wx, wz, seed, poseAngle, lookDown, poseData) => {
-            const ty = getTerrainHeight(wx, wz);
-            const v = makeVillager(scene, wx, wz, ty, seed);
+            const v = makeVillager(scene, wx, wz, fortFloorY, seed);
             v._dragonReach = true;
+            v._floorY = fortFloorY; // lock to fortress ground, don't climb onto roof
             v._studyPoseAngle = poseAngle;
             v._studyLookDown = lookDown;
             v._studyPose = poseData || null; // extra pose overrides
