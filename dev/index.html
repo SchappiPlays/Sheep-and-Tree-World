@@ -3339,7 +3339,7 @@ function startGame(loadSlotName) {
         const gy = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
         const S = BLOCK.STONE, DS = BLOCK.DARK_STONE, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 17.0) * 43758.5453; return d - Math.floor(d); };
-        const R = 0.02;
+        const R = 0; // no ruin — Dragon's Reach is intact
 
         const _pb = (bx, by, bz, bl) => {
             if (by < 0 || by >= 256) return;
@@ -3530,54 +3530,48 @@ function startGame(loadSlotName) {
         }
         scene.add(cg);
 
-        // === NPCS — villager model, correct terrain Y ===
-        // Helper: spawn villager and optionally pose them
-        const spawnNPC = (wx, wz, seed, poseAngle, lookDown) => {
+        // === NPCS — real villagers that study the dragon half the day, wander the other half ===
+        const spawnDRVillager = (wx, wz, seed, poseAngle, lookDown, poseData) => {
             const ty = getTerrainHeight(wx, wz);
             const v = makeVillager(scene, wx, wz, ty, seed);
-            v.group.rotation.y = poseAngle;
-            if (lookDown) {
-                v.headGroup.rotation.x = -0.45; // looking down at dragon
-                v.leftArm.shoulder.rotation.x = 0.6; // arm reaching forward
-            }
+            v._dragonReach = true;
+            v._studyPoseAngle = poseAngle;
+            v._studyLookDown = lookDown;
+            v._studyPose = poseData || null; // extra pose overrides
+            v._studyX = wx;
+            v._studyZ = wz;
+            v.homeX = FX; v.homeZ = FZ; // wander around fortress
+            villageMgr.villagers.push(v);
             return v;
         };
 
-        // Close observers — crouching/leaning in near the dragon head and body
-        const obs1 = spawnNPC(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true);
-        obs1.body.position.y = 0.65; obs1.spine.rotation.x = 0.55; // crouch
-        const obs2 = spawnNPC(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true);
-        obs2.body.position.y = 0.65; obs2.spine.rotation.x = 0.5;
+        // Close observers
+        spawnDRVillager(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true, { crouch: true, spineX: 0.55 });
+        spawnDRVillager(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true, { crouch: true, spineX: 0.5 });
 
-        // Mid-ring — standing scholars with scrolls/notes
-        spawnNPC(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
-        spawnNPC(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
-        spawnNPC(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
-        spawnNPC(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
+        // Mid-ring — standing scholars
+        spawnDRVillager(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
+        spawnDRVillager(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
+        spawnDRVillager(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
+        spawnDRVillager(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
 
-        // Outer ring — arriving, writing notes, discussing
-        spawnNPC(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
-        spawnNPC(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
-        spawnNPC(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
+        // Outer ring
+        spawnDRVillager(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        spawnDRVillager(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
+        spawnDRVillager(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
 
-        // Two guards near the inner dividing wall gate
-        const guardZ = FZ + (-10) * 0; // inner wall in world coords ≈ FZ - 9.5
+        // Guards near inner wall gate
         const divWorldZ = (Math.round(FZ / BS) - 10) * BS;
-        spawnNPC(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
-        spawnNPC(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
+        spawnDRVillager(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
+        spawnDRVillager(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
 
-        // ── LEADER: Archon Vael — head of the expedition ──
-        // Stands prominently north of the corpse, facing it
+        // ── LEADER: Archon Vael ──
         const leaderX = CORP_X - 6, leaderZ = CORP_Z - 5;
-        const leader = spawnNPC(leaderX, leaderZ, 0.42, Math.PI * 0.15, true);
-        // Distinctive appearance: crimson robes, grey hair, larger scale
-        leader._shirtMat.color.setHex(0x8B0000);  // deep crimson
-        leader._pantsMat.color.setHex(0x4a2200);  // dark brown
-        leader._hairMat.color.setHex(0xaaaaaa);   // grey/white hair
-        leader.group.scale.setScalar(1.12);        // taller
-        // Arm raised slightly — gesturing as if explaining
-        leader.rightArm.shoulder.rotation.x = -0.5;
-        leader.rightArm.shoulder.rotation.z = -0.3;
+        const leader = spawnDRVillager(leaderX, leaderZ, 0.42, Math.PI * 0.15, true, { leader: true });
+        leader._shirtMat.color.setHex(0x8B0000);
+        leader._pantsMat.color.setHex(0x4a2200);
+        leader._hairMat.color.setHex(0xaaaaaa);
+        leader.group.scale.setScalar(1.12);
     }
 
     // Naturally spawning chests in ruins
@@ -14504,7 +14498,7 @@ function animate() {
     _updateArrows(dt);
 
     // Villagers
-    villageMgr.update(dt, player.position.x, player.position.z);
+    villageMgr.update(dt, player.position.x, player.position.z, timeOfDay);
 
     // Dragons
     player._lookPitch = fpPitch;

@@ -729,7 +729,7 @@ export class VillageManager {
         this.spawnedVillages = new Set();
     }
 
-    update(dt, playerX, playerZ) {
+    update(dt, playerX, playerZ, timeOfDay) {
         // Spawn villagers for nearby villages
         for (const vd of VILLAGE_DEFS) {
             const dx = vd.x - playerX, dz = vd.z - playerZ;
@@ -1098,6 +1098,64 @@ export class VillageManager {
                     v.group.rotation.y = fleeAngle; // snap rotation instantly
                     v.walking = true;
                     v.speed += (4.0 - v.speed) * 5 * dt;
+                }
+            }
+            // Dragon's Reach scholars — study the corpse half the day, wander the other half
+            else if (v._dragonReach) {
+                const studying = timeOfDay >= 0.25 && timeOfDay < 0.55;
+                if (studying) {
+                    // Walk to study position, then hold pose
+                    const sdx = v._studyX - v.x, sdz = v._studyZ - v.z;
+                    const sDist = Math.sqrt(sdx * sdx + sdz * sdz);
+                    if (sDist > 0.5) {
+                        v.walking = true;
+                        v.angle = Math.atan2(sdx, sdz);
+                    } else {
+                        v.walking = false; v.speed = 0;
+                        v.x = v._studyX; v.z = v._studyZ;
+                        v.group.rotation.y = v._studyPoseAngle;
+                        // Apply study pose
+                        if (v._studyLookDown) {
+                            v.headGroup.rotation.x = -0.45;
+                            v.leftArm.shoulder.rotation.x = 0.6;
+                        }
+                        if (v._studyPose) {
+                            if (v._studyPose.crouch) {
+                                v.body.position.y = 0.65;
+                                v.spine.rotation.x = v._studyPose.spineX || 0.5;
+                            }
+                            if (v._studyPose.leader) {
+                                v.rightArm.shoulder.rotation.x = -0.5;
+                                v.rightArm.shoulder.rotation.z = -0.3;
+                            }
+                        }
+                    }
+                } else {
+                    // Reset pose and wander normally
+                    if (v._studyPose && v._studyPose.crouch) {
+                        v.body.position.y = 0; v.spine.rotation.x = 0;
+                    }
+                    v.headGroup.rotation.x = 0;
+                    v.leftArm.shoulder.rotation.x = 0;
+                    v.rightArm.shoulder.rotation.x = 0;
+                    v.rightArm.shoulder.rotation.z = 0;
+                    v.wanderTimer -= dt;
+                    if (v.wanderTimer <= 0) {
+                        if (!v.walking) {
+                            v.walking = true;
+                            const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
+                            const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
+                            if (homeDist > 20) {
+                                v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
+                            } else {
+                                v.angle += (Math.random() - 0.5) * 2.2;
+                            }
+                            v.wanderTimer = 2 + Math.random() * 4;
+                        } else {
+                            v.walking = false;
+                            v.wanderTimer = 1.5 + Math.random() * 3;
+                        }
+                    }
                 }
             }
             // Normal wander AI
