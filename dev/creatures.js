@@ -1,6 +1,6 @@
 // creatures.js — Sheep (exact model from game.html) with wandering AI
 
-import { BLOCK_SIZE, CHUNK_SIZE } from './world.js';
+import { BLOCK_SIZE, CHUNK_SIZE, getPlainsBlend } from './world.js';
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
@@ -1175,8 +1175,8 @@ export class CreatureManager {
                 if (isForested && typeHash < 0.4) {
                     // Forest — deer
                     creature = makeDeer(sx, sz, terrainY);
-                } else if (isForested && typeHash < 0.46 && !nearSpawn) {
-                    // Forest — rare wolves
+                } else if (isForested && typeHash < 0.46 && !nearSpawn && getPlainsBlend(sx, sz) < 0.15) {
+                    // Forest — rare wolves (not in plains)
                     creature = makeWolf(sx, sz, terrainY);
                 } else if (typeHash < 0.35) {
                     creature = makeSheep(sx, sz, terrainY);
