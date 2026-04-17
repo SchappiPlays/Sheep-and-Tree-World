@@ -1018,6 +1018,10 @@ export class World {
                     const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
                     const distToCenter = Math.sqrt((wx-hillCX)*(wx-hillCX) + (wz-hillCZ)*(wz-hillCZ));
                     if (distToCenter > hillR - 10) continue; // fade at edges
+                    // No trees in rivers
+                    let _aInRiv = false;
+                    for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.2) { _aInRiv = true; break; } }
+                    if (_aInRiv) continue;
                     // Moderate density — ~10% chance, spaced out
                     if (this._hash(bx * 0.37 + 1111, bz * 0.53 + 2222) > 0.10) continue;
                     if (lx % 3 !== 0 || lz % 3 !== 0) continue;
@@ -1082,6 +1086,10 @@ export class World {
                 const plainsB = getPlainsBlend(wx, wz);
                 if (plainsB > 0.15) continue;
                 if (isOnPath(wx, wz)) continue; // no trees on paths
+                // No trees in rivers
+                let _inRiv = false;
+                for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.2) { _inRiv = true; break; } }
+                if (_inRiv) continue;
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
                 const trunkH = 4 + Math.floor(this._hash(jx*1.7, jz*2.3) * 4);
@@ -1131,6 +1139,9 @@ export class World {
                 const allMtn = getMountainBlend(pWx,pWz)+getNWMountainBlend(pWx,pWz)+getSWMountainBlend(pWx,pWz)+getNEMountainBlend(pWx,pWz)+getSEMountainBlend(pWx,pWz)+getFarEastMountainBlend(pWx,pWz);
                 if (allMtn > 0.5) continue; // not on steep mountains
                 if (isOnPath(pWx, pWz)) continue;
+                let _pInRiv = false;
+                for (const riv of riverDefs) { if (getRiverBlend(pWx, pWz, riv) > 0.2) { _pInRiv = true; break; } }
+                if (_pInRiv) continue;
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
                 // Tall trunk, narrow conical canopy
                 const trunkH = 6 + Math.floor(this._hash(jx*1.3, jz*2.1) * 5); // 6-10
@@ -1307,5 +1318,209 @@ export class World {
         const bz = Math.floor(wz / BLOCK_SIZE);
         const b = this.getBlockAt(bx, by, bz);
         return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE && b !== BLOCK.TORCH;
+    }
+}
+
+// ── Water Simulation ──
+// Cellular automaton: water flows downhill, sources are infinite, ocean drains
+
+export class WaterSim {
+    constructor(world) {
+        this.world = world;
+        this._dirtyChunks = new Set(); // chunk keys needing mesh rebuild
+        this._activeWater = new Set(); // "bx,by,bz" of water blocks to simulate
+        this._sources = []; // { bx, by, bz } infinite source blocks
+        this._yOff = 128;
+        this._tickTimer = 0;
+        this._tickRate = 0.15; // seconds between simulation ticks
+        this._simRadius = 80; // block radius around player to simulate
+        this._playerBX = 0;
+        this._playerBZ = 0;
+        this._initSources();
+    }
+
+    _initSources() {
+        // Create source blocks at the start of each river
+        for (const riv of riverDefs) {
+            const [sx, sz] = riv.pts[0];
+            const bx = Math.floor(sx / BLOCK_SIZE);
+            const bz = Math.floor(sz / BLOCK_SIZE);
+            const waterH = riv.heights[0];
+            // Place source blocks across the river width at the source
+            const r = Math.ceil(riv.sourceRadius / BLOCK_SIZE);
+            for (let dx = -r; dx <= r; dx++) {
+                for (let dz = -r; dz <= r; dz++) {
+                    if (dx * dx + dz * dz > r * r) continue;
+                    const wx = (bx + dx) * BLOCK_SIZE, wz = (bz + dz) * BLOCK_SIZE;
+                    if (getRiverBlend(wx, wz, riv) < 0.3) continue;
+                    const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
+                    this._sources.push({ bx: bx + dx, by, bz: bz + dz });
+                }
+            }
+        }
+    }
+
+    setPlayerPos(wx, wz) {
+        this._playerBX = Math.floor(wx / BLOCK_SIZE);
+        this._playerBZ = Math.floor(wz / BLOCK_SIZE);
+    }
+
+    // Call each frame with dt
+    update(dt) {
+        this._tickTimer += dt;
+        if (this._tickTimer < this._tickRate) return;
+        this._tickTimer = 0;
+        this._dirtyChunks.clear();
+        this._tick();
+        return this._dirtyChunks;
+    }
+
+    _isNearPlayer(bx, bz) {
+        const dx = bx - this._playerBX, dz = bz - this._playerBZ;
+        return dx * dx + dz * dz < this._simRadius * this._simRadius;
+    }
+
+    _isOcean(bx, bz) {
+        const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+        const sz = wz / ISLAND_NS_SCALE;
+        const dist = Math.sqrt(wx * wx + sz * sz);
+        return dist > getIslandRadius(wx, wz) - 80;
+    }
+
+    _markDirty(bx, bz) {
+        const cx = Math.floor(bx / CHUNK_SIZE);
+        const cz = Math.floor(bz / CHUNK_SIZE);
+        this._dirtyChunks.add(cx + ',' + cz);
+    }
+
+    _setWater(bx, by, bz) {
+        if (this.world.getBlockAt(bx, by, bz) === BLOCK.WATER) return false;
+        this.world.setBlock(bx, by, bz, BLOCK.WATER);
+        this._activeWater.add(bx + ',' + by + ',' + bz);
+        this._markDirty(bx, bz);
+        return true;
+    }
+
+    _removeWater(bx, by, bz) {
+        if (this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER) return;
+        this.world.setBlock(bx, by, bz, BLOCK.AIR);
+        this._activeWater.delete(bx + ',' + by + ',' + bz);
+        this._markDirty(bx, bz);
+    }
+
+    _tick() {
+        const world = this.world;
+
+        // 1. Spawn water at sources (infinite)
+        for (const s of this._sources) {
+            if (!this._isNearPlayer(s.bx, s.bz)) continue;
+            this._setWater(s.bx, s.by, s.bz);
+        }
+
+        // 2. Collect water blocks near the player to simulate
+        // Scan loaded chunks near player for water blocks
+        const r = this._simRadius;
+        const pbx = this._playerBX, pbz = this._playerBZ;
+        const toProcess = [];
+
+        // Iterate active water set
+        for (const key of this._activeWater) {
+            const parts = key.split(',');
+            const bx = +parts[0], by = +parts[1], bz = +parts[2];
+            if (!this._isNearPlayer(bx, bz)) continue;
+            toProcess.push({ bx, by, bz });
+        }
+
+        // Also scan a region near the player for water blocks we haven't tracked yet
+        // (from chunk generation). Do this sparsely to avoid performance hit.
+        const scanStep = 4;
+        for (let dx = -r; dx <= r; dx += scanStep) {
+            for (let dz = -r; dz <= r; dz += scanStep) {
+                if (dx * dx + dz * dz > r * r) continue;
+                const bx = pbx + dx, bz = pbz + dz;
+                // Scan a column for water
+                const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+                const h = getTerrainHeight(wx, wz);
+                const surfY = Math.floor(h / BLOCK_SIZE) + this._yOff;
+                for (let by = Math.max(this._yOff - 5, surfY - 5); by <= surfY + 10; by++) {
+                    if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
+                        const key = bx + ',' + by + ',' + bz;
+                        if (!this._activeWater.has(key)) {
+                            this._activeWater.add(key);
+                            toProcess.push({ bx, by, bz });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Process each water block — try to flow
+        const newWater = [];
+        const removeWater = [];
+
+        for (const { bx, by, bz } of toProcess) {
+            // Check if this water block still exists
+            if (world.getBlockAt(bx, by, bz) !== BLOCK.WATER) {
+                this._activeWater.delete(bx + ',' + by + ',' + bz);
+                continue;
+            }
+
+            // Remove if at ocean
+            if (by <= this._yOff && this._isOcean(bx, bz)) {
+                removeWater.push({ bx, by, bz });
+                continue;
+            }
+
+            // Try to flow DOWN first (gravity)
+            const below = world.getBlockAt(bx, by - 1, bz);
+            if (below === BLOCK.AIR) {
+                newWater.push({ bx, by: by - 1, bz });
+                continue; // water falls, don't spread sideways
+            }
+
+            // Try to flow to lower horizontal neighbors
+            const neighbors = [
+                { dx: 1, dz: 0 }, { dx: -1, dz: 0 },
+                { dx: 0, dz: 1 }, { dx: 0, dz: -1 },
+            ];
+            for (const n of neighbors) {
+                const nx = bx + n.dx, nz = bz + n.dz;
+                // Check if neighbor at same level is air
+                const nb = world.getBlockAt(nx, by, nz);
+                if (nb === BLOCK.AIR) {
+                    // Check if the block below neighbor is solid (water sits on ground)
+                    // or if there's air below (water will fall there instead on next tick)
+                    const nbBelow = world.getBlockAt(nx, by - 1, nz);
+                    if (nbBelow !== BLOCK.AIR) {
+                        // Only spread if neighbor terrain is at same level or lower
+                        newWater.push({ bx: nx, by, bz: nz });
+                    } else {
+                        // Neighbor has air below — water flows down there (waterfall)
+                        newWater.push({ bx: nx, by: by - 1, bz: nz });
+                    }
+                }
+                // Also check one level below for downhill flow
+                const nbLow = world.getBlockAt(nx, by - 1, nz);
+                if (nbLow === BLOCK.AIR) {
+                    const nbLowBelow = world.getBlockAt(nx, by - 2, nz);
+                    if (nbLowBelow !== BLOCK.AIR && nbLowBelow !== BLOCK.WATER) {
+                        newWater.push({ bx: nx, by: by - 1, bz: nz });
+                    }
+                }
+            }
+        }
+
+        // Apply removals
+        for (const { bx, by, bz } of removeWater) {
+            this._removeWater(bx, by, bz);
+        }
+
+        // Apply new water (limit per tick to prevent lag)
+        let placed = 0;
+        const maxPerTick = 200;
+        for (const { bx, by, bz } of newWater) {
+            if (placed >= maxPerTick) break;
+            if (this._setWater(bx, by, bz)) placed++;
+        }
     }
 }

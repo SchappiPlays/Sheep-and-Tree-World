@@ -488,7 +488,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers, WaterSim } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager, updateWaterTime } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -1819,7 +1819,7 @@ document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
 });
 
 // ── World (created once, reset on new game) ──
-let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr;
+let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr, waterSim;
 const mp = new Multiplayer(scene);
 
 function startGame(loadSlotName) {
@@ -1861,6 +1861,7 @@ function startGame(loadSlotName) {
     world = new World();
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
     initRivers(); // Pre-calculate river heights for downhill flow
+    waterSim = new WaterSim(world);
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
     chunkManager.initChunkMap();
@@ -14208,6 +14209,18 @@ function animate() {
 
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z);
+
+    // Water simulation
+    if (waterSim) {
+        waterSim.setPlayerPos(player.position.x, player.position.z);
+        const dirtyChunks = waterSim.update(dt);
+        if (dirtyChunks && dirtyChunks.size > 0) {
+            for (const key of dirtyChunks) {
+                const [cx, cz] = key.split(',').map(Number);
+                chunkManager.rebuildChunkAt(cx * CHUNK_SIZE, cz * CHUNK_SIZE);
+            }
+        }
+    }
 
     // Rebuild structure LOD mesh if block counts changed — throttled heavily
     if (world && world._modifiedBlocks) {
