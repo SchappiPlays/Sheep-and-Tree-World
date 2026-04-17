@@ -256,11 +256,11 @@ function _initRiverHeights() {
         riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
 
         // Calculate heights using a linear gradient from source to end.
-        // Don't sample terrain — hilly terrain gives wildly varying bank heights.
-        // Instead: source height from terrain, end height = 0.5 (just above sea level),
-        // linear interpolation between them. This guarantees smooth consistent downhill.
+        // Source height capped low — water must sit deep in the carved channel,
+        // well below surrounding terrain, to prevent flooding.
         const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
-        const startH = Math.max(sourceH - 1.5, 2); // water surface at source
+        // Cap source water low — must sit well below surrounding terrain everywhere
+        const startH = Math.min(Math.max(sourceH * 0.15, 1.5), 4);
         const endH = 0.5; // just above sea level at river mouth
         riv.heights = [];
         for (let i = 0; i < riv.pts.length; i++) {
@@ -1332,28 +1332,24 @@ export class WaterSim {
         this._sources = []; // { bx, by, bz } infinite source blocks
         this._yOff = 128;
         this._tickTimer = 0;
-        this._tickRate = 0.15; // seconds between simulation ticks
-        this._simRadius = 80; // block radius around player to simulate
+        this._tickRate = 0.25; // seconds between simulation ticks
+        this._simRadius = 50; // block radius around player to simulate
         this._playerBX = 0;
         this._playerBZ = 0;
         this._initSources();
     }
 
     _initSources() {
-        // Create source blocks at the start of each river
+        // Create a small cluster of source blocks at each river origin
         for (const riv of riverDefs) {
             const [sx, sz] = riv.pts[0];
             const bx = Math.floor(sx / BLOCK_SIZE);
             const bz = Math.floor(sz / BLOCK_SIZE);
             const waterH = riv.heights[0];
-            // Place source blocks across the river width at the source
-            const r = Math.ceil(riv.sourceRadius / BLOCK_SIZE);
-            for (let dx = -r; dx <= r; dx++) {
-                for (let dz = -r; dz <= r; dz++) {
-                    if (dx * dx + dz * dz > r * r) continue;
-                    const wx = (bx + dx) * BLOCK_SIZE, wz = (bz + dz) * BLOCK_SIZE;
-                    if (getRiverBlend(wx, wz, riv) < 0.3) continue;
-                    const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
+            const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
+            // Just a small 3x3 source — water spreads from here
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
                     this._sources.push({ bx: bx + dx, by, bz: bz + dz });
                 }
             }
@@ -1417,107 +1413,79 @@ export class WaterSim {
             this._setWater(s.bx, s.by, s.bz);
         }
 
-        // 2. Collect water blocks near the player to simulate
-        // Scan loaded chunks near player for water blocks
-        const r = this._simRadius;
-        const pbx = this._playerBX, pbz = this._playerBZ;
-        const toProcess = [];
+        // 2. Process active water blocks near the player
+        // Only process blocks that have potential to flow (frontier)
+        const toRemove = [];
+        const newWater = [];
+        let processed = 0;
+        const maxProcess = 500; // cap how many blocks we check per tick
 
-        // Iterate active water set
         for (const key of this._activeWater) {
+            if (processed >= maxProcess) break;
             const parts = key.split(',');
             const bx = +parts[0], by = +parts[1], bz = +parts[2];
             if (!this._isNearPlayer(bx, bz)) continue;
-            toProcess.push({ bx, by, bz });
-        }
+            processed++;
 
-        // Also scan a region near the player for water blocks we haven't tracked yet
-        // (from chunk generation). Do this sparsely to avoid performance hit.
-        const scanStep = 4;
-        for (let dx = -r; dx <= r; dx += scanStep) {
-            for (let dz = -r; dz <= r; dz += scanStep) {
-                if (dx * dx + dz * dz > r * r) continue;
-                const bx = pbx + dx, bz = pbz + dz;
-                // Scan a column for water
-                const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
-                const h = getTerrainHeight(wx, wz);
-                const surfY = Math.floor(h / BLOCK_SIZE) + this._yOff;
-                for (let by = Math.max(this._yOff - 5, surfY - 5); by <= surfY + 10; by++) {
-                    if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
-                        const key = bx + ',' + by + ',' + bz;
-                        if (!this._activeWater.has(key)) {
-                            this._activeWater.add(key);
-                            toProcess.push({ bx, by, bz });
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Process each water block — try to flow
-        const newWater = [];
-        const removeWater = [];
-
-        for (const { bx, by, bz } of toProcess) {
             // Check if this water block still exists
             if (world.getBlockAt(bx, by, bz) !== BLOCK.WATER) {
-                this._activeWater.delete(bx + ',' + by + ',' + bz);
+                toRemove.push(key);
                 continue;
             }
 
             // Remove if at ocean
             if (by <= this._yOff && this._isOcean(bx, bz)) {
-                removeWater.push({ bx, by, bz });
+                toRemove.push(key);
+                this._removeWater(bx, by, bz);
                 continue;
             }
+
+            let settled = true; // assume settled until we find somewhere to flow
 
             // Try to flow DOWN first (gravity)
             const below = world.getBlockAt(bx, by - 1, bz);
             if (below === BLOCK.AIR) {
                 newWater.push({ bx, by: by - 1, bz });
-                continue; // water falls, don't spread sideways
+                settled = false;
+                continue; // water falls, don't spread sideways this tick
             }
 
-            // Try to flow to lower horizontal neighbors
-            const neighbors = [
-                { dx: 1, dz: 0 }, { dx: -1, dz: 0 },
-                { dx: 0, dz: 1 }, { dx: 0, dz: -1 },
-            ];
-            for (const n of neighbors) {
-                const nx = bx + n.dx, nz = bz + n.dz;
-                // Check if neighbor at same level is air
-                const nb = world.getBlockAt(nx, by, nz);
-                if (nb === BLOCK.AIR) {
-                    // Check if the block below neighbor is solid (water sits on ground)
-                    // or if there's air below (water will fall there instead on next tick)
-                    const nbBelow = world.getBlockAt(nx, by - 1, nz);
-                    if (nbBelow !== BLOCK.AIR) {
-                        // Only spread if neighbor terrain is at same level or lower
-                        newWater.push({ bx: nx, by, bz: nz });
-                    } else {
-                        // Neighbor has air below — water flows down there (waterfall)
-                        newWater.push({ bx: nx, by: by - 1, bz: nz });
-                    }
-                }
-                // Also check one level below for downhill flow
+            // Try to flow to horizontal neighbors that are lower
+            for (let di = 0; di < 4; di++) {
+                const nx = bx + (di === 0 ? 1 : di === 1 ? -1 : 0);
+                const nz = bz + (di === 2 ? 1 : di === 3 ? -1 : 0);
+                // Check below neighbor (downhill flow)
                 const nbLow = world.getBlockAt(nx, by - 1, nz);
                 if (nbLow === BLOCK.AIR) {
-                    const nbLowBelow = world.getBlockAt(nx, by - 2, nz);
-                    if (nbLowBelow !== BLOCK.AIR && nbLowBelow !== BLOCK.WATER) {
+                    const nbLow2 = world.getBlockAt(nx, by - 2, nz);
+                    if (nbLow2 !== BLOCK.AIR) {
                         newWater.push({ bx: nx, by: by - 1, bz: nz });
+                        settled = false;
+                    } else {
+                        // Drop further — waterfall
+                        newWater.push({ bx: nx, by: by - 1, bz: nz });
+                        settled = false;
                     }
+                    continue;
+                }
+                // Spread at same level only if on solid ground
+                const nb = world.getBlockAt(nx, by, nz);
+                if (nb === BLOCK.AIR && below !== BLOCK.AIR) {
+                    newWater.push({ bx: nx, by, bz: nz });
+                    settled = false;
                 }
             }
+
+            // If water can't flow anywhere, it's settled — stop tracking it
+            if (settled) toRemove.push(key);
         }
 
-        // Apply removals
-        for (const { bx, by, bz } of removeWater) {
-            this._removeWater(bx, by, bz);
-        }
+        // Clean up settled/removed blocks from active set
+        for (const key of toRemove) this._activeWater.delete(key);
 
         // Apply new water (limit per tick to prevent lag)
         let placed = 0;
-        const maxPerTick = 200;
+        const maxPerTick = 60;
         for (const { bx, by, bz } of newWater) {
             if (placed >= maxPerTick) break;
             if (this._setWater(bx, by, bz)) placed++;

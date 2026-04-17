@@ -14210,14 +14210,17 @@ function animate() {
     // Load/unload chunks
     chunkManager.update(player.position.x, player.position.z);
 
-    // Water simulation
+    // Water simulation — throttle chunk rebuilds to max 2 per frame
     if (waterSim) {
         waterSim.setPlayerPos(player.position.x, player.position.z);
         const dirtyChunks = waterSim.update(dt);
         if (dirtyChunks && dirtyChunks.size > 0) {
+            let rebuilt = 0;
             for (const key of dirtyChunks) {
+                if (rebuilt >= 2) break;
                 const [cx, cz] = key.split(',').map(Number);
                 chunkManager.rebuildChunkAt(cx * CHUNK_SIZE, cz * CHUNK_SIZE);
+                rebuilt++;
             }
         }
     }
