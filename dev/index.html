@@ -1829,122 +1829,170 @@ function _playIntroCinematic(onDone) {
     _introActive = true;
     gamePaused = false; // allow rendering
 
-    // Cinematic waypoints: { pos: [x,y,z], look: [x,y,z], dur: seconds, label }
+    // Each shot has start/end camera positions for movement, plus a fade transition time
+    // from/to: camera position, lookFrom/lookTo: look target, dur: seconds, fade: transition time
     const shots = [
-        // Wide aerial sweep — whole island from high up
-        { pos: [0, 120, -200], look: [0, 0, 0], dur: 4, label: '' },
-        // Stone Castle (Kingdom) — dramatic approach
-        { pos: [200, 60, 150], look: [260, 10, 105], dur: 4, label: 'The Kingdom' },
-        // Closer castle view
-        { pos: [280, 30, 130], look: [260, 15, 105], dur: 3, label: '' },
-        // Main village — swooping over houses and villagers
-        { pos: [60, 25, 30], look: [80, 5, 16], dur: 3.5, label: 'The Village' },
-        // East mountains & Great Peak panorama
-        { pos: [1400, 100, -200], look: [1640, 40, -80], dur: 4, label: 'The Great Peak' },
-        // Dragon's Reach fortress
-        { pos: [2120, 40, 60], look: [2160, 12, 10], dur: 3.5, label: "Dragon's Reach" },
-        // Ice Castle in the north
-        { pos: [-30, 50, -560], look: [10, 20, -600], dur: 3.5, label: 'The Frozen North' },
-        // Giant ancient forest — atmospheric
-        { pos: [-80, 60, -150], look: [-30, 10, -190], dur: 3, label: 'The Ancient Forest' },
-        // Final — zoom down to player spawn
-        { pos: [0, 80, 20], look: [0, 0, 0], dur: 2.5, label: '' },
-        { pos: [0, 8, 4], look: [0, 2, 0], dur: 3, label: 'Your journey begins...' },
+        // Wide aerial sweep — orbit over the island
+        { from: [-200, 140, -300], to: [200, 120, -100], lookFrom: [0, 0, 0], lookTo: [100, 0, 50], dur: 5, label: '' },
+        // Stone Castle — fly in from the south
+        { from: [220, 70, 200], to: [280, 25, 120], lookFrom: [260, 10, 105], lookTo: [260, 15, 105], dur: 5, label: 'The Kingdom', fade: 0.8 },
+        // Main village — low sweep over rooftops
+        { from: [40, 18, 40], to: [110, 12, 10], lookFrom: [80, 4, 16], lookTo: [90, 3, 10], dur: 4.5, label: 'The Village', fade: 0.8 },
+        // Great Peak — dramatic panorama, camera slides along the range
+        { from: [1200, 110, -250], to: [1700, 90, -180], lookFrom: [1640, 50, -80], lookTo: [1640, 30, -80], dur: 5, label: 'The Great Peak', fade: 0.8 },
+        // Dragon's Reach — approach from the sky
+        { from: [2100, 60, 80], to: [2170, 22, 30], lookFrom: [2160, 15, 10], lookTo: [2160, 10, 10], dur: 5, label: "Dragon's Reach", fade: 0.8 },
+        // Ice Castle — pull back reveal
+        { from: [30, 30, -580], to: [-40, 55, -550], lookFrom: [10, 18, -600], lookTo: [10, 25, -600], dur: 4.5, label: 'The Frozen North', fade: 0.8 },
+        // Ancient Forest — moody flyover
+        { from: [-100, 50, -140], to: [0, 40, -210], lookFrom: [-30, 8, -190], lookTo: [-20, 5, -200], dur: 4, label: 'The Ancient Forest', fade: 0.8 },
+        // Final — high above spawn, then dive down
+        { from: [30, 100, 40], to: [0, 5, 3], lookFrom: [0, 0, 0], lookTo: [0, 1, -2], dur: 5, label: 'Your journey begins...', fade: 1.0 },
     ];
 
-    // Overlay for labels and skip hint
+    // Overlay for labels, skip hint, fade, and letterbox
     const overlay = document.createElement('div');
     overlay.id = 'introOverlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
+    const fadeEl = document.createElement('div');
+    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;transition:opacity 0.6s;pointer-events:none;';
+    overlay.appendChild(fadeEl);
     const labelEl = document.createElement('div');
-    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;text-shadow:0 2px 8px rgba(0,0,0,0.8);opacity:0;transition:opacity 0.8s;';
+    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,0.9);opacity:0;transition:opacity 0.6s;pointer-events:none;';
     overlay.appendChild(labelEl);
     const skipEl = document.createElement('div');
-    skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.5);font-family:sans-serif;';
+    skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
     skipEl.textContent = 'Click or press any key to skip';
     overlay.appendChild(skipEl);
-    // Letterbox bars
     const barT = document.createElement('div');
-    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:50px;background:black;';
+    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
     const barB = document.createElement('div');
-    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:50px;background:black;';
+    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
     overlay.appendChild(barT); overlay.appendChild(barB);
     document.body.appendChild(overlay);
 
     let shotIdx = 0, shotTime = 0, done = false;
-    let prevPos = new THREE.Vector3(shots[0].pos[0], shots[0].pos[1], shots[0].pos[2]);
-    let prevLook = new THREE.Vector3(shots[0].look[0], shots[0].look[1], shots[0].look[2]);
-    camera.position.copy(prevPos);
-    camera.lookAt(prevLook);
+    // States: 'fadein' (black→clear), 'moving' (camera moving), 'fadeout' (clear→black)
+    let phase = 'fadein';
+    let phaseTime = 0;
+    const FADE_DUR = 0.6; // base fade duration
+
+    // Position camera at first shot start
+    const s0 = shots[0];
+    camera.position.set(s0.from[0], s0.from[1], s0.from[2]);
+    camera.lookAt(s0.lookFrom[0], s0.lookFrom[1], s0.lookFrom[2]);
+    fadeEl.style.opacity = '1';
 
     const finish = () => {
         if (done) return;
         done = true;
         _introActive = false;
-        gamePaused = true; // pause briefly
         overlay.remove();
-        // Reset camera to player
         const spawnY = getTerrainHeight(0, 0);
         player.position.set(0, spawnY, 0);
         player.group.position.set(0, spawnY, 0);
-        gamePaused = false;
         onDone();
     };
 
-    // Skip on click or key
     const skipClick = () => finish();
     const skipKey = (e) => { if (e.key !== 'F11' && e.key !== 'F12') finish(); };
     overlay.addEventListener('click', skipClick);
     window.addEventListener('keydown', skipKey);
 
+    let _prev = performance.now();
     const introTick = () => {
         if (done) return;
         requestAnimationFrame(introTick);
 
         const now = performance.now();
-        if (!introTick._prev) introTick._prev = now;
-        const dt = Math.min((now - introTick._prev) / 1000, 0.1);
-        introTick._prev = now;
+        const dt = Math.min((now - _prev) / 1000, 0.1);
+        _prev = now;
+        phaseTime += dt;
 
-        shotTime += dt;
         const shot = shots[shotIdx];
-        const nextShot = shots[Math.min(shotIdx + 1, shots.length - 1)];
+        const fadeDur = shot.fade || FADE_DUR;
 
-        // Smooth interpolation within this shot
-        const t = Math.min(shotTime / shot.dur, 1);
-        const ease = t * t * (3 - 2 * t); // smoothstep
+        if (phase === 'fadein') {
+            // Fade from black → clear
+            const t = Math.min(phaseTime / fadeDur, 1);
+            fadeEl.style.opacity = String(1 - t);
+            // Pre-position camera at shot start and load chunks
+            camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
+            camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
+            if (chunkManager) {
+                chunkManager.update(camera.position.x, camera.position.z);
+                chunkManager._processQueue(6);
+            }
+            if (t >= 1) { phase = 'moving'; phaseTime = 0; }
+        }
+        else if (phase === 'moving') {
+            // Smooth camera movement from→to
+            const t = Math.min(phaseTime / shot.dur, 1);
+            const ease = t * t * (3 - 2 * t); // smoothstep
 
-        const targetPos = new THREE.Vector3(shot.pos[0], shot.pos[1], shot.pos[2]);
-        const targetLook = new THREE.Vector3(shot.look[0], shot.look[1], shot.look[2]);
-        // Blend from previous position to current shot target
-        camera.position.lerpVectors(prevPos, targetPos, ease);
-        const lookTarget = new THREE.Vector3().lerpVectors(prevLook, targetLook, ease);
-        camera.lookAt(lookTarget);
+            camera.position.set(
+                shot.from[0] + (shot.to[0] - shot.from[0]) * ease,
+                shot.from[1] + (shot.to[1] - shot.from[1]) * ease,
+                shot.from[2] + (shot.to[2] - shot.from[2]) * ease
+            );
+            camera.lookAt(
+                shot.lookFrom[0] + (shot.lookTo[0] - shot.lookFrom[0]) * ease,
+                shot.lookFrom[1] + (shot.lookTo[1] - shot.lookFrom[1]) * ease,
+                shot.lookFrom[2] + (shot.lookTo[2] - shot.lookFrom[2]) * ease
+            );
 
-        // Label
-        if (shot.label && t > 0.15 && t < 0.85) {
-            labelEl.textContent = shot.label;
-            labelEl.style.opacity = '1';
-        } else if (t >= 0.85 || !shot.label) {
-            labelEl.style.opacity = '0';
+            // Label: fade in after 15%, fade out before 85%
+            if (shot.label) {
+                if (t > 0.1 && t < 0.8) {
+                    labelEl.textContent = shot.label;
+                    labelEl.style.opacity = '1';
+                } else {
+                    labelEl.style.opacity = '0';
+                }
+            } else {
+                labelEl.style.opacity = '0';
+            }
+
+            // Load chunks around camera
+            if (chunkManager) chunkManager.update(camera.position.x, camera.position.z);
+
+            if (t >= 1) {
+                labelEl.style.opacity = '0';
+                phase = 'fadeout';
+                phaseTime = 0;
+            }
+        }
+        else if (phase === 'fadeout') {
+            // Fade clear → black
+            const t = Math.min(phaseTime / fadeDur, 1);
+            fadeEl.style.opacity = String(t);
+            if (t >= 1) {
+                shotIdx++;
+                if (shotIdx >= shots.length) { finish(); return; }
+                phase = 'fadein';
+                phaseTime = 0;
+                // Pre-position for next shot's chunk loading
+                const next = shots[shotIdx];
+                camera.position.set(next.from[0], next.from[1], next.from[2]);
+                if (chunkManager) {
+                    chunkManager.update(camera.position.x, camera.position.z);
+                    chunkManager._processQueue(6);
+                }
+            }
         }
 
-        // Update chunks around camera for the view
-        if (chunkManager) {
-            chunkManager.update(camera.position.x, camera.position.z);
-        }
         updateWaterTime(now * 0.001);
         renderer.render(scene, camera);
-
-        if (t >= 1) {
-            prevPos.copy(targetPos);
-            prevLook.copy(targetLook);
-            shotIdx++;
-            shotTime = 0;
-            if (shotIdx >= shots.length) finish();
-        }
     };
-    requestAnimationFrame(introTick);
+
+    // Give chunks a moment to load at the first position before starting
+    setTimeout(() => {
+        if (chunkManager) {
+            chunkManager.update(s0.from[0], s0.from[2]);
+            chunkManager._processQueue(8);
+        }
+        requestAnimationFrame(introTick);
+    }, 100);
 }
 
 function startGame(loadSlotName) {
