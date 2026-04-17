@@ -38,6 +38,22 @@ function makePatagium(p0, p1, maxW, mat, parent) {
     return mesh;
 }
 
+// Two-tone spike: skinMat on bottom ~22%, boneMat on top ~78%. Group with base at y=0, tip pointing up.
+function gradientSpike(r, h, segs, skinMat, boneMat) {
+    const grp = new THREE.Group();
+    const splitFrac = 0.22;
+    const baseH = h * splitFrac;
+    const tipH = h * (1 - splitFrac);
+    const splitR = r * (1 - splitFrac * 0.45);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(splitR, r, baseH, segs), skinMat);
+    base.position.y = baseH * 0.5;
+    grp.add(base);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(splitR, tipH, segs), boneMat);
+    tip.position.y = baseH + tipH * 0.5;
+    grp.add(tip);
+    return grp;
+}
+
 function makeDragonBone(p1, p2, r1, r2, mat, parent) {
     const dx = p2[0]-p1[0], dy = p2[1]-p1[1], dz = p2[2]-p1[2];
     const len = Math.sqrt(dx*dx+dy*dy+dz*dz);
@@ -301,16 +317,17 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     const bellyColor = baseHue.clone().lerp(new THREE.Color(0xc4a032), 0.7);
     const memColor = wingColor ? new THREE.Color(wingColor) : darker;
     // Accent color for horns, spikes, and wrist claws — varies by dragon type.
-    // Fire wyverns: ~half roll the ivory accent, others keep a body-derived bone tone.
-    // Tusked dragons always use the body-derived (original) bone tone.
+    // Fire wyverns: ~half roll the ivory accent. Tusked dragons always use ivory bone.
     const ivoryRoll = ((eggColor * 0x9E3779B1) >>> 0) / 0xFFFFFFFF;
     const fireUsesIvory = !!isWyvern && !hasTusks && ivoryRoll < 0.5;
     let accentHex;
     if (isLightning) accentHex = 0x2C2C2B;
     else if (isIce) accentHex = 0x9FB9D4;
-    else if (fireUsesIvory) accentHex = 0xE8DCC8;
+    else if (fireUsesIvory || hasTusks) accentHex = 0xE8DCC8;
     else accentHex = null; // fall through to body-derived bone color
     const accentColor = accentHex !== null ? new THREE.Color(accentHex) : baseHue.clone().multiplyScalar(0.25);
+    // Gradient horns/spikes: base matches skin, tip is ivory bone
+    const useBoneGrad = (accentHex === 0xE8DCC8);
 
     const bTop = new THREE.MeshStandardMaterial({ color: baseHue, roughness: 0.55, metalness: 0.2 });
     const bMid = new THREE.MeshStandardMaterial({ color: midHue, roughness: 0.5, metalness: 0.18 });
@@ -350,8 +367,15 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     for (let i = 0; i < 8; i++) {
         const t = i / 7;
         const h = 0.12 + Math.sin(t * Math.PI) * 0.15;
-        const ridge = new THREE.Mesh(new THREE.ConeGeometry(0.04*S, h*S, 4), bSpike);
-        ridge.position.set(0, 0.42*S, 0.6*S - i*0.22*S); ridge.castShadow = true; g.add(ridge);
+        let ridge;
+        if (useBoneGrad) {
+            ridge = gradientSpike(0.04*S, h*S, 4, bTop, bSpike);
+            ridge.position.set(0, 0.42*S - h*S*0.5, 0.6*S - i*0.22*S);
+        } else {
+            ridge = new THREE.Mesh(new THREE.ConeGeometry(0.04*S, h*S, 4), bSpike);
+            ridge.position.set(0, 0.42*S, 0.6*S - i*0.22*S);
+        }
+        ridge.castShadow = true; g.add(ridge);
     }
     // Neck — chained groups so rotations propagate (allowing real bend)
     const neckGrp = new THREE.Group();
@@ -402,7 +426,14 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         }
     } else {
         for (let s = -1; s <= 1; s += 2) {
-            makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
+            if (useBoneGrad) {
+                // Skin only on the bottom ~25% of the horn (midpoint of first segment)
+                const pHMid = [s*0.215*S, 0.375*S, -0.175*S];
+                makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], pHMid, 0.045*S, 0.05*S, bTop, headGrp);
+                makeDragonBone(pHMid, [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.045*S, bHorn, headGrp);
+            } else {
+                makeDragonBone([s*0.18*S, 0.25*S, -0.1*S], [s*0.25*S, 0.5*S, -0.25*S], 0.04*S, 0.05*S, bHorn, headGrp);
+            }
             makeDragonBone([s*0.25*S, 0.5*S, -0.25*S], [s*0.28*S, 0.7*S, -0.5*S], 0.015*S, 0.04*S, bHorn, headGrp);
         }
         // Some ice dragons grow an extra crown of icicle-like spikes across the head
@@ -444,7 +475,9 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             const p2 = [s*0.32*S, -0.15*S, 0.72*S];
             const p3 = [s*0.24*S, -0.20*S, 1.00*S];
             const p4 = [s*0.12*S, -0.22*S, 1.22*S];
-            makeDragonBone(p0, p1, 0.085*S, 0.100*S, bHorn, headGrp);
+            // Only the root segment (~25% of arc) uses skin colour, rest tapers to bone
+            const tuskRootMat = useBoneGrad ? bTop : bHorn;
+            makeDragonBone(p0, p1, 0.085*S, 0.100*S, tuskRootMat, headGrp);
             makeDragonBone(p1, p2, 0.065*S, 0.085*S, bHorn, headGrp);
             makeDragonBone(p2, p3, 0.040*S, 0.065*S, bHorn, headGrp);
             makeDragonBone(p3, p4, 0.015*S, 0.040*S, bHorn, headGrp);
@@ -780,8 +813,8 @@ export class DragonManager {
         this.heldEgg = null; // egg data currently held (from inventory)
         this.ridingDragon = null;
         this.ridingRef = null;
-        this.altarX = -505;
-        this.altarZ = -335;
+        this.altarX = -1010;
+        this.altarZ = -670;
         this._built = false;
         this.carriedEggGrp = null;
         this.carriedEggMat = null;
@@ -1006,7 +1039,7 @@ export class DragonManager {
         // ── Eggs — exact colours from game.html ──
         const eggDefs = [
             // Wyverns
-            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, isWyvern: true, name: 'Dark Red Wyvern' },
+            { dx: -3, dz: 2, color: 0x882222, emissive: 0x441111, veinColor: 0xcc4422, glowColor: 0xff4422, wingColor: 0xff5533, isWyvern: true, name: 'Dark Red Wyvern' },
             { dx: 4, dz: -1, color: 0x443388, emissive: 0x221155, veinColor: 0x7744cc, glowColor: 0x7744ff, isWyvern: true, name: 'Purple Wyvern' },
             { dx: -2, dz: -4, color: 0x228844, emissive: 0x114422, veinColor: 0x22cc66, glowColor: 0x22ff66, isWyvern: true, name: 'Emerald Wyvern' },
             { dx: 5, dz: 3, color: 0x4488cc, emissive: 0x224466, veinColor: 0xccaa33, glowColor: 0x44aaff, wingColor: 0xccaa33, isWyvern: true, name: 'Steel Blue Wyvern' },

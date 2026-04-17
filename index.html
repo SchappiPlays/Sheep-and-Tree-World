@@ -495,9 +495,51 @@ import { CreatureManager } from './creatures.js';
 import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
 import { HorseManager } from './horses.js';
 import { Multiplayer } from './multiplayer.js';
-import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle } from './villages.js';
+import { VillageManager, placeVillageInChunk, preplaceVillagesAndCastle, makeVillager } from './villages.js';
 
 function mix(a, b, t) { return a + (b - a) * t; }
+
+// Shared double-bit axe head builder. Returns a Group to attach to a sword mesh's
+// _bladeGrp. Includes an extended wooden haft (using the given handle material) and
+// two mirrored heads so the silhouette reads as a proper double-headed battleaxe.
+function buildAxeHead(bladeMat, handleMat) {
+    const grp = new THREE.Group();
+    // Wooden haft extension — spans from just above the guard up to the base of the head
+    const haft = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.55, 0.032), handleMat || bladeMat);
+    haft.position.y = 0.4;
+    grp.add(haft);
+    // Head mounted high on the haft — flattened in Z so the silhouette reads 2D
+    const head = new THREE.Group();
+    head.position.y = 0.70;
+    head.scale.z = 0.45; // squash the head along the axe's thin axis
+    // Central socket (metal band around the haft where both heads mount)
+    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.08), bladeMat);
+    head.add(socket);
+    // Double-bit: two mirrored heads facing opposite directions
+    for (const sign of [-1, 1]) {
+        const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.055), bladeMat);
+        cheek.position.set(sign * 0.12, 0, 0);
+        head.add(cheek);
+        const edge = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.20, 4), bladeMat);
+        edge.position.set(sign * 0.28, 0, 0);
+        edge.rotation.z = sign * -Math.PI / 2;
+        edge.rotation.y = Math.PI / 4;
+        head.add(edge);
+        const topHorn = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), bladeMat);
+        topHorn.position.set(sign * 0.15, 0.14, 0);
+        topHorn.rotation.z = sign * -0.5;
+        topHorn.rotation.y = Math.PI / 4;
+        head.add(topHorn);
+        const botHorn = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), bladeMat);
+        botHorn.position.set(sign * 0.15, -0.14, 0);
+        botHorn.rotation.z = Math.PI - sign * 0.5;
+        botHorn.rotation.y = Math.PI / 4;
+        head.add(botHorn);
+    }
+    grp.add(head);
+    return grp;
+}
+window.buildAxeHead = buildAxeHead;
 
 const SKY_COLOR = 0x87CEEB;
 
@@ -514,10 +556,10 @@ document.body.appendChild(renderer.domElement);
 
 // ── Scene ──
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0008); // lighter fog so far terrain visible
+scene.fog = new THREE.FogExp2(SKY_COLOR, 0.0004); // lighter fog so far terrain visible
 
 // ── Camera — same FOV as game.html ──
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 5000);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 10000);
 
 // ── Lighting — same as game.html ──
 const ambient = new THREE.AmbientLight(0x556677, 0.45);
@@ -536,16 +578,16 @@ scene.add(sun.target);
 
 // ── Sun Sphere in Sky ──
 const sunSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(200, 16, 16),
+    new THREE.SphereGeometry(400, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false })
 );
-sunSphere.position.set(400, 600, -300);
+sunSphere.position.set(800, 600, -600);
 sunSphere.renderOrder = -10;
 scene.add(sunSphere);
 
 // Sun glow (larger transparent sphere)
 const sunGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(350, 16, 16),
+    new THREE.SphereGeometry(700, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false })
 );
 sunGlow.position.copy(sunSphere.position);
@@ -554,16 +596,16 @@ scene.add(sunGlow);
 
 // ── Moon ──
 const moonSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(150, 16, 16),
+    new THREE.SphereGeometry(300, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false })
 );
-moonSphere.position.set(-400, 600, 300);
+moonSphere.position.set(-800, 600, 600);
 moonSphere.renderOrder = -10;
 moonSphere.visible = false;
 scene.add(moonSphere);
 
 const moonGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(250, 16, 16),
+    new THREE.SphereGeometry(500, 16, 16),
     new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false })
 );
 moonGlow.position.copy(moonSphere.position);
@@ -581,7 +623,7 @@ const _starCount = 1800;
 const _starPos = new Float32Array(_starCount * 3);
 const _starSizes = new Float32Array(_starCount);
 const _starColors = new Float32Array(_starCount * 3);
-const _starR = 4500;
+const _starR = 9000;
 for (let i = 0; i < _starCount; i++) {
     // Uniform distribution on sphere (above horizon only)
     const u = Math.random(), v = Math.random();
@@ -729,8 +771,8 @@ function makeCloud(x, y, z) {
 
 // Spawn clouds in a grid pattern with randomness
 for (let i = 0; i < 20; i++) {
-    const x = (Math.random() - 0.5) * 2000;
-    const z = (Math.random() - 0.5) * 2000;
+    const x = (Math.random() - 0.5) * 4000;
+    const z = (Math.random() - 0.5) * 4000;
     const y = 180 + Math.random() * 80;
     clouds.push(makeCloud(x, y, z));
 }
@@ -740,10 +782,10 @@ function updateClouds(dt) {
         c.group.position.x += c.speed * dt;
         c.group.position.z += c.drift * dt;
         // Wrap around when too far
-        if (c.group.position.x > 1200) c.group.position.x -= 2400;
-        if (c.group.position.x < -1200) c.group.position.x += 2400;
-        if (c.group.position.z > 1200) c.group.position.z -= 2400;
-        if (c.group.position.z < -1200) c.group.position.z += 2400;
+        if (c.group.position.x > 2400) c.group.position.x -= 4800;
+        if (c.group.position.x < -2400) c.group.position.x += 4800;
+        if (c.group.position.z > 2400) c.group.position.z -= 4800;
+        if (c.group.position.z < -2400) c.group.position.z += 4800;
     }
 }
 
@@ -766,7 +808,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     const BS = BLOCK_SIZE;
     const step = 5; // sample every 5th block for performance
     const S = BS * step; // world-space step size
-    const range = 150; // world units in each direction
+    const range = 300; // world units in each direction
     const _hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
     const _getBiome = (wx, wz) => {
         const glacial = getFrozenBasinBlend(wx, wz);
@@ -946,13 +988,13 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Gate structures matching in-game gates
     const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.8 });
-    const hillCX = -30, hillCZ = -350;
+    const hillCX = -60, hillCZ = -700;
     // [gateX, gateZ, axis, innerOffsetX, innerOffsetZ] — inner offset points toward hill ring center
     const _gateData = [
-        [-140, -350, 'z', 15, 0],   // west, inner = east
-        [80, -350, 'z', -15, 0],     // east, inner = west
-        [-30, -460, 'x', 0, 15],     // north, inner = south
-        [-30, -240, 'x', 0, -15],     // south, inner = north
+        [-280, -700, 'z', 15, 0],   // west, inner = east
+        [160, -700, 'z', -15, 0],     // east, inner = west
+        [-60, -920, 'x', 0, 15],     // north, inner = south
+        [-60, -480, 'x', 0, -15],     // south, inner = north
     ];
     for (const [gx, gz, axis, iox, ioz] of _gateData) {
         const gy = getTerrainHeight(gx, gz);
@@ -1001,7 +1043,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
 
     // Boss figures — positioned on INNER side of each gate
     // Colossus (west gate, inner = east of gate)
-    const colBX = -140 + 15, colBZ = -350;
+    const colBX = -280 + 15, colBZ = -700;
     const colBY = getTerrainHeight(colBX, colBZ);
     const colFig = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, 3.5), new THREE.MeshStandardMaterial({ color: 0x777777 }));
     colFig.position.set(colBX, colBY + 4.5, colBZ); titleScene.add(colFig);
@@ -1013,7 +1055,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     colHead.position.set(colBX, colBY + 11, colBZ); titleScene.add(colHead);
 
     // Skeleton (east gate, inner = west of gate)
-    const skBX = 80 - 15, skBZ = -350;
+    const skBX = 160 - 15, skBZ = -700;
     const skBY = getTerrainHeight(skBX, skBZ);
     const skelFig = new THREE.Mesh(new THREE.BoxGeometry(1.8, 8, 1.2), new THREE.MeshStandardMaterial({ color: 0xd8d0c0 }));
     skelFig.position.set(skBX, skBY + 4, skBZ); titleScene.add(skelFig);
@@ -1025,7 +1067,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     }
 
     // Dark Knight (north gate, inner = south of gate)
-    const dkBX = -30, dkBZ = -300 + 15;
+    const dkBX = -60, dkBZ = -600 + 15;
     const dkBY = getTerrainHeight(dkBX, dkBZ);
     const dkFig = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5, 1), new THREE.MeshStandardMaterial({ color: 0x1a1a2a }));
     dkFig.position.set(dkBX, dkBY + 2.5, dkBZ); titleScene.add(dkFig);
@@ -1036,7 +1078,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     dkChest.position.set(dkBX, dkBY + 2.5, dkBZ + 0.6); titleScene.add(dkChest);
 
     // Hobgoblin (south gate, inner = north of gate)
-    const hgBX = -30, hgBZ = -80 - 15;
+    const hgBX = -60, hgBZ = -160 - 15;
     const hgBY = getTerrainHeight(hgBX, hgBZ);
     const hobFig = new THREE.Mesh(new THREE.BoxGeometry(2, 4.5, 1.8), new THREE.MeshStandardMaterial({ color: 0x3a5a1a }));
     hobFig.position.set(hgBX, hgBY + 2.3, hgBZ); titleScene.add(hobFig);
@@ -1059,9 +1101,9 @@ function animateTitle() {
     requestAnimationFrame(animateTitle);
     titleAngle += 0.0015;
     const r = 180, h = 70;
-    // Orbit around the hill ring center (-30, -350)
-    titleCam.position.set(-30 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -350 + Math.cos(titleAngle) * r);
-    titleCam.lookAt(-30, 5, -350);
+    // Orbit around the hill ring center (-60, -700)
+    titleCam.position.set(-60 + Math.sin(titleAngle) * r, h + Math.sin(titleAngle * 0.7) * 10, -700 + Math.cos(titleAngle) * r);
+    titleCam.lookAt(-60, 5, -700);
     titleRenderer.render(titleScene, titleCam);
 }
 animateTitle();
@@ -1151,12 +1193,16 @@ function rebuildPlayerBlocksMesh() {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    // Hide this mesh near the player — the real chunk meshes show instead
+    // Hide this mesh where chunks are loaded — the real chunk meshes show instead
     mat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 25.0 };
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
@@ -1164,9 +1210,12 @@ function rebuildPlayerBlocksMesh() {
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         mat._shader = shader;
     };
@@ -1180,8 +1229,8 @@ function buildFarTerrain(centerX, centerZ) {
     _farCenterX = centerX || 0;
     _farCenterZ = centerZ || 0;
     const BS = BLOCK_SIZE;
-    const range = 1600;
-    const step = 6;
+    const range = 3200;
+    const step = 12;
     const S = BS * step;
     const halfS = S * 0.5;
     const skipRange = 90;
@@ -1231,16 +1280,17 @@ function buildFarTerrain(centerX, centerZ) {
 
     // Skip tree rendering inside structures (trees poking through walls look bad)
     const _TREE_SKIP_BOXES = [
-        [-400-5, 20-5, -400+165, 20+135],     // Western Castle
-        [-505-25, -335-25, -505+25, -335+25], // Ruined Fortress
-        [-900-50, 575-50, -900+50, 575+50],   // SW Fortress
-        [-300-20, 280-20, -300+20, 280+20],   // Scorched Fortress
+        [-800-5, 40-5, -800+165, 40+135],     // Western Castle
+        [-1010-25, -670-25, -1010+25, -670+25], // Ruined Fortress
+        [-1800-50, 1150-50, -1800+50, 1150+50],   // SW Fortress
+        [-600-20, 560-20, -600+20, 560+20],   // Scorched Fortress
+        [2160-30, 10-25, 2160+30, 10+25],     // Dragon's Reach
     ];
     const _noTrees = (wx, wz) => {
         for (const [x1, z1, x2, z2] of _TREE_SKIP_BOXES) {
             if (wx >= x1 && wx <= x2 && wz >= z1 && wz <= z2) return true;
         }
-        for (const vd of [{x:80,z:16},{x:-100,z:-50},{x:200,z:60},{x:-200,z:100},{x:50,z:-150},{x:-150,z:200},{x:100,z:550},{x:-120,z:620},{x:250,z:680}]) {
+        for (const vd of [{x:160,z:32},{x:-200,z:-100},{x:400,z:120},{x:-400,z:200},{x:100,z:-300},{x:-300,z:400},{x:200,z:1100},{x:-240,z:1240},{x:500,z:1360}]) {
             const dx = wx - vd.x, dz = wz - vd.z;
             if (dx*dx + dz*dz < 40*40) return true;
         }
@@ -1251,7 +1301,16 @@ function buildFarTerrain(centerX, centerZ) {
             // Shader handles the cutout dynamically — no mesh skip needed
             const wx = gx * S, wz = gz * S;
             const rawTH = getTerrainHeight(wx, wz);
-            if (rawTH < 0.01) continue; // skip ocean cells (outside island boundary)
+            // Ocean cells — render as flat water tiles
+            if (rawTH < 0.01) {
+                const oceanY = rawTH < -0.5 ? rawTH : -0.3;
+                const depthT = Math.min(1, Math.max(0, -rawTH / 15));
+                const oR = 0.16*(1-depthT)+0.08*depthT, oG = 0.35*(1-depthT)+0.2*depthT, oB = 0.54*(1-depthT)+0.42*depthT;
+                _c.setRGB(oR, oG, oB);
+                const oHex = _c.getHex();
+                pushFace(wx-halfS, oceanY, wz-halfS, wx-halfS, oceanY, wz+halfS, wx+halfS, oceanY, wz+halfS, wx+halfS, oceanY, wz-halfS, oHex);
+                continue;
+            }
             const snapH = gH(gx, gz);
             const top = snapH + BS;
 
@@ -1259,9 +1318,10 @@ function buildFarTerrain(centerX, centerZ) {
             const snow = getSnowBlend(wz), desert = getDesertBlend(wz);
             const mtn = getMountainBlend(wx, wz), scorched = getScorchedBlend(wx, wz);
             const glacial = getFrozenBasinBlend(wx, wz);
+            const plains = getPlainsBlend(wx, wz);
             let hex;
             if (glacial > 0.05) hex = 0x90c8e0;
-            else if (scorched > 0.3) hex = 0x2a2018;
+            else if (scorched > 0.05) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
             else if (snow > 0) hex = 0xb0c8b0;
             else if (desert > 0.5) hex = 0xd4c07a;
@@ -1269,15 +1329,22 @@ function buildFarTerrain(centerX, centerZ) {
             else if (mtn > 0.5) hex = 0x888888;
             else if (mtn > 0.1) hex = 0x5a7a4a;
             else hex = 0x5a9040;
-            // Beach sand — near sea level (overrides grass)
-            if (rawTH < 1.5 && snow === 0 && desert === 0 && mtn < 0.3) hex = 0xd4c07a;
-            // Only check the exact cell center for rivers/paths (narrow features)
-            let riverFound = false;
-            for (const riv of riverDefs) {
-                if (getRiverBlend(wx, wz, riv) > 0.5) { riverFound = true; break; }
+            // Beach sand — near sea level AND near coast (not just any low area like bays)
+            const _szz = wz / 1.15;
+            const _dfc = Math.sqrt(wx*wx + _szz*_szz);
+            const _lr = getIslandRadius(wx, wz);
+            if (rawTH < 1.5 && _dfc > _lr - 160 && snow === 0 && desert === 0 && mtn < 0.3) hex = 0xd4c07a;
+            // Sample multiple points per cell for narrow features (rivers/paths)
+            let riverFound = false, pathFound = false;
+            const probeOff = halfS * 0.5;
+            const probes = [[wx,wz],[wx-probeOff,wz],[wx+probeOff,wz],[wx,wz-probeOff],[wx,wz+probeOff]];
+            for (const [px,pz] of probes) {
+                if (!riverFound) for (const riv of riverDefs) { if (getRiverBlend(px, pz, riv) > 0.5) { riverFound = true; break; } }
+                if (!pathFound && isOnPath(px, pz)) pathFound = true;
+                if (riverFound && pathFound) break;
             }
             if (riverFound) hex = 0x4d8dbf; // lighter blue river
-            else if (isOnPath(wx, wz)) hex = 0x8a7a5a;
+            else if (pathFound) hex = 0x8a7a5a;
 
             // Top face
             pushFace(
@@ -1305,32 +1372,43 @@ function buildFarTerrain(centerX, centerZ) {
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
-            const plains = getPlainsBlend(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && !_noTrees(wx, wz)) {
+            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
-                if (plains > 0.5) continue; // skip trees in plains entirely
-                if (treeChance < 0.18 * (1 - plains * 0.95)) {
-                    const trunkH = BS * 5;   // ~2.4 world units (real trees 4-8 blocks)
-                    const leafR = BS * 2.5;  // ~1.2 world units canopy radius
-                    const trunkR = BS * 0.5; // ~0.24 world units trunk radius
+                // Vary forest density — same noise as world.js _placeTreesInChunk
+                const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
+                    Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
+                    Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
+                const _baseDensity = _fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003;
+                const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
+                if (treeChance < _lodDensity) {
+                    // Jitter position to break grid pattern
+                    const _jh1 = Math.sin(gx * 73.1 + gz * 51.3 + 5.7) * 43758.5453;
+                    const _jh2 = Math.sin(gx * 91.7 + gz * 37.9 + 3.1) * 43758.5453;
+                    const _jx = (_jh1 - Math.floor(_jh1) - 0.5) * S * 0.7;
+                    const _jz = (_jh2 - Math.floor(_jh2) - 0.5) * S * 0.7;
+                    const twx = wx + _jx, twz = wz + _jz;
+                    const tTop = Math.floor(Math.max(getTerrainHeight(twx, twz), -0.3) / BS) * BS + BS;
+                    const trunkH = BS * 5;
+                    const leafR = BS * 2.5;
+                    const trunkR = BS * 0.5;
                     const trunkCol = 0x5a3a1a;
                     const leafCol = (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
-                    const tBase = top;
+                    const tBase = tTop;
 
                     // Trunk — 4 side faces
-                    pushFace(wx-trunkR, tBase+trunkH, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz+trunkR, wx-trunkR, tBase+trunkH, wz+trunkR, trunkCol);
-                    pushFace(wx+trunkR, tBase+trunkH, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz-trunkR, wx+trunkR, tBase+trunkH, wz-trunkR, trunkCol);
-                    pushFace(wx-trunkR, tBase+trunkH, wz+trunkR, wx-trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase+trunkH, wz+trunkR, trunkCol);
-                    pushFace(wx+trunkR, tBase+trunkH, wz-trunkR, wx+trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase+trunkH, wz-trunkR, trunkCol);
+                    pushFace(twx-trunkR, tBase+trunkH, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz+trunkR, twx-trunkR, tBase+trunkH, twz+trunkR, trunkCol);
+                    pushFace(twx+trunkR, tBase+trunkH, twz+trunkR, twx+trunkR, tBase, twz+trunkR, twx+trunkR, tBase, twz-trunkR, twx+trunkR, tBase+trunkH, twz-trunkR, trunkCol);
+                    pushFace(twx-trunkR, tBase+trunkH, twz+trunkR, twx-trunkR, tBase, twz+trunkR, twx+trunkR, tBase, twz+trunkR, twx+trunkR, tBase+trunkH, twz+trunkR, trunkCol);
+                    pushFace(twx+trunkR, tBase+trunkH, twz-trunkR, twx+trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase+trunkH, twz-trunkR, trunkCol);
 
                     // Leaves — blocky canopy (top + 4 sides)
                     const lBase = tBase + trunkH - BS * 1.5;
                     const lTop = lBase + BS * 5;
-                    pushFace(wx-leafR, lTop, wz-leafR, wx-leafR, lTop, wz+leafR, wx+leafR, lTop, wz+leafR, wx+leafR, lTop, wz-leafR, leafCol);
-                    pushFace(wx-leafR, lTop, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lBase, wz+leafR, wx-leafR, lTop, wz+leafR, leafCol);
-                    pushFace(wx+leafR, lTop, wz+leafR, wx+leafR, lBase, wz+leafR, wx+leafR, lBase, wz-leafR, wx+leafR, lTop, wz-leafR, leafCol);
-                    pushFace(wx-leafR, lTop, wz+leafR, wx-leafR, lBase, wz+leafR, wx+leafR, lBase, wz+leafR, wx+leafR, lTop, wz+leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lTop, twz+leafR, twx+leafR, lTop, twz+leafR, twx+leafR, lTop, twz-leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lBase, twz+leafR, twx-leafR, lTop, twz+leafR, leafCol);
+                    pushFace(twx+leafR, lTop, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lBase, twz-leafR, twx+leafR, lTop, twz-leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz+leafR, twx-leafR, lBase, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lTop, twz+leafR, leafCol);
                     pushFace(wx+leafR, lTop, wz-leafR, wx+leafR, lBase, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lTop, wz-leafR, leafCol);
                 }
             }
@@ -1370,25 +1448,29 @@ function buildFarTerrain(centerX, centerZ) {
     geo.setIndex(new THREE.BufferAttribute(idxArr.subarray(0, ii), 1));
     geo.computeVertexNormals();
     const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    // Shader hack: discard fragments within a radius of the player (dynamic cutout)
+    // Shader: discard fragments where chunks are loaded
     farMat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 25.0 };
-        // Add varying + uniforms
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
-        // Compute world position unconditionally in vertex shader
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
         );
-        // Discard near player in fragment shader
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         farMat._shader = shader;
     };
@@ -1409,10 +1491,14 @@ function buildFarTerrain(centerX, centerZ) {
     farWaterGeo.rotateX(-Math.PI / 2);
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
     waterMat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 25.0 };
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
@@ -1420,9 +1506,12 @@ function buildFarTerrain(centerX, centerZ) {
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         waterMat._shader = shader;
     };
@@ -1738,6 +1827,8 @@ function startGame(loadSlotName) {
     // Clear anvil and campfire models
     for (const [k, m] of anvilModels) scene.remove(m);
     anvilModels.clear();
+    for (const [k, m] of steelAnvilModels) scene.remove(m);
+    steelAnvilModels.clear();
     for (const [k, m] of campfireModels) scene.remove(m);
     campfireModels.clear();
 
@@ -1745,6 +1836,7 @@ function startGame(loadSlotName) {
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
+    chunkManager.initChunkMap();
     creatures = new CreatureManager(scene, world);
     creatures._onCreatureDrop = (item, count, creatureType) => {
         for (let i = 0; i < count; i++) addToInventory(item);
@@ -1790,25 +1882,26 @@ function startGame(loadSlotName) {
     horseMgr = new HorseManager(scene, world);
     world._placeVillages = placeVillageInChunk;
 
-    // ── Giant Ruined Fortress at (-505, -335) ──
+    // ── Giant Ruined Fortress at (-1010, -670) ──
     _initMagicShopStaffs();
     // Far terrain built during loading screen (stage 2)
     buildRuinedFortress(world);
     buildSouthwestFortress(world);
     markPlayerBlocksDirty();
     preplaceVillagesAndCastle(world);
-    buildForestGate(world, -140, -350, 'z', false);   // west gate (intact)
-    buildForestGate(world, 80, -350, 'z', true);       // east gate (half shattered)
-    buildForestGate(world, -30, -460, 'x', false);     // north gate (intact)
-    buildForestGate(world, -30, -240, 'x', false);      // south gate (intact)
+    buildForestGate(world, -280, -700, 'z', false);   // west gate (intact)
+    buildForestGate(world, 160, -700, 'z', true);       // east gate (half shattered)
+    buildForestGate(world, -60, -920, 'x', false);     // north gate (intact)
+    buildForestGate(world, -60, -480, 'x', false);      // south gate (intact)
     buildForestRuins(world);
+    buildEasternFortress(world);
 
     function buildRuinedFortress(w) {
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const centerX = Math.round(-505 / BS);
-        const centerZ = Math.round(-335 / BS);
-        const groundY = Math.floor(getTerrainHeight(-505, -335) / BS) + yOff;
+        const centerX = Math.round(-1010 / BS);
+        const centerZ = Math.round(-670 / BS);
+        const groundY = Math.floor(getTerrainHeight(-1010, -670) / BS) + yOff;
         const S = BLOCK.DARK_STONE, G = BLOCK.GRAVEL, P = BLOCK.PLANKS, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
 
@@ -2250,8 +2343,8 @@ function startGame(loadSlotName) {
         const swordId = 'csword_fortress_blade';
         if (!window._customSwords) window._customSwords = {};
         window._customSwords[swordId] = {
-            tier: 'dragonsteel',
-            damage: 12,
+            tier: 'damaged_dragonsteel',
+            damage: 5, speedMult: 1.6,
             pommelStyle: 'gem',
             pommelMat: 'ruby',
             handleMat: 'dragonsteel_ingot',
@@ -2265,74 +2358,74 @@ function startGame(loadSlotName) {
         };
         // All fortress swords
         const fortressSwords = [
-            { id: swordId, wx: -505, wz: -332, data: window._customSwords[swordId] },
+            { id: swordId, wx: -1010, wz: -664, data: window._customSwords[swordId] },
         ];
 
         // Wyrmblade — long thin rapier with sapphire pommel
         const s2 = 'csword_fortress_wyrm';
         window._customSwords[s2] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'gem', pommelMat: 'sapphire',
             handleMat: 'gold_ingot', guardStyle: 'ring', guardMat: 'gold_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.9, bladeThickness: 0.7,
             trimMat: 'sapphire', name: 'Wyrmblade',
         };
-        fortressSwords.push({ id: s2, wx: -520, wz: -325, data: window._customSwords[s2] });
+        fortressSwords.push({ id: s2, wx: -1040, wz: -650, data: window._customSwords[s2] });
 
         // Flamecleaver — wide heavy sword with emerald and gold
         const s3 = 'csword_fortress_flame';
         window._customSwords[s3] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'skull', pommelMat: 'gold_ingot',
             handleMat: 'iron_ingot', guardStyle: 'wide', guardMat: 'gold_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.2, bladeThickness: 1.8,
             trimMat: 'emerald', name: 'Flamecleaver',
         };
-        fortressSwords.push({ id: s3, wx: -498, wz: -345, data: window._customSwords[s3] });
+        fortressSwords.push({ id: s3, wx: -996, wz: -690, data: window._customSwords[s3] });
 
         // Nightfang — sleek dagger with topaz
         const s4 = 'csword_fortress_night';
         window._customSwords[s4] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'claw', pommelMat: 'topaz',
             handleMat: 'stick', guardStyle: 'straight', guardMat: 'dragonsteel_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 1.2, bladeThickness: 0.8,
             trimMat: 'topaz', name: 'Nightfang',
         };
-        fortressSwords.push({ id: s4, wx: -510, wz: -350, data: window._customSwords[s4] });
+        fortressSwords.push({ id: s4, wx: -1020, wz: -700, data: window._customSwords[s4] });
 
         // Stormbreaker — massive two-hander with diamond and steel
         const s5 = 'csword_fortress_storm';
         window._customSwords[s5] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'round', pommelMat: 'diamond',
             handleMat: 'steel_ingot', guardStyle: 'spiked', guardMat: 'steel_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 3.8, bladeThickness: 1.6,
             trimMat: 'diamond', name: 'Stormbreaker',
         };
-        fortressSwords.push({ id: s5, wx: -490, wz: -330, data: window._customSwords[s5] });
+        fortressSwords.push({ id: s5, wx: -980, wz: -660, data: window._customSwords[s5] });
 
         // Duskrend — elegant sword with ruby guard and wolf pommel
         const s6 = 'csword_fortress_dusk';
         window._customSwords[s6] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'wolf', pommelMat: 'ruby',
             handleMat: 'gold_ingot', guardStyle: 'curved', guardMat: 'ruby',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.4, bladeThickness: 1.0,
             trimMat: 'gold_ingot', name: 'Duskrend',
         };
-        fortressSwords.push({ id: s6, wx: -515, wz: -338, data: window._customSwords[s6] });
+        fortressSwords.push({ id: s6, wx: -1030, wz: -676, data: window._customSwords[s6] });
 
         // Voidpiercer — stone-handled with emerald accents
         const s7 = 'csword_fortress_void';
         window._customSwords[s7] = {
-            tier: 'dragonsteel', damage: 12,
+            tier: 'damaged_dragonsteel', damage: 5, speedMult: 1.6,
             pommelStyle: 'gem', pommelMat: 'emerald',
             handleMat: BLOCK.STONE, guardStyle: 'wide', guardMat: 'iron_ingot',
             bladeMat: 'dragonsteel_ingot', bladeLength: 2.8, bladeThickness: 1.2,
             trimMat: 'emerald', name: 'Voidpiercer',
         };
-        fortressSwords.push({ id: s7, wx: -500, wz: -342, data: window._customSwords[s7] });
+        fortressSwords.push({ id: s7, wx: -1000, wz: -684, data: window._customSwords[s7] });
 
         // === 24 damaged dragonsteel swords scattered around the fort ===
         // Half damage (tier uses numeric damage field), half attack speed.
@@ -2347,8 +2440,8 @@ function startGame(loadSlotName) {
             const h = _hash01(i + 1000);
             const ang = (i / 24) * Math.PI * 2 + _hash01(i + 500) * 0.3;
             const rad = 18 + _hash01(i + 200) * 14;
-            const wx = Math.round(-505 + Math.cos(ang) * rad);
-            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const wx = Math.round(-1010 + Math.cos(ang) * rad);
+            const wz = Math.round(-670 + Math.sin(ang) * rad);
             const pommelStyle = _pommelPool[Math.floor(_hash01(i + 11) * _pommelPool.length)];
             const pommelGem = _gemPool[Math.floor(_hash01(i + 22) * _gemPool.length)];
             const guardStyle = _guardPool[Math.floor(_hash01(i + 33) * _guardPool.length)];
@@ -2359,7 +2452,7 @@ function startGame(loadSlotName) {
             const trimMat = hasTrim ? _gemPool[Math.floor(_hash01(i + 77) * _gemPool.length)] : null;
             const def = {
                 tier: 'damaged_dragonsteel',
-                damage: 6, // half of the 12 named dragonsteel baseline
+                damage: 5,
                 speedMult: 2.0, // attack twice as slow
                 pommelStyle, pommelMat: pommelGem,
                 handleMat,
@@ -2389,17 +2482,17 @@ function startGame(loadSlotName) {
             const id = 'csword_battleaxe_' + i;
             const ang = Math.PI * 0.15 + i * 0.22;
             const rad = 9 + (i % 2) * 4;
-            const wx = Math.round(-505 + Math.cos(ang) * rad);
-            const wz = Math.round(-335 + Math.sin(ang) * rad);
+            const wx = Math.round(-1010 + Math.cos(ang) * rad);
+            const wz = Math.round(-670 + Math.sin(ang) * rad);
             const def = {
-                tier: 'dragonsteel_heavy',
-                damage: 14, // battleaxes hit harder
-                speedMult: 1.4, // but swing slower
+                tier: 'damaged_dragonsteel',
+                damage: 5,
+                speedMult: 1.8, // damaged axe is sluggish
                 pommelStyle: 'round', pommelMat: bd.gem,
                 handleMat: bd.handle,
                 guardStyle: 'wide', guardMat: 'dragonsteel_ingot',
                 bladeMat: 'dragonsteel_ingot',
-                bladeLength: 0.8, bladeThickness: 3.0, // wide axe-head silhouette
+                bladeLength: 0.8, bladeThickness: 3.0,
                 trimMat: bd.trim, name: bd.name,
                 isBattleaxe: true,
             };
@@ -2419,8 +2512,8 @@ function startGame(loadSlotName) {
         for (let i = 0; i < 28; i++) {
             const ang = (i / 28) * Math.PI * 2 + _shash(i + 13) * 0.5;
             const rad = 10 + _shash(i + 27) * 22;
-            const wx = -505 + Math.cos(ang) * rad;
-            const wz = -335 + Math.sin(ang) * rad;
+            const wx = -1010 + Math.cos(ang) * rad;
+            const wz = -670 + Math.sin(ang) * rad;
             const yaw = _shash(i + 41) * Math.PI * 2;
             // Loot: 1-2 armor pieces + 30% chance for a tool
             const lootCount = 1 + (_shash(i + 53) < 0.4 ? 1 : 0);
@@ -2441,7 +2534,7 @@ function startGame(loadSlotName) {
     function buildSouthwestFortress(w) {
         const BS = BLOCK_SIZE;
         const yOff = 128;
-        const FX = -900, FZ = 575;
+        const FX = -1800, FZ = 1150;
         const centerX = Math.round(FX / BS);
         const centerZ = Math.round(FZ / BS);
         const groundY = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
@@ -2974,12 +3067,12 @@ function startGame(loadSlotName) {
             _pb(bx, by, bz, block);
         };
 
-        const hillCX = -30, hillCZ = -350;
+        const hillCX = -60, hillCZ = -700;
 
-        // Ruin 1: Broken temple with pillars (-60, -210)
+        // Ruin 1: Broken temple with pillars (-120, -420)
         {
-            const rx = Math.round(-60 / BS), rz = Math.round(-210 / BS);
-            const gy = Math.floor(getTerrainHeight(-60, -210) / BS) + yOff;
+            const rx = Math.round(-120 / BS), rz = Math.round(-420 / BS);
+            const gy = Math.floor(getTerrainHeight(-120, -420) / BS) + yOff;
             // Floor
             for (let dx = -6; dx <= 6; dx++) for (let dz = -4; dz <= 4; dz++)
                 rb(rx+dx, gy, rz+dz, S, 0.15);
@@ -2997,10 +3090,10 @@ function startGame(loadSlotName) {
             rb(rx, gy+2, rz, SM, 0.05);
         }
 
-        // Ruin 2: Collapsed tower (-10, -160)
+        // Ruin 2: Collapsed tower (-20, -320)
         {
-            const rx = Math.round(-10 / BS), rz = Math.round(-160 / BS);
-            const gy = Math.floor(getTerrainHeight(-10, -160) / BS) + yOff;
+            const rx = Math.round(-20 / BS), rz = Math.round(-320 / BS);
+            const gy = Math.floor(getTerrainHeight(-20, -320) / BS) + yOff;
             // Circular base
             for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
                 if (dx*dx+dz*dz > 18) continue;
@@ -3022,10 +3115,10 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 3: Stone archway (-50, -335)
+        // Ruin 3: Stone archway (-100, -670)
         {
-            const rx = Math.round(-50 / BS), rz = Math.round(-335 / BS);
-            const gy = Math.floor(getTerrainHeight(-50, -335) / BS) + yOff;
+            const rx = Math.round(-100 / BS), rz = Math.round(-670 / BS);
+            const gy = Math.floor(getTerrainHeight(-100, -670) / BS) + yOff;
             // Two pillars
             for (let y = 0; y < 8; y++) {
                 rb(rx, gy+y, rz-3, S, 0.05);
@@ -3042,10 +3135,10 @@ function startGame(loadSlotName) {
                 rb(rx+dx, gy, rz+dz, S, 0.12);
         }
 
-        // Ruin 4: Overgrown wall fragments (10, -200)
+        // Ruin 4: Overgrown wall fragments (20, -400)
         {
-            const rx = Math.round(10 / BS), rz = Math.round(-200 / BS);
-            const gy = Math.floor(getTerrainHeight(10, -200) / BS) + yOff;
+            const rx = Math.round(20 / BS), rz = Math.round(-400 / BS);
+            const gy = Math.floor(getTerrainHeight(20, -400) / BS) + yOff;
             // L-shaped wall
             for (let dx = 0; dx <= 10; dx++) {
                 const h = 4 - Math.floor(hash(rx+dx, rz) * 2);
@@ -3060,10 +3153,10 @@ function startGame(loadSlotName) {
             _pb(rx+6, gy+2, rz, BLOCK.AIR);
         }
 
-        // Ruin 5: Stone circle / ritual site (-20, -220)
+        // Ruin 5: Stone circle / ritual site (-40, -440)
         {
-            const rx = Math.round(-20 / BS), rz = Math.round(-220 / BS);
-            const gy = Math.floor(getTerrainHeight(-20, -220) / BS) + yOff;
+            const rx = Math.round(-40 / BS), rz = Math.round(-440 / BS);
+            const gy = Math.floor(getTerrainHeight(-40, -440) / BS) + yOff;
             // Standing stones in circle
             for (let i = 0; i < 8; i++) {
                 const a = (i / 8) * Math.PI * 2;
@@ -3083,10 +3176,10 @@ function startGame(loadSlotName) {
             rb(rx, gy+1, rz, SM, 0.02);
         }
 
-        // Ruin 6: Staircase to nowhere (0, -180)
+        // Ruin 6: Staircase to nowhere (0, -360)
         {
-            const rx = Math.round(0 / BS), rz = Math.round(-180 / BS);
-            const gy = Math.floor(getTerrainHeight(0, -180) / BS) + yOff;
+            const rx = Math.round(0 / BS), rz = Math.round(-360 / BS);
+            const gy = Math.floor(getTerrainHeight(0, -360) / BS) + yOff;
             // Wide stairs going up
             for (let step = 0; step < 8; step++) {
                 const w = 5 - Math.floor(step * 0.4);
@@ -3098,10 +3191,10 @@ function startGame(loadSlotName) {
                 rb(rx+dx, gy+8, rz-8+dz, S, 0.2);
         }
 
-        // Ruin 7: Foundation outline (-40, -350)
+        // Ruin 7: Foundation outline (-80, -700)
         {
-            const rx = Math.round(-40 / BS), rz = Math.round(-350 / BS);
-            const gy = Math.floor(getTerrainHeight(-40, -350) / BS) + yOff;
+            const rx = Math.round(-80 / BS), rz = Math.round(-700 / BS);
+            const gy = Math.floor(getTerrainHeight(-80, -700) / BS) + yOff;
             // Rectangular foundation — just low walls
             for (let dx = -8; dx <= 8; dx++) {
                 rb(rx+dx, gy, rz-6, S, 0.1); rb(rx+dx, gy+1, rz-6, S, 0.2);
@@ -3118,7 +3211,7 @@ function startGame(loadSlotName) {
             }
         }
 
-        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-30, -350)
+        // Ruin 8: Grand Central Ruin — collapsed great hall at hill ring center (-60, -700)
         {
             const rx = Math.round(hillCX / BS), rz = Math.round(hillCZ / BS);
             const gy = Math.floor(getTerrainHeight(hillCX, hillCZ) / BS) + yOff;
@@ -3207,6 +3300,257 @@ function startGame(loadSlotName) {
         }
     }
 
+    function buildEasternFortress(w) {
+        // Dragon's Reach — ancient dragon-rider stronghold near Farwatch
+        const BS = BLOCK_SIZE;
+        const yOff = 128;
+        const FX = 2160, FZ = 10;
+        const cx = Math.round(FX / BS);
+        const cz = Math.round(FZ / BS);
+        const gy = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
+        const S = BLOCK.STONE, DS = BLOCK.DARK_STONE, A = BLOCK.AIR, D = BLOCK.DIRT;
+        const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 17.0) * 43758.5453; return d - Math.floor(d); };
+        const R = 0.02;
+
+        const _pb = (bx, by, bz, bl) => {
+            if (by < 0 || by >= 256) return;
+            if (!w._structureBlocks) w._structureBlocks = new Map();
+            w._structureBlocks.set(bx + ',' + by + ',' + bz, bl);
+            const mcx = Math.floor(bx / CHUNK_SIZE), mcz = Math.floor(bz / CHUNK_SIZE);
+            const mlx = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const mlz = ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const ck = mcx + ',' + mcz;
+            if (!w._modsByChunk) w._modsByChunk = new Map();
+            if (!w._modsByChunk.has(ck)) w._modsByChunk.set(ck, []);
+            w._modsByChunk.get(ck).push({ lx: mlx, y: by, lz: mlz, block: bl });
+        };
+        const rb = (bx, by, bz, bl, rc) => { if (rc && hash(bx*7+by*13, bz*11+by*3) < rc) return; _pb(bx, by, bz, bl); };
+        const box = (x0,y0,z0,x1,y1,z1,bl,rc) => { for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++) for(let z=z0;z<=z1;z++) rb(x,y,z,bl,rc); };
+        const room = (x0,y0,z0,rw,rd,rh,bl,rc) => {
+            const x1=x0+rw-1, z1=z0+rd-1, y1=y0+rh-1;
+            box(x0,y0,z0,x1,y0,z1,bl,rc&&rc*0.3);
+            box(x0,y1,z0,x1,y1,z1,bl,rc);
+            box(x0,y0,z0,x0,y1,z1,bl,rc); box(x1,y0,z0,x1,y1,z1,bl,rc);
+            box(x0,y0,z0,x1,y1,z0,bl,rc); box(x0,y0,z1,x1,y1,z1,bl,rc);
+            box(x0+1,y0+1,z0+1,x1-1,y1-1,z1-1,A,0);
+        };
+        const tower = (tx,tz,r,h,rc) => {
+            for(let y=0;y<h;y++) for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){
+                if(dx*dx+dz*dz>r*r+1) continue;
+                if(dx*dx+dz*dz>(r-1)*(r-1)) rb(tx+dx,gy+y,tz+dz,S,rc+y*0.004);
+                else if(y===0||y%5===0) _pb(tx+dx,gy+y,tz+dz,S);
+                else _pb(tx+dx,gy+y,tz+dz,A);
+            }
+            for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){
+                if(dx*dx+dz*dz>r*r+1||dx*dx+dz*dz<(r-1)*(r-1)) continue;
+                if((dx+dz)%2===0) rb(tx+dx,gy+h,tz+dz,S,rc+0.1);
+            }
+        };
+
+        const HW=55, HD=45, wallH=16;
+
+        // Flatten ground
+        for(let x=cx-HW-6;x<=cx+HW+6;x++) for(let z=cz-HD-6;z<=cz+HD+6;z++){
+            _pb(x,gy,z,S); for(let dy=1;dy<=3;dy++) _pb(x,gy-dy,z,D);
+            for(let dy=1;dy<=28;dy++) _pb(x,gy+dy,z,A);
+        }
+
+        // Outer walls
+        box(cx-HW,gy+1,cz-HD,cx+HW,gy+wallH,cz-HD+1,S,R);
+        box(cx-HW,gy+1,cz+HD-1,cx+HW,gy+wallH,cz+HD,S,R);
+        box(cx-HW,gy+1,cz-HD,cx-HW+1,gy+wallH,cz+HD,S,R);
+        box(cx+HW-1,gy+1,cz-HD,cx+HW,gy+wallH,cz+HD,S,R);
+        for(let i=-HW;i<=HW;i++) if(i%2===0){
+            rb(cx+i,gy+wallH+1,cz-HD,S,R+0.05); rb(cx+i,gy+wallH+1,cz+HD,S,R+0.05);
+        }
+        for(let i=-HD;i<=HD;i++) if(i%2===0){
+            rb(cx-HW,gy+wallH+1,cz+i,S,R+0.05); rb(cx+HW,gy+wallH+1,cz+i,S,R+0.05);
+        }
+        // Wall-walk
+        for(let i=-HW+2;i<=HW-2;i++){ _pb(cx+i,gy+wallH,cz-HD+1,S); _pb(cx+i,gy+wallH,cz+HD-1,S); }
+        for(let i=-HD+2;i<=HD-2;i++){ _pb(cx-HW+1,gy+wallH,cz+i,S); _pb(cx+HW-1,gy+wallH,cz+i,S); }
+        // Arrow slits (dark stone)
+        for(let i=-HW+8;i<=HW-8;i+=10){
+            rb(cx+i,gy+8,cz-HD,DS,0); rb(cx+i,gy+10,cz-HD,DS,0);
+            rb(cx+i,gy+8,cz+HD,DS,0); rb(cx+i,gy+10,cz+HD,DS,0);
+        }
+        for(let i=-HD+8;i<=HD-8;i+=10){
+            rb(cx-HW,gy+8,cz+i,DS,0); rb(cx-HW,gy+10,cz+i,DS,0);
+            rb(cx+HW,gy+8,cz+i,DS,0); rb(cx+HW,gy+10,cz+i,DS,0);
+        }
+
+        // Corner + mid towers
+        tower(cx-HW,cz-HD,5,22,R); tower(cx+HW,cz-HD,5,22,R);
+        tower(cx-HW,cz+HD,5,22,R); tower(cx+HW,cz+HD,5,22,R);
+        tower(cx,cz-HD,4,20,R); tower(cx-HW,cz,4,20,R); tower(cx+HW,cz,4,20,R);
+        tower(cx-8,cz+HD,4,22,R); tower(cx+8,cz+HD,4,22,R); // south gate flanks
+
+        // South gate (faces Farwatch)
+        for(let dy=0;dy<13;dy++) for(let dx=-3;dx<=3;dx++){
+            _pb(cx+dx,gy+1+dy,cz+HD-1,A); _pb(cx+dx,gy+1+dy,cz+HD,A);
+        }
+        for(let ay=0;ay<3;ay++){ const ins=ay+1;
+            for(let dx=-3+ins;dx<=3-ins;dx++){
+                _pb(cx+dx,gy+14+ay,cz+HD-1,A); _pb(cx+dx,gy+14+ay,cz+HD,A);
+            }
+        }
+        for(let dy=0;dy<=16;dy++){ _pb(cx-4,gy+dy,cz+HD,DS); _pb(cx+4,gy+dy,cz+HD,DS); }
+        // Dragon relief above south gate
+        for(let dx=-2;dx<=2;dx++) _pb(cx+dx,gy+18,cz+HD,DS);
+        _pb(cx-3,gy+17,cz+HD,DS); _pb(cx+3,gy+17,cz+HD,DS);
+        _pb(cx-4,gy+16,cz+HD,DS); _pb(cx+4,gy+16,cz+HD,DS);
+
+        // Inner dividing wall (keep / courtyard)
+        const divZ = cz-10;
+        box(cx-HW+2,gy+1,divZ,cx+HW-2,gy+10,divZ+1,S,R*0.5);
+        for(let dy=0;dy<8;dy++) for(let dx=-3;dx<=3;dx++){
+            _pb(cx+dx,gy+1+dy,divZ,A); _pb(cx+dx,gy+1+dy,divZ+1,A);
+        }
+        for(let dx=-3;dx<=3;dx++) _pb(cx+dx,gy+9,divZ,DS);
+        _pb(cx-4,gy+7,divZ,DS); _pb(cx+4,gy+7,divZ,DS);
+
+        // Keep (north section)
+        const kx0=cx-HW+2, kx1=cx+HW-2, kz0=cz-HD+3, kz1=divZ-2, kH=12;
+        room(kx0,gy,kz0,kx1-kx0+1,kz1-kz0+1,kH,S,R*0.4);
+        tower(kx0,kz0,3,kH+4,R*0.5); tower(kx1,kz0,3,kH+4,R*0.5);
+        tower(kx0,kz1,3,kH+3,R*0.5); tower(kx1,kz1,3,kH+3,R*0.5);
+        for(let dy=0;dy<7;dy++) for(let dx=-2;dx<=2;dx++) _pb(cx+dx,gy+1+dy,kz1,A);
+        // Interior east-west divider (library vs archive)
+        box(kx0+1,gy+1,cz-HD+16,cx-1,gy+kH-1,cz-HD+16,S,R*0.3);
+        for(let dy=0;dy<5;dy++) _pb(cx-4,gy+1+dy,cz-HD+16,A);
+        // Library (east half): bookshelves and tables
+        for(let bx=cx+4;bx<=kx1-4;bx+=4) for(let dy=1;dy<=5;dy++) _pb(bx,gy+dy,kz0+2,BLOCK.PLANKS);
+        for(let i=0;i<4;i++){ _pb(cx+4+i*5,gy+1,kz0+8,BLOCK.PLANKS); _pb(cx+4+i*5,gy+1,kz0+9,BLOCK.PLANKS); }
+        for(let bx=cx+6;bx<=kx1-6;bx+=10){ _pb(bx,gy+7,kz0,DS); _pb(bx,gy+9,kz0,DS); }
+        // Archive (west half): ritual altar
+        const altX=cx-16, altZ=kz0+8;
+        for(let dx=-4;dx<=4;dx++) for(let dz=-3;dz<=3;dz++)
+            if(Math.abs(dx)===4||Math.abs(dz)===3) _pb(altX+dx,gy,altZ+dz,DS);
+        _pb(altX,gy+1,altZ,DS); _pb(altX,gy+2,altZ,DS); _pb(altX,gy+3,altZ,DS);
+        for(let a=0;a<8;a++){ const rx2=Math.round(Math.cos(a*Math.PI/4)*4),rz2=Math.round(Math.sin(a*Math.PI/4)*4); _pb(altX+rx2,gy+1,altZ+rz2,DS); }
+        for(let bx=kx0+6;bx<=cx-6;bx+=10){ _pb(bx,gy+7,kz0,DS); _pb(bx,gy+9,kz0,DS); }
+
+        // Courtyard (south section): scorched floor patches
+        for(let bx=cx-HW+3;bx<=cx+HW-3;bx++) for(let bz=divZ+2;bz<=cz+HD-3;bz++)
+            if(hash(bx+311,bz+422)<0.2) _pb(bx,gy,bz,DS);
+        // Well
+        const wCX=cx-20, wCZ=cz+15;
+        for(let da=0;da<8;da++){ const wx2=Math.round(Math.cos(da*Math.PI/4)*2),wz2=Math.round(Math.sin(da*Math.PI/4)*2);
+            _pb(wCX+wx2,gy+1,wCZ+wz2,S); _pb(wCX+wx2,gy+2,wCZ+wz2,S); }
+        // Storage room (east courtyard)
+        room(cx+20,gy,cz+5,14,10,6,S,R*0.3);
+        for(let dy=0;dy<4;dy++) _pb(cx+21,gy+1+dy,cz+5,A);
+
+        w._easternFortress = { x: FX, z: FZ };
+
+        // ── BRIDGE over river south of fortress ───────────────────────────────
+        // River crosses the approach path at approx (FX, 22). The path system
+        // keeps terrain elevated here; add stone blocks for visual clarity.
+        const bBX = cx;
+        const bBZ = Math.round(22 / BS);
+        const bBY = Math.floor(getTerrainHeight(FX, 22) / BS) + yOff;
+        // Deck (5 wide, spanning the river channel)
+        for(let dx=-2;dx<=2;dx++) for(let dz=bBZ-6;dz<=bBZ+6;dz++) _pb(bBX+dx, bBY, dz, S);
+        // Railings on each long side
+        for(let dz=bBZ-5;dz<=bBZ+5;dz++) for(let dy=1;dy<=2;dy++){
+            rb(bBX-3, bBY+dy, dz, DS, R*0.2);
+            rb(bBX+3, bBY+dy, dz, DS, R*0.2);
+        }
+        // Support blocks at each bank
+        for(let dx=-2;dx<=2;dx++) for(let dy=0;dy<=2;dy++){
+            _pb(bBX+dx, bBY-dy, bBZ-6, S);
+            _pb(bBX+dx, bBY-dy, bBZ+6, S);
+        }
+
+        // === RED DRAGON CORPSE — uses real dragon model ===
+        const CORP_X = FX + 4, CORP_Z = FZ + 6;
+        const corpseTerrainY = getTerrainHeight(CORP_X, CORP_Z);
+
+        // Build wyvern corpse using the real dragon model (isWyvern=true)
+        const redCorpse = makeBabyDragon(0, 0, 0, 0xA02010, 0x620800, true, false, false, false);
+        const cg = redCorpse.group;
+        const corpseScale = 1.8;
+        cg.scale.setScalar(corpseScale);
+        const corpseFootOffset = 0.95 * 2.55 * corpseScale;
+        // Proper death pose (mirrors _toCorpse logic)
+        cg.rotation.x = 0;
+        cg.rotation.z = 0;
+        cg.rotation.y = 0.3;
+        cg.position.set(CORP_X, corpseTerrainY + corpseFootOffset * 0.35, CORP_Z);
+        // Drooped head + slack neck
+        if (redCorpse.neckGrp) redCorpse.neckGrp.rotation.x = 0.5;
+        if (redCorpse.neckSegs) for (const s of redCorpse.neckSegs) s.rotation.set(0.12, 0, 0);
+        if (redCorpse.headGrp) { redCorpse.headGrp.rotation.x = 0.5; redCorpse.headGrp.rotation.y = 0; redCorpse.headGrp.rotation.z = 0; }
+        if (redCorpse.jawGrp) redCorpse.jawGrp.rotation.x = 0.65;
+        if (redCorpse.eyes) for (const e of redCorpse.eyes) e.scale.y = 0.08;
+        if (redCorpse.tailSegs) for (let i = 0; i < redCorpse.tailSegs.length; i++) {
+            redCorpse.tailSegs[i].rotation.set(0, 0.05 * (i % 2 === 0 ? 1 : -1), 0);
+        }
+        // Hind legs splayed (wyvern front legs are hidden)
+        if (redCorpse.legs) for (let i = 0; i < redCorpse.legs.length; i++) {
+            const leg = redCorpse.legs[i];
+            if (!leg || !leg.visible) continue;
+            const side = (i % 2 === 0) ? -1 : 1;
+            leg.rotation.set(0.2, 0, side * 0.35);
+        }
+        // Wyvern wings folded flat (hierarchical arm structure: shoulder → elbow → hand)
+        if (redCorpse.wings) for (const w of redCorpse.wings) {
+            if (w._elbow) w._elbow.rotation.set(0, 0, 0);
+            if (w._hand) w._hand.rotation.set(0, 0, 0);
+            if (w.rotation) w.rotation.set(0, 0, 0);
+        }
+        scene.add(cg);
+
+        // === NPCS — villager model, correct terrain Y ===
+        // Helper: spawn villager and optionally pose them
+        const spawnNPC = (wx, wz, seed, poseAngle, lookDown) => {
+            const ty = getTerrainHeight(wx, wz);
+            const v = makeVillager(scene, wx, wz, ty, seed);
+            v.group.rotation.y = poseAngle;
+            if (lookDown) {
+                v.headGroup.rotation.x = -0.45; // looking down at dragon
+                v.leftArm.shoulder.rotation.x = 0.6; // arm reaching forward
+            }
+            return v;
+        };
+
+        // Close observers — crouching/leaning in near the dragon head and body
+        const obs1 = spawnNPC(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true);
+        obs1.body.position.y = 0.65; obs1.spine.rotation.x = 0.55; // crouch
+        const obs2 = spawnNPC(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true);
+        obs2.body.position.y = 0.65; obs2.spine.rotation.x = 0.5;
+
+        // Mid-ring — standing scholars with scrolls/notes
+        spawnNPC(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
+        spawnNPC(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
+        spawnNPC(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
+        spawnNPC(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
+
+        // Outer ring — arriving, writing notes, discussing
+        spawnNPC(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        spawnNPC(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
+        spawnNPC(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
+
+        // Two guards near the inner dividing wall gate
+        const guardZ = FZ + (-10) * 0; // inner wall in world coords ≈ FZ - 9.5
+        const divWorldZ = (Math.round(FZ / BS) - 10) * BS;
+        spawnNPC(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
+        spawnNPC(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
+
+        // ── LEADER: Archon Vael — head of the expedition ──
+        // Stands prominently north of the corpse, facing it
+        const leaderX = CORP_X - 6, leaderZ = CORP_Z - 5;
+        const leader = spawnNPC(leaderX, leaderZ, 0.42, Math.PI * 0.15, true);
+        // Distinctive appearance: crimson robes, grey hair, larger scale
+        leader._shirtMat.color.setHex(0x8B0000);  // deep crimson
+        leader._pantsMat.color.setHex(0x4a2200);  // dark brown
+        leader._hairMat.color.setHex(0xaaaaaa);   // grey/white hair
+        leader.group.scale.setScalar(1.12);        // taller
+        // Arm raised slightly — gesturing as if explaining
+        leader.rightArm.shoulder.rotation.x = -0.5;
+        leader.rightArm.shoulder.rotation.z = -0.3;
+    }
+
     // Naturally spawning chests in ruins
     {
         const yOff = 128;
@@ -3224,18 +3568,18 @@ function startGame(loadSlotName) {
             chestData[key] = { items: { ...loot } };
         };
 
-        // Chest in Broken Temple (-60, -210) — near the altar
-        _placeRuinChest(-58, -210, { 'iron_ingot': 3, 'gold_ingot': 1, 'stick': 6 });
-        // Chest in Collapsed Tower (-10, -160) — in the rubble
-        _placeRuinChest(-8, -160, { 'diamond': 1, 'coal': 8, [BLOCK.STONE]: 16 });
-        // Chest at Stone Circle (-20, -220) — ritual offering
-        _placeRuinChest(-20, -218, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
-        // Chest in Staircase ruins (0, -180) — hidden under steps
-        _placeRuinChest(2, -180, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
-        // Chest in Foundation ruins (-40, -350) — corner stash
-        _placeRuinChest(-46, -350, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
+        // Chest in Broken Temple (-120, -420) — near the altar
+        _placeRuinChest(-116, -420, { 'iron_ingot': 3, 'gold_ingot': 1, 'stick': 6 });
+        // Chest in Collapsed Tower (-20, -320) — in the rubble
+        _placeRuinChest(-16, -320, { 'diamond': 1, 'coal': 8, [BLOCK.STONE]: 16 });
+        // Chest at Stone Circle (-40, -440) — ritual offering
+        _placeRuinChest(-40, -436, { 'ruby': 1, 'sapphire': 1, 'emerald': 1 });
+        // Chest in Staircase ruins (0, -360) — hidden under steps
+        _placeRuinChest(4, -360, { 'iron_ingot': 5, [BLOCK.WOOD]: 20, 'gold_ingot': 2 });
+        // Chest in Foundation ruins (-80, -700) — corner stash
+        _placeRuinChest(-92, -700, { 'steel_ingot': 2, 'diamond': 1, 'iron_ingot': 4 });
         // Central ruin — behind the altar
-        _placeRuinChest(-28, -194, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
+        _placeRuinChest(-56, -388, { 'diamond': 2, 'gold_ingot': 5, 'ruby': 2, 'iron_ingot': 8 });
     }
 
     // Hook setBlock to broadcast changes in multiplayer + mark LOD dirty
@@ -3560,20 +3904,19 @@ function startGame(loadSlotName) {
             const bLenS = (cs.bladeLength || 2) / 2;
             sm._bladeGrp.scale.set(cs.bladeThickness || 1, bLenS, cs.bladeThickness || 1);
             sm._bladeGrp.position.y = 0.1 * (1 - bLenS);
-            // Battleaxe silhouette — add a wide axe-head wedge and hide default blade/tip
+            // Battleaxe silhouette — double-bit head + extended haft.
             if (cs.isBattleaxe && !sm._axeHead) {
+                sm._bladeGrp.scale.set(1, 1, 1);
+                sm._bladeGrp.position.y = 0;
+                // Hide the default blade/tip and guard — an axe has no crossguard
                 for (const child of sm._bladeGrp.children) child.visible = false;
-                const axeMat = sm._bladeMat;
-                const axeGrp = new THREE.Group();
-                axeGrp.position.y = 0.28;
-                const head = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), axeMat);
-                head.position.y = 0; axeGrp.add(head);
-                const fanL = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.26, 3), axeMat);
-                fanL.rotation.z = Math.PI; fanL.position.set(0.10, 0.01, 0); axeGrp.add(fanL);
-                const fanR = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.20, 3), axeMat);
-                fanR.rotation.z = 0; fanR.position.set(-0.07, 0.01, 0); axeGrp.add(fanR);
-                sm._bladeGrp.add(axeGrp);
-                sm._axeHead = axeGrp;
+                if (sm._guardMesh) sm._guardMesh.visible = false;
+                if (sm._guardExtra1) sm._guardExtra1.visible = false;
+                if (sm._guardExtra2) sm._guardExtra2.visible = false;
+                if (sm._trimStripe) sm._trimStripe.visible = false;
+                if (sm._trimStripe2) sm._trimStripe2.visible = false;
+                sm._axeHead = buildAxeHead(sm._bladeMat, sm._handleMat);
+                sm._bladeGrp.add(sm._axeHead);
             }
             // Position in world — stuck in ground at angle
             const gy = getTerrainHeight(fs.wx, fs.wz);
@@ -3807,7 +4150,7 @@ function startGame(loadSlotName) {
 
     // === Lightning Dragon Nest — deep desert ===
     {
-        const nestX = 220, nestZ = 1080;
+        const nestX = 440, nestZ = 2160;
         const nestY = getTerrainHeight(nestX, nestZ);
         const yOff = 128;
         const BS = BLOCK_SIZE;
@@ -3927,7 +4270,7 @@ function startGame(loadSlotName) {
     // === Fortress Guardian Wyvern — massive black dragon circling above ===
     // Always create fresh (not saved)
     {
-        const fortDragon = dragonMgr._makeDragon(-505, -335, getTerrainHeight(-505, -335), 0x0a0a0a, 0xcc7733, true, false, false, true);
+        const fortDragon = dragonMgr._makeDragon(-1010, -670, getTerrainHeight(-1010, -670), 0x0a0a0a, 0xcc7733, true, false, false, true);
         fortDragon._hasTusks = true;
         // Make it massive and fully grown
         fortDragon.age = 7200; // elder
@@ -3955,16 +4298,16 @@ function startGame(loadSlotName) {
         scene.add(fireMesh);
         fortDragon._fireMesh = fireMesh;
         fortDragon._fireMat = fireMat;
-        fortDragon.x = -505;
-        fortDragon.z = -335;
-        fortDragon.group.position.set(-505, getTerrainHeight(-505, -335) + 40, -335);
+        fortDragon.x = -1010;
+        fortDragon.z = -670;
+        fortDragon.group.position.set(-1010, getTerrainHeight(-1010, -670) + 40, -670);
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
 
         // Black-and-gold dragon egg on a small altar inside the fortress
         {
-            const ex = -505 + 4, ez = -335 + 2;
+            const ex = -1010 + 4, ez = -670 + 2;
             const ey = getTerrainHeight(ex, ez);
             const eggGrp = new THREE.Group();
             const altarMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
@@ -4280,7 +4623,7 @@ function startGame(loadSlotName) {
 
     // === Giant Skeleton Boss at east gate ===
     if (!killedBosses.has('The Ancient One')) {
-        const bossX = 80, bossZ = -350;
+        const bossX = 160, bossZ = -700;
 
         // Pre-generate the sword it will drop and wield
         const _bossRng = () => Math.random();
@@ -4460,7 +4803,7 @@ function startGame(loadSlotName) {
 
     // === Earth Colossus Boss near the western gate ===
     if (!killedBosses.has('Colossus of the Gate')) {
-        const colX = -155, colZ = -350;
+        const colX = -310, colZ = -700;
         const colY = getTerrainHeight(colX, colZ);
         const colossus = {
             group: new THREE.Group(), legs: [], headGrp: new THREE.Group(),
@@ -4583,7 +4926,7 @@ function startGame(loadSlotName) {
 
     // === Dark Knight Boss at north gate ===
     if (!killedBosses.has('The Dark Knight')) {
-        const dkX = -30, dkZ = -300;
+        const dkX = -60, dkZ = -600;
         const dkY = getTerrainHeight(dkX, dkZ);
 
         // Pre-generate the knight's sword
@@ -4661,7 +5004,7 @@ function startGame(loadSlotName) {
 
     // === Necromancer Boss at central ancient forest ruin ===
     if (!killedBosses.has('The Necromancer')) {
-        const necX = -30, necZ = -350;
+        const necX = -60, necZ = -700;
         const necY = getTerrainHeight(necX, necZ) + 1.5; // on the altar platform
 
         const necro = new Player(scene, world);
@@ -4916,7 +5259,7 @@ function startGame(loadSlotName) {
 
     // === Hobgoblin Warchief + Goblins at south gate ===
     if (!killedBosses.has('Grokthak the Warchief')) {
-        const hgX = -30, hgZ = -230; // south gate inner side (gate at z=-240)
+        const hgX = -60, hgZ = -460; // south gate inner side (gate at z=-480)
         const hgY = getTerrainHeight(hgX, hgZ);
 
         // Spawn 6 goblin minions around the gate
@@ -5058,7 +5401,7 @@ function startGame(loadSlotName) {
 
     // === Scorched Fortress & Ember Lord Boss ===
     {
-        const sfX = -300, sfZ = 280; // center of scorched lands
+        const sfX = -600, sfZ = 560; // center of scorched lands
         const BS = BLOCK_SIZE;
         const yOff = 128;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 42.0) * 43758.5453; return d - Math.floor(d); };
@@ -5150,7 +5493,7 @@ function startGame(loadSlotName) {
 
     // === Ember Lord Boss ===
     if (!killedBosses.has('The Ember Lord')) {
-        const elX = -300, elZ = 280;
+        const elX = -600, elZ = 560;
         const elY = getTerrainHeight(elX, elZ) + 1;
 
         const emberLord = new Player(scene, world);
@@ -5432,6 +5775,7 @@ function startGame(loadSlotName) {
             // Restore modified blocks + rebuild chunk index
             if (s.modifiedBlocks) {
                 const anvilOrigins = new Set();
+                const steelAnvilOrigins = new Set();
                 const campfireOrigins = new Set();
                 const torchPositions = [];
                 for (const [key, val] of Object.entries(s.modifiedBlocks)) {
@@ -5446,6 +5790,7 @@ function startGame(loadSlotName) {
                     world._modsByChunk.get(ck).push({ lx: mlx, y: mby, lz: mlz, block: val });
                     // Collect anvil/campfire block positions for clustering after loop
                     if (val === BLOCK.ANVIL) anvilOrigins.add(mbx + ',' + mby + ',' + mbz);
+                    if (val === BLOCK.STEEL_ANVIL) steelAnvilOrigins.add(mbx + ',' + mby + ',' + mbz);
                     if (val === BLOCK.CAMPFIRE) campfireOrigins.add(mbx + ',' + mby + ',' + mbz);
                     if (val === BLOCK.TORCH) torchPositions.push([mbx, mby, mbz]);
                 }
@@ -5488,6 +5833,12 @@ function startGame(loadSlotName) {
                     const [ax, ay, az] = key.split(',').map(Number);
                     placeAnvilModel(ax, ay, az);
                 }
+                for (const [k, m] of steelAnvilModels) scene.remove(m);
+                steelAnvilModels.clear();
+                for (const key of _clusterOrigins(steelAnvilOrigins, 1)) {
+                    const [ax, ay, az] = key.split(',').map(Number);
+                    placeSteelAnvilModel(ax, ay, az);
+                }
                 for (const key of _clusterOrigins(campfireOrigins, 0)) {
                     const [cx, cy, cz] = key.split(',').map(Number);
                     placeCampfireModel(cx, cy, cz);
@@ -5514,8 +5865,8 @@ function startGame(loadSlotName) {
                     // Skip silver wyvern, fortress dragon, and other named fortress entities
                     if (dd.dragonName === 'The Silver Wyvern' || dd.dragonName === 'Kaelthrazor the Ancient') continue;
                     // Skip dragons at known fortress positions
-                    if (Math.abs(dd.x - (-505)) < 2 && Math.abs(dd.z - (-335)) < 2) continue; // ruined fortress
-                    if (Math.abs(dd.x - (-900)) < 50 && Math.abs(dd.z - 575) < 50) continue; // SW fortress area
+                    if (Math.abs(dd.x - (-1010)) < 2 && Math.abs(dd.z - (-670)) < 2) continue; // ruined fortress
+                    if (Math.abs(dd.x - (-1800)) < 50 && Math.abs(dd.z - 1150) < 50) continue; // SW fortress area
                     const hy = world.getHeight(dd.x, dd.z);
                     const _lightningColors = [0x7a3dc4, 0x20202a, 0xa05a28, 0x2878f0];
                     const _iceColorsCheck = [0xddeeff, 0xc8e0f5, 0xeaf3ff, 0xb0d0e8, 0xd0e8f8, 0xf0f8ff];
@@ -7991,7 +8342,7 @@ const worldMapEl = document.getElementById('worldMap');
 const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 let mapOpen = false;
-let mapViewX = 0, mapViewZ = 0, mapViewSize = 1600;
+let mapViewX = 0, mapViewZ = 0, mapViewSize = 3200;
 let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
 let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
 
@@ -8363,59 +8714,63 @@ function drawWorldMap() {
         };
 
         // Castle (the western castle from villages.js)
-        drawCastle(-400, 20, 'The Castle');
+        drawCastle(-800, 40, 'The Castle');
 
         // Ruined Fortress
-        drawRuins(-505, -335, 'Ruined Fortress');
+        drawRuins(-1010, -670, 'Ruined Fortress');
 
         // Mountains
-        drawMountain(602, -30, 'East Mountains', 10);
-        drawMountain(510, -130, 'NW Peaks', 7);
-        drawMountain(510, 80, 'SW Hills', 6);
-        drawMountain(820, -40, 'Great Peak', 12);
-        drawMountain(730, -95, 'NE Ridge', 6);
-        drawMountain(735, 40, 'SE Ridge', 6);
-        drawMountain(-30, -1050, 'Frozen Mountains', 14);
-        drawMountain(-250, -1350, 'Frostfang Ridge', 10);
-        drawMountain(200, -1300, 'Icespire Peaks', 9);
-        drawMountain(50, -1400, 'Pale Spine', 8);
-        drawMountain(-400, -1200, 'Howling Crags', 8);
-        drawMountain(380, -1180, 'Rimestone Peaks', 8);
+        drawMountain(1204, -60, 'East Mountains', 10);
+        drawMountain(1020, -260, 'NW Peaks', 7);
+        drawMountain(1020, 160, 'SW Hills', 6);
+        drawMountain(1640, -80, 'Great Peak', 12);
+        drawMountain(1460, -190, 'NE Ridge', 6);
+        drawMountain(1470, 80, 'SE Ridge', 6);
+        drawMountain(-60, -2100, 'Frozen Mountains', 14);
+        drawMountain(-500, -2700, 'Frostfang Ridge', 10);
+        drawMountain(400, -2600, 'Icespire Peaks', 9);
+        drawMountain(100, -2800, 'Pale Spine', 8);
+        drawMountain(-800, -2400, 'Howling Crags', 8);
+        drawMountain(760, -2360, 'Rimestone Peaks', 8);
 
         // Villages
-        drawVillage(80, 16, 'Meadow Village');
-        drawVillage(-100, -50, 'Forest Edge');
-        drawVillage(200, 60, 'Hillside Town');
-        drawVillage(-200, 100, 'Western Hamlet');
-        drawVillage(50, -150, 'Northwatch');
-        drawVillage(-150, 200, 'Southmoor');
+        drawVillage(160, 32, 'Meadow Village');
+        drawVillage(-200, -100, 'Forest Edge');
+        drawVillage(400, 120, 'Hillside Town');
+        drawVillage(-400, 200, 'Western Hamlet');
+        drawVillage(100, -300, 'Northwatch');
+        drawVillage(-300, 400, 'Southmoor');
+        drawVillage(2040, 60, 'Farwatch');
+        drawCastle(2160, 10, "Dragon's Reach");
+        drawVillage(-2100, -120, 'Bay Watch');
+        drawVillage(-2150, 200, 'Tidecrest');
 
-        // Forest Gates (around the ancient forest hill ring at -30, -350)
-        drawGate(-140, -350, 'West Gate');
-        drawGate(80, -350, 'East Gate');
-        drawGate(-30, -460, 'North Gate');
-        drawGate(-30, -240, 'South Gate');
+        // Forest Gates (around the ancient forest hill ring at -60, -700)
+        drawGate(-280, -700, 'West Gate');
+        drawGate(160, -700, 'East Gate');
+        drawGate(-60, -920, 'North Gate');
+        drawGate(-60, -480, 'South Gate');
 
         // Gate bosses
-        drawDanger(-125, -350, 'Colossus');
-        drawDanger(65, -350, 'Skeleton');
-        drawDanger(-30, -285, 'Dark Knight');
-        drawDanger(-30, -95, 'Hobgoblin');
+        drawDanger(-250, -700, 'Colossus');
+        drawDanger(130, -700, 'Skeleton');
+        drawDanger(-60, -570, 'Dark Knight');
+        drawDanger(-60, -190, 'Hobgoblin');
 
         // Goblin camps
-        drawDanger(-115, 35, 'Goblin Outpost');
+        drawDanger(-230, 70, 'Goblin Outpost');
 
         // Ancient forest — large italic label
-        drawLabel(-30, -350, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
+        drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
 
         // Forest ruins (inside the ancient forest)
         const ruinStyle = 'rgba(80, 55, 30, 0.5)';
-        drawLabel(-60, -210, 'Broken Temple', ruinStyle, 8);
-        drawLabel(-10, -160, 'Old Tower', ruinStyle, 8);
-        drawLabel(-20, -220, 'Stone Circle', ruinStyle, 8);
+        drawLabel(-120, -420, 'Broken Temple', ruinStyle, 8);
+        drawLabel(-20, -320, 'Old Tower', ruinStyle, 8);
+        drawLabel(-40, -440, 'Stone Circle', ruinStyle, 8);
 
         // Dragon altar
-        const altX = toX(-505), altY = toY(-335);
+        const altX = toX(-1010), altY = toY(-670);
         if (altX > -20 && altX < w+20 && altY > -20 && altY < h+20) {
             const s = Math.max(3, Math.min(7, 5 * scale));
             mapCtx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; mapCtx.lineWidth = 1.5;
@@ -8431,7 +8786,7 @@ function drawWorldMap() {
         }
 
         // Cave entrance
-        const caveX = toX(560), caveY = toY(-50);
+        const caveX = toX(1120), caveY = toY(-100);
         if (caveX > -20 && caveX < w+20 && caveY > -20 && caveY < h+20) {
             const s = Math.max(3, Math.min(6, 4 * scale));
             mapCtx.fillStyle = 'rgba(40, 30, 20, 0.6)';
@@ -8444,13 +8799,13 @@ function drawWorldMap() {
         }
 
         // Abandoned Village
-        drawRuins(0, -540, 'Abandoned Village');
+        drawRuins(0, -1080, 'Abandoned Village');
 
         // Scorched Lands region label
-        drawLabel(-300, 260, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
+        drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
 
         // Enchanted Forest region label
-        drawLabel(715, -30, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
+        drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
 
         // Compass rose (top-right corner)
         const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
@@ -8541,7 +8896,7 @@ mapCanvas.addEventListener('wheel', e => {
     if (!mapOpen) return;
     e.preventDefault(); e.stopPropagation();
     const zf = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-    mapViewSize = Math.max(50, Math.min(3500, mapViewSize * zf));
+    mapViewSize = Math.max(50, Math.min(7000, mapViewSize * zf));
     drawWorldMap();
 }, { passive: false });
 
@@ -8829,7 +9184,8 @@ function getItemInfo(key) {
     if (key === 'raw_pork') return { name: 'Raw Pork', top: '#dd8888', front: '#bb6666' };
     if (key === 'raw_venison') return { name: 'Raw Venison', top: '#bb5544', front: '#993322' };
     if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
-    if (key === 'anvil_block') return { name: 'Anvil', top: '#666', front: '#444' };
+    if (key === 'anvil_block') return { name: 'Iron Anvil', top: '#666', front: '#444' };
+    if (key === 'steel_anvil_block') return { name: 'Steel Anvil', top: '#607080', front: '#506070' };
     if (key === 'blast_furnace_block') return { name: 'Blast Furnace', top: '#555560', front: '#3a3a40' };
     if (key === 'campfire_block') return { name: 'Campfire', top: '#cc6622', front: '#8a4a1a' };
     if (key === 'chest_block') return { name: 'Chest', top: '#8a6535', front: '#6b4a20' };
@@ -9806,6 +10162,7 @@ const BREAK_TIME = {
     [BLOCK.FURNACE]: [4.0, 2.0, 1.0, 0.6],
     15: [4.0, 2.0, 1.0, 0.6],
     [BLOCK.ANVIL]: [Infinity, Infinity, 3.0, 1.5],
+    [BLOCK.STEEL_ANVIL]: [Infinity, Infinity, 3.5, 1.5],
     19: [Infinity, Infinity, 3.0, 1.5],
     [BLOCK.RUBY_ORE]: [Infinity, Infinity, Infinity, 2.0],
     21: [Infinity, Infinity, Infinity, 2.0],
@@ -10101,6 +10458,7 @@ function getBlockDrop(blockType) {
     if (blockType === BLOCK.EMERALD_ORE) return 'emerald';
     if (blockType === BLOCK.TOPAZ_ORE) return 'topaz';
     if (blockType === BLOCK.ANVIL) return 'anvil_block';
+    if (blockType === BLOCK.STEEL_ANVIL) return 'steel_anvil_block';
     if (blockType === BLOCK.BLAST_FURNACE) return 'blast_furnace_block';
     if (blockType === BLOCK.CAMPFIRE) return 'campfire_block';
     if (blockType === BLOCK.CHEST) return 'chest_block';
@@ -10114,6 +10472,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
 
     // Remove anvil/campfire model if breaking
     if (hit.block === BLOCK.ANVIL) removeAnvilModel(hit.x, hit.y, hit.z);
+    if (hit.block === BLOCK.STEEL_ANVIL) removeSteelAnvilModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CAMPFIRE) removeCampfireModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.TORCH) removeTorchModel(hit.x, hit.y, hit.z);
     if (hit.block === BLOCK.CHEST) {
@@ -10243,6 +10602,7 @@ const WB_CATEGORIES = [
         { from: BLOCK.PLANKS, to: BLOCK.CRAFTING, fc: 16, tc: 1 },
         { from: 3, to: 'furnace_block', fc: 8, tc: 1 },
         { from: 'iron_ingot', to: 'anvil_block', fc: 5, tc: 1 },
+        { from: 'steel_ingot', fromAlt: 'iron_ingot', to: 'steel_anvil_block', fc: 5, fcAlt: 2, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: BLOCK.STONE, to: 'blast_furnace_block', fc: 5, fcAlt: 8, tc: 1, multi: true },
         { from: BLOCK.WOOD, fromAlt: 'coal', to: 'campfire_block', fc: 4, fcAlt: 1, tc: 1, multi: true },
         { from: BLOCK.WOOD, to: 'chest_block', fc: 8, tc: 1 },
@@ -10643,8 +11003,57 @@ function removeAnvilModel(px, py, pz) {
             }
 }
 
+// ── Steel Anvil 3D models ──
+const steelAnvilModels = new Map();
+const _steelAnvilDarkMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, metalness: 0.9, roughness: 0.2 });
+const _steelAnvilLightMat = new THREE.MeshStandardMaterial({ color: 0x6080a0, metalness: 0.85, roughness: 0.22 });
+
+function createSteelAnvilModel(wx, wy, wz) {
+    const BS = BLOCK_SIZE;
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(BS * 1.8, BS * 0.4, BS * 1.4), _steelAnvilDarkMat);
+    base.position.y = BS * 0.2; g.add(base);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(BS * 1.0, BS * 0.6, BS * 0.8), _steelAnvilDarkMat);
+    pillar.position.y = BS * 0.7; g.add(pillar);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(BS * 2.0, BS * 0.35, BS * 1.2), _steelAnvilLightMat);
+    top.position.y = BS * 1.2; g.add(top);
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(BS * 0.3, BS * 0.8, 4), _steelAnvilLightMat);
+    horn.position.set(BS * 1.2, BS * 1.2, 0);
+    horn.rotation.z = -Math.PI / 2;
+    g.add(horn);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(BS * 0.5, BS * 0.5, BS * 1.0), _steelAnvilDarkMat);
+    step.position.set(-BS * 0.9, BS * 0.75, 0); g.add(step);
+    // Small decorative steel band on the work surface
+    const band = new THREE.Mesh(new THREE.BoxGeometry(BS * 2.05, BS * 0.07, BS * 0.2), _steelAnvilLightMat);
+    band.position.set(0, BS * 1.39, 0); g.add(band);
+    g.position.set(wx + BS, wy + BS, wz + BS);
+    scene.add(g);
+    return g;
+}
+
+function placeSteelAnvilModel(px, py, pz) {
+    const BS = BLOCK_SIZE; const yOff = 128;
+    const wx = px * BS, wy = (py - yOff) * BS, wz = pz * BS;
+    const key = px + ',' + py + ',' + pz;
+    if (steelAnvilModels.has(key)) return;
+    steelAnvilModels.set(key, createSteelAnvilModel(wx, wy, wz));
+}
+
+function removeSteelAnvilModel(px, py, pz) {
+    for (let dx = 0; dx <= 1; dx++)
+        for (let dy = 0; dy <= 1; dy++)
+            for (let dz = 0; dz <= 1; dz++) {
+                const key = (px-dx) + ',' + (py-dy) + ',' + (pz-dz);
+                if (steelAnvilModels.has(key)) {
+                    scene.remove(steelAnvilModels.get(key));
+                    steelAnvilModels.delete(key);
+                }
+            }
+}
+
 // ── Anvil system — metal tools + custom swords ──
 let anvilOpen = false;
+let currentAnvilTier = 'iron'; // 'iron' or 'steel'
 const anvilMenuEl = document.createElement('div');
 anvilMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.55);backdrop-filter:blur(6px);border:2px solid rgba(160,140,100,0.3);border-radius:8px;padding:16px;min-width:440px;max-height:80vh;overflow-y:auto;user-select:none;';
 document.body.appendChild(anvilMenuEl);
@@ -10703,6 +11112,9 @@ const ANVIL_RECIPES = [
     ]},
 ];
 
+// Materials allowed on the Iron Anvil (steel/diamond/dragonsteel need the Steel Anvil)
+const _IRON_ANVIL_MATS = new Set(['stick', String(BLOCK.STONE), 'copper_ingot', 'iron_ingot', 'gold_ingot']);
+
 // Sword customization options
 const GUARD_STYLES = ['straight', 'curved', 'wide', 'spiked', 'ring'];
 const POMMEL_STYLES = ['round', 'gem', 'skull', 'wolf', 'claw'];
@@ -10760,27 +11172,37 @@ let anvilSwordConfig = {
     bladeMat: 'iron_ingot', bladeLength: 2, bladeThickness: 1,
     trimMat: '',
     name: '',
+    isBattleaxe: false,
 };
 
 const _anvilCollapsed = {}; // track which categories are collapsed
 
 function updateAnvilUI() {
-    let html = '<h2 style="color:rgba(220,200,160,0.85);font:bold 15px monospace;text-align:center;margin-bottom:10px;">Anvil</h2>';
+    const _isSteelAnvil = currentAnvilTier === 'steel';
+    const _tierLabel = _isSteelAnvil ? 'Steel Anvil' : 'Iron Anvil';
+    const _borderColor = _isSteelAnvil ? 'rgba(96,128,160,0.5)' : 'rgba(160,140,100,0.3)';
+    const _headColor = _isSteelAnvil ? 'rgba(160,200,240,0.9)' : 'rgba(220,200,160,0.85)';
+    let html = `<h2 style="color:${_headColor};font:bold 15px monospace;text-align:center;margin-bottom:10px;">${_tierLabel}</h2>`;
+    if (!_isSteelAnvil) html += '<div style="font:10px monospace;color:rgba(160,140,100,0.6);text-align:center;margin-bottom:8px;">Iron-tier materials only — find or craft a Steel Anvil for more</div>';
 
-    // Standard recipes
+    // Standard recipes — iron anvil filters to iron-tier materials only
+    const _recipeAllowed = (r) => _isSteelAnvil || (_IRON_ANVIL_MATS.has(String(r.from)) && (!r.multi || _IRON_ANVIL_MATS.has(String(r.fromAlt || 'stick'))));
     for (const cat of ANVIL_RECIPES) {
+        const filteredRecipes = cat.recipes.filter(_recipeAllowed);
+        if (filteredRecipes.length === 0) continue;
         const collapsed = _anvilCollapsed[cat.name];
         const arrow = collapsed ? '▶' : '▼';
         html += `<div class="craft-cat open" data-toggle="${cat.name}" style="cursor:pointer;user-select:none;">${arrow} ${cat.name}</div><div class="craft-grid" style="${collapsed ? 'display:none;' : ''}">`;
-        for (let ri = 0; ri < cat.recipes.length; ri++) {
-            const r = cat.recipes[ri];
+        for (let ri = 0; ri < filteredRecipes.length; ri++) {
+            const r = filteredRecipes[ri];
+            const origRi = cat.recipes.indexOf(r);
             const has1 = (inventory[r.from] || 0) >= r.fc;
             const has2 = !r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt;
             const canCraft = has1 && has2;
             const outInfo = getItemInfo(r.to);
             const inInfo = getItemInfo(r.from);
             const altInfo = r.multi ? getItemInfo(r.fromAlt) : null;
-            html += `<div class="craft-row${canCraft ? '' : ' disabled'}" data-cat="${cat.name}" data-ri="${ri}" style="cursor:pointer;">
+            html += `<div class="craft-row${canCraft ? '' : ' disabled'}" data-cat="${cat.name}" data-ri="${origRi}" style="cursor:pointer;">
                 <span class="craft-icon" style="background:${inInfo?.front || '#555'}"></span>
                 <span>${r.fc}× ${inInfo?.name || '?'}</span>`;
             if (altInfo) html += `<span>+ ${r.fcAlt}× ${altInfo.name}</span>`;
@@ -10797,7 +11219,8 @@ function updateAnvilUI() {
         for (const o of opts) s += `<option value="${o.value}"${cur == o.value ? ' selected' : ''}>${o.label}</option>`;
         return s + '</select>';
     };
-    const _matOpts = SWORD_MATERIALS.map(m => ({ value: m.key, label: m.name }));
+    const _tierFilter = (m) => _isSteelAnvil || _IRON_ANVIL_MATS.has(String(m.key));
+    const _matOpts = SWORD_MATERIALS.filter(_tierFilter).map(m => ({ value: m.key, label: m.name }));
     const _accentOpts = [..._matOpts, ...ACCENT_MATERIALS.map(m => ({ value: m.key, label: m.name }))];
     const _matOptsWithNone = [{ value: '', label: 'None' }, ..._accentOpts];
     const _styleOpts = (arr) => arr.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
@@ -10847,12 +11270,19 @@ function updateAnvilUI() {
 
     // 6. Blade name
     html += `<div style="${_row}"><span style="${_lbl}width:55px;">Name</span>`;
-    html += `<input type="text" id="anvilName" maxlength="24" placeholder="Unnamed Blade" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
+    html += `<input type="text" id="anvilName" maxlength="24" placeholder="${anvilSwordConfig.isBattleaxe ? 'Unnamed Battleaxe' : 'Unnamed Blade'}" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
     html += `</div>`;
+
+    // 7. Battleaxe toggle — swaps the forged weapon for a double-bit axe with bigger
+    // per-hit damage but slower swing speed.
+    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Battleaxe</span>`;
+    html += `<label style="flex:1;display:flex;align-items:center;gap:6px;font:10px monospace;color:rgba(200,180,140,0.8);cursor:pointer;">`;
+    html += `<input type="checkbox" id="anvilIsBattleaxe" ${anvilSwordConfig.isBattleaxe ? 'checked' : ''}>`;
+    html += `<span>Forge as double-bit battleaxe (+50% damage, 40% slower swing)</span></label></div>`;
 
     // Cost summary + forge button
     html += '<div id="anvilCostSummary" style="margin-top:6px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
-    html += '<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">Forge Sword</button>';
+    html += `<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">${anvilSwordConfig.isBattleaxe ? 'Forge Battleaxe' : 'Forge Sword'}</button>`;
     html += '</div></div>'; // close sword collapsible + outer div
 
     // ── Custom Staff Forge ──
@@ -10915,6 +11345,7 @@ function updateAnvilUI() {
         });
     });
 
+
     // Wire up standard recipe clicks
     anvilMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
         row.addEventListener('click', () => {
@@ -10948,6 +11379,7 @@ function updateAnvilUI() {
         c.bladeThickness = Number(document.getElementById('anvilBladeThick')?.value || 10) / 10;
         c.trimMat = document.getElementById('anvilTrimMat')?.value || '';
         c.name = document.getElementById('anvilName')?.value?.trim() || '';
+        c.isBattleaxe = !!document.getElementById('anvilIsBattleaxe')?.checked;
         // Parse mat keys back to numbers if needed
         if (!isNaN(c.pommelMat)) c.pommelMat = Number(c.pommelMat);
         if (!isNaN(c.handleMat)) c.handleMat = Number(c.handleMat);
@@ -10987,6 +11419,11 @@ function updateAnvilUI() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', _updateCost);
     }
+    const _axeToggle = document.getElementById('anvilIsBattleaxe');
+    if (_axeToggle) _axeToggle.addEventListener('change', () => {
+        anvilSwordConfig.isBattleaxe = _axeToggle.checked;
+        updateAnvilUI();
+    });
     for (const id of ['anvilBladeLen','anvilBladeThick']) {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', () => {
@@ -11024,6 +11461,7 @@ function updateAnvilUI() {
         // Create custom sword
         const swordId = 'csword_' + Date.now();
         if (!window._customSwords) window._customSwords = {};
+        const weaponLabel = c.isBattleaxe ? 'battleaxe' : 'sword';
         window._customSwords[swordId] = {
             tier, damage: BLADE_DAMAGE[c.bladeMat] || 3,
             pommelStyle: c.pommelStyle, pommelMat: c.pommelMat,
@@ -11031,14 +11469,16 @@ function updateAnvilUI() {
             guardStyle: c.guardStyle, guardMat: c.guardMat,
             bladeMat: c.bladeMat, bladeLength: c.bladeLength, bladeThickness: c.bladeThickness,
             trimMat: c.trimMat,
-            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' Sword'),
+            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' ' + (c.isBattleaxe ? 'Battleaxe' : 'Sword')),
+            isBattleaxe: !!c.isBattleaxe,
+            speedMult: c.isBattleaxe ? 1.4 : 1.0,
         };
         inventory[swordId] = 1;
         const emptyIdx = hotbarSlots.indexOf(0);
         if (emptyIdx >= 0) hotbarSlots[emptyIdx] = swordId;
         refreshUI();
         updateAnvilUI();
-        showToast('Forged: ' + (c.name || tier + ' sword'));
+        showToast('Forged: ' + (c.name || tier + ' ' + weaponLabel));
     });
 
     // ── Staff forge wiring ──
@@ -11158,9 +11598,14 @@ const _gateBosses = ['The Ancient One', 'Colossus of the Gate', 'The Dark Knight
 const _getSwordDamage = (held) => {
     if (typeof held === 'string' && held.startsWith('csword_') && window._customSwords && window._customSwords[held]) {
         const cs = window._customSwords[held];
-        // Plain 'dragonsteel' tier keeps the level-scaled base so named fortress swords
-        // stay consistent. Sub-tiers (damaged_dragonsteel, dragonsteel_heavy) use flat damage.
-        if (cs.tier === 'dragonsteel' && !cs.damage) return _getDragonsteelDmg(5);
+        if (cs.tier === 'damaged_dragonsteel') return 5; // flat — salvage & reforge at a blacksmith for full power
+        if (cs.isBattleaxe) {
+            // Battleaxes: dragonsteel scales like a normal dragonsteel sword but with a
+            // higher base (8 vs 5); non-dragonsteel adds +50% flat damage for the slower swing.
+            if (cs.tier === 'dragonsteel' || cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(8);
+            return Math.floor((cs.damage || 6) * 1.5);
+        }
+        if (cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(cs.damage || 8);
         if (cs.tier === 'dragonsteel') return _getDragonsteelDmg(5);
         return cs.damage || 6;
     }
@@ -12743,7 +13188,15 @@ function doPlace(e) {
 
     // Right-click on anvil → open anvil menu
     if (hit.block === BLOCK.ANVIL && placeHoldTime < 0.05) {
-        anvilOpen = true;
+        anvilOpen = true; currentAnvilTier = 'iron';
+        anvilMenuEl.style.display = 'block';
+        updateAnvilUI();
+        placingHeld = false;
+        if (pointerLocked) document.exitPointerLock();
+        return false;
+    }
+    if (hit.block === BLOCK.STEEL_ANVIL && placeHoldTime < 0.05) {
+        anvilOpen = true; currentAnvilTier = 'steel';
         anvilMenuEl.style.display = 'block';
         updateAnvilUI();
         placingHeld = false;
@@ -12778,10 +13231,11 @@ function doPlace(e) {
     const isFurnace = bt === 'furnace_block';
     const isBlastFurnace = bt === 'blast_furnace_block';
     const isAnvil = bt === 'anvil_block';
+    const isSteelAnvil = bt === 'steel_anvil_block';
     const isCampfire = bt === 'campfire_block';
     const isChest = bt === 'chest_block';
-    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isCampfire ? BLOCK.CAMPFIRE : isChest ? BLOCK.CHEST : bt;
-    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isCampfire && !isChest) return false;
+    const placeBlock = isFurnace ? 15 : isBlastFurnace ? BLOCK.BLAST_FURNACE : isAnvil ? BLOCK.ANVIL : isSteelAnvil ? BLOCK.STEEL_ANVIL : isCampfire ? BLOCK.CAMPFIRE : isChest ? BLOCK.CHEST : bt;
+    if (typeof bt === 'string' && !isFurnace && !isBlastFurnace && !isAnvil && !isSteelAnvil && !isCampfire && !isChest) return false;
 
     const px = hit.prevX, py = hit.prevY, pz = hit.prevZ;
     const BS = BLOCK_SIZE;
@@ -12806,7 +13260,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         placeCampfireModel(px, py, pz);
-    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
+    } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.STEEL_ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
         for (let dx = 0; dx <= 1; dx++)
             for (let dy = 0; dy <= 1; dy++)
                 for (let dz = 0; dz <= 1; dz++)
@@ -12815,6 +13269,7 @@ function doPlace(e) {
             for (let dz = 0; dz <= 1; dz++)
                 rebuildNear(px + dx, pz + dz);
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
+        if (placeBlock === BLOCK.STEEL_ANVIL) placeSteelAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
     } else if (snapGrid) {
         // Snap placement — uses snapShape
@@ -12893,7 +13348,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     const held = hotbarSlots[selectedSlot];
     if (equippedShield) {
         const info = held ? getItemInfo(held) : null;
-        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
+        const isPlaceable = held && (typeof held === 'number' || held === 'furnace_block' || held === 'anvil_block' || held === 'steel_anvil_block' || held === 'blast_furnace_block' || held === 'campfire_block' || held === 'chest_block');
         if (!isPlaceable) {
             shieldRaised = true;
             return; // don't place blocks while shielding
@@ -13316,7 +13771,31 @@ function animate() {
                     ss._trimStripe.visible = false;
                     ss._trimStripe2.visible = false;
                 }
-                isTwoH = (bLen > 2.3);
+                // Battleaxe silhouette for the sheathed version
+                const _defBlade = ss._bladeGrp.children[0];
+                const _defTip = ss._bladeGrp.children[1];
+                if (cs.isBattleaxe) {
+                    ss._bladeGrp.scale.set(1, 1, 1);
+                    ss._bladeGrp.position.y = 0;
+                    if (_defBlade) _defBlade.visible = false;
+                    if (_defTip) _defTip.visible = false;
+                    ss._trimStripe.visible = false;
+                    ss._trimStripe2.visible = false;
+                    if (ss._guardMesh) ss._guardMesh.visible = false;
+                    if (ss._guardExtra1) ss._guardExtra1.visible = false;
+                    if (ss._guardExtra2) ss._guardExtra2.visible = false;
+                    if (!ss._axeHead) {
+                        ss._axeHead = window.buildAxeHead(ss._bladeMat, ss._handleMat);
+                        ss._bladeGrp.add(ss._axeHead);
+                    }
+                    ss._axeHead.visible = true;
+                } else {
+                    if (ss._axeHead) ss._axeHead.visible = false;
+                    if (_defBlade) _defBlade.visible = true;
+                    if (_defTip) _defTip.visible = true;
+                    if (ss._guardMesh) ss._guardMesh.visible = true;
+                }
+                isTwoH = (bLen > 2.3) || cs.isBattleaxe;
             } else {
                 // Standard sword — apply tier colors to all parts
                 const SC = {
@@ -13335,6 +13814,9 @@ function animate() {
                 ss._pommelMat.color.setHex(c.pommel); ss._pommelMat.needsUpdate = true;
                 ss._bladeGrp.scale.set(1, 1, 1);
                 ss._bladeGrp.position.y = 0;
+                if (ss._axeHead) ss._axeHead.visible = false;
+                if (ss._bladeGrp.children[0]) ss._bladeGrp.children[0].visible = true;
+                if (ss._bladeGrp.children[1]) ss._bladeGrp.children[1].visible = true;
             }
             if (isTwoH) {
                 // On back: blade pointing up, flat against back, slight diagonal tilt
@@ -13493,7 +13975,7 @@ function animate() {
     sun.target.updateMatrixWorld();
 
     // Sun sphere — arc from east to west, tilted south so it never goes directly overhead
-    const sunSkyDist = 2000;
+    const sunSkyDist = 4000;
     sunSphere.position.set(
         player.position.x + Math.cos(sunAngle) * sunSkyDist,
         Math.sin(sunAngle) * sunSkyDist * 0.8,
@@ -13667,15 +14149,12 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    // Update far terrain + water cutout position (shader-based, follows player every frame)
-    if (farTerrain && farTerrain.material._shader) {
-        farTerrain.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
-    }
-    if (_playerBlocksMesh && _playerBlocksMesh.material._shader) {
-        _playerBlocksMesh.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
-    }
-    if (farWater && farWater.material._shader) {
-        farWater.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
+    // Update chunk-map texture and sync uniforms to far terrain shaders
+    if (chunkManager) {
+        chunkManager.updateChunkMap();
+        if (farTerrain && farTerrain.material._shader) chunkManager.syncChunkMapUniforms(farTerrain.material._shader.uniforms);
+        if (_playerBlocksMesh && _playerBlocksMesh.material._shader) chunkManager.syncChunkMapUniforms(_playerBlocksMesh.material._shader.uniforms);
+        if (farWater && farWater.material._shader) chunkManager.syncChunkMapUniforms(farWater.material._shader.uniforms);
     }
 
     // Attack cooldown
@@ -14262,7 +14741,7 @@ function animate() {
     // Context music — boss > fortress > village > calm
     {
         const aliveBosses = creatures.creatures.filter(c => c._isBoss && !c.dead);
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
+        const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const cur = musicSystem.currentName;
 
@@ -14282,7 +14761,7 @@ function animate() {
         }
 
         // Check if near a village
-        const villageLocs = [[80,16],[-100,-50],[200,60],[-200,100],[50,-150],[-150,200]];
+        const villageLocs = [[160,32],[-200,-100],[400,120],[-400,200],[100,-300],[-300,400]];
         let nearVillage = false;
         for (const [vx, vz] of villageLocs) {
             const vdx = player.position.x - vx, vdz = player.position.z - vz;
@@ -14321,7 +14800,7 @@ function animate() {
         fd._lastHitTime = (fd._lastHitTime === undefined ? 1000 : fd._lastHitTime + dt);
         if (fd._lastHitTime > 10 && fd.hp < fd.maxHP) fd.hp = Math.min(fd.maxHP, fd.hp + fd.maxHP * 0.02 * dt);
         if (fd.hp <= 0) { fd.state = 'dead'; }
-        const fortCX = -505, fortCZ = -335;
+        const fortCX = -1010, fortCZ = -670;
         const landX = fortCX + 20, landZ = fortCZ + 15; // landing spot near fortress
         const landY = getTerrainHeight(landX, landZ);
         fd._flapT = (fd._flapT || 0) + dt;
@@ -14421,7 +14900,7 @@ function animate() {
         }
 
         // Fire breath — attack player if too close to fortress (only while flying)
-        const fdx = player.position.x - (-505), fdz = player.position.z - (-335);
+        const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 

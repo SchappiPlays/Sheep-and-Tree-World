@@ -1193,12 +1193,16 @@ function rebuildPlayerBlocksMesh() {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    // Hide this mesh near the player — the real chunk meshes show instead
+    // Hide this mesh where chunks are loaded — the real chunk meshes show instead
     mat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 80.0 };
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
@@ -1206,9 +1210,12 @@ function rebuildPlayerBlocksMesh() {
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         mat._shader = shader;
     };
@@ -1311,9 +1318,10 @@ function buildFarTerrain(centerX, centerZ) {
             const snow = getSnowBlend(wz), desert = getDesertBlend(wz);
             const mtn = getMountainBlend(wx, wz), scorched = getScorchedBlend(wx, wz);
             const glacial = getFrozenBasinBlend(wx, wz);
+            const plains = getPlainsBlend(wx, wz);
             let hex;
             if (glacial > 0.05) hex = 0x90c8e0;
-            else if (scorched > 0.3) hex = 0x2a2018;
+            else if (scorched > 0.05) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
             else if (snow > 0) hex = 0xb0c8b0;
             else if (desert > 0.5) hex = 0xd4c07a;
@@ -1364,18 +1372,16 @@ function buildFarTerrain(centerX, centerZ) {
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
-            const plains = getPlainsBlend(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && !_noTrees(wx, wz)) {
+            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
-                if (plains > 0.5) continue; // skip trees in plains entirely
                 // Vary forest density — same noise as world.js _placeTreesInChunk
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
                 const _baseDensity = _fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003;
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
-                if (treeChance < _lodDensity * (1 - plains * 0.95)) {
+                if (treeChance < _lodDensity) {
                     // Jitter position to break grid pattern
                     const _jh1 = Math.sin(gx * 73.1 + gz * 51.3 + 5.7) * 43758.5453;
                     const _jh2 = Math.sin(gx * 91.7 + gz * 37.9 + 3.1) * 43758.5453;
@@ -1442,25 +1448,29 @@ function buildFarTerrain(centerX, centerZ) {
     geo.setIndex(new THREE.BufferAttribute(idxArr.subarray(0, ii), 1));
     geo.computeVertexNormals();
     const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    // Shader hack: discard fragments within a radius of the player (dynamic cutout)
+    // Shader: discard fragments where chunks are loaded
     farMat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 80.0 };
-        // Add varying + uniforms
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
-        // Compute world position unconditionally in vertex shader
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
         );
-        // Discard near player in fragment shader
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         farMat._shader = shader;
     };
@@ -1481,10 +1491,14 @@ function buildFarTerrain(centerX, centerZ) {
     farWaterGeo.rotateX(-Math.PI / 2);
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x3a7ab5, transparent: true, opacity: 0.5 });
     waterMat.onBeforeCompile = (shader) => {
-        shader.uniforms._playerPos = { value: new THREE.Vector3() };
-        shader.uniforms._cutoutR = { value: 80.0 };
+        const cmu = chunkManager.getChunkMapUniforms();
+        shader.uniforms._chunkMap = cmu._chunkMap;
+        shader.uniforms._cmapOX = cmu._cmapOX;
+        shader.uniforms._cmapOZ = cmu._cmapOZ;
+        shader.uniforms._cmapSize = cmu._cmapSize;
+        shader.uniforms._chunkWorldSize = cmu._chunkWorldSize;
         shader.vertexShader = 'varying vec3 vWPos;\n' + shader.vertexShader;
-        shader.fragmentShader = 'varying vec3 vWPos;\nuniform vec3 _playerPos;\nuniform float _cutoutR;\n' + shader.fragmentShader;
+        shader.fragmentShader = 'varying vec3 vWPos;\nuniform sampler2D _chunkMap;\nuniform float _cmapOX;\nuniform float _cmapOZ;\nuniform float _cmapSize;\nuniform float _chunkWorldSize;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace(
             '#include <fog_vertex>',
             'vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#include <fog_vertex>'
@@ -1492,9 +1506,12 @@ function buildFarTerrain(centerX, centerZ) {
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `#include <dithering_fragment>
-            float _dx = vWPos.x - _playerPos.x;
-            float _dz = vWPos.z - _playerPos.z;
-            if (_dx*_dx + _dz*_dz < _cutoutR*_cutoutR) discard;`
+            float _cx = floor(vWPos.x / _chunkWorldSize) - _cmapOX;
+            float _cz = floor(vWPos.z / _chunkWorldSize) - _cmapOZ;
+            vec2 _uv = vec2((_cx + 0.5) / _cmapSize, (_cz + 0.5) / _cmapSize);
+            if (_uv.x >= 0.0 && _uv.x <= 1.0 && _uv.y >= 0.0 && _uv.y <= 1.0) {
+                if (texture2D(_chunkMap, _uv).r > 0.5) discard;
+            }`
         );
         waterMat._shader = shader;
     };
@@ -1819,6 +1836,7 @@ function startGame(loadSlotName) {
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
+    chunkManager.initChunkMap();
     creatures = new CreatureManager(scene, world);
     creatures._onCreatureDrop = (item, count, creatureType) => {
         for (let i = 0; i < count; i++) addToInventory(item);
@@ -14131,15 +14149,12 @@ function animate() {
 
     // Rebuild far terrain if player moved far from the skip zone center
     const farDx = player.position.x - _farCenterX, farDz = player.position.z - _farCenterZ;
-    // Update far terrain + water cutout position (shader-based, follows player every frame)
-    if (farTerrain && farTerrain.material._shader) {
-        farTerrain.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
-    }
-    if (_playerBlocksMesh && _playerBlocksMesh.material._shader) {
-        _playerBlocksMesh.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
-    }
-    if (farWater && farWater.material._shader) {
-        farWater.material._shader.uniforms._playerPos.value.set(player.position.x, 0, player.position.z);
+    // Update chunk-map texture and sync uniforms to far terrain shaders
+    if (chunkManager) {
+        chunkManager.updateChunkMap();
+        if (farTerrain && farTerrain.material._shader) chunkManager.syncChunkMapUniforms(farTerrain.material._shader.uniforms);
+        if (_playerBlocksMesh && _playerBlocksMesh.material._shader) chunkManager.syncChunkMapUniforms(_playerBlocksMesh.material._shader.uniforms);
+        if (farWater && farWater.material._shader) chunkManager.syncChunkMapUniforms(farWater.material._shader.uniforms);
     }
 
     // Attack cooldown

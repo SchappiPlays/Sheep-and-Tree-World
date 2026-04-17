@@ -436,9 +436,41 @@ export class Player {
         // Blade — scale by length and thickness
         _applyMat(tool._bladeMat, swordData.bladeMat);
         const bLenScale = bLen / 2;   // normalize: 2 = default (1.0x)
-        tool._bladeGrp.scale.set(bThick, bLenScale, bThick);
-        // Offset blade group so the base stays at the guard (y≈0.1)
-        tool._bladeGrp.position.y = 0.1 * (1 - bLenScale);
+        if (swordData.isBattleaxe) {
+            // Keep the blade group at its natural size so our axe mesh isn't distorted
+            tool._bladeGrp.scale.set(1, 1, 1);
+            tool._bladeGrp.position.y = 0;
+        } else {
+            tool._bladeGrp.scale.set(bThick, bLenScale, bThick);
+            // Offset blade group so the base stays at the guard (y≈0.1)
+            tool._bladeGrp.position.y = 0.1 * (1 - bLenScale);
+        }
+        // Battleaxe head — built lazily, toggled with the default blade/tip.
+        const defaultBlade = tool._bladeGrp.children[0];
+        const defaultTip = tool._bladeGrp.children[1];
+        const trim1 = tool._trimStripe, trim2 = tool._trimStripe2;
+        if (swordData.isBattleaxe) {
+            if (!tool._axeHead && typeof window !== 'undefined' && window.buildAxeHead) {
+                tool._axeHead = window.buildAxeHead(tool._bladeMat, tool._handleMat);
+                tool._bladeGrp.add(tool._axeHead);
+            }
+            if (tool._axeHead) tool._axeHead.visible = true;
+            if (defaultBlade) defaultBlade.visible = false;
+            if (defaultTip) defaultTip.visible = false;
+            if (trim1) trim1.visible = false;
+            if (trim2) trim2.visible = false;
+            // Hide crossguard too — axes don't have one
+            if (tool._guardMesh) tool._guardMesh.visible = false;
+            if (tool._guardExtra1) tool._guardExtra1.visible = false;
+            if (tool._guardExtra2) tool._guardExtra2.visible = false;
+            this._isBattleaxe = true;
+        } else {
+            if (tool._axeHead) tool._axeHead.visible = false;
+            if (defaultBlade) defaultBlade.visible = true;
+            if (defaultTip) defaultTip.visible = true;
+            if (tool._guardMesh) tool._guardMesh.visible = true;
+            this._isBattleaxe = false;
+        }
         // Handle
         _applyMat(tool._handleMat, swordData.handleMat);
         // Guard

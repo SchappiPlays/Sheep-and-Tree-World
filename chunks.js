@@ -74,6 +74,70 @@ export class ChunkManager {
         this._lastPCX = null; // force re-scan
     }
 
+    // Chunk-map texture: each pixel = 1 chunk, white = loaded, black = not
+    initChunkMap() {
+        const sz = 512;
+        this._cmapSize = sz;
+        this._cmapData = new Uint8Array(sz * sz * 4); // RGBA
+        this._cmapTex = new THREE.DataTexture(this._cmapData, sz, sz, THREE.RGBAFormat);
+        this._cmapTex.magFilter = THREE.NearestFilter;
+        this._cmapTex.minFilter = THREE.NearestFilter;
+        this._cmapTex.needsUpdate = true;
+        // Origin chunk coords that map to texture center
+        this._cmapOX = 0;
+        this._cmapOZ = 0;
+        return this._cmapTex;
+    }
+
+    // Update the chunk map texture — call each frame after chunk loading
+    updateChunkMap() {
+        if (!this._cmapTex) return;
+        const pcx = this._lastPCX, pcz = this._lastPCZ;
+        if (pcx === null) return;
+        const sz = this._cmapSize;
+        const half = sz >> 1;
+        // Re-center on player chunk
+        this._cmapOX = pcx - half;
+        this._cmapOZ = pcz - half;
+        const data = this._cmapData;
+        // Clear
+        data.fill(0);
+        // Mark loaded chunks
+        for (const key of this.loaded.keys()) {
+            const sep = key.indexOf(',');
+            const cx = parseInt(key.substring(0, sep));
+            const cz = parseInt(key.substring(sep + 1));
+            const tx = cx - this._cmapOX;
+            const tz = cz - this._cmapOZ;
+            if (tx >= 0 && tx < sz && tz >= 0 && tz < sz) {
+                const i = (tz * sz + tx) * 4;
+                data[i] = 255;     // R
+                data[i + 1] = 255; // G
+                data[i + 2] = 255; // B
+                data[i + 3] = 255; // A
+            }
+        }
+        this._cmapTex.needsUpdate = true;
+    }
+
+    // Returns shader uniforms for chunk-map cutout
+    getChunkMapUniforms() {
+        return {
+            _chunkMap: { value: this._cmapTex },
+            _cmapOX: { value: 0.0 },
+            _cmapOZ: { value: 0.0 },
+            _cmapSize: { value: this._cmapSize },
+            _chunkWorldSize: { value: CHUNK_SIZE * BS },
+        };
+    }
+
+    // Update uniform values (call each frame)
+    syncChunkMapUniforms(uniforms) {
+        if (!uniforms || !this._cmapTex) return;
+        uniforms._cmapOX.value = this._cmapOX;
+        uniforms._cmapOZ.value = this._cmapOZ;
+    }
+
     update(px, pz, facingAngle) {
         // Convert world position to chunk coordinates
         const pcx = Math.floor(px / (CHUNK_SIZE * BS));
@@ -82,7 +146,7 @@ export class ChunkManager {
         const faceDZ = Math.cos(facingAngle || 0);
 
         if (pcx === this._lastPCX && pcz === this._lastPCZ) {
-            this._processQueue(3);
+            this._processQueue(8);
             return;
         }
         this._lastPCX = pcx;
@@ -143,7 +207,7 @@ export class ChunkManager {
             this.loaded.delete(key);
         }
         this.loadedCount = this.loaded.size;
-        this._processQueue(3);
+        this._processQueue(8);
     }
 
     rebuildChunkAt(bx, bz) {
@@ -166,6 +230,8 @@ export class ChunkManager {
 
     _processQueue(maxPerFrame) {
         let built = 0;
+        const t0 = performance.now();
+        const timeBudget = 12; // ms per frame budget for chunk building
         while (this.buildQueue.length > 0 && built < maxPerFrame) {
             const { cx, cz, key, lod } = this.buildQueue.shift();
             if (this.loaded.has(key)) continue;
@@ -181,6 +247,8 @@ export class ChunkManager {
             if (entry.leaves) this.scene.add(entry.leaves);
             this.loaded.set(key, entry);
             built++;
+            // Time-based: keep building if under budget (high-LOD chunks are cheap)
+            if (performance.now() - t0 > timeBudget) break;
         }
         this.loadedCount = this.loaded.size;
     }
@@ -225,14 +293,14 @@ export class ChunkManager {
                     const block = this.world.getBlockAt(bx, y, bz);
 
                     if (block === BLOCK.WATER) {
-                        const above = this.world.getBlockAt(bx, y + S, bz);
+                        const above = this.world.getBlockAt(bx, y + 1, bz);
                         if (above === BLOCK.AIR) {
                             const face = FACES[2];
                             const verts = face.verts;
                             for (let vi = 0; vi < 4; vi++) {
                                 wPos.push(
                                     (lx + verts[vi][0] * S) * BS,
-                                    (y - Y_OFF + 0.85 * S) * BS,
+                                    (y - Y_OFF + 0.85) * BS,
                                     (lz + verts[vi][2] * S) * BS
                                 );
                                 wNrm.push(0, 1, 0);
@@ -250,7 +318,7 @@ export class ChunkManager {
                         const isPine = block === BLOCK.PINE_LEAVES;
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
-                            const nbx = bx + face.dir[0] * S, nby = y + face.dir[1] * S, nbz = bz + face.dir[2] * S;
+                            const nbx = bx + face.dir[0] * S, nby = y + face.dir[1], nbz = bz + face.dir[2] * S;
                             const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                             if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL) continue;
                             const ch = colorHash(bx, y, bz);
@@ -261,7 +329,7 @@ export class ChunkManager {
                             tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
                             const verts = face.verts;
                             for (let vi = 0; vi < 4; vi++) {
-                                lPos.push((lx + verts[vi][0] * S) * BS, (y - Y_OFF + verts[vi][1] * S) * BS, (lz + verts[vi][2] * S) * BS);
+                                lPos.push((lx + verts[vi][0] * S) * BS, (y - Y_OFF + verts[vi][1]) * BS, (lz + verts[vi][2] * S) * BS);
                                 lNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                                 lCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                             }
@@ -276,7 +344,6 @@ export class ChunkManager {
                     let _cornerLow = [false, false, false, false];
                     // Use simpler slope styles at higher LODs for performance
                     let _slopeStyle = (typeof window !== 'undefined' && window._slopeStyle) || 'mini';
-                    if (lod >= 2 && _slopeStyle === 'mini') _slopeStyle = 'sloped';
                     if (lod >= 3) _slopeStyle = 'none';
                     const _aboveBlock = this.world.getBlockAt(bx, y + 1, bz);
                     const _aboveIsOpen = _aboveBlock === BLOCK.AIR || _aboveBlock === BLOCK.FLOWER_RED || _aboveBlock === BLOCK.FLOWER_YELLOW || _aboveBlock === BLOCK.FLOWER_BLUE || _aboveBlock === BLOCK.FLOWER_WHITE;
@@ -309,7 +376,7 @@ export class ChunkManager {
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
                         const nbx = bx + face.dir[0] * S;
-                        const nby = y + face.dir[1] * S;
+                        const nby = y + face.dir[1];
                         const nbz = bz + face.dir[2] * S;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                         const _neighborSolid = neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES && neighbor !== BLOCK.PINE_LEAVES && neighbor !== BLOCK.TORCH && neighbor !== BLOCK.CAMPFIRE;
@@ -541,7 +608,7 @@ export class ChunkManager {
                                         const ix = x0[0]*(1-cu)*(1-cv) + x1[0]*cu*(1-cv) + x2[0]*(1-cu)*cv + x3[0]*cu*cv;
                                         const iy = x0[1]*(1-cu)*(1-cv) + x1[1]*cu*(1-cv) + x2[1]*(1-cu)*cv + x3[1]*cu*cv;
                                         const iz = x0[2]*(1-cu)*(1-cv) + x1[2]*cu*(1-cv) + x2[2]*(1-cu)*cv + x3[2]*cu*cv;
-                                        tPos.push((lx + ix * S) * BS, (y - Y_OFF + iy * S) * BS, (lz + iz * S) * BS);
+                                        tPos.push((lx + ix * S) * BS, (y - Y_OFF + iy) * BS, (lz + iz * S) * BS);
                                         tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                                         tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                                     }
@@ -622,8 +689,8 @@ export class ChunkManager {
                             const baseX = lx * BS, baseZ = lz * BS;
                             const fullW = S * BS;
                             const halfW = fullW * 0.5;
-                            const topY = (y - Y_OFF + S) * BS;
-                            const midY = topY - halfW;
+                            const topY = (y - Y_OFF + 1) * BS;
+                            const midY = topY - BS * 0.5;
                             const _r = tmpColor.r, _g = tmpColor.g, _b = tmpColor.b;
                             if (_slopeStyle === 'sloped') {
                                 // Tilted quad
@@ -686,12 +753,12 @@ export class ChunkManager {
                         // For sloped mini-block style: skip cardinal side faces — each mini-cube renders its own
                         if (_isSlopeable && fi !== 2 && fi !== 3 && _slopeStyle === 'mini') continue;
                         for (let vi = 0; vi < 4; vi++) {
-                            let vyy = (y - Y_OFF + fv[vi][1] * S) * BS;
+                            let vyy = (y - Y_OFF + fv[vi][1]) * BS;
                             // For sloped blocks: side face top vertices use corner heights
                             if (_isSlopeable && fv[vi][1] === 1 && fi !== 2 && fi !== 3) {
                                 const cornerIdx = (fv[vi][0] * 2) + fv[vi][2];
                                 if (_cornerLow[cornerIdx]) {
-                                    vyy = (y - Y_OFF + S) * BS - (S * BS) * 0.5;
+                                    vyy = (y - Y_OFF + 1) * BS - BS * 0.5;
                                 }
                             }
                             tPos.push(
