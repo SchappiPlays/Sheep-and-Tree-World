@@ -1321,8 +1321,11 @@ function buildFarTerrain(centerX, centerZ) {
             else if (mtn > 0.5) hex = 0x888888;
             else if (mtn > 0.1) hex = 0x5a7a4a;
             else hex = 0x5a9040;
-            // Beach sand — near sea level (overrides grass)
-            if (rawTH < 1.5 && snow === 0 && desert === 0 && mtn < 0.3) hex = 0xd4c07a;
+            // Beach sand — near sea level AND near coast (not just any low area like bays)
+            const _szz = wz / 1.15;
+            const _dfc = Math.sqrt(wx*wx + _szz*_szz);
+            const _lr = getIslandRadius(wx, wz);
+            if (rawTH < 1.5 && _dfc > _lr - 160 && snow === 0 && desert === 0 && mtn < 0.3) hex = 0xd4c07a;
             // Sample multiple points per cell for narrow features (rivers/paths)
             let riverFound = false, pathFound = false;
             const probeOff = halfS * 0.5;
