@@ -255,38 +255,18 @@ function _initRiverHeights() {
         }
         riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
 
-        // Calculate heights: sample raw terrain (skip river carving) at each waypoint
-        // Water must sit well below bank to prevent flooding when simulation runs
-        // Ensure monotonically decreasing (always downhill from source)
+        // Calculate heights using a linear gradient from source to end.
+        // Don't sample terrain — hilly terrain gives wildly varying bank heights.
+        // Instead: source height from terrain, end height = 0.5 (just above sea level),
+        // linear interpolation between them. This guarantees smooth consistent downhill.
+        const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
+        const startH = Math.max(sourceH - 1.5, 2); // water surface at source
+        const endH = 0.5; // just above sea level at river mouth
         riv.heights = [];
-        let prevH = Infinity;
         for (let i = 0; i < riv.pts.length; i++) {
-            const [px, pz] = riv.pts[i];
-            // Sample terrain height near the bank (offset perpendicular to avoid the carved channel)
-            let bankH;
-            if (i === 0) {
-                bankH = _getRawTerrainHeight(px, pz);
-            } else {
-                // Sample off to the side of the river for bank height
-                const dx = riv.pts[i][0] - riv.pts[Math.max(0,i-1)][0];
-                const dz = riv.pts[i][1] - riv.pts[Math.max(0,i-1)][1];
-                const len = Math.sqrt(dx*dx + dz*dz) || 1;
-                const nx = -dz / len, nz = dx / len;
-                const off = riv.width + 4;
-                const h1 = _getRawTerrainHeight(px + nx * off, pz + nz * off);
-                const h2 = _getRawTerrainHeight(px - nx * off, pz - nz * off);
-                bankH = Math.min(h1, h2); // lower bank
-            }
-            // Water surface sits well below bank — deep in the carved channel
-            // Bank is the terrain beside the river; channel is carved ~2 units below bank
-            // Water fills to about halfway up the channel walls
-            let waterH = bankH - 2.0;
-            // Ensure monotonically decreasing — always downhill
-            waterH = Math.min(waterH, prevH - 0.1);
-            // Don't go below sea level (rivers end at ocean)
-            waterH = Math.max(waterH, 0.1);
+            const t = riv.cumDist[i] / riv.totalLen; // 0 at source, 1 at mouth
+            const waterH = startH + (endH - startH) * t;
             riv.heights.push(waterH);
-            prevH = waterH;
         }
     }
 }
