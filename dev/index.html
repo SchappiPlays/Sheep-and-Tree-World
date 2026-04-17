@@ -1370,34 +1370,39 @@ function buildFarTerrain(centerX, centerZ) {
                 const treeChance = th - Math.floor(th);
                 if (plains > 0.5) continue; // skip trees in plains entirely
                 // Vary forest density — same noise as world.js _placeTreesInChunk
-                // Each LOD cell covers (step/2)^2 = 36 normal tree slots
-                // P(at least 1 tree) = 1 - (1-density)^36
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
-                const _baseDensity = _fn > 0.2 ? 0.08 : _fn > -0.1 ? 0.03 : 0.008;
+                const _baseDensity = _fn > 0.2 ? 0.06 : _fn > -0.1 ? 0.015 : 0.003;
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
                 if (treeChance < _lodDensity * (1 - plains * 0.95)) {
-                    const trunkH = BS * 5;   // ~2.4 world units (real trees 4-8 blocks)
-                    const leafR = BS * 2.5;  // ~1.2 world units canopy radius
-                    const trunkR = BS * 0.5; // ~0.24 world units trunk radius
+                    // Jitter position to break grid pattern
+                    const _jh1 = Math.sin(gx * 73.1 + gz * 51.3 + 5.7) * 43758.5453;
+                    const _jh2 = Math.sin(gx * 91.7 + gz * 37.9 + 3.1) * 43758.5453;
+                    const _jx = (_jh1 - Math.floor(_jh1) - 0.5) * S * 0.7;
+                    const _jz = (_jh2 - Math.floor(_jh2) - 0.5) * S * 0.7;
+                    const twx = wx + _jx, twz = wz + _jz;
+                    const tTop = Math.floor(Math.max(getTerrainHeight(twx, twz), -0.3) / BS) * BS + BS;
+                    const trunkH = BS * 5;
+                    const leafR = BS * 2.5;
+                    const trunkR = BS * 0.5;
                     const trunkCol = 0x5a3a1a;
                     const leafCol = (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
-                    const tBase = top;
+                    const tBase = tTop;
 
                     // Trunk — 4 side faces
-                    pushFace(wx-trunkR, tBase+trunkH, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz+trunkR, wx-trunkR, tBase+trunkH, wz+trunkR, trunkCol);
-                    pushFace(wx+trunkR, tBase+trunkH, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz-trunkR, wx+trunkR, tBase+trunkH, wz-trunkR, trunkCol);
-                    pushFace(wx-trunkR, tBase+trunkH, wz+trunkR, wx-trunkR, tBase, wz+trunkR, wx+trunkR, tBase, wz+trunkR, wx+trunkR, tBase+trunkH, wz+trunkR, trunkCol);
-                    pushFace(wx+trunkR, tBase+trunkH, wz-trunkR, wx+trunkR, tBase, wz-trunkR, wx-trunkR, tBase, wz-trunkR, wx-trunkR, tBase+trunkH, wz-trunkR, trunkCol);
+                    pushFace(twx-trunkR, tBase+trunkH, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz+trunkR, twx-trunkR, tBase+trunkH, twz+trunkR, trunkCol);
+                    pushFace(twx+trunkR, tBase+trunkH, twz+trunkR, twx+trunkR, tBase, twz+trunkR, twx+trunkR, tBase, twz-trunkR, twx+trunkR, tBase+trunkH, twz-trunkR, trunkCol);
+                    pushFace(twx-trunkR, tBase+trunkH, twz+trunkR, twx-trunkR, tBase, twz+trunkR, twx+trunkR, tBase, twz+trunkR, twx+trunkR, tBase+trunkH, twz+trunkR, trunkCol);
+                    pushFace(twx+trunkR, tBase+trunkH, twz-trunkR, twx+trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase+trunkH, twz-trunkR, trunkCol);
 
                     // Leaves — blocky canopy (top + 4 sides)
                     const lBase = tBase + trunkH - BS * 1.5;
                     const lTop = lBase + BS * 5;
-                    pushFace(wx-leafR, lTop, wz-leafR, wx-leafR, lTop, wz+leafR, wx+leafR, lTop, wz+leafR, wx+leafR, lTop, wz-leafR, leafCol);
-                    pushFace(wx-leafR, lTop, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lBase, wz+leafR, wx-leafR, lTop, wz+leafR, leafCol);
-                    pushFace(wx+leafR, lTop, wz+leafR, wx+leafR, lBase, wz+leafR, wx+leafR, lBase, wz-leafR, wx+leafR, lTop, wz-leafR, leafCol);
-                    pushFace(wx-leafR, lTop, wz+leafR, wx-leafR, lBase, wz+leafR, wx+leafR, lBase, wz+leafR, wx+leafR, lTop, wz+leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lTop, twz+leafR, twx+leafR, lTop, twz+leafR, twx+leafR, lTop, twz-leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lBase, twz+leafR, twx-leafR, lTop, twz+leafR, leafCol);
+                    pushFace(twx+leafR, lTop, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lBase, twz-leafR, twx+leafR, lTop, twz-leafR, leafCol);
+                    pushFace(twx-leafR, lTop, twz+leafR, twx-leafR, lBase, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lTop, twz+leafR, leafCol);
                     pushFace(wx+leafR, lTop, wz-leafR, wx+leafR, lBase, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lTop, wz-leafR, leafCol);
                 }
             }
