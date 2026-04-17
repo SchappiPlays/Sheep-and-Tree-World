@@ -1400,31 +1400,86 @@ export class WaterSim {
         }
     }
 
-    // Called when a block is placed — if in a river, drain downstream
+    // Called when a block is placed — if in a river, check if it forms a real dam
     onBlockPlaced(bx, by, bz) {
         const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
-        // Check if block was placed in a river channel
         for (const riv of riverDefs) {
             if (getRiverBlend(wx, wz, riv) > 0.3) {
-                // Get flow direction and drain downstream
                 const fd = getRiverFlowDir(wx, wz, riv);
-                this._drainDownstream(bx, by, bz, fd[0], fd[1], riv);
+                // Only drain if this block actually dams the river —
+                // check if upstream water can still reach downstream water
+                if (!this._canWaterBypass(bx, by, bz, fd[0], fd[1])) {
+                    this._drainDownstream(bx, by, bz, fd[0], fd[1]);
+                }
                 break;
             }
         }
     }
 
+    // BFS: can upstream water reach downstream water by flowing around?
+    _canWaterBypass(bx, by, bz, fdx, fdz) {
+        // Find a downstream water block to use as target
+        let targetKey = null;
+        const dsDirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
+        for (const [dx, dy, dz] of dsDirs) {
+            const dot = dx * fdx + dz * fdz;
+            if (dot < 0.1) continue; // not downstream
+            const nx = bx + dx, nz = bz + dz;
+            if (this.world.getBlockAt(nx, by, nz) === BLOCK.WATER) {
+                targetKey = nx + ',' + by + ',' + nz;
+                break;
+            }
+        }
+        if (!targetKey) return false; // no downstream water — nothing to drain
+
+        // Find an upstream water start
+        let startX = null, startZ = null;
+        for (const [dx, dy, dz] of dsDirs) {
+            const dot = dx * fdx + dz * fdz;
+            if (dot > -0.1) continue; // not upstream
+            const nx = bx + dx, nz = bz + dz;
+            if (this.world.getBlockAt(nx, by, nz) === BLOCK.WATER) {
+                startX = nx; startZ = nz;
+                break;
+            }
+        }
+        if (startX === null) return false; // no upstream water
+
+        // BFS from upstream, see if we can reach the downstream target
+        // Only search horizontally at the same Y level + one above (water surface)
+        const visited = new Set();
+        const queue = [{ x: startX, z: startZ }];
+        visited.add(startX + ',' + by + ',' + startZ);
+        let steps = 0;
+        const maxSteps = 200; // don't search forever
+        while (queue.length > 0 && steps < maxSteps) {
+            const { x, z } = queue.shift();
+            steps++;
+            for (const [dx, , dz] of dsDirs) {
+                const nx = x + dx, nz = z + dz;
+                for (let dy = 0; dy <= 1; dy++) {
+                    const ny = by + dy;
+                    const key = nx + ',' + ny + ',' + nz;
+                    if (key === targetKey) return true; // water can get around!
+                    if (visited.has(key)) continue;
+                    visited.add(key);
+                    const b = this.world.getBlockAt(nx, ny, nz);
+                    if (b === BLOCK.WATER || b === BLOCK.AIR) {
+                        queue.push({ x: nx, z: nz });
+                    }
+                }
+            }
+        }
+        return false; // can't reach downstream — it's a real dam
+    }
+
     // Walk downstream from a dam and remove water blocks
-    _drainDownstream(startBX, startBY, startBZ, fdx, fdz, riv) {
-        // Flood-fill through water blocks downstream, removing them
-        // Uses _drainFillQueue/_drainVisited to spread across multiple ticks
+    _drainDownstream(startBX, startBY, startBZ, fdx, fdz) {
         this._drainVisited = new Set();
         this._drainFillQueue = [];
-        // Start from neighbors of the placed block
         const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0]];
         for (const [dx, dy, dz] of dirs) {
             const nx = startBX + dx, ny = startBY + dy, nz = startBZ + dz;
-            // Only start on the downstream side
             const dot = dx * fdx + dz * fdz;
             if (dot < -0.1) continue; // upstream side, skip
             if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
