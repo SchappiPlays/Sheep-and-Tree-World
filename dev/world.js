@@ -323,7 +323,11 @@ function getTerrainHeight(x, z) {
     const distFromCenter = Math.sqrt(x * x + sz * sz);
     const localR = getIslandRadius(x, z);
 
-    if (distFromCenter > localR - 60) return 0;
+    // Ocean depth — gradually deeper past the island edge
+    if (distFromCenter > localR - 60) {
+        const pastEdge = distFromCenter - (localR - 60);
+        return -Math.min(pastEdge * 0.15, 25);
+    }
 
     const fadeStart = localR - 140;
     let edgeFade = distFromCenter > fadeStart ? 1 - (distFromCenter - fadeStart) / 80 : 1;
@@ -359,7 +363,7 @@ function getTerrainHeight(x, z) {
     // Western Bay — single large elliptical inlet at the coast
     const bayDx = (x - (-2412)) / 448, bayDz = (z - 30) / 308;
     const bayD = bayDx * bayDx + bayDz * bayDz;
-    if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-12) * s; }
+    if (bayD < 1) { const t = 1 - bayD; const s = t * t; h = h * (1 - s) + (-15 * s) * s; }
 
     // East mountains
     const mtn = getMountainBlend(x, z);
