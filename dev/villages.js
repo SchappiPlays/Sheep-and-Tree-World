@@ -15,6 +15,8 @@ const VILLAGE_DEFS = [
     { x: -240, z: 1240, houses: 4, name: 'Sunstone', biome: 'desert', smiths: [8, 5] },
     { x: 500, z: 1360, houses: 3, name: 'Dune\'s End', biome: 'desert', smiths: [7] },
     { x: 2040, z: 60, houses: 8, name: 'Farwatch', smiths: [2, 1] },
+    { x: -2100, z: -120, houses: 5, name: 'Bay Watch', smiths: [4, 2] },
+    { x: -2150, z: 200, houses: 4, name: 'Tidecrest', smiths: [3] },
 ];
 const SMITH_SKILL_NAMES = { 1:'Apprentice', 2:'Novice', 3:'Journeyman', 4:'Skilled', 5:'Expert', 6:'Master', 7:'Veteran', 8:'Grandmaster', 9:'Legendary' };
 
