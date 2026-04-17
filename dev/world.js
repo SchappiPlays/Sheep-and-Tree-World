@@ -199,16 +199,15 @@ function getScorchedBlend(x, z) {
 }
 
 const riverDefs = [
-    // Glacial River — source: southern foot of frozen mountains, flows south then SE to east coast
-    // Stays in negative-Z territory until turning east, avoiding overlap with Mountain River
+    // Glacial River — source: southern foot of frozen mountains, flows south then SW to NW coast
+    // Avoids east mountains entirely by curving west, empties on north-west coast
     { name: 'Glacial River', width: 5, sourceRadius: 12, pts: [
         [-60,-1650],[-55,-1580],[-45,-1500],[-30,-1420],[-20,-1340],[-15,-1260],
         [-30,-1180],[-10,-1100],[0,-1020],[20,-940],[0,-860],[20,-780],
-        [50,-700],[40,-620],[20,-540],[0,-460],[10,-380],[30,-300],
-        [60,-240],[120,-190],[200,-160],[300,-140],[420,-130],[540,-120],
-        [660,-115],[780,-110],[900,-105],[1020,-100],[1140,-95],
-        [1260,-90],[1380,-85],[1500,-80],[1620,-75],[1740,-70],
-        [1860,-65],[1980,-60],[2100,-55],[2300,-50],[2500,-40],[2610,-30]
+        [50,-700],[40,-620],[20,-540],[0,-460],[-20,-380],[-60,-300],
+        [-120,-260],[-200,-230],[-300,-210],[-400,-200],[-500,-190],
+        [-600,-185],[-700,-180],[-800,-175],[-900,-170],[-1000,-165],
+        [-1100,-160],[-1200,-150],[-1280,-140]
     ]},
     // Mountain River — source: NW mountains, flows SW to west coast
     // Stays in positive-Z territory (south side) to avoid crossing Glacial River
