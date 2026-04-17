@@ -10553,6 +10553,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                         const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
                         addToInventory(getBlockDrop(block));
                         world.setBlock(bx, by, bz, BLOCK.AIR);
+                        if (waterSim) waterSim.onBlockBroken(bx, by, bz);
                         rebuildSet.add(bx + ',' + bz);
                         if (isTree) fellTree(bx, by, bz, rebuildSet);
                     }
@@ -10585,6 +10586,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                         const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
                         addToInventory(getBlockDrop(block));
                         world.setBlock(bx, by, bz, BLOCK.AIR);
+                        if (waterSim) waterSim.onBlockBroken(bx, by, bz);
                         rebuildSet.add(bx + ',' + bz);
                         if (isTree) fellTree(bx, by, bz, rebuildSet);
                     }
@@ -10600,6 +10602,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
         const isTree = hit.block === BLOCK.WOOD && isNaturalTree(hit.x, hit.y, hit.z);
         addToInventory(getBlockDrop(hit.block));
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
+        if (waterSim) waterSim.onBlockBroken(hit.x, hit.y, hit.z);
         if (isTree) {
             const rs = new Set();
             rs.add(hit.x + ',' + hit.z);

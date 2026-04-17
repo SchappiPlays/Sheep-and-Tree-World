@@ -255,18 +255,25 @@ function _initRiverHeights() {
         }
         riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
 
-        // Calculate heights using a linear gradient from source to end.
-        // Source height capped low — water must sit deep in the carved channel,
-        // well below surrounding terrain, to prevent flooding.
+        // Calculate heights: linear gradient from source to mouth,
+        // but capped at each waypoint to stay well below surrounding terrain.
         const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
-        // Cap source water low — must sit well below surrounding terrain everywhere
         const startH = Math.min(Math.max(sourceH * 0.15, 1.5), 4);
         const endH = 0.5; // just above sea level at river mouth
         riv.heights = [];
+        let prevH = Infinity;
         for (let i = 0; i < riv.pts.length; i++) {
             const t = riv.cumDist[i] / riv.totalLen; // 0 at source, 1 at mouth
-            const waterH = startH + (endH - startH) * t;
+            let waterH = startH + (endH - startH) * t;
+            // Cap to stay well below terrain at this waypoint
+            const localTerrain = _getRawTerrainHeight(riv.pts[i][0], riv.pts[i][1]);
+            waterH = Math.min(waterH, localTerrain - 1.5);
+            // Must always be downhill
+            waterH = Math.min(waterH, prevH - 0.05);
+            // Don't go below sea level
+            waterH = Math.max(waterH, 0.2);
             riv.heights.push(waterH);
+            prevH = waterH;
         }
     }
 }
@@ -1381,6 +1388,23 @@ export class WaterSim {
         const sz = wz / ISLAND_NS_SCALE;
         const dist = Math.sqrt(wx * wx + sz * sz);
         return dist > getIslandRadius(wx, wz) - 80;
+    }
+
+    // Called when a block is broken — wake up adjacent water so it flows
+    onBlockBroken(bx, by, bz) {
+        const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+        for (const [dx, dy, dz] of dirs) {
+            const nx = bx + dx, ny = by + dy, nz = bz + dz;
+            if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                this._activeWater.add(nx + ',' + ny + ',' + nz);
+            }
+        }
+        // Also check 2 blocks up — water above the broken block should fall
+        for (let dy = 1; dy <= 3; dy++) {
+            if (this.world.getBlockAt(bx, by + dy, bz) === BLOCK.WATER) {
+                this._activeWater.add(bx + ',' + (by + dy) + ',' + bz);
+            }
+        }
     }
 
     _markDirty(bx, bz) {
