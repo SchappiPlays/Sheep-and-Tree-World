@@ -1873,26 +1873,32 @@ function _playIntroCinematic(onDone) {
     overlay.appendChild(barT); overlay.appendChild(barB);
     document.body.appendChild(overlay);
 
-    let shotIdx = 0, shotTime = 0, done = false;
-    // States: 'fadein' (black→clear), 'moving' (camera moving), 'fadeout' (clear→black)
-    let phase = 'fadein';
+    let shotIdx = 0, done = false;
+    // Phases: 'loading' (black screen, load chunks), 'fadein' (black→clear),
+    //         'moving' (camera flies, NO chunk reload), 'fadeout' (clear→black)
+    let phase = 'loading';
     let phaseTime = 0;
-    const FADE_DUR = 0.6; // base fade duration
+    let loadTicks = 0;
+    const FADE_DUR = 0.8;
+    const MIN_LOAD_TICKS = 30; // at least 30 frames of chunk loading (~0.5s)
 
-    // Position camera at first shot start
     const s0 = shots[0];
     camera.position.set(s0.from[0], s0.from[1], s0.from[2]);
     camera.lookAt(s0.lookFrom[0], s0.lookFrom[1], s0.lookFrom[2]);
     fadeEl.style.opacity = '1';
+    fadeEl.style.transition = 'none'; // manual control, no CSS transition lag
 
     const finish = () => {
         if (done) return;
         done = true;
         _introActive = false;
         overlay.remove();
+        window.removeEventListener('keydown', skipKey);
         const spawnY = getTerrainHeight(0, 0);
         player.position.set(0, spawnY, 0);
         player.group.position.set(0, spawnY, 0);
+        // Reload chunks around spawn
+        if (chunkManager) { chunkManager.update(0, 0); chunkManager._processQueue(8); }
         onDone();
     };
 
@@ -1900,6 +1906,10 @@ function _playIntroCinematic(onDone) {
     const skipKey = (e) => { if (e.key !== 'F11' && e.key !== 'F12') finish(); };
     overlay.addEventListener('click', skipClick);
     window.addEventListener('keydown', skipKey);
+
+    const _getShotCenter = (shot) => {
+        return shot.preload || [(shot.from[0] + shot.to[0]) / 2, (shot.from[2] + shot.to[2]) / 2];
+    };
 
     let _prev = performance.now();
     const introTick = () => {
@@ -1912,28 +1922,40 @@ function _playIntroCinematic(onDone) {
         phaseTime += dt;
 
         const shot = shots[shotIdx];
-        const fadeDur = shot.fade || FADE_DUR;
 
-        if (phase === 'fadein') {
-            // Fade from black → clear, aggressively load chunks while screen is black
-            const t = Math.min(phaseTime / fadeDur, 1);
+        if (phase === 'loading') {
+            // Black screen — aggressively load chunks at the shot's location
+            fadeEl.style.opacity = '1';
+            const [plx, plz] = _getShotCenter(shot);
+            if (chunkManager) {
+                chunkManager.update(plx, plz);
+                chunkManager._processQueue(16);
+            }
+            loadTicks++;
+            // Hold until enough chunks are loaded (min ticks + check loaded count)
+            const loaded = chunkManager ? (chunkManager.loadedCount || 0) : 999;
+            if (loadTicks >= MIN_LOAD_TICKS && loaded > 8) {
+                phase = 'fadein';
+                phaseTime = 0;
+                // Position camera
+                camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
+                camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
+                // One final render so the first visible frame looks good
+                renderer.render(scene, camera);
+            }
+        }
+        else if (phase === 'fadein') {
+            // Smoothly fade from black
+            const t = Math.min(phaseTime / FADE_DUR, 1);
             fadeEl.style.opacity = String(1 - t);
-            // Pre-position camera at shot start
             camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
             camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
-            // Load chunks at the preload center (or camera pos)
-            if (chunkManager) {
-                const plx = shot.preload ? shot.preload[0] : shot.from[0];
-                const plz = shot.preload ? shot.preload[1] : shot.from[2];
-                chunkManager.update(plx, plz);
-                chunkManager._processQueue(12); // aggressive loading while hidden
-            }
             if (t >= 1) { phase = 'moving'; phaseTime = 0; }
         }
         else if (phase === 'moving') {
-            // Smooth camera movement from→to
+            // Camera flies — DO NOT update chunks, they're already loaded
             const t = Math.min(phaseTime / shot.dur, 1);
-            const ease = t * t * (3 - 2 * t); // smoothstep
+            const ease = t * t * (3 - 2 * t);
 
             camera.position.set(
                 shot.from[0] + (shot.to[0] - shot.from[0]) * ease,
@@ -1946,7 +1968,7 @@ function _playIntroCinematic(onDone) {
                 shot.lookFrom[2] + (shot.lookTo[2] - shot.lookFrom[2]) * ease
             );
 
-            // Label: fade in after 15%, fade out before 85%
+            // Label
             if (shot.label) {
                 if (t > 0.1 && t < 0.8) {
                     labelEl.textContent = shot.label;
@@ -1958,9 +1980,6 @@ function _playIntroCinematic(onDone) {
                 labelEl.style.opacity = '0';
             }
 
-            // Load chunks around camera
-            if (chunkManager) chunkManager.update(camera.position.x, camera.position.z);
-
             if (t >= 1) {
                 labelEl.style.opacity = '0';
                 phase = 'fadeout';
@@ -1968,23 +1987,22 @@ function _playIntroCinematic(onDone) {
             }
         }
         else if (phase === 'fadeout') {
-            // Fade clear → black, start loading next shot's chunks while fading
-            const t = Math.min(phaseTime / fadeDur, 1);
+            // Fade to black, then start loading next shot
+            const t = Math.min(phaseTime / FADE_DUR, 1);
             fadeEl.style.opacity = String(t);
-            // Pre-load next shot's area while screen is going black
+            // Start pre-loading next location while fading out
             const nextIdx = shotIdx + 1;
             if (nextIdx < shots.length && chunkManager) {
-                const next = shots[nextIdx];
-                const plx = next.preload ? next.preload[0] : next.from[0];
-                const plz = next.preload ? next.preload[1] : next.from[2];
+                const [plx, plz] = _getShotCenter(shots[nextIdx]);
                 chunkManager.update(plx, plz);
-                chunkManager._processQueue(12);
+                chunkManager._processQueue(16);
             }
             if (t >= 1) {
                 shotIdx++;
                 if (shotIdx >= shots.length) { finish(); return; }
-                phase = 'fadein';
+                phase = 'loading';
                 phaseTime = 0;
+                loadTicks = 0;
             }
         }
 
@@ -1992,16 +2010,7 @@ function _playIntroCinematic(onDone) {
         renderer.render(scene, camera);
     };
 
-    // Aggressively load chunks at the first shot before starting
-    const _preloadIntro = (count) => {
-        if (count <= 0 || done) { requestAnimationFrame(introTick); return; }
-        if (chunkManager) {
-            chunkManager.update(s0.from[0], s0.from[2]);
-            chunkManager._processQueue(12);
-        }
-        setTimeout(() => _preloadIntro(count - 1), 16);
-    };
-    _preloadIntro(15); // ~250ms of aggressive chunk loading before first frame
+    requestAnimationFrame(introTick);
 }
 
 function startGame(loadSlotName) {
@@ -3712,7 +3721,8 @@ function startGame(loadSlotName) {
         scene.add(cg);
 
         // === NPCS — real villagers that study the dragon half the day, wander the other half ===
-        const fortFloorY = getTerrainHeight(FX, FZ) + BS; // ground level + stone floor
+        // Match the fortress floor calculation: gy is in block coords, convert to world Y
+        const fortFloorY = (gy - yOff + 1) * BS; // top of the stone floor block
         const spawnDRVillager = (wx, wz, seed, poseAngle, lookDown, poseData) => {
             const v = makeVillager(scene, wx, wz, fortFloorY, seed);
             v._dragonReach = true;
