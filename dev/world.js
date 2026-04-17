@@ -937,7 +937,12 @@ export class World {
                 const twx = bx * BLOCK_SIZE, twz = bz * BLOCK_SIZE;
                 const tdh = Math.sqrt((twx-hillCX)*(twx-hillCX) + (twz-hillCZ)*(twz-hillCZ));
                 if (tdh < hillR - 5) continue;
-                if (this._hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > 0.06) continue;
+                // Vary tree density across the world — dense forests in some areas, sparse elsewhere
+                const _forestNoise = (Math.sin(twx * 0.004 + 1.7) * Math.cos(twz * 0.005 + 0.3) +
+                    Math.sin(twx * 0.007 - twz * 0.006 + 2.5) * 0.5 +
+                    Math.cos(twx * 0.003 + twz * 0.004 - 1.0) * 0.3) / 1.8; // -1 to 1
+                const _treeDensity = _forestNoise > 0.2 ? 0.08 : _forestNoise > -0.1 ? 0.03 : 0.008;
+                if (this._hash(bx * 0.37 + 7777, bz * 0.53 + 3333) > _treeDensity) continue;
 
                 const jx = bx + Math.floor(this._hash(bx+11,bz+22)*2);
                 const jz = bz + Math.floor(this._hash(bx+33,bz+44)*2);

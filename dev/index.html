@@ -1369,7 +1369,12 @@ function buildFarTerrain(centerX, centerZ) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
                 if (plains > 0.5) continue; // skip trees in plains entirely
-                if (treeChance < 0.18 * (1 - plains * 0.95)) {
+                // Vary forest density — match world.js forest zones
+                const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
+                    Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
+                    Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
+                const _lodDensity = _fn > 0.2 ? 0.22 : _fn > -0.1 ? 0.08 : 0.02;
+                if (treeChance < _lodDensity * (1 - plains * 0.95)) {
                     const trunkH = BS * 5;   // ~2.4 world units (real trees 4-8 blocks)
                     const leafR = BS * 2.5;  // ~1.2 world units canopy radius
                     const trunkR = BS * 0.5; // ~0.24 world units trunk radius
