@@ -260,7 +260,7 @@ function _initRiverHeights() {
         // No per-waypoint terrain cap — those cause sudden drops when the
         // river path crosses any terrain depression.
         const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
-        const startH = Math.min(Math.max(sourceH * 0.1, 1.2), 2.5);
+        const startH = Math.min(Math.max(sourceH * 0.1, 1.2), 2.0);
         const endH = 0.3; // just above sea level at river mouth
         riv.heights = [];
         for (let i = 0; i < riv.pts.length; i++) {
