@@ -209,15 +209,15 @@ const riverDefs = [
         [-600,-185],[-700,-180],[-800,-175],[-900,-170],[-1000,-165],
         [-1100,-160],[-1200,-150],[-1280,-140]
     ]},
-    // Mountain River — source: NW mountains, flows SW to west coast
-    // Stays in positive-Z territory (south side) to avoid crossing Glacial River
+    // Mountain River — source: NW mountains, flows south then SW to west coast
+    // Starts in NW mountains (510,-130), curves south of east mountains
     { name: 'Mountain River', width: 4, sourceRadius: 10, pts: [
-        [1020,-260],[960,-240],[900,-210],[840,-180],[780,-150],[720,-120],
-        [660,-90],[600,-60],[540,0],[480,30],[420,60],[360,90],
-        [300,110],[240,130],[180,150],[120,170],[60,180],[0,190],
-        [-60,200],[-120,210],[-180,220],[-250,230],[-320,240],
-        [-400,240],[-480,230],[-560,220],[-640,210],[-720,200],
-        [-800,180],[-880,160],[-960,140],[-1040,120],[-1120,100],[-1200,60],[-1280,20]
+        [510,-150],[480,-120],[450,-90],[420,-60],[390,-30],[360,0],
+        [330,30],[300,60],[270,90],[240,120],[200,150],[160,170],
+        [110,185],[60,195],[0,200],[-60,210],[-120,220],[-180,230],
+        [-250,235],[-320,240],[-400,240],[-480,235],[-560,225],
+        [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
+        [-1040,120],[-1120,100],[-1200,60],[-1280,20]
     ]},
     // Highland River — source: far east mountains, flows east to second continent coast
     // Starts further east to avoid Mountain River's path
@@ -359,7 +359,7 @@ const pondLocs = [
     {x:-500,z:200,radius:28},{x:-300,z:-1300,radius:36},{x:300,z:1200,radius:24},
     // River source lakes — sourceDepth creates a bowl instead of flattening to 0
     {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
-    {x:1020,z:-260,radius:10,sourceDepth:3},   // Mountain River source — NW mountain spring
+    {x:510,z:-150,radius:10,sourceDepth:3},    // Mountain River source — NW mountain spring
     {x:1500,z:-40,radius:8,sourceDepth:3},     // Highland River source — far east mountain spring
 ];
 
