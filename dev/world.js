@@ -256,6 +256,7 @@ function _initRiverHeights() {
         riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
 
         // Calculate heights: sample raw terrain (skip river carving) at each waypoint
+        // Water must sit well below bank to prevent flooding when simulation runs
         // Ensure monotonically decreasing (always downhill from source)
         riv.heights = [];
         let prevH = Infinity;
@@ -276,10 +277,12 @@ function _initRiverHeights() {
                 const h2 = _getRawTerrainHeight(px - nx * off, pz - nz * off);
                 bankH = Math.min(h1, h2); // lower bank
             }
-            // Water surface sits 0.3 units below the bank
-            let waterH = bankH - 0.3;
+            // Water surface sits well below bank — deep in the carved channel
+            // Bank is the terrain beside the river; channel is carved ~2 units below bank
+            // Water fills to about halfway up the channel walls
+            let waterH = bankH - 2.0;
             // Ensure monotonically decreasing — always downhill
-            waterH = Math.min(waterH, prevH - 0.05);
+            waterH = Math.min(waterH, prevH - 0.1);
             // Don't go below sea level (rivers end at ocean)
             waterH = Math.max(waterH, 0.1);
             riv.heights.push(waterH);
@@ -768,10 +771,12 @@ function getTerrainHeight(x, z) {
                 if (onPath) {
                     h = Math.max(h, 2); // bridge deck sits above water
                 } else {
-                    // Carve river bed: lower terrain to water height minus channel depth
+                    // Carve river channel: bed sits below water level, banks slope up
                     const waterH = getRiverWaterHeight(x, z, riv);
-                    const bedH = waterH - 0.8; // channel is 0.8 units deep below water surface
-                    h = h * (1 - rb) + bedH * rb;
+                    const bedH = waterH - 1.2; // channel bed well below water surface
+                    // rb=1 at center → full depth. rb<1 at edges → gradual slope up
+                    const carveH = bedH * rb + h * (1 - rb);
+                    h = Math.min(h, carveH);
                 }
             }
         }

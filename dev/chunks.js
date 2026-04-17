@@ -367,27 +367,33 @@ export class ChunkManager {
                     const block = this.world.getBlockAt(bx, y, bz);
 
                     if (block === BLOCK.WATER) {
-                        const above = this.world.getBlockAt(bx, y + 1, bz);
-                        if (above === BLOCK.AIR) {
-                            const face = FACES[2];
-                            const verts = face.verts;
-                            // Compute flow direction for this water block
-                            const wwx = bx * BS, wwz = bz * BS;
-                            let flowX = 0, flowZ = 0;
-                            for (const riv of riverDefs) {
-                                if (getRiverBlend(wwx, wwz, riv) > 0.3) {
-                                    const fd = getRiverFlowDir(wwx, wwz, riv);
-                                    flowX = fd[0]; flowZ = fd[1];
-                                    break;
-                                }
+                        // Compute flow direction once per water column position
+                        const wwx = bx * BS, wwz = bz * BS;
+                        let flowX = 0, flowZ = 0;
+                        for (const riv of riverDefs) {
+                            if (getRiverBlend(wwx, wwz, riv) > 0.3) {
+                                const fd = getRiverFlowDir(wwx, wwz, riv);
+                                flowX = fd[0]; flowZ = fd[1];
+                                break;
                             }
+                        }
+                        // Render all exposed faces (not just top)
+                        for (let fi = 0; fi < 6; fi++) {
+                            const face = FACES[fi];
+                            const nx = face.dir[0], ny = face.dir[1], nz = face.dir[2];
+                            const nbx = bx + nx * S, nby = y + ny, nbz = bz + nz * S;
+                            const nb = this.world.getBlockAt(nbx, nby, nbz);
+                            // Only show face if neighbor is air (not water or solid)
+                            if (nb !== BLOCK.AIR) continue;
+                            const verts = face.verts;
+                            const isTop = fi === 2;
                             for (let vi = 0; vi < 4; vi++) {
                                 wPos.push(
                                     (lx + verts[vi][0] * S) * BS,
-                                    (y - Y_OFF + 0.85) * BS,
+                                    (y - Y_OFF + (isTop ? 0.85 : verts[vi][1])) * BS,
                                     (lz + verts[vi][2] * S) * BS
                                 );
-                                wNrm.push(0, 1, 0);
+                                wNrm.push(nx, ny, nz);
                                 wFlow.push(flowX, flowZ);
                             }
                             wIdx.push(wVert, wVert+1, wVert+2, wVert+2, wVert+1, wVert+3);
