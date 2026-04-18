@@ -9008,8 +9008,8 @@ function drawWorldMap() {
                 else if(biome===6){tR=30;tG=20;tB=15;tA=0.4;}
                 else if(biome===7){tR=90;tG=50;tB=130;tA=0.25;}
                 else if(biome===9){tR=120;tG=100;tB=60;tA=0.4;}
-                else if(biome===8){tR=45;tG=85;tB=35;tA=0.2;}
-                else{tR=40;tG=80;tB=30;tA=0.15;}
+                else if(biome===8){const f=Math.min(1,Math.max(0,th/50));tR=25+f*40;tG=55+f*50;tB=18+f*30;tA=0.45-f*0.25;}
+                else{const f=Math.min(1,Math.max(0,th/40));tR=20+f*40;tG=50+f*50;tB=15+f*30;tA=0.4-f*0.25;}
                 if(tA>0){
                     for(let sy=0;sy<step&&gy*step+sy<h;sy++){
                         for(let sx=0;sx<step&&gx*step+sx<w;sx++){
