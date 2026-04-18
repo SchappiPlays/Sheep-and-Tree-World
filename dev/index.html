@@ -355,7 +355,12 @@ canvas { display: block; }
 <div id="statAllocationMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:550;flex-direction:column;align-items:center;justify-content:center;">
     <div style="background:rgba(25,35,20,0.95);border:2px solid rgba(120,160,80,0.4);border-radius:10px;padding:24px 32px;min-width:340px;">
         <h2 style="color:rgba(220,200,160,0.9);font:bold 20px monospace;margin:0 0 4px;text-align:center;">Allocate Stats</h2>
-        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 25</div>
+        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">Points remaining: 25</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button onclick="window._statPreset('warrior')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(80,30,30,0.5);color:rgba(220,180,150,0.9);border:1px solid rgba(180,100,80,0.4);border-radius:4px;cursor:pointer;">&#x2694; Warrior</button>
+            <button onclick="window._statPreset('mage')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(30,30,80,0.5);color:rgba(180,180,220,0.9);border:1px solid rgba(100,100,180,0.4);border-radius:4px;cursor:pointer;">&#x2605; Mage</button>
+            <button onclick="window._statPreset('rogue')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(30,60,30,0.5);color:rgba(180,220,180,0.9);border:1px solid rgba(80,140,80,0.4);border-radius:4px;cursor:pointer;">&#x27A4; Rogue</button>
+        </div>
         <div id="statRows" style="display:flex;flex-direction:column;gap:8px;"></div>
         <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
     </div>
@@ -1826,41 +1831,59 @@ const mp = new Multiplayer(scene);
 // ── Intro Cinematic — aerial tour of the world for new players ──
 let _introActive = false;
 function _playIntroCinematic(onDone) {
-    _introActive = true;
-    gamePaused = false; // allow rendering
+    // Cinematic runs INSIDE the game loop — player teleports to each location
+    // so chunks load naturally. First-person, HUD hidden, peaceful mode.
+    // Phase 1: preload all shot locations (black screen + progress bar)
+    // Phase 2: play shots seamlessly with no loading pauses
 
-    // Each shot: from/to (camera pos), lookFrom/lookTo (look target), dur, fade, label
-    // preload: [x,z] — position to aggressively load chunks around during fade-in
     const shots = [
-        // Wide aerial sweep — orbit over the island from high up
-        { from: [-200, 160, -200], to: [200, 140, 100], lookFrom: [0, 0, 0], lookTo: [100, 0, 50], dur: 5, label: '' },
-        // The Castle (-800, 40) — approach from the east
-        { from: [-700, 50, 90], to: [-820, 25, 30], lookFrom: [-800, 12, 40], lookTo: [-800, 15, 40], dur: 5, label: 'The Castle', fade: 1.0, preload: [-800, 40] },
-        // Meadow Village (160, 32) — low sweep past houses and villagers
-        { from: [120, 15, 55], to: [200, 12, 15], lookFrom: [160, 3, 32], lookTo: [170, 3, 28], dur: 4.5, label: 'Meadow Village', fade: 1.0, preload: [160, 32] },
-        // Ruined Fortress (-1010, -670) — dramatic reveal
-        { from: [-1060, 50, -620], to: [-970, 30, -700], lookFrom: [-1010, 10, -670], lookTo: [-1010, 12, -670], dur: 5, label: 'The Ruined Fortress', fade: 1.0, preload: [-1010, -670] },
-        // Ancient Forest (-60, -700) — moody flyover of the hill ring
-        { from: [-150, 70, -620], to: [30, 55, -780], lookFrom: [-60, 15, -700], lookTo: [-60, 10, -700], dur: 5, label: 'The Ancient Forest', fade: 1.0, preload: [-60, -700] },
-        // Great Peak (1640, -80) — panorama slide along the range
-        { from: [1350, 120, -250], to: [1800, 95, 50], lookFrom: [1640, 50, -80], lookTo: [1640, 30, -80], dur: 5, label: 'The Great Peak', fade: 1.0, preload: [1640, -80] },
-        // Dragon's Reach (2160, 10) — approach from the sky
-        { from: [2100, 55, 70], to: [2180, 22, -10], lookFrom: [2160, 12, 10], lookTo: [2160, 10, 10], dur: 5, label: "Dragon's Reach", fade: 1.0, preload: [2160, 10] },
-        // Frozen Mountains (-60, -2100) — the dragon's nest, epic reveal
-        { from: [-150, 90, -1950], to: [30, 70, -2200], lookFrom: [-60, 30, -2100], lookTo: [-60, 25, -2100], dur: 5, label: 'The Frozen North', fade: 1.0, preload: [-60, -2100] },
-        // Final — high above spawn, then dive down to player
-        { from: [30, 100, 40], to: [0, 5, 3], lookFrom: [0, 0, 0], lookTo: [0, 1, -2], dur: 5, label: 'Your journey begins...', fade: 1.2 },
+        // All yaw values computed as atan2(target.x - cam.x, target.z - cam.z)
+        // Fly TOWARD each landmark so yaw stays consistent (small change per shot)
+
+        // Wide aerial sweep NE across the island, looking forward-down
+        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 6, label: '' },
+        // Castle (-800, 40) — approach from NE looking down at it
+        { from: [-680, 60, -30], to: [-780, 40, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.4, pitch1: -0.35, dur: 6, label: 'The Castle' },
+        // Meadow Village (160, 32) — approach from SW
+        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 5, label: 'Meadow Village' },
+        // Ancient Forest (-60, -700) — approach from NE looking down into canopy
+        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 6, label: 'The Ancient Forest' },
+        // Great Peak (1640, -80) — view from east side (x=1950), well outside mountain
+        // Mountain: 1480-1800 X, -220 to 60 Z, peaks 130+
+        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6, label: 'The Great Peak' },
+        // Dragon's Reach (2160, 10) — approach from south
+        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5, label: "Dragon's Reach" },
+        // Scorched Castle (-300, 280) — approach from NE
+        { from: [-220, 55, 220], to: [-290, 40, 270], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5, label: 'The Scorched Fortress' },
+        // Coastal Village (-855, -150) — approach from east
+        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5, label: 'Coastal Village' },
+        // Final — descend toward spawn from NE
+        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5, label: 'Your journey begins...' },
     ];
 
-    // Overlay for labels, skip hint, fade, and letterbox
+    // Collect all unique positions to preload (from + to of each shot)
+    const preloadPositions = [];
+    for (const s of shots) {
+        preloadPositions.push([s.from[0], s.from[2]]);
+        preloadPositions.push([s.to[0], s.to[2]]);
+    }
+
+    // Overlay
     const overlay = document.createElement('div');
     overlay.id = 'introOverlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
     const fadeEl = document.createElement('div');
-    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;transition:opacity 0.6s;pointer-events:none;';
+    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;pointer-events:none;';
     overlay.appendChild(fadeEl);
+    // Loading progress (shown during preload)
+    const loadInfoEl = document.createElement('div');
+    loadInfoEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;';
+    loadInfoEl.innerHTML = '<div style="color:rgba(220,200,160,0.9);font:bold 20px serif;letter-spacing:2px;margin-bottom:16px;">Preparing your world...</div>' +
+        '<div style="width:240px;height:6px;background:rgba(60,50,40,0.6);border-radius:3px;overflow:hidden;margin:0 auto;">' +
+        '<div id="introLoadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:3px;transition:width 0.2s;"></div></div>';
+    overlay.appendChild(loadInfoEl);
     const labelEl = document.createElement('div');
-    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,0.9);opacity:0;transition:opacity 0.6s;pointer-events:none;';
+    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,0.9);opacity:0;transition:opacity 0.8s;pointer-events:none;';
     overlay.appendChild(labelEl);
     const skipEl = document.createElement('div');
     skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
@@ -1873,32 +1896,53 @@ function _playIntroCinematic(onDone) {
     overlay.appendChild(barT); overlay.appendChild(barB);
     document.body.appendChild(overlay);
 
-    let shotIdx = 0, done = false;
-    // Phases: 'loading' (black screen, load chunks), 'fadein' (black→clear),
-    //         'moving' (camera flies, NO chunk reload), 'fadeout' (clear→black)
-    let phase = 'loading';
-    let phaseTime = 0;
-    let loadTicks = 0;
+    // State
+    let done = false;
+    let preloadIdx = 0, preloadTicks = 0;
+    const PRELOAD_TICKS_PER = 40; // ~0.7s per location
+    let phase = 'preload'; // preload → fadein → playing → fadeout → done
+    let shotIdx = 0, phaseTime = 0;
     const FADE_DUR = 0.8;
-    const MIN_LOAD_TICKS = 30; // at least 30 frames of chunk loading (~0.5s)
 
-    const s0 = shots[0];
-    camera.position.set(s0.from[0], s0.from[1], s0.from[2]);
-    camera.lookAt(s0.lookFrom[0], s0.lookFrom[1], s0.lookFrom[2]);
-    fadeEl.style.opacity = '1';
-    fadeEl.style.transition = 'none'; // manual control, no CSS transition lag
+    // Save & set cinematic state
+    const savedHud = hudHidden;
+    const savedPeaceful = peacefulMode;
+    const savedZoom = zoomLevel;
+    hudHidden = true;
+    peacefulMode = true;
+    zoomLevel = 0;
+    _introActive = true;
+    gamePaused = false;
+
+    const hudIds = ['debug','crosshair','hotbar','hearts','prompt','saveToast','minimap','manaBar','staminaBar'];
+    hudIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    if (player && player._nameLabel) player._nameLabel.visible = false;
+    if (player) player.group.visible = false;
+
+    // Prevent chunk unloading during cinematic
+    if (chunkManager) chunkManager.skipUnload = true;
 
     const finish = () => {
         if (done) return;
         done = true;
         _introActive = false;
+        window._introCinematicTick = null;
         overlay.remove();
         window.removeEventListener('keydown', skipKey);
+        if (chunkManager) chunkManager.skipUnload = false;
+
+        hudHidden = savedHud;
+        peacefulMode = savedPeaceful;
+        zoomLevel = savedZoom;
+        const vis = hudHidden ? 'none' : '';
+        hudIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = vis; });
+        if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
+        if (player) player.group.visible = true;
+
         const spawnY = getTerrainHeight(0, 0);
-        player.position.set(0, spawnY, 0);
-        player.group.position.set(0, spawnY, 0);
-        // Reload chunks around spawn
-        if (chunkManager) { chunkManager.update(0, 0); chunkManager._processQueue(8); }
+        player.position.set(0, spawnY + 1, 0);
+        player.group.position.set(0, spawnY + 1, 0);
+        player.jumpVel = 0;
         onDone();
     };
 
@@ -1907,110 +1951,108 @@ function _playIntroCinematic(onDone) {
     overlay.addEventListener('click', skipClick);
     window.addEventListener('keydown', skipKey);
 
-    const _getShotCenter = (shot) => {
-        return shot.preload || [(shot.from[0] + shot.to[0]) / 2, (shot.from[2] + shot.to[2]) / 2];
-    };
+    window._introCinematicTick = (dt) => {
+        if (done) { window._introCinematicTick = null; return; }
+        const ease = t => t * t * (3 - 2 * t);
 
-    let _prev = performance.now();
-    const introTick = () => {
-        if (done) return;
-        requestAnimationFrame(introTick);
-
-        const now = performance.now();
-        const dt = Math.min((now - _prev) / 1000, 0.1);
-        _prev = now;
-        phaseTime += dt;
-
-        const shot = shots[shotIdx];
-
-        if (phase === 'loading') {
-            // Black screen — aggressively load chunks at the shot's location
+        if (phase === 'preload') {
+            // Cycle through all positions, loading chunks at each
             fadeEl.style.opacity = '1';
-            const [plx, plz] = _getShotCenter(shot);
-            if (chunkManager) {
-                chunkManager.update(plx, plz);
-                chunkManager._processQueue(16);
-            }
-            loadTicks++;
-            // Hold until enough chunks are loaded (min ticks + check loaded count)
-            const loaded = chunkManager ? (chunkManager.loadedCount || 0) : 999;
-            if (loadTicks >= MIN_LOAD_TICKS && loaded > 8) {
-                phase = 'fadein';
-                phaseTime = 0;
-                // Position camera
-                camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
-                camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
-                // One final render so the first visible frame looks good
-                renderer.render(scene, camera);
+            const [px, pz] = preloadPositions[preloadIdx];
+            player.position.set(px, 100, pz);
+            player.group.position.set(px, 100, pz);
+            player.jumpVel = 0;
+            // Aggressively process more chunks during preload
+            if (chunkManager) chunkManager._processQueue(16);
+            preloadTicks++;
+            // Update progress bar
+            const progress = (preloadIdx + preloadTicks / PRELOAD_TICKS_PER) / preloadPositions.length;
+            const bar = document.getElementById('introLoadBar');
+            if (bar) bar.style.width = (progress * 100).toFixed(1) + '%';
+            if (preloadTicks >= PRELOAD_TICKS_PER) {
+                preloadTicks = 0;
+                preloadIdx++;
+                if (preloadIdx >= preloadPositions.length) {
+                    // All preloaded — start playing
+                    phase = 'fadein';
+                    phaseTime = 0;
+                    loadInfoEl.style.display = 'none';
+                    // Position at first shot
+                    const s0 = shots[0];
+                    player.position.set(s0.from[0], s0.from[1], s0.from[2]);
+                    player.group.position.set(s0.from[0], s0.from[1], s0.from[2]);
+                    fpYaw = s0.yaw0; fpPitch = s0.pitch0;
+                }
             }
         }
         else if (phase === 'fadein') {
-            // Smoothly fade from black
+            phaseTime += dt;
             const t = Math.min(phaseTime / FADE_DUR, 1);
             fadeEl.style.opacity = String(1 - t);
-            camera.position.set(shot.from[0], shot.from[1], shot.from[2]);
-            camera.lookAt(shot.lookFrom[0], shot.lookFrom[1], shot.lookFrom[2]);
-            if (t >= 1) { phase = 'moving'; phaseTime = 0; }
+            if (t >= 1) { phase = 'playing'; phaseTime = 0; }
         }
-        else if (phase === 'moving') {
-            // Camera flies — DO NOT update chunks, they're already loaded
+        else if (phase === 'playing') {
+            phaseTime += dt;
+            const shot = shots[shotIdx];
             const t = Math.min(phaseTime / shot.dur, 1);
-            const ease = t * t * (3 - 2 * t);
+            const e = ease(t);
 
-            camera.position.set(
-                shot.from[0] + (shot.to[0] - shot.from[0]) * ease,
-                shot.from[1] + (shot.to[1] - shot.from[1]) * ease,
-                shot.from[2] + (shot.to[2] - shot.from[2]) * ease
-            );
-            camera.lookAt(
-                shot.lookFrom[0] + (shot.lookTo[0] - shot.lookFrom[0]) * ease,
-                shot.lookFrom[1] + (shot.lookTo[1] - shot.lookFrom[1]) * ease,
-                shot.lookFrom[2] + (shot.lookTo[2] - shot.lookFrom[2]) * ease
-            );
+            const px = shot.from[0] + (shot.to[0] - shot.from[0]) * e;
+            const py = shot.from[1] + (shot.to[1] - shot.from[1]) * e;
+            const pz = shot.from[2] + (shot.to[2] - shot.from[2]) * e;
+            player.position.set(px, py, pz);
+            player.group.position.set(px, py, pz);
+            player.jumpVel = 0;
 
-            // Label
+            fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
+            fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
+
             if (shot.label) {
-                if (t > 0.1 && t < 0.8) {
-                    labelEl.textContent = shot.label;
-                    labelEl.style.opacity = '1';
-                } else {
-                    labelEl.style.opacity = '0';
-                }
+                labelEl.textContent = shot.label;
+                labelEl.style.opacity = (t > 0.08 && t < 0.85) ? '1' : '0';
             } else {
                 labelEl.style.opacity = '0';
             }
 
             if (t >= 1) {
                 labelEl.style.opacity = '0';
-                phase = 'fadeout';
-                phaseTime = 0;
+                shotIdx++;
+                if (shotIdx >= shots.length) {
+                    phase = 'fadeout'; phaseTime = 0;
+                } else {
+                    // Quick crossfade between shots
+                    phase = 'crossfade'; phaseTime = 0;
+                }
+            }
+        }
+        else if (phase === 'crossfade') {
+            phaseTime += dt;
+            const CROSS_DUR = 0.5;
+            const t = Math.min(phaseTime / CROSS_DUR, 1);
+            // Fade to black then back
+            fadeEl.style.opacity = String(t < 0.5 ? t * 2 : 2 - t * 2);
+            // At halfway, snap to next shot start
+            if (t >= 0.5 && phaseTime - dt < CROSS_DUR * 0.5) {
+                const shot = shots[shotIdx];
+                player.position.set(shot.from[0], shot.from[1], shot.from[2]);
+                player.group.position.set(shot.from[0], shot.from[1], shot.from[2]);
+                fpYaw = shot.yaw0; fpPitch = shot.pitch0;
+            }
+            if (t >= 1) {
+                fadeEl.style.opacity = '0';
+                phase = 'playing'; phaseTime = 0;
             }
         }
         else if (phase === 'fadeout') {
-            // Fade to black, then start loading next shot
+            phaseTime += dt;
             const t = Math.min(phaseTime / FADE_DUR, 1);
             fadeEl.style.opacity = String(t);
-            // Start pre-loading next location while fading out
-            const nextIdx = shotIdx + 1;
-            if (nextIdx < shots.length && chunkManager) {
-                const [plx, plz] = _getShotCenter(shots[nextIdx]);
-                chunkManager.update(plx, plz);
-                chunkManager._processQueue(16);
-            }
-            if (t >= 1) {
-                shotIdx++;
-                if (shotIdx >= shots.length) { finish(); return; }
-                phase = 'loading';
-                phaseTime = 0;
-                loadTicks = 0;
-            }
+            if (t >= 1) { finish(); return; }
         }
 
-        updateWaterTime(now * 0.001);
-        renderer.render(scene, camera);
+        player.group.visible = false;
+        player.jumpVel = 0;
     };
-
-    requestAnimationFrame(introTick);
 }
 
 function startGame(loadSlotName) {
@@ -6261,6 +6303,7 @@ let _autosaveTimer = 0;
 let gamePaused = false;
 let settingsOpen = false;
 let hudHidden = false;
+let peacefulMode = false;
 
 // ── Settings ──
 let useMouseLook = true; // true = new (mouse look), false = classic (A/D turn)
@@ -6368,6 +6411,15 @@ function buildStatUI() {
     }
 }
 
+window._statPreset = (preset) => {
+    const presets = {
+        warrior: { strength: 8, agility: 3, fortitude: 8, dexterity: 3, wisdom: 3 },
+        mage:    { strength: 2, agility: 3, fortitude: 3, dexterity: 7, wisdom: 10 },
+        rogue:   { strength: 5, agility: 8, fortitude: 3, dexterity: 7, wisdom: 2 },
+    };
+    Object.assign(playerStats, presets[preset]);
+    buildStatUI();
+};
 window._statInc = (key) => {
     if (playerStats[key] >= STAT_MAX_EACH || getStatPointsUsed() >= STAT_MAX_POINTS) return;
     playerStats[key]++;
@@ -8491,6 +8543,11 @@ document.addEventListener('keydown', e => {
         document.getElementById('minimap').style.display = vis;
         document.getElementById('manaBar').style.display = vis;
         document.getElementById('staminaBar').style.display = vis;
+        if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
+    }
+    if (e.code === 'KeyH' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen) {
+        peacefulMode = !peacefulMode;
+        addChatMessage(peacefulMode ? 'Peaceful mode ON — creatures are no longer hostile' : 'Peaceful mode OFF — creatures are hostile again', peacefulMode ? 'rgba(150,220,150,0.9)' : 'rgba(220,150,150,0.9)');
     }
     if (e.code === 'KeyL' && gameStarted && !gamePaused) {
         levelMenuOpen = !levelMenuOpen;
@@ -8509,7 +8566,10 @@ document.addEventListener('keydown', e => {
             if (pointerLocked) document.exitPointerLock();
             mapViewX = player.position.x;
             mapViewZ = player.position.z;
-            drawWorldMap();
+            _mapDrawProgress = 0;
+            _mapDrawStart = performance.now();
+            _mapLayers = null; // force full redraw
+            _mapAnimateLoop();
         }
     }
     // F key — tap to cycle all dragons, hold to open whistle menu
@@ -8575,29 +8635,212 @@ let mapOpen = false;
 let mapViewX = 0, mapViewZ = 0, mapViewSize = 3200;
 let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
 let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
+let _mapBgCache = null, _mapBgCacheVX = null, _mapBgCacheVZ = null, _mapBgCacheSize = null;
+let _mapLayers = null;
+let _mapDrawProgress = 1; // 0→1 animated draw-in
+let _mapDrawStart = 0;
 
 // Parchment background
 const parchmentImg = new Image();
 parchmentImg.src = 'parchment.png';
 
+function _drawMapMarkers(ctx, w, h, scale, vx, vz, vs, progress) {
+    const ink = 'rgba(60, 40, 20, 0.85)';
+    const inkLight = 'rgba(80, 55, 30, 0.55)';
+    const inkRed = 'rgba(130, 40, 30, 0.7)';
+    const toX = wx => (wx - vx + vs) * scale;
+    const toY = wz => (wz - vz + vs) * scale;
+
+    // All markers in draw order — each gets a sequential index
+    const markers = [];
+    const addMarker = (fn) => markers.push(fn);
+
+    // Helper draw functions (capture ctx)
+    const drawCastle = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(10, 6 * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.fillStyle = ink;
+        ctx.strokeRect(x - s*0.6, y - s, s*1.2, s*1.4);
+        for (let i = -1; i <= 1; i++) ctx.fillRect(x + i*s*0.4 - s*0.15, y - s - s*0.35, s*0.3, s*0.35);
+        ctx.fillRect(x - s*0.15, y + s*0.1, s*0.3, s*0.4);
+        if (label) { ctx.font = `italic ${Math.max(8, Math.min(13, 10 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*1.4 + Math.max(8, 10 * scale)); }
+    };
+    const drawMountain = (wx, wz, label, sz) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(4, Math.min(14, (sz||8) * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s*0.5); ctx.lineTo(x, y - s); ctx.lineTo(x + s, y + s*0.5); ctx.stroke();
+        for (let i = 1; i <= 3; i++) { const t = i * 0.25; ctx.beginPath(); ctx.moveTo(x + s*t*0.5, y - s + s*1.5*t); ctx.lineTo(x + s*t*0.5 + s*0.3, y - s + s*1.5*t + s*0.3); ctx.stroke(); }
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*0.5 + Math.max(8, 10 * scale)); }
+    };
+    const drawRuins = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(8, 5 * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s*0.5); ctx.lineTo(x - s, y - s*0.6); ctx.moveTo(x - s*0.1, y + s*0.5); ctx.lineTo(x - s*0.1, y - s); ctx.moveTo(x + s*0.8, y + s*0.5); ctx.lineTo(x + s*0.8, y - s*0.3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - s*0.8, y - s*0.4); ctx.lineTo(x + s*0.5, y + s*0.1); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkLight; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*0.5 + Math.max(7, 9 * scale)); }
+    };
+    const drawGate = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(8, 5 * scale));
+        ctx.strokeStyle = inkRed; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s); ctx.lineTo(x - s, y - s*0.5); ctx.moveTo(x + s, y + s); ctx.lineTo(x + s, y - s*0.5); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y - s*0.5, s, Math.PI, 0); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkRed; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(7, 9 * scale)); }
+    };
+    const drawVillage = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(2, Math.min(6, 4 * scale));
+        ctx.fillStyle = ink;
+        ctx.fillRect(x - s*1.2, y - s*0.3, s*0.8, s*0.6); ctx.fillRect(x + s*0.2, y - s*0.5, s*0.9, s*0.7); ctx.fillRect(x - s*0.4, y + s*0.3, s*0.7, s*0.5);
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(8, 10 * scale)); }
+    };
+    const drawLabel = (wx, wz, label, color, size) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -40 || x > w+40 || y < -20 || y > h+20) return;
+        const fs = Math.max(7, Math.min(size || 11, (size || 11) * scale));
+        ctx.font = `italic ${fs}px Georgia, serif`; ctx.fillStyle = color || ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y);
+    };
+    const drawDanger = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(7, 5 * scale));
+        ctx.strokeStyle = inkRed; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.moveTo(x+s, y-s); ctx.lineTo(x-s, y+s); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, s*0.3, 0, Math.PI*2); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkRed; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(8, 10 * scale)); }
+    };
+
+    // ── Register all markers in draw order ──
+    // Compass rose first
+    addMarker(() => {
+        const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.fillStyle = ink;
+        ctx.beginPath(); ctx.moveTo(crX, crY - crS); ctx.lineTo(crX, crY + crS); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(crX - crS, crY); ctx.lineTo(crX + crS, crY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(crX, crY - crS - 4); ctx.lineTo(crX - 3, crY - crS + 3); ctx.lineTo(crX + 3, crY - crS + 3); ctx.closePath(); ctx.fill();
+        ctx.font = `bold ${Math.max(8, crS * 0.5)}px Georgia, serif`; ctx.textAlign = 'center';
+        ctx.fillText('N', crX, crY - crS - 7);
+        ctx.font = `${Math.max(6, crS * 0.35)}px Georgia, serif`;
+        ctx.fillText('S', crX, crY + crS + 10); ctx.fillText('E', crX + crS + 8, crY + 3); ctx.fillText('W', crX - crS - 8, crY + 3);
+    });
+    // Mountains
+    addMarker(() => drawMountain(1204, -60, 'East Mountains', 10));
+    addMarker(() => drawMountain(1020, -260, 'NW Peaks', 7));
+    addMarker(() => drawMountain(1020, 160, 'SW Hills', 6));
+    addMarker(() => drawMountain(1640, -80, 'Great Peak', 12));
+    addMarker(() => drawMountain(1460, -190, 'NE Ridge', 6));
+    addMarker(() => drawMountain(1470, 80, 'SE Ridge', 6));
+    addMarker(() => drawMountain(-60, -2100, 'Frozen Mountains', 14));
+    addMarker(() => drawMountain(-500, -2700, 'Frostfang Ridge', 10));
+    addMarker(() => drawMountain(400, -2600, 'Icespire Peaks', 9));
+    addMarker(() => drawMountain(100, -2800, 'Pale Spine', 8));
+    addMarker(() => drawMountain(-800, -2400, 'Howling Crags', 8));
+    addMarker(() => drawMountain(760, -2360, 'Rimestone Peaks', 8));
+    // Castles
+    addMarker(() => drawCastle(-800, 40, 'The Castle'));
+    addMarker(() => drawCastle(2160, 10, "Dragon's Reach"));
+    // Ruins
+    addMarker(() => drawRuins(-1010, -670, 'Ruined Fortress'));
+    addMarker(() => drawRuins(0, -1080, 'Abandoned Village'));
+    // Villages
+    addMarker(() => drawVillage(160, 32, 'Meadow Village'));
+    addMarker(() => drawVillage(-200, -100, 'Forest Edge'));
+    addMarker(() => drawVillage(400, 120, 'Hillside Town'));
+    addMarker(() => drawVillage(-400, 200, 'Western Hamlet'));
+    addMarker(() => drawVillage(100, -300, 'Northwatch'));
+    addMarker(() => drawVillage(-300, 400, 'Southmoor'));
+    addMarker(() => drawVillage(2040, 60, 'Farwatch'));
+    addMarker(() => drawVillage(-2100, -120, 'Bay Watch'));
+    addMarker(() => drawVillage(-2150, 200, 'Tidecrest'));
+    // Gates
+    addMarker(() => drawGate(-280, -700, 'West Gate'));
+    addMarker(() => drawGate(160, -700, 'East Gate'));
+    addMarker(() => drawGate(-60, -920, 'North Gate'));
+    addMarker(() => drawGate(-60, -480, 'South Gate'));
+    // Danger markers
+    addMarker(() => drawDanger(-250, -700, 'Colossus'));
+    addMarker(() => drawDanger(130, -700, 'Skeleton'));
+    addMarker(() => drawDanger(-60, -570, 'Dark Knight'));
+    addMarker(() => drawDanger(-60, -190, 'Hobgoblin'));
+    addMarker(() => drawDanger(-230, 70, 'Goblin Outpost'));
+    // Region labels
+    addMarker(() => drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13));
+    addMarker(() => drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12));
+    addMarker(() => drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10));
+    addMarker(() => { const rs = 'rgba(80, 55, 30, 0.5)'; drawLabel(-120, -420, 'Broken Temple', rs, 8); drawLabel(-20, -320, 'Old Tower', rs, 8); drawLabel(-40, -440, 'Stone Circle', rs, 8); });
+    // Dragon altar
+    addMarker(() => {
+        const ax = toX(-1010), ay = toY(-670);
+        if (ax < -20 || ax > w+20 || ay < -20 || ay > h+20) return;
+        const s = Math.max(3, Math.min(7, 5 * scale));
+        ctx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ax, ay - s*3, s, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax, ay - s*3 - s*0.5); ctx.lineTo(ax, ay - s*3 + s*0.5); ctx.moveTo(ax - s*0.5, ay - s*3); ctx.lineTo(ax + s*0.5, ay - s*3); ctx.stroke();
+    });
+    // Cave
+    addMarker(() => {
+        const cx = toX(1120), cy = toY(-100);
+        if (cx < -20 || cx > w+20 || cy < -20 || cy > h+20) return;
+        const s = Math.max(3, Math.min(6, 4 * scale));
+        ctx.fillStyle = 'rgba(40, 30, 20, 0.6)'; ctx.beginPath(); ctx.arc(cx, cy, s, Math.PI, 0); ctx.fill();
+        ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText('Cave', cx, cy + Math.max(8, 10 * scale));
+    });
+
+    // ── Draw markers with staggered fade-in ──
+    const total = markers.length;
+    for (let i = 0; i < total; i++) {
+        // Each marker fades in over a window; staggered start
+        const markerStart = i / total;
+        const markerEnd = markerStart + 0.15; // each takes 15% of total time to fade in
+        const alpha = progress >= 1 ? 1 : Math.max(0, Math.min(1, (progress - markerStart) / (markerEnd - markerStart)));
+        if (alpha <= 0) continue;
+        ctx.globalAlpha = alpha;
+        markers[i]();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function _mapAnimateLoop() {
+    if (!mapOpen) return;
+    const elapsed = (performance.now() - _mapDrawStart) / 1000;
+    const DRAW_DUR = 2.0; // seconds to draw all markers
+    _mapDrawProgress = Math.min(1, elapsed / DRAW_DUR);
+    drawWorldMap();
+    if (_mapDrawProgress < 1) requestAnimationFrame(_mapAnimateLoop);
+}
+
 function drawWorldMap() {
     const w = mapCanvas.width, h = mapCanvas.height;
     const scale = w / (mapViewSize * 2);
+    const toX = wx => (wx - mapViewX + mapViewSize) * scale;
+    const toY = wz => (wz - mapViewZ + mapViewSize) * scale;
 
-    if (!mapCache || mapCacheVX !== mapViewX || mapCacheVZ !== mapViewZ || mapCacheSize !== mapViewSize) {
-        // Draw parchment background
-        if (parchmentImg.complete) {
-            mapCtx.drawImage(parchmentImg, 0, 0, w, h);
-        } else {
-            mapCtx.fillStyle = '#d4bc8b';
-            mapCtx.fillRect(0, 0, w, h);
-        }
+    // ── Build cached layers if viewport changed ──
+    if (!_mapLayers || _mapBgCacheVX !== mapViewX || _mapBgCacheVZ !== mapViewZ || _mapBgCacheSize !== mapViewSize) {
+        _mapBgCacheVX = mapViewX; _mapBgCacheVZ = mapViewZ; _mapBgCacheSize = mapViewSize;
 
-        // Build height data for contour lines
+        // Parchment base
+        const parchCanvas = document.createElement('canvas');
+        parchCanvas.width = w; parchCanvas.height = h;
+        const pCtx = parchCanvas.getContext('2d');
+        if (parchmentImg.complete) pCtx.drawImage(parchmentImg, 0, 0, w, h);
+        else { pCtx.fillStyle = '#d4bc8b'; pCtx.fillRect(0, 0, w, h); }
+        // Border
+        pCtx.strokeStyle = 'rgba(80, 55, 30, 0.6)'; pCtx.lineWidth = 3; pCtx.strokeRect(2, 2, w-4, h-4);
+        pCtx.strokeStyle = 'rgba(80, 55, 30, 0.3)'; pCtx.lineWidth = 1; pCtx.strokeRect(6, 6, w-12, h-12);
+
+        // ── Compute terrain data ──
         const step = 3;
         const cols = Math.ceil(w / step), rows = Math.ceil(h / step);
         const heightData = new Float32Array(cols * rows);
-        const biomeData = new Uint8Array(cols * rows); // 0=land, 1=ocean, 2=beach, 3=snow, 4=desert, 5=mountain, 6=scorched, 7=enchanted, 8=forest
+        const biomeData = new Uint8Array(cols * rows);
 
         for (let gx = 0; gx < cols; gx++) {
             for (let gy = 0; gy < rows; gy++) {
@@ -8605,465 +8848,308 @@ function drawWorldMap() {
                 const wx = (px / scale) + mapViewX - mapViewSize;
                 const wz = (py / scale) + mapViewZ - mapViewSize;
                 const idx = gy * cols + gx;
-
                 const sz = wz / ISLAND_NS_SCALE;
                 const dist = Math.sqrt(wx * wx + sz * sz);
                 const localR = getIslandRadius(wx, wz);
-
-                if (dist > localR - 20) {
-                    heightData[idx] = -5;
-                    biomeData[idx] = 1; // ocean
-                    continue;
-                }
-                if (dist > localR - 50) {
-                    heightData[idx] = 0.5;
-                    biomeData[idx] = 2; // beach
-                    continue;
-                }
-
+                if (dist > localR - 20) { heightData[idx] = -5; biomeData[idx] = 1; continue; }
+                if (dist > localR - 50) { heightData[idx] = 0.5; biomeData[idx] = 2; continue; }
                 const th = getTerrainHeight(wx, wz);
                 heightData[idx] = th;
-
-                const snow = getSnowBlend(wz);
-                const desert = getDesertBlend(wz);
-                const mtn = getMountainBlend(wx, wz);
-                const scorch = getScorchedBlend(wx, wz);
-                const ench = getEnchantedBlend(wx, wz);
-
+                const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx, wz);
+                const scorch = getScorchedBlend(wx, wz), ench = getEnchantedBlend(wx, wz);
                 if (scorch > 0.1) biomeData[idx] = 6;
                 else if (ench > 0.1) biomeData[idx] = 7;
                 else if (mtn > 0.3) biomeData[idx] = 5;
                 else if (snow > 0.3) biomeData[idx] = 3;
                 else if (desert > 0.3) biomeData[idx] = 4;
-                else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
-                else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
+                else if (isOnPath(wx, wz)) biomeData[idx] = 9;
+                else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8;
                 else biomeData[idx] = 0;
-                // River override — check on top of other biomes
-                for (const riv of riverDefs) {
-                    if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; }
-                }
+                for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; } }
             }
         }
 
-        // Draw biome tints (subtle, ink-wash style over parchment)
-        const imgData = mapCtx.getImageData(0, 0, w, h);
-        const pixels = imgData.data;
-
-        for (let gx = 0; gx < cols; gx++) {
-            for (let gy = 0; gy < rows; gy++) {
-                const idx = gy * cols + gx;
-                const biome = biomeData[idx];
-                const th = heightData[idx];
-                let tintR = 0, tintG = 0, tintB = 0, tintA = 0;
-
-                if (biome === 1) { // ocean — blue-grey wash
-                    tintR = 70; tintG = 100; tintB = 130; tintA = 0.45;
-                } else if (biome === 2) { // beach — warm sand
-                    tintR = 190; tintG = 170; tintB = 120; tintA = 0.1;
-                } else if (biome === 3) { // snow — pale blue-white
-                    tintR = 180; tintG = 195; tintB = 210; tintA = 0.35;
-                } else if (biome === 4) { // desert — warm ochre
-                    tintR = 170; tintG = 140; tintB = 70; tintA = 0.25;
-                } else if (biome === 5) { // mountain — grey-brown, darken with height
-                    const hFactor = Math.min(1, th / 80);
-                    tintR = 80 - hFactor*30; tintG = 75 - hFactor*30; tintB = 70 - hFactor*25; tintA = 0.25 + hFactor*0.15;
-                } else if (biome === 6) { // scorched — dark charcoal
-                    tintR = 30; tintG = 20; tintB = 15; tintA = 0.4;
-                } else if (biome === 7) { // enchanted — purple wash
-                    tintR = 90; tintG = 50; tintB = 130; tintA = 0.25;
-                } else if (biome === 10) { // river — blue water
-                    tintR = 50; tintG = 90; tintB = 150; tintA = 0.5;
-                } else if (biome === 9) { // path — sandy brown line
-                    tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
-                } else if (biome === 8) { // forest — deep green
-                    tintR = 45; tintG = 85; tintB = 35; tintA = 0.2;
-                } else { // grass — rich green
-                    tintR = 40; tintG = 80; tintB = 30; tintA = 0.15;
-                }
-
-                if (tintA > 0) {
-                    for (let sy = 0; sy < step && gy * step + sy < h; sy++) {
-                        for (let sx = 0; sx < step && gx * step + sx < w; sx++) {
-                            const pi = ((gy * step + sy) * w + gx * step + sx) * 4;
-                            pixels[pi]     = Math.round(pixels[pi] * (1 - tintA) + tintR * tintA);
-                            pixels[pi + 1] = Math.round(pixels[pi+1] * (1 - tintA) + tintG * tintA);
-                            pixels[pi + 2] = Math.round(pixels[pi+2] * (1 - tintA) + tintB * tintA);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Draw contour lines — interval scales with zoom (finer when zoomed in)
-        // mapViewSize=1200 (zoomed out) → interval=10, mapViewSize=100 (zoomed in) → interval=1
+        // ── Layer 2: Contour lines as canvas paths ──
+        const contourCanvas = document.createElement('canvas');
+        contourCanvas.width = w; contourCanvas.height = h;
+        const cCtx = contourCanvas.getContext('2d');
         const contourInterval = Math.max(0.5, Math.min(5, mapViewSize / 200));
-        const majorMult = contourInterval <= 2 ? 5 : 3; // major line every 3rd or 5th
-        const inkR = 70, inkG = 45, inkB = 25;
+        const majorMult = contourInterval <= 2 ? 5 : 3;
 
+        // Build contour segments: for each contour level, collect connected points
+        // Use marching squares to find line segments crossing each cell
+        const contourLines = []; // { points:[[x,y],...], major:bool }
+        const levelsFound = new Set();
         for (let gx = 1; gx < cols - 1; gx++) {
             for (let gy = 1; gy < rows - 1; gy++) {
                 const idx = gy * cols + gx;
                 if (biomeData[idx] === 1) continue;
                 const th = heightData[idx];
-                const hRight = heightData[idx + 1];
-                const hDown = heightData[(gy + 1) * cols + gx];
-                const hDiag = heightData[(gy + 1) * cols + gx + 1];
-
-                const minH = Math.min(th, hRight, hDown, hDiag);
-                const maxH = Math.max(th, hRight, hDown, hDiag);
-
-                // Check all contour levels that cross this cell
+                const hR = heightData[idx + 1], hD = heightData[(gy+1)*cols+gx];
+                const minH = Math.min(th, hR, hD), maxH = Math.max(th, hR, hD);
                 for (let lvl = Math.ceil(minH / contourInterval) * contourInterval; lvl <= maxH; lvl += contourInterval) {
                     if (lvl <= 0) continue;
-                    const majorInterval = contourInterval * majorMult;
-                    const isMajor = (Math.abs(lvl % majorInterval) < 0.01);
-                    const lineAlpha = isMajor ? 0.75 : 0.45;
+                    levelsFound.add(lvl);
+                }
+            }
+        }
+        // For each level, trace connected contour line segments
+        for (const lvl of [...levelsFound].sort((a,b) => a-b)) {
+            const majorInterval = contourInterval * majorMult;
+            const isMajor = Math.abs(lvl % majorInterval) < 0.01;
+            // Collect all edge segments via marching squares
+            const segs = [];
+            for (let gx = 0; gx < cols - 1; gx++) {
+                for (let gy = 0; gy < rows - 1; gy++) {
+                    const i00 = gy*cols+gx, i10 = i00+1, i01 = (gy+1)*cols+gx, i11 = i01+1;
+                    if (biomeData[i00]===1 && biomeData[i10]===1 && biomeData[i01]===1 && biomeData[i11]===1) continue;
+                    const v00=heightData[i00], v10=heightData[i10], v01=heightData[i01], v11=heightData[i11];
+                    const b0 = v00 >= lvl ? 1:0, b1 = v10 >= lvl ? 1:0, b2 = v11 >= lvl ? 1:0, b3 = v01 >= lvl ? 1:0;
+                    const config = b0|b1<<1|b2<<2|b3<<3;
+                    if (config === 0 || config === 15) continue;
+                    const lerp = (a,b,va,vb) => va===vb ? 0.5 : (lvl-va)/(vb-va);
+                    const top = () => [(gx + lerp(0,1,v00,v10))*step, gy*step];
+                    const right = () => [(gx+1)*step, (gy + lerp(0,1,v10,v11))*step];
+                    const bottom = () => [(gx + lerp(0,1,v01,v11))*step, (gy+1)*step];
+                    const left = () => [gx*step, (gy + lerp(0,1,v00,v01))*step];
+                    const addSeg = (a,b) => segs.push([a,b]);
+                    switch(config) {
+                        case 1: case 14: addSeg(top(),left()); break;
+                        case 2: case 13: addSeg(top(),right()); break;
+                        case 3: case 12: addSeg(left(),right()); break;
+                        case 4: case 11: addSeg(right(),bottom()); break;
+                        case 5: addSeg(top(),right()); addSeg(left(),bottom()); break;
+                        case 6: case 9: addSeg(top(),bottom()); break;
+                        case 7: case 8: addSeg(left(),bottom()); break;
+                        case 10: addSeg(top(),left()); addSeg(right(),bottom()); break;
+                    }
+                }
+            }
+            // Chain segments into polylines
+            if (segs.length === 0) continue;
+            const eps = 0.5;
+            const eq = (a,b) => Math.abs(a[0]-b[0])<eps && Math.abs(a[1]-b[1])<eps;
+            const used = new Uint8Array(segs.length);
+            for (let si = 0; si < segs.length; si++) {
+                if (used[si]) continue;
+                used[si] = 1;
+                const chain = [segs[si][0], segs[si][1]];
+                let found = true;
+                while (found) {
+                    found = false;
+                    for (let j = 0; j < segs.length; j++) {
+                        if (used[j]) continue;
+                        if (eq(chain[chain.length-1], segs[j][0])) { chain.push(segs[j][1]); used[j]=1; found=true; }
+                        else if (eq(chain[chain.length-1], segs[j][1])) { chain.push(segs[j][0]); used[j]=1; found=true; }
+                        else if (eq(chain[0], segs[j][1])) { chain.unshift(segs[j][0]); used[j]=1; found=true; }
+                        else if (eq(chain[0], segs[j][0])) { chain.unshift(segs[j][1]); used[j]=1; found=true; }
+                    }
+                }
+                contourLines.push({ points: chain, major: isMajor });
+            }
+        }
+        // Draw contour lines on contour canvas
+        for (const cl of contourLines) {
+            cCtx.strokeStyle = cl.major ? 'rgba(70,45,25,0.75)' : 'rgba(70,45,25,0.40)';
+            cCtx.lineWidth = cl.major ? 1.5 : 0.8;
+            cCtx.beginPath();
+            cCtx.moveTo(cl.points[0][0], cl.points[0][1]);
+            for (let i = 1; i < cl.points.length; i++) cCtx.lineTo(cl.points[i][0], cl.points[i][1]);
+            cCtx.stroke();
+        }
+        // ── Coastline + trees on separate canvas ──
+        const coastTreeCanvas = document.createElement('canvas');
+        coastTreeCanvas.width = w; coastTreeCanvas.height = h;
+        const ctCtx = coastTreeCanvas.getContext('2d');
+        // Coastline
+        for (let gx = 1; gx < cols-1; gx++) {
+            for (let gy = 1; gy < rows-1; gy++) {
+                const idx = gy*cols+gx;
+                if (biomeData[idx] === 1) continue;
+                const nb = [biomeData[idx-1],biomeData[idx+1],biomeData[(gy-1)*cols+gx],biomeData[(gy+1)*cols+gx]];
+                if (!nb.some(n=>n===1)) continue;
+                ctCtx.fillStyle = 'rgba(60,45,30,0.6)';
+                ctCtx.fillRect(gx*step, gy*step, step, step);
+            }
+        }
+        // Tree symbols
+        for (let gx = 2; gx < cols-2; gx += 3) {
+            for (let gy = 2; gy < rows-2; gy += 3) {
+                if (biomeData[gy*cols+gx] !== 8) continue;
+                const hash = Math.sin(gx*73.1+gy*197.3)*43758.5;
+                if ((hash-Math.floor(hash)) > 0.5) continue;
+                const cx = gx*step+1, cy = gy*step+1;
+                ctCtx.fillStyle = 'rgba(50,70,35,0.5)';
+                ctCtx.beginPath(); ctCtx.moveTo(cx,cy-2); ctCtx.lineTo(cx-2,cy+1); ctCtx.lineTo(cx+2,cy+1); ctCtx.closePath(); ctCtx.fill();
+            }
+        }
 
-                    // Draw a 2px or 3px dot at this grid cell
-                    const spread = isMajor ? 2 : 1;
-                    for (let sy = 0; sy < spread; sy++) {
-                        for (let sx = 0; sx < spread; sx++) {
-                            const ppx = gx * step + sx, ppy = gy * step + sy;
-                            if (ppx >= w || ppy >= h) continue;
-                            const pi = (ppy * w + ppx) * 4;
-                            pixels[pi]     = Math.round(pixels[pi] * (1 - lineAlpha) + inkR * lineAlpha);
-                            pixels[pi + 1] = Math.round(pixels[pi+1] * (1 - lineAlpha) + inkG * lineAlpha);
-                            pixels[pi + 2] = Math.round(pixels[pi+2] * (1 - lineAlpha) + inkB * lineAlpha);
+        // ── Layer 3: Biome colors (no rivers, no contour lines) ──
+        const colorCanvas = document.createElement('canvas');
+        colorCanvas.width = w; colorCanvas.height = h;
+        const colCtx = colorCanvas.getContext('2d');
+        // Draw parchment first so we can tint it
+        if (parchmentImg.complete) colCtx.drawImage(parchmentImg, 0, 0, w, h);
+        else { colCtx.fillStyle = '#d4bc8b'; colCtx.fillRect(0, 0, w, h); }
+        const colImg = colCtx.getImageData(0, 0, w, h);
+        const colPx = colImg.data;
+        for (let gx = 0; gx < cols; gx++) {
+            for (let gy = 0; gy < rows; gy++) {
+                const idx = gy*cols+gx;
+                const biome = biomeData[idx];
+                if (biome === 10) continue; // rivers drawn separately
+                const th = heightData[idx];
+                let tR=0,tG=0,tB=0,tA=0;
+                if (biome===1){tR=70;tG=100;tB=130;tA=0.45;}
+                else if(biome===2){tR=190;tG=170;tB=120;tA=0.1;}
+                else if(biome===3){tR=180;tG=195;tB=210;tA=0.35;}
+                else if(biome===4){tR=170;tG=140;tB=70;tA=0.25;}
+                else if(biome===5){const f=Math.min(1,th/80);tR=80-f*30;tG=75-f*30;tB=70-f*25;tA=0.25+f*0.15;}
+                else if(biome===6){tR=30;tG=20;tB=15;tA=0.4;}
+                else if(biome===7){tR=90;tG=50;tB=130;tA=0.25;}
+                else if(biome===9){tR=120;tG=100;tB=60;tA=0.4;}
+                else if(biome===8){tR=45;tG=85;tB=35;tA=0.2;}
+                else{tR=40;tG=80;tB=30;tA=0.15;}
+                if(tA>0){
+                    for(let sy=0;sy<step&&gy*step+sy<h;sy++){
+                        for(let sx=0;sx<step&&gx*step+sx<w;sx++){
+                            const pi=((gy*step+sy)*w+gx*step+sx)*4;
+                            colPx[pi]=Math.round(colPx[pi]*(1-tA)+tR*tA);
+                            colPx[pi+1]=Math.round(colPx[pi+1]*(1-tA)+tG*tA);
+                            colPx[pi+2]=Math.round(colPx[pi+2]*(1-tA)+tB*tA);
                         }
                     }
                 }
             }
         }
+        colCtx.putImageData(colImg, 0, 0);
 
-        // Draw coastline (darker ink line at land/ocean boundary)
-        for (let gx = 1; gx < cols - 1; gx++) {
-            for (let gy = 1; gy < rows - 1; gy++) {
-                const idx = gy * cols + gx;
-                const isLand = biomeData[idx] !== 1;
-                if (!isLand) continue;
-                const neighbors = [
-                    biomeData[idx - 1], biomeData[idx + 1],
-                    biomeData[(gy-1) * cols + gx], biomeData[(gy+1) * cols + gx]
-                ];
-                if (!neighbors.some(n => n === 1)) continue;
-                // This is a coastline cell
-                for (let sy = 0; sy < step; sy++) {
-                    for (let sx = 0; sx < step; sx++) {
-                        const ppx = gx * step + sx, ppy = gy * step + sy;
-                        if (ppx >= w || ppy >= h) continue;
-                        const pi = (ppy * w + ppx) * 4;
-                        pixels[pi]     = Math.round(pixels[pi] * 0.4 + 60 * 0.6);
-                        pixels[pi + 1] = Math.round(pixels[pi+1] * 0.4 + 45 * 0.6);
-                        pixels[pi + 2] = Math.round(pixels[pi+2] * 0.4 + 30 * 0.6);
-                    }
-                }
-            }
+        // ── Layer 4: River paths (canvas polylines from riverDefs waypoints) ──
+        const riverPaths = [];
+        for (const riv of riverDefs) {
+            const pts = riv.pts.map(p => [toX(p[0]), toY(p[1])]);
+            riverPaths.push({ pts, width: Math.max(1.5, riv.width * scale * 0.8), name: riv.name });
         }
 
-        // Draw small tree symbols in forest areas
-        for (let gx = 2; gx < cols - 2; gx += 3) {
-            for (let gy = 2; gy < rows - 2; gy += 3) {
-                const idx = gy * cols + gx;
-                if (biomeData[idx] !== 8) continue;
-                const hash = Math.sin(gx * 73.1 + gy * 197.3) * 43758.5;
-                if ((hash - Math.floor(hash)) > 0.5) continue;
-                const cx = gx * step + 1, cy = gy * step + 1;
-                // Tiny tree symbol: small triangle
-                for (let dy = -2; dy <= 1; dy++) {
-                    const hw = Math.max(0, 2 - Math.abs(dy + 1)); // width narrows at top
-                    for (let dx = -hw; dx <= hw; dx++) {
-                        const ppx = cx + dx, ppy = cy + dy;
-                        if (ppx < 0 || ppx >= w || ppy < 0 || ppy >= h) continue;
-                        const pi = (ppy * w + ppx) * 4;
-                        pixels[pi]     = Math.round(pixels[pi] * 0.5 + 50 * 0.5);
-                        pixels[pi + 1] = Math.round(pixels[pi+1] * 0.5 + 70 * 0.5);
-                        pixels[pi + 2] = Math.round(pixels[pi+2] * 0.5 + 35 * 0.5);
-                    }
-                }
+        // ── Compute contour line total lengths for draw animation ──
+        let totalContourLen = 0;
+        for (const cl of contourLines) {
+            let len = 0;
+            for (let i = 1; i < cl.points.length; i++) {
+                const dx = cl.points[i][0]-cl.points[i-1][0], dy = cl.points[i][1]-cl.points[i-1][1];
+                len += Math.sqrt(dx*dx+dy*dy);
             }
+            cl._len = len;
+            totalContourLen += len;
         }
 
-        mapCtx.putImageData(imgData, 0, 0);
-
-        // Decorative border (drawn on top)
-        mapCtx.strokeStyle = 'rgba(80, 55, 30, 0.6)';
-        mapCtx.lineWidth = 3;
-        mapCtx.strokeRect(2, 2, w - 4, h - 4);
-        mapCtx.strokeStyle = 'rgba(80, 55, 30, 0.3)';
-        mapCtx.lineWidth = 1;
-        mapCtx.strokeRect(6, 6, w - 12, h - 12);
-
-        // ── Map markers and drawings ──
-        const ink = 'rgba(60, 40, 20, 0.85)';
-        const inkLight = 'rgba(80, 55, 30, 0.55)';
-        const inkRed = 'rgba(130, 40, 30, 0.7)';
-        const toX = wx => (wx - mapViewX + mapViewSize) * scale;
-        const toY = wz => (wz - mapViewZ + mapViewSize) * scale;
-
-        // Helper: draw a small castle/tower icon
-        const drawCastle = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(10, 6 * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5; mapCtx.fillStyle = ink;
-            // Tower body
-            mapCtx.strokeRect(x - s*0.6, y - s, s*1.2, s*1.4);
-            // Crenellations
-            for (let i = -1; i <= 1; i++) {
-                mapCtx.fillRect(x + i*s*0.4 - s*0.15, y - s - s*0.35, s*0.3, s*0.35);
-            }
-            // Door
-            mapCtx.fillRect(x - s*0.15, y + s*0.1, s*0.3, s*0.4);
-            // Label
-            if (label) {
-                mapCtx.font = `italic ${Math.max(8, Math.min(13, 10 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*1.4 + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Helper: draw mountain peak symbol (small inverted V with hatching)
-        const drawMountain = (wx, wz, label, sz) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(4, Math.min(14, (sz||8) * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5;
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s*0.5);
-            mapCtx.lineTo(x, y - s);
-            mapCtx.lineTo(x + s, y + s*0.5);
-            mapCtx.stroke();
-            // Hatching on right side
-            for (let i = 1; i <= 3; i++) {
-                const t = i * 0.25;
-                mapCtx.beginPath();
-                mapCtx.moveTo(x + s*t*0.5, y - s + s*1.5*t);
-                mapCtx.lineTo(x + s*t*0.5 + s*0.3, y - s + s*1.5*t + s*0.3);
-                mapCtx.stroke();
-            }
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*0.5 + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Helper: draw ruins symbol (broken pillars)
-        const drawRuins = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(8, 5 * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.2;
-            // Broken columns
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s*0.5); mapCtx.lineTo(x - s, y - s*0.6);
-            mapCtx.moveTo(x - s*0.1, y + s*0.5); mapCtx.lineTo(x - s*0.1, y - s);
-            mapCtx.moveTo(x + s*0.8, y + s*0.5); mapCtx.lineTo(x + s*0.8, y - s*0.3);
-            mapCtx.stroke();
-            // Fallen beam
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s*0.8, y - s*0.4);
-            mapCtx.lineTo(x + s*0.5, y + s*0.1);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkLight; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*0.5 + Math.max(7, 9 * scale));
-            }
-        };
-
-        // Helper: draw gate symbol (two pillars with arch)
-        const drawGate = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(8, 5 * scale));
-            mapCtx.strokeStyle = inkRed; mapCtx.lineWidth = 1.5;
-            // Two pillars
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s); mapCtx.lineTo(x - s, y - s*0.5);
-            mapCtx.moveTo(x + s, y + s); mapCtx.lineTo(x + s, y - s*0.5);
-            mapCtx.stroke();
-            // Arch
-            mapCtx.beginPath();
-            mapCtx.arc(x, y - s*0.5, s, Math.PI, 0);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkRed; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(7, 9 * scale));
-            }
-        };
-
-        // Helper: draw village symbol (small cluster of houses)
-        const drawVillage = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(2, Math.min(6, 4 * scale));
-            mapCtx.fillStyle = ink;
-            // Small house shapes
-            mapCtx.fillRect(x - s*1.2, y - s*0.3, s*0.8, s*0.6);
-            mapCtx.fillRect(x + s*0.2, y - s*0.5, s*0.9, s*0.7);
-            mapCtx.fillRect(x - s*0.4, y + s*0.3, s*0.7, s*0.5);
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(8, 10 * scale));
-            }
-        };
-
-        // ── Place markers (actual coordinates from the codebase) ──
-
-        // Helper: draw label only (for region names)
-        const drawLabel = (wx, wz, label, color, size) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -40 || x > w+40 || y < -20 || y > h+20) return;
-            const fs = Math.max(7, Math.min(size || 11, (size || 11) * scale));
-            mapCtx.font = `italic ${fs}px Georgia, serif`;
-            mapCtx.fillStyle = color || ink;
-            mapCtx.textAlign = 'center';
-            mapCtx.fillText(label, x, y);
-        };
-
-        // Helper: draw a danger marker (skull-like X)
-        const drawDanger = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(7, 5 * scale));
-            mapCtx.strokeStyle = inkRed; mapCtx.lineWidth = 1.8;
-            mapCtx.beginPath();
-            mapCtx.moveTo(x-s, y-s); mapCtx.lineTo(x+s, y+s);
-            mapCtx.moveTo(x+s, y-s); mapCtx.lineTo(x-s, y+s);
-            mapCtx.stroke();
-            mapCtx.beginPath(); mapCtx.arc(x, y, s*0.3, 0, Math.PI*2);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkRed; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Castle (the western castle from villages.js)
-        drawCastle(-800, 40, 'The Castle');
-
-        // Ruined Fortress
-        drawRuins(-1010, -670, 'Ruined Fortress');
-
-        // Mountains
-        drawMountain(1204, -60, 'East Mountains', 10);
-        drawMountain(1020, -260, 'NW Peaks', 7);
-        drawMountain(1020, 160, 'SW Hills', 6);
-        drawMountain(1640, -80, 'Great Peak', 12);
-        drawMountain(1460, -190, 'NE Ridge', 6);
-        drawMountain(1470, 80, 'SE Ridge', 6);
-        drawMountain(-60, -2100, 'Frozen Mountains', 14);
-        drawMountain(-500, -2700, 'Frostfang Ridge', 10);
-        drawMountain(400, -2600, 'Icespire Peaks', 9);
-        drawMountain(100, -2800, 'Pale Spine', 8);
-        drawMountain(-800, -2400, 'Howling Crags', 8);
-        drawMountain(760, -2360, 'Rimestone Peaks', 8);
-
-        // Villages
-        drawVillage(160, 32, 'Meadow Village');
-        drawVillage(-200, -100, 'Forest Edge');
-        drawVillage(400, 120, 'Hillside Town');
-        drawVillage(-400, 200, 'Western Hamlet');
-        drawVillage(100, -300, 'Northwatch');
-        drawVillage(-300, 400, 'Southmoor');
-        drawVillage(2040, 60, 'Farwatch');
-        drawCastle(2160, 10, "Dragon's Reach");
-        drawVillage(-2100, -120, 'Bay Watch');
-        drawVillage(-2150, 200, 'Tidecrest');
-
-        // Forest Gates (around the ancient forest hill ring at -60, -700)
-        drawGate(-280, -700, 'West Gate');
-        drawGate(160, -700, 'East Gate');
-        drawGate(-60, -920, 'North Gate');
-        drawGate(-60, -480, 'South Gate');
-
-        // Gate bosses
-        drawDanger(-250, -700, 'Colossus');
-        drawDanger(130, -700, 'Skeleton');
-        drawDanger(-60, -570, 'Dark Knight');
-        drawDanger(-60, -190, 'Hobgoblin');
-
-        // Goblin camps
-        drawDanger(-230, 70, 'Goblin Outpost');
-
-        // Ancient forest — large italic label
-        drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
-
-        // Forest ruins (inside the ancient forest)
-        const ruinStyle = 'rgba(80, 55, 30, 0.5)';
-        drawLabel(-120, -420, 'Broken Temple', ruinStyle, 8);
-        drawLabel(-20, -320, 'Old Tower', ruinStyle, 8);
-        drawLabel(-40, -440, 'Stone Circle', ruinStyle, 8);
-
-        // Dragon altar
-        const altX = toX(-1010), altY = toY(-670);
-        if (altX > -20 && altX < w+20 && altY > -20 && altY < h+20) {
-            const s = Math.max(3, Math.min(7, 5 * scale));
-            mapCtx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; mapCtx.lineWidth = 1.5;
-            mapCtx.beginPath();
-            mapCtx.arc(altX, altY - s*3, s, 0, Math.PI*2);
-            mapCtx.stroke();
-            mapCtx.beginPath();
-            mapCtx.moveTo(altX, altY - s*3 - s*0.5);
-            mapCtx.lineTo(altX, altY - s*3 + s*0.5);
-            mapCtx.moveTo(altX - s*0.5, altY - s*3);
-            mapCtx.lineTo(altX + s*0.5, altY - s*3);
-            mapCtx.stroke();
-        }
-
-        // Cave entrance
-        const caveX = toX(1120), caveY = toY(-100);
-        if (caveX > -20 && caveX < w+20 && caveY > -20 && caveY < h+20) {
-            const s = Math.max(3, Math.min(6, 4 * scale));
-            mapCtx.fillStyle = 'rgba(40, 30, 20, 0.6)';
-            mapCtx.beginPath();
-            mapCtx.arc(caveX, caveY, s, Math.PI, 0);
-            mapCtx.fill();
-            mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-            mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-            mapCtx.fillText('Cave', caveX, caveY + Math.max(8, 10 * scale));
-        }
-
-        // Abandoned Village
-        drawRuins(0, -1080, 'Abandoned Village');
-
-        // Scorched Lands region label
-        drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
-
-        // Enchanted Forest region label
-        drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
-
-        // Compass rose (top-right corner)
-        const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
-        mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5; mapCtx.fillStyle = ink;
-        // N-S line
-        mapCtx.beginPath(); mapCtx.moveTo(crX, crY - crS); mapCtx.lineTo(crX, crY + crS); mapCtx.stroke();
-        // E-W line
-        mapCtx.beginPath(); mapCtx.moveTo(crX - crS, crY); mapCtx.lineTo(crX + crS, crY); mapCtx.stroke();
-        // N arrow
-        mapCtx.beginPath();
-        mapCtx.moveTo(crX, crY - crS - 4);
-        mapCtx.lineTo(crX - 3, crY - crS + 3);
-        mapCtx.lineTo(crX + 3, crY - crS + 3);
-        mapCtx.closePath(); mapCtx.fill();
-        // Labels
-        mapCtx.font = `bold ${Math.max(8, crS * 0.5)}px Georgia, serif`;
-        mapCtx.textAlign = 'center';
-        mapCtx.fillText('N', crX, crY - crS - 7);
-        mapCtx.font = `${Math.max(6, crS * 0.35)}px Georgia, serif`;
-        mapCtx.fillText('S', crX, crY + crS + 10);
-        mapCtx.fillText('E', crX + crS + 8, crY + 3);
-        mapCtx.fillText('W', crX - crS - 8, crY + 3);
-
-        mapCache = mapCtx.getImageData(0, 0, w, h);
-        mapCacheVX = mapViewX; mapCacheVZ = mapViewZ; mapCacheSize = mapViewSize;
-    } else {
-        mapCtx.putImageData(mapCache, 0, 0);
+        _mapLayers = { parchCanvas, contourCanvas, coastTreeCanvas, colorCanvas, contourLines, totalContourLen, riverPaths };
     }
+
+    // ── Animation phases ──
+    // Phase 0: 0.0-0.0  parchment only (instant)
+    // Phase 1: 0.0-0.3  contour lines draw in + coastline/trees fade in
+    // Phase 2: 0.3-0.7  colors pour in (top→bottom) + rivers draw simultaneously
+    // Phase 3: 0.7-1.0  markers appear
+    const p = _mapDrawProgress;
+    const L = _mapLayers;
+
+    // Always start with parchment
+    mapCtx.drawImage(L.parchCanvas, 0, 0);
+
+    // ── Phase 2 (drawn first so contours render on top): Colors pour in ──
+    if (p > 0.3) {
+        const colorP = Math.min(1, (p - 0.3) / 0.4);
+        const revealY = Math.floor(colorP * h);
+        if (revealY > 0) {
+            mapCtx.save();
+            mapCtx.beginPath();
+            mapCtx.rect(0, 0, w, revealY);
+            mapCtx.clip();
+            mapCtx.drawImage(L.colorCanvas, 0, 0);
+            mapCtx.restore();
+        }
+    }
+
+    // ── Phase 1: Contour lines drawing in + coastline/trees fade ──
+    if (p > 0) {
+        const contourP = Math.min(1, p / 0.3);
+        // Coastline + trees fade in with contour progress
+        mapCtx.globalAlpha = contourP;
+        mapCtx.drawImage(L.coastTreeCanvas, 0, 0);
+        mapCtx.globalAlpha = 1;
+        if (contourP >= 1) {
+            // All contour lines complete — draw cached canvas
+            mapCtx.drawImage(L.contourCanvas, 0, 0);
+        } else {
+            // Draw contour lines progressively
+            const inkCol = ['rgba(70,45,25,0.40)', 'rgba(70,45,25,0.75)'];
+            const inkW = [0.8, 1.5];
+            let cumLen = 0;
+            const drawLen = contourP * L.totalContourLen;
+            for (const cl of L.contourLines) {
+                if (cumLen >= drawLen) break;
+                const remaining = drawLen - cumLen;
+                mapCtx.strokeStyle = inkCol[cl.major?1:0];
+                mapCtx.lineWidth = inkW[cl.major?1:0];
+                mapCtx.beginPath();
+                mapCtx.moveTo(cl.points[0][0], cl.points[0][1]);
+                let segLen = 0;
+                for (let i = 1; i < cl.points.length; i++) {
+                    const dx = cl.points[i][0]-cl.points[i-1][0], dy = cl.points[i][1]-cl.points[i-1][1];
+                    const d = Math.sqrt(dx*dx+dy*dy);
+                    if (segLen + d <= remaining) {
+                        mapCtx.lineTo(cl.points[i][0], cl.points[i][1]);
+                        segLen += d;
+                    } else {
+                        const t = (remaining - segLen) / d;
+                        mapCtx.lineTo(cl.points[i-1][0]+dx*t, cl.points[i-1][1]+dy*t);
+                        break;
+                    }
+                }
+                mapCtx.stroke();
+                cumLen += cl._len;
+            }
+        }
+    }
+
+    // ── Phase 2 continued: Rivers draw progressively ──
+    if (p > 0.3) {
+        const colorP = Math.min(1, (p - 0.3) / 0.4);
+        for (const riv of L.riverPaths) {
+            if (riv.pts.length < 2) continue;
+            mapCtx.strokeStyle = 'rgba(50,90,150,0.6)';
+            mapCtx.lineWidth = riv.width;
+            mapCtx.lineCap = 'round';
+            mapCtx.lineJoin = 'round';
+            mapCtx.beginPath();
+            mapCtx.moveTo(riv.pts[0][0], riv.pts[0][1]);
+            let totalLen = 0;
+            for (let i = 1; i < riv.pts.length; i++) {
+                const dx = riv.pts[i][0]-riv.pts[i-1][0], dy = riv.pts[i][1]-riv.pts[i-1][1];
+                totalLen += Math.sqrt(dx*dx+dy*dy);
+            }
+            const drawLen = colorP * totalLen;
+            let drawn = 0;
+            for (let i = 1; i < riv.pts.length; i++) {
+                const dx = riv.pts[i][0]-riv.pts[i-1][0], dy = riv.pts[i][1]-riv.pts[i-1][1];
+                const d = Math.sqrt(dx*dx+dy*dy);
+                if (drawn + d <= drawLen) {
+                    mapCtx.lineTo(riv.pts[i][0], riv.pts[i][1]);
+                    drawn += d;
+                } else {
+                    const t = (drawLen - drawn) / d;
+                    mapCtx.lineTo(riv.pts[i-1][0]+dx*t, riv.pts[i-1][1]+dy*t);
+                    break;
+                }
+            }
+            mapCtx.stroke();
+        }
+    }
+
+    // ── Phase 3: Markers ──
+    const markerP = p > 0.7 ? Math.min(1, (p - 0.7) / 0.3) : 0;
+    _drawMapMarkers(mapCtx, w, h, scale, mapViewX, mapViewZ, mapViewSize, markerP);
 
     // Waypoint markers
     _drawWaypointsOnMap(mapCtx, scale, mapViewX, mapViewZ, mapViewSize);
@@ -13666,14 +13752,14 @@ let camInit = false;
 
 function animate() {
     requestAnimationFrame(animate);
-    if (!gameStarted || gamePaused || settingsOpen || !dragonMgr || _introActive) { prevTime = performance.now(); return; }
+    if (!gameStarted || gamePaused || settingsOpen || !dragonMgr) { prevTime = performance.now(); return; }
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
     updateWaterTime(now * 0.001);
 
-    // Autosave every 40s
-    _autosaveTimer += dt;
+    // Autosave every 40s (skip during cinematic)
+    if (!_introActive) _autosaveTimer += dt;
     if (_autosaveTimer >= 40) {
         _autosaveTimer = 0;
         saveGame(_currentSaveName);
@@ -13684,9 +13770,14 @@ function animate() {
     fpsTime += dt;
     if (fpsTime >= 1) { fps = frameCount; frameCount = 0; fpsTime = 0; }
 
+    // Cinematic tick — runs inside game loop so chunks load around player
+    if (_introActive && window._introCinematicTick) {
+        window._introCinematicTick(dt);
+    }
+
     // Player update
     fpActive = zoomLevel < 0.15 && !(dragonMgr && dragonMgr.ridingDragon);
-    if (!(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !anvilOpen) {
+    if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !anvilOpen) {
         const useMouse = useMouseLook && pointerLocked;
         // Axis-lock movement to placement direction while place-locking
         let moveKeys = keys;
@@ -14694,6 +14785,7 @@ function animate() {
         }
     }
 
+    creatures.peacefulMode = peacefulMode;
     creatures.update(dt, player.position.x, player.position.z, player.position.y);
     _updateArrows(dt);
 
@@ -14866,7 +14958,7 @@ function animate() {
             const bdx = player.position.x - boss.x, bdz = player.position.z - boss.z;
             const bDist = Math.sqrt(bdx*bdx + bdz*bdz);
             // Trigger attack when in range and attack ready (only if hostile)
-            if (boss.hostile && bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
+            if (boss.hostile && !peacefulMode && bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
                 boss._smashTimer = 0;
                 if (boss._isDarkKnight || boss._isEmberLord) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
             }
@@ -15293,8 +15385,8 @@ function animate() {
         lookOffY = bd.growthScale * 2;
     }
 
-    // Hide player model in first person
-    player.group.visible = !firstPerson;
+    // Hide player model in first person (or during cinematic)
+    player.group.visible = !firstPerson && !_introActive;
 
     if (firstPerson) {
         // First person — camera at eye level, mouse look with pitch
@@ -15515,7 +15607,7 @@ function animate() {
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}${mpInfo}`;
 
     // ── Update block highlight ──
-    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen) {
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen && !hudHidden) {
         const hlHit = raycastBlock(null);
         if (hlHit) {
             const BS = BLOCK_SIZE;
@@ -16134,12 +16226,40 @@ function executeCommand(input) {
             }
             break;
         }
+        case 'time': {
+            if (args.length === 0) {
+                // /time — show current time
+                const hrs = Math.floor(timeOfDay * 24);
+                const mins = Math.floor((timeOfDay * 24 - hrs) * 60);
+                const period = hrs >= 12 ? 'PM' : 'AM';
+                const h12 = hrs % 12 || 12;
+                const timeStr = `${h12}:${String(mins).padStart(2,'0')} ${period}`;
+                addChatMessage(`Time: ${timeStr} (${timeOfDay.toFixed(3)})`, 'rgba(180,180,220,0.9)');
+            } else if (args[0] === 'set') {
+                if (args.length < 2) { addChatMessage('Usage: /time set <value|day|noon|night|midnight>', 'rgba(255,100,100,0.9)'); return; }
+                const presets = { day: 0.30, noon: 0.50, night: 0.80, midnight: 0.0, sunrise: 0.22, sunset: 0.78 };
+                const preset = presets[args[1].toLowerCase()];
+                if (preset !== undefined) {
+                    timeOfDay = preset;
+                    addChatMessage(`Time set to ${args[1]} (${timeOfDay.toFixed(2)})`, 'rgba(150,220,150,0.9)');
+                } else {
+                    const val = Number(args[1]);
+                    if (isNaN(val) || val < 0 || val > 1) { addChatMessage('Time must be 0-1 or a preset (day/noon/night/midnight/sunrise/sunset)', 'rgba(255,100,100,0.9)'); return; }
+                    timeOfDay = val;
+                    addChatMessage(`Time set to ${timeOfDay.toFixed(3)}`, 'rgba(150,220,150,0.9)');
+                }
+            } else {
+                addChatMessage('Usage: /time [set <value|day|noon|night|midnight>]', 'rgba(255,100,100,0.9)');
+            }
+            break;
+        }
         case 'help': {
             addChatMessage('/give <player> <item> [qty] — Give items', 'rgba(180,180,220,0.9)');
             addChatMessage('/tp <player> <x> <y> <z> — Teleport', 'rgba(180,180,220,0.9)');
             addChatMessage('/clear [player] — Clear inventory', 'rgba(180,180,220,0.9)');
             addChatMessage('/kill <player> — Kill player', 'rgba(180,180,220,0.9)');
             addChatMessage('/creative — Toggle creative mode (fly + unlimited blocks)', 'rgba(180,180,220,0.9)');
+            addChatMessage('/time [set <value>] — Show/set time of day', 'rgba(180,180,220,0.9)');
             addChatMessage('/export x1 y1 z1 x2 y2 z2 — Export build region', 'rgba(180,180,220,0.9)');
             addChatMessage('/import x y z — Import build at position', 'rgba(180,180,220,0.9)');
             addChatMessage('Selectors: @s=self @a=all @r=random', 'rgba(180,180,220,0.9)');
