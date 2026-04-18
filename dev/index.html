@@ -1861,11 +1861,13 @@ function _playIntroCinematic(onDone) {
         { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5, label: 'Your journey begins...' },
     ];
 
-    // Collect all unique positions to preload (from + to of each shot)
+    // Collect unique positions to preload (deduplicate nearby ones)
     const preloadPositions = [];
     for (const s of shots) {
         preloadPositions.push([s.from[0], s.from[2]]);
-        preloadPositions.push([s.to[0], s.to[2]]);
+        // Only add 'to' if it's far enough from 'from' to need separate chunk loading
+        const dx = s.to[0] - s.from[0], dz = s.to[2] - s.from[2];
+        if (Math.sqrt(dx*dx + dz*dz) > 80) preloadPositions.push([s.to[0], s.to[2]]);
     }
 
     // Overlay
@@ -1899,7 +1901,7 @@ function _playIntroCinematic(onDone) {
     // State
     let done = false;
     let preloadIdx = 0, preloadTicks = 0;
-    const PRELOAD_TICKS_PER = 40; // ~0.7s per location
+    const PRELOAD_TICKS_PER = 12; // ~0.2s per location
     let phase = 'preload'; // preload → fadein → playing → fadeout → done
     let shotIdx = 0, phaseTime = 0;
     const FADE_DUR = 0.8;
@@ -1962,8 +1964,8 @@ function _playIntroCinematic(onDone) {
             player.position.set(px, 100, pz);
             player.group.position.set(px, 100, pz);
             player.jumpVel = 0;
-            // Aggressively process more chunks during preload
-            if (chunkManager) chunkManager._processQueue(16);
+            // Aggressively process more chunks during preload (behind black screen, use big time budget)
+            if (chunkManager) chunkManager._processQueue(64, 80);
             preloadTicks++;
             // Update progress bar
             const progress = (preloadIdx + preloadTicks / PRELOAD_TICKS_PER) / preloadPositions.length;
@@ -8837,7 +8839,7 @@ function drawWorldMap() {
         pCtx.strokeStyle = 'rgba(80, 55, 30, 0.3)'; pCtx.lineWidth = 1; pCtx.strokeRect(6, 6, w-12, h-12);
 
         // ── Compute terrain data ──
-        const step = 3;
+        const step = 5;
         const cols = Math.ceil(w / step), rows = Math.ceil(h / step);
         const heightData = new Float32Array(cols * rows);
         const biomeData = new Uint8Array(cols * rows);
@@ -9028,7 +9030,12 @@ function drawWorldMap() {
         const riverPaths = [];
         for (const riv of riverDefs) {
             const pts = riv.pts.map(p => [toX(p[0]), toY(p[1])]);
-            riverPaths.push({ pts, width: Math.max(1.5, riv.width * scale * 0.8), name: riv.name });
+            let totalLen = 0;
+            for (let i = 1; i < pts.length; i++) {
+                const dx = pts[i][0]-pts[i-1][0], dy = pts[i][1]-pts[i-1][1];
+                totalLen += Math.sqrt(dx*dx+dy*dy);
+            }
+            riverPaths.push({ pts, width: Math.max(1.5, riv.width * scale * 0.8), name: riv.name, totalLen });
         }
 
         // ── Compute contour line total lengths for draw animation ──
@@ -9124,12 +9131,7 @@ function drawWorldMap() {
             mapCtx.lineJoin = 'round';
             mapCtx.beginPath();
             mapCtx.moveTo(riv.pts[0][0], riv.pts[0][1]);
-            let totalLen = 0;
-            for (let i = 1; i < riv.pts.length; i++) {
-                const dx = riv.pts[i][0]-riv.pts[i-1][0], dy = riv.pts[i][1]-riv.pts[i-1][1];
-                totalLen += Math.sqrt(dx*dx+dy*dy);
-            }
-            const drawLen = colorP * totalLen;
+            const drawLen = colorP * riv.totalLen;
             let drawn = 0;
             for (let i = 1; i < riv.pts.length; i++) {
                 const dx = riv.pts[i][0]-riv.pts[i-1][0], dy = riv.pts[i][1]-riv.pts[i-1][1];

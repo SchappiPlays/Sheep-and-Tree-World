@@ -251,12 +251,14 @@ export class ChunkManager {
         }
         this.buildQueue.sort((a, b) => a.priority - b.priority);
 
-        // Unload distant chunks
+        // Unload distant chunks (skip during cinematic preload)
         const toDelete = [];
+        if (!this.skipUnload) {
         for (const [key, entry] of this.loaded) {
             const [cx, cz] = key.split(',').map(Number);
             const dx = cx - pcx, dz = cz - pcz;
             if (dx * dx + dz * dz > UNLOAD_DIST * UNLOAD_DIST) toDelete.push(key);
+        }
         }
         for (const key of toDelete) {
             const entry = this.loaded.get(key);
@@ -287,7 +289,7 @@ export class ChunkManager {
         this.loaded.set(key, entry);
     }
 
-    _processQueue(maxPerFrame) {
+    _processQueue(maxPerFrame, timeBudgetOverride) {
         if (this.buildQueue.length === 0) return;
         // Re-sort queue by distance to current player chunk each frame
         const pcx = this._lastPCX, pcz = this._lastPCZ;
@@ -305,7 +307,7 @@ export class ChunkManager {
         }
         let built = 0;
         const t0 = performance.now();
-        const timeBudget = 12; // ms per frame budget for chunk building
+        const timeBudget = timeBudgetOverride || 12; // ms per frame budget for chunk building
         while (this.buildQueue.length > 0 && built < maxPerFrame) {
             const { cx, cz, key, lod } = this.buildQueue.shift();
             if (this.loaded.has(key)) continue;
