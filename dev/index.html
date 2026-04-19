@@ -1874,6 +1874,9 @@ function _playIntroCinematic(onDone) {
         preloadPositions.push([(s.from[0]+s.to[0])/2, (s.from[2]+s.to[2])/2]);
         preloadPositions.push([s.to[0], s.to[2]]);
     }
+    // Extra preload positions for large structures the camera looks AT (not just flies over)
+    // Castle (-800,40) spans ~165x135 blocks — preload its extent
+    preloadPositions.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
 
     // Overlay
     const overlay = document.createElement('div');
