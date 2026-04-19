@@ -1841,24 +1841,24 @@ function _playIntroCinematic(onDone) {
         // Fly TOWARD each landmark so yaw stays consistent (small change per shot)
 
         // Wide aerial sweep NE across the island, looking forward-down
-        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 6, label: '' },
+        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 6 },
         // Castle (-800, 40) — approach from NE looking down at it
-        { from: [-680, 60, -30], to: [-780, 40, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.4, pitch1: -0.35, dur: 6, label: 'The Castle' },
+        { from: [-680, 60, -30], to: [-780, 40, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.4, pitch1: -0.35, dur: 6 },
         // Meadow Village (160, 32) — approach from SW
-        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 5, label: 'Meadow Village' },
+        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 5 },
         // Ancient Forest (-60, -700) — approach from NE looking down into canopy
-        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 6, label: 'The Ancient Forest' },
+        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 6 },
         // Great Peak (1640, -80) — view from east side (x=1950), well outside mountain
         // Mountain: 1480-1800 X, -220 to 60 Z, peaks 130+
-        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6, label: 'The Great Peak' },
+        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6 },
         // Dragon's Reach (2160, 10) — approach from south
-        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5, label: "Dragon's Reach" },
+        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5 },
         // Scorched Castle (-300, 280) — approach from NE
-        { from: [-220, 55, 220], to: [-290, 40, 270], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5, label: 'The Scorched Fortress' },
+        { from: [-220, 55, 220], to: [-290, 40, 270], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
         // Coastal Village (-855, -150) — approach from east
-        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5, label: 'Coastal Village' },
+        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5 },
         // Final — descend toward spawn from NE
-        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5, label: 'Your journey begins...' },
+        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5 },
     ];
 
     // Collect unique positions to preload (deduplicate nearby ones)
@@ -1884,9 +1884,6 @@ function _playIntroCinematic(onDone) {
         '<div style="width:240px;height:6px;background:rgba(60,50,40,0.6);border-radius:3px;overflow:hidden;margin:0 auto;">' +
         '<div id="introLoadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:3px;transition:width 0.2s;"></div></div>';
     overlay.appendChild(loadInfoEl);
-    const labelEl = document.createElement('div');
-    labelEl.style.cssText = 'position:absolute;bottom:80px;width:100%;text-align:center;font-size:28px;color:white;font-family:serif;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,0.9);opacity:0;transition:opacity 0.8s;pointer-events:none;';
-    overlay.appendChild(labelEl);
     const skipEl = document.createElement('div');
     skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
     skipEl.textContent = 'Click or press any key to skip';
@@ -2009,15 +2006,7 @@ function _playIntroCinematic(onDone) {
             fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
             fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
 
-            if (shot.label) {
-                labelEl.textContent = shot.label;
-                labelEl.style.opacity = (t > 0.08 && t < 0.85) ? '1' : '0';
-            } else {
-                labelEl.style.opacity = '0';
-            }
-
             if (t >= 1) {
-                labelEl.style.opacity = '0';
                 shotIdx++;
                 if (shotIdx >= shots.length) {
                     phase = 'fadeout'; phaseTime = 0;
