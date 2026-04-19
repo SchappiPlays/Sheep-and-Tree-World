@@ -1852,21 +1852,21 @@ function _playIntroCinematic(onDone) {
         { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6 },
         // Dragon's Reach (2160, 10) — approach from south
         { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5 },
-        // Scorched Castle (-300, 280) — approach from NE
-        { from: [-220, 55, 220], to: [-290, 40, 270], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        // Scorched Fortress (-600, 560) — approach from NE
+        { from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
         // Coastal Village (-855, -150) — approach from east
         { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5 },
         // Final — descend toward spawn from NE
         { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5 },
     ];
 
-    // Collect unique positions to preload (deduplicate nearby ones)
+    // Collect positions to preload — from, midpoint, and to for each shot
     const preloadPositions = [];
     for (const s of shots) {
         preloadPositions.push([s.from[0], s.from[2]]);
-        // Only add 'to' if it's far enough from 'from' to need separate chunk loading
-        const dx = s.to[0] - s.from[0], dz = s.to[2] - s.from[2];
-        if (Math.sqrt(dx*dx + dz*dz) > 80) preloadPositions.push([s.to[0], s.to[2]]);
+        // Always add midpoint and endpoint so chunks along the entire path are ready
+        preloadPositions.push([(s.from[0]+s.to[0])/2, (s.from[2]+s.to[2])/2]);
+        preloadPositions.push([s.to[0], s.to[2]]);
     }
 
     // Overlay
