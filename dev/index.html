@@ -8678,6 +8678,7 @@ let zoomLevel = 1.0;
 const minZoom = 0.05; // below ~0.15 triggers first person
 const maxZoom = 5.0;
 addEventListener('wheel', e => {
+    if (inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || blastFurnaceOpen || chestOpen || settingsOpen || guideBookOpen) return;
     e.preventDefault();
     const zoomSpeed = 0.001;
     zoomLevel += e.deltaY * zoomSpeed;
