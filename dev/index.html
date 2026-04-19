@@ -1937,6 +1937,16 @@ function _playIntroCinematic(onDone) {
         if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
         if (player) player.group.visible = true;
 
+        // Transition from menu music to calm
+        if (musicSystem.current) {
+            musicSystem.fadeOut(musicSystem.current);
+            musicSystem.currentName = null;
+            musicSystem.current = null;
+            setTimeout(() => musicSystem.play('calm'), 1200);
+        } else {
+            musicSystem.play('calm');
+        }
+
         const spawnY = getTerrainHeight(0, 0);
         player.position.set(0, spawnY + 1, 0);
         player.group.position.set(0, spawnY + 1, 0);
@@ -2059,14 +2069,16 @@ function startGame(loadSlotName) {
         while (existingSaves['Save ' + n]) n++;
         _currentSaveName = 'Save ' + n;
     }
-    // Stop menu music, then start calm after fade
-    if (musicSystem.current) {
-        musicSystem.fadeOut(musicSystem.current);
-        musicSystem.currentName = null;
-        musicSystem.current = null;
-        setTimeout(() => musicSystem.play('calm'), 1200);
-    } else {
-        musicSystem.play('calm');
+    // Stop menu music, then start calm after fade (unless cinematic is running)
+    if (!_introActive) {
+        if (musicSystem.current) {
+            musicSystem.fadeOut(musicSystem.current);
+            musicSystem.currentName = null;
+            musicSystem.current = null;
+            setTimeout(() => musicSystem.play('calm'), 1200);
+        } else {
+            musicSystem.play('calm');
+        }
     }
 
     // Clean up previous game if any
@@ -15127,8 +15139,8 @@ function animate() {
         }
     }
 
-    // Context music — boss > fortress > village > calm
-    {
+    // Context music — boss > fortress > village > calm (skip during cinematic)
+    if (!_introActive) {
         const aliveBosses = creatures.creatures.filter(c => c._isBoss && !c.dead);
         const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
