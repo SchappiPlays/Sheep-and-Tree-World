@@ -1883,6 +1883,9 @@ function _playIntroCinematic(onDone) {
         '<div style="width:240px;height:6px;background:rgba(60,50,40,0.6);border-radius:3px;overflow:hidden;margin:0 auto;">' +
         '<div id="introLoadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:3px;transition:width 0.2s;"></div></div>';
     overlay.appendChild(loadInfoEl);
+    const titleTextEl = document.createElement('div');
+    titleTextEl.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.2s;';
+    overlay.appendChild(titleTextEl);
     const skipEl = document.createElement('div');
     skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
     skipEl.textContent = 'Click or press any key to skip';
@@ -1900,6 +1903,8 @@ function _playIntroCinematic(onDone) {
     const PRELOAD_TICKS_PER = 12; // ~0.2s per location
     let phase = 'preload'; // preload → fadein → playing → fadeout → done
     let shotIdx = 0, phaseTime = 0;
+    let totalPlayTime = 0;
+    let titlePhase = 0; // 0=waiting, 1=presents showing, 2=presents fading, 3=title showing, 4=title fading, 5=done
     const FADE_DUR = 0.8;
 
     // Save & set cinematic state
@@ -2008,6 +2013,7 @@ function _playIntroCinematic(onDone) {
         }
         else if (phase === 'playing') {
             phaseTime += dt;
+            totalPlayTime += dt;
             const shot = shots[shotIdx];
             const t = Math.min(phaseTime / shot.dur, 1);
             const e = ease(t);
@@ -2021,6 +2027,23 @@ function _playIntroCinematic(onDone) {
 
             fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
             fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
+
+            // Title text: "Schappi Studios Presents:" during shot 0, "Sheep and Tree World" during shot 1
+            if (titlePhase === 0 && totalPlayTime > 1.5) {
+                titleTextEl.innerHTML = '<div style="color:rgba(220,200,170,0.9);font:300 18px serif;letter-spacing:3px;">Schappi Studios Presents:</div>';
+                titleTextEl.style.opacity = '1';
+                titlePhase = 1;
+            } else if (titlePhase === 1 && totalPlayTime > 5.0) {
+                titleTextEl.style.opacity = '0';
+                titlePhase = 2;
+            } else if (titlePhase === 2 && totalPlayTime > 6.5) {
+                titleTextEl.innerHTML = '<div style="color:white;font:bold 42px serif;letter-spacing:4px;text-shadow:0 2px 20px rgba(0,0,0,0.8);">Sheep and Tree World</div>';
+                titleTextEl.style.opacity = '1';
+                titlePhase = 3;
+            } else if (titlePhase === 3 && totalPlayTime > 11.0) {
+                titleTextEl.style.opacity = '0';
+                titlePhase = 4;
+            }
 
             if (t >= 1) {
                 shotIdx++;
