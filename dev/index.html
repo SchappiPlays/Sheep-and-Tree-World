@@ -610,7 +610,7 @@ scene.add(sun.target);
 // ── Sun Sphere in Sky ──
 const sunSphere = new THREE.Mesh(
     new THREE.SphereGeometry(400, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false, depthTest: false })
 );
 sunSphere.position.set(800, 600, -600);
 sunSphere.renderOrder = -10;
@@ -619,7 +619,7 @@ scene.add(sunSphere);
 // Sun glow (larger transparent sphere)
 const sunGlow = new THREE.Mesh(
     new THREE.SphereGeometry(700, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false, depthTest: false })
 );
 sunGlow.position.copy(sunSphere.position);
 sunGlow.renderOrder = -10;
@@ -628,7 +628,7 @@ scene.add(sunGlow);
 // ── Moon ──
 const moonSphere = new THREE.Mesh(
     new THREE.SphereGeometry(300, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false, depthTest: false })
 );
 moonSphere.position.set(-800, 600, 600);
 moonSphere.renderOrder = -10;
@@ -637,7 +637,7 @@ scene.add(moonSphere);
 
 const moonGlow = new THREE.Mesh(
     new THREE.SphereGeometry(500, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false, depthTest: false })
 );
 moonGlow.position.copy(moonSphere.position);
 moonGlow.renderOrder = -10;
