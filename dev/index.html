@@ -1860,26 +1860,38 @@ function _playIntroCinematic(onDone) {
         { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5 },
         // Scorched Fortress (-600, 560) — approach from NE
         { from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        // Ruined Fortress (-1010, -670) — approach from south, dragon flies nearby
+        // yaw = atan2(-1010 - (-950), -670 - (-600)) = atan2(-60, -70) ≈ -2.43
+        { from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 5 },
+        // Dragon flying over east mountains (602, -30) — camera tracks from below
+        // yaw = atan2(602 - 550, -30 - 20) = atan2(52, -50) ≈ 2.37
+        { from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 5 },
         // Coastal Village (-855, -150) — approach from east
         { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5 },
         // Final — descend toward spawn from NE
         { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5 },
     ];
 
-    // Collect positions to preload — from, midpoint, and to for each shot
-    const preloadPositions = [];
+    // Collect positions to preload — from and to for each shot (midpoints rarely need separate loading)
+    const _rawPreload = [];
     for (const s of shots) {
-        preloadPositions.push([s.from[0], s.from[2]]);
-        // Always add midpoint and endpoint so chunks along the entire path are ready
-        preloadPositions.push([(s.from[0]+s.to[0])/2, (s.from[2]+s.to[2])/2]);
-        preloadPositions.push([s.to[0], s.to[2]]);
+        _rawPreload.push([s.from[0], s.from[2]]);
+        _rawPreload.push([s.to[0], s.to[2]]);
     }
-    // Extra preload positions for large structures the camera looks AT (not just flies over)
-    // Castle (-800,40) spans to (-635,175) — grid of positions covering entire footprint
-    for (let cx = -800; cx <= -635; cx += 55) {
-        for (let cz = 40; cz <= 175; cz += 45) {
-            preloadPositions.push([cx, cz]);
+    // Extra positions for large structures the camera looks AT
+    // Castle (-800,40) spans to (-635,175)
+    _rawPreload.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
+    // Ruined fortress area
+    _rawPreload.push([-1010, -670]);
+    // Deduplicate nearby positions (within 60 units)
+    const preloadPositions = [];
+    for (const p of _rawPreload) {
+        let dup = false;
+        for (const q of preloadPositions) {
+            const dx = p[0]-q[0], dz = p[1]-q[1];
+            if (dx*dx+dz*dz < 3600) { dup = true; break; }
         }
+        if (!dup) preloadPositions.push(p);
     }
 
     // Overlay
@@ -1913,7 +1925,7 @@ function _playIntroCinematic(onDone) {
     // State
     let done = false;
     let preloadIdx = 0, preloadTicks = 0;
-    const PRELOAD_TICKS_PER = 12; // ~0.2s per location
+    const PRELOAD_TICKS_PER = 6; // ~0.1s per location
     let phase = 'preload'; // preload → fadein → playing → fadeout → done
     let shotIdx = 0, phaseTime = 0;
     let totalPlayTime = 0;
@@ -1989,7 +2001,7 @@ function _playIntroCinematic(onDone) {
             player.group.position.set(px, 100, pz);
             player.jumpVel = 0;
             // Aggressively process more chunks during preload (behind black screen, use big time budget)
-            if (chunkManager) chunkManager._processQueue(64, 80);
+            if (chunkManager) chunkManager._processQueue(128, 150);
             preloadTicks++;
             // Update progress bar
             const progress = (preloadIdx + preloadTicks / PRELOAD_TICKS_PER) / preloadPositions.length;
