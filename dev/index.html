@@ -1405,11 +1405,15 @@ function buildFarTerrain(centerX, centerZ) {
             if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
+                // Ancient forest detection — center (-60, -700), radius 170
+                const _afDx = wx - (-60), _afDz = wz - (-700);
+                const _afDist = Math.sqrt(_afDx*_afDx + _afDz*_afDz);
+                const _inAncient = _afDist < 170;
                 // Vary forest density — same noise as world.js _placeTreesInChunk
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
-                const _baseDensity = _fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003;
+                const _baseDensity = _inAncient ? 0.12 : (_fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003);
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
                 if (treeChance < _lodDensity) {
                     // Jitter position to break grid pattern
@@ -1419,11 +1423,13 @@ function buildFarTerrain(centerX, centerZ) {
                     const _jz = (_jh2 - Math.floor(_jh2) - 0.5) * S * 0.7;
                     const twx = wx + _jx, twz = wz + _jz;
                     const tTop = Math.floor(Math.max(getTerrainHeight(twx, twz), -0.3) / BS) * BS + BS;
-                    const trunkH = BS * 5;
-                    const leafR = BS * 2.5;
-                    const trunkR = BS * 0.5;
-                    const trunkCol = 0x5a3a1a;
-                    const leafCol = (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
+                    // Ancient forest trees are much larger
+                    const _tScale = _inAncient ? 2.5 : 1.0;
+                    const trunkH = BS * 5 * _tScale;
+                    const leafR = BS * 2.5 * _tScale;
+                    const trunkR = BS * 0.5 * _tScale;
+                    const trunkCol = _inAncient ? 0x3a2810 : 0x5a3a1a;
+                    const leafCol = _inAncient ? 0x1a4a15 : (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
                     const tBase = tTop;
 
                     // Trunk — 4 side faces
@@ -1433,13 +1439,13 @@ function buildFarTerrain(centerX, centerZ) {
                     pushFace(twx+trunkR, tBase+trunkH, twz-trunkR, twx+trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase+trunkH, twz-trunkR, trunkCol);
 
                     // Leaves — blocky canopy (top + 4 sides)
-                    const lBase = tBase + trunkH - BS * 1.5;
-                    const lTop = lBase + BS * 5;
+                    const lBase = tBase + trunkH - BS * 1.5 * _tScale;
+                    const lTop = lBase + BS * 5 * _tScale;
                     pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lTop, twz+leafR, twx+leafR, lTop, twz+leafR, twx+leafR, lTop, twz-leafR, leafCol);
                     pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lBase, twz+leafR, twx-leafR, lTop, twz+leafR, leafCol);
                     pushFace(twx+leafR, lTop, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lBase, twz-leafR, twx+leafR, lTop, twz-leafR, leafCol);
                     pushFace(twx-leafR, lTop, twz+leafR, twx-leafR, lBase, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lTop, twz+leafR, leafCol);
-                    pushFace(wx+leafR, lTop, wz-leafR, wx+leafR, lBase, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lTop, wz-leafR, leafCol);
+                    pushFace(twx+leafR, lTop, twz-leafR, twx+leafR, lBase, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lTop, twz-leafR, leafCol);
                 }
             }
             // LOD pine trees — snow biome, conical shape
