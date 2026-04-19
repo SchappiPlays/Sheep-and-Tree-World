@@ -1413,7 +1413,7 @@ function buildFarTerrain(centerX, centerZ) {
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
-                const _baseDensity = _inAncient ? 0.12 : (_fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003);
+                const _baseDensity = _inAncient ? 0.03 : (_fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003);
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
                 if (treeChance < _lodDensity) {
                     // Jitter position to break grid pattern
@@ -1875,8 +1875,12 @@ function _playIntroCinematic(onDone) {
         preloadPositions.push([s.to[0], s.to[2]]);
     }
     // Extra preload positions for large structures the camera looks AT (not just flies over)
-    // Castle (-800,40) spans ~165x135 blocks — preload its extent
-    preloadPositions.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
+    // Castle (-800,40) spans to (-635,175) — grid of positions covering entire footprint
+    for (let cx = -800; cx <= -635; cx += 55) {
+        for (let cz = 40; cz <= 175; cz += 45) {
+            preloadPositions.push([cx, cz]);
+        }
+    }
 
     // Overlay
     const overlay = document.createElement('div');
@@ -14311,7 +14315,7 @@ function animate() {
     }
 
     // Day/night cycle — server is authoritative when connected
-    if (!mp.active) timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
+    if (!mp.active && !_introActive) timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
     const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
     const isDusk = timeOfDay > 0.72 && timeOfDay <= 0.78;
     const isDawn = timeOfDay >= 0.22 && timeOfDay < 0.28;
