@@ -1976,6 +1976,7 @@ function _playIntroCinematic(onDone) {
                     phase = 'fadein';
                     phaseTime = 0;
                     loadInfoEl.style.display = 'none';
+                    musicSystem.play('menu');
                     // Position at first shot
                     const s0 = shots[0];
                     player.position.set(s0.from[0], s0.from[1], s0.from[2]);
