@@ -1106,7 +1106,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     }
 
     // Dark Knight (north gate, inner = south of gate)
-    const dkBX = -60, dkBZ = -600 + 15;
+    const dkBX = -60, dkBZ = -920 + 15;
     const dkBY = getTerrainHeight(dkBX, dkBZ);
     const dkFig = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5, 1), new THREE.MeshStandardMaterial({ color: 0x1a1a2a }));
     dkFig.position.set(dkBX, dkBY + 2.5, dkBZ); titleScene.add(dkFig);
@@ -1117,7 +1117,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
     dkChest.position.set(dkBX, dkBY + 2.5, dkBZ + 0.6); titleScene.add(dkChest);
 
     // Hobgoblin (south gate, inner = north of gate)
-    const hgBX = -60, hgBZ = -160 - 15;
+    const hgBX = -60, hgBZ = -480 - 15;
     const hgBY = getTerrainHeight(hgBX, hgBZ);
     const hobFig = new THREE.Mesh(new THREE.BoxGeometry(2, 4.5, 1.8), new THREE.MeshStandardMaterial({ color: 0x3a5a1a }));
     hobFig.position.set(hgBX, hgBY + 2.3, hgBZ); titleScene.add(hobFig);
@@ -5331,7 +5331,7 @@ function startGame(loadSlotName, clipShotIdx) {
 
     // === Dark Knight Boss at north gate ===
     if (!killedBosses.has('The Dark Knight')) {
-        const dkX = -60, dkZ = -600;
+        const dkX = -60, dkZ = -905; // north gate (-60,-920), inner side = south (+15)
         const dkY = getTerrainHeight(dkX, dkZ);
 
         // Pre-generate the knight's sword
