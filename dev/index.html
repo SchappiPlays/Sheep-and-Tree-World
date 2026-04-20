@@ -1771,6 +1771,22 @@ document.getElementById('newGameBtn').addEventListener('click', async () => {
     startGame(null);
 });
 
+// ── Cinematic shot definitions (used by clip buttons + intro cinematic) ──
+let _introActive = false;
+const _cinematicShots = [
+    { name: 'Aerial Sweep', from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 8 },
+    { name: 'Castle', from: [-680, 70, -30], to: [-780, 55, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.45, pitch1: -0.4, dur: 7 },
+    { name: 'Meadow Village', from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 6 },
+    { name: 'Ancient Forest', from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 7 },
+    { name: 'Great Peak', from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 7 },
+    { name: "Dragon's Reach", from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 6 },
+    { name: 'Scorched Fortress', from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 6 },
+    { name: 'Ruined Fortress', from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 6 },
+    { name: 'Dragon Flyby', from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 6 },
+    { name: 'Coastal Village', from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 6 },
+    { name: 'Descent to Spawn', from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 7 },
+];
+
 // ── Cinematic Clip Buttons ──
 {
     const clipBtns = document.getElementById('clipBtns');
@@ -1875,20 +1891,6 @@ const _waterDirtyCarry = new Set();
 const mp = new Multiplayer(scene);
 
 // ── Intro Cinematic — aerial tour of the world for new players ──
-let _introActive = false;
-const _cinematicShots = [
-    { name: 'Aerial Sweep', from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 8 },
-    { name: 'Castle', from: [-680, 70, -30], to: [-780, 55, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.45, pitch1: -0.4, dur: 7 },
-    { name: 'Meadow Village', from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 6 },
-    { name: 'Ancient Forest', from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 7 },
-    { name: 'Great Peak', from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 7 },
-    { name: "Dragon's Reach", from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 6 },
-    { name: 'Scorched Fortress', from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 6 },
-    { name: 'Ruined Fortress', from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 6 },
-    { name: 'Dragon Flyby', from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 6 },
-    { name: 'Coastal Village', from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 6 },
-    { name: 'Descent to Spawn', from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 7 },
-];
 function _playIntroCinematic(onDone, singleShotIdx) {
     // Cinematic runs INSIDE the game loop — player teleports to each location
     // so chunks load naturally. First-person, HUD hidden, peaceful mode.
