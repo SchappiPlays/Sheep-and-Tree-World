@@ -1846,30 +1846,28 @@ function _playIntroCinematic(onDone) {
         // Fly TOWARD each landmark so yaw stays consistent (small change per shot)
 
         // Wide aerial sweep NE across the island, looking forward-down
-        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 6 },
+        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 8 },
         // Castle (-800, 40) — approach from NE looking down at it
-        { from: [-680, 70, -30], to: [-780, 55, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.45, pitch1: -0.4, dur: 6 },
+        { from: [-680, 70, -30], to: [-780, 55, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.45, pitch1: -0.4, dur: 7 },
         // Meadow Village (160, 32) — approach from SW
-        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 6 },
         // Ancient Forest (-60, -700) — approach from NE looking down into canopy
-        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 6 },
+        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 7 },
         // Great Peak (1640, -80) — view from east side (x=1950), well outside mountain
         // Mountain: 1480-1800 X, -220 to 60 Z, peaks 130+
-        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6 },
+        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 7 },
         // Dragon's Reach (2160, 10) — approach from south
-        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 6 },
         // Scorched Fortress (-600, 560) — approach from NE
-        { from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        { from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 6 },
         // Ruined Fortress (-1010, -670) — approach from south, dragon flies nearby
-        // yaw = atan2(-1010 - (-950), -670 - (-600)) = atan2(-60, -70) ≈ -2.43
-        { from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 5 },
+        { from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 6 },
         // Dragon flying over east mountains (602, -30) — camera tracks from below
-        // yaw = atan2(602 - 550, -30 - 20) = atan2(52, -50) ≈ 2.37
-        { from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 5 },
+        { from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 6 },
         // Coastal Village (-855, -150) — approach from east
-        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5 },
+        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 6 },
         // Final — descend toward spawn from NE
-        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5 },
+        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 7 },
     ];
 
     // Collect positions to preload — from and to for each shot (midpoints rarely need separate loading)
@@ -1903,8 +1901,13 @@ function _playIntroCinematic(onDone) {
     overlay.id = 'introOverlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
     const fadeEl = document.createElement('div');
-    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;pointer-events:none;';
+    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;pointer-events:none;transition:none;';
     overlay.appendChild(fadeEl);
+    // Vignette — dark edges for cinematic look
+    const vignetteEl = document.createElement('div');
+    vignetteEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 1.5s;' +
+        'background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.35) 80%, rgba(0,0,0,0.7) 100%);';
+    overlay.appendChild(vignetteEl);
     // Loading progress (shown during preload)
     const loadInfoEl = document.createElement('div');
     loadInfoEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;';
@@ -1913,16 +1916,17 @@ function _playIntroCinematic(onDone) {
         '<div id="introLoadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:3px;transition:width 0.2s;"></div></div>';
     overlay.appendChild(loadInfoEl);
     const titleTextEl = document.createElement('div');
-    titleTextEl.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.2s;';
+    titleTextEl.style.cssText = 'position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.8s ease;';
     overlay.appendChild(titleTextEl);
     const skipEl = document.createElement('div');
-    skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
+    skipEl.style.cssText = 'position:absolute;bottom:24px;width:100%;text-align:center;font-size:12px;color:rgba(255,255,255,0.3);font-family:sans-serif;pointer-events:none;letter-spacing:1px;';
     skipEl.textContent = 'Click or press any key to skip';
     overlay.appendChild(skipEl);
+    // Wider letterbox bars for cinematic 2.39:1 feel
     const barT = document.createElement('div');
-    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
+    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:0;background:black;pointer-events:none;transition:height 1.2s ease;';
     const barB = document.createElement('div');
-    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
+    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:0;background:black;pointer-events:none;transition:height 1.2s ease;';
     overlay.appendChild(barT); overlay.appendChild(barB);
     document.body.appendChild(overlay);
 
@@ -1934,7 +1938,7 @@ function _playIntroCinematic(onDone) {
     let shotIdx = 0, phaseTime = 0;
     let totalPlayTime = 0;
     let titlePhase = 0; // 0=waiting, 1=presents showing, 2=presents fading, 3=title showing, 4=title fading, 5=done
-    const FADE_DUR = 0.8;
+    const FADE_DUR = 1.5; // slower, more cinematic fade in/out
 
     // Save & set cinematic state
     const savedHud = hudHidden;
@@ -1962,6 +1966,7 @@ function _playIntroCinematic(onDone) {
         overlay.remove();
         window.removeEventListener('keydown', skipKey);
         if (chunkManager) chunkManager.skipUnload = false;
+        if (camera) camera.rotation.z = 0; // reset any cinematic roll
 
         hudHidden = savedHud;
         peacefulMode = savedPeaceful;
@@ -1995,7 +2000,10 @@ function _playIntroCinematic(onDone) {
 
     window._introCinematicTick = (dt) => {
         if (done) { window._introCinematicTick = null; return; }
-        const ease = t => t * t * (3 - 2 * t);
+        // Quintic ease — very smooth acceleration/deceleration
+        const ease = t => { const t3 = t * t * t; return t3 * (t * (t * 6 - 15) + 10); };
+        // Sine ease — gentle, organic
+        const easeSine = t => 0.5 - 0.5 * Math.cos(t * Math.PI);
 
         if (phase === 'preload') {
             // Cycle through all positions, loading chunks at each
@@ -2037,8 +2045,14 @@ function _playIntroCinematic(onDone) {
         else if (phase === 'fadein') {
             phaseTime += dt;
             const t = Math.min(phaseTime / FADE_DUR, 1);
-            fadeEl.style.opacity = String(1 - t);
-            if (t >= 1) { phase = 'playing'; phaseTime = 0; }
+            fadeEl.style.opacity = String(1 - easeSine(t));
+            // Animate letterbox bars and vignette in
+            if (phaseTime > 0.3) {
+                barT.style.height = '60px';
+                barB.style.height = '60px';
+                vignetteEl.style.opacity = '1';
+            }
+            if (t >= 1) { fadeEl.style.opacity = '0'; phase = 'playing'; phaseTime = 0; }
         }
         else if (phase === 'playing') {
             phaseTime += dt;
@@ -2059,19 +2073,35 @@ function _playIntroCinematic(onDone) {
             fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
             fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
 
-            // Title text: "Schappi Studios Presents:" during shot 0, "Sheep and Tree World" during shot 1
-            if (titlePhase === 0 && totalPlayTime > 1.5) {
-                titleTextEl.innerHTML = '<div style="color:rgba(220,200,170,0.9);font:300 18px serif;letter-spacing:3px;">Schappi Studios Presents:</div>';
+            // Subtle camera roll — gentle sway for organic feel
+            if (camera) camera.rotation.z = Math.sin(totalPlayTime * 0.4) * 0.008 + Math.sin(totalPlayTime * 0.7) * 0.005;
+
+            // Pre-load upcoming shot chunks near the end of current shot
+            if (t > 0.7 && shotIdx + 1 < shots.length) {
+                const next = shots[shotIdx + 1];
+                // Briefly queue chunks at next shot start position
+                const _savedPX = player.position.x, _savedPZ = player.position.z;
+                if (chunkManager) {
+                    chunkManager.update(next.from[0], next.from[2]);
+                    chunkManager._processQueue(16, 20);
+                    // Restore actual camera position for normal chunk system
+                    chunkManager.update(_savedPX, _savedPZ);
+                }
+            }
+
+            // Title text with cinematic styling
+            if (titlePhase === 0 && totalPlayTime > 2.0) {
+                titleTextEl.innerHTML = '<div style="color:rgba(220,210,180,0.85);font:300 17px serif;letter-spacing:5px;text-transform:uppercase;">Schappi Studios Presents</div>';
                 titleTextEl.style.opacity = '1';
                 titlePhase = 1;
-            } else if (titlePhase === 1 && totalPlayTime > 5.0) {
+            } else if (titlePhase === 1 && totalPlayTime > 5.5) {
                 titleTextEl.style.opacity = '0';
                 titlePhase = 2;
-            } else if (titlePhase === 2 && totalPlayTime > 6.5) {
-                titleTextEl.innerHTML = '<div style="color:white;font:bold 42px serif;letter-spacing:4px;text-shadow:0 2px 20px rgba(0,0,0,0.8);">Sheep and Tree World</div>';
+            } else if (titlePhase === 2 && totalPlayTime > 7.5) {
+                titleTextEl.innerHTML = '<div style="color:rgba(255,255,255,0.95);font:bold 48px serif;letter-spacing:6px;text-shadow:0 2px 30px rgba(0,0,0,0.6), 0 0 60px rgba(0,0,0,0.3);">Sheep and Tree World</div>';
                 titleTextEl.style.opacity = '1';
                 titlePhase = 3;
-            } else if (titlePhase === 3 && totalPlayTime > 11.0) {
+            } else if (titlePhase === 3 && totalPlayTime > 13.0) {
                 titleTextEl.style.opacity = '0';
                 titlePhase = 4;
             }
@@ -2081,26 +2111,30 @@ function _playIntroCinematic(onDone) {
                 if (shotIdx >= shots.length) {
                     phase = 'fadeout'; phaseTime = 0;
                 } else {
-                    // Quick crossfade between shots
+                    // Smooth dissolve between shots
                     phase = 'crossfade'; phaseTime = 0;
                 }
             }
         }
         else if (phase === 'crossfade') {
             phaseTime += dt;
-            const CROSS_DUR = 0.5;
+            totalPlayTime += dt;
+            const CROSS_DUR = 0.8;
             const t = Math.min(phaseTime / CROSS_DUR, 1);
-            // Fade to black then back
-            fadeEl.style.opacity = String(t < 0.5 ? t * 2 : 2 - t * 2);
-            // At halfway, snap to next shot start
-            if (t >= 0.5 && phaseTime - dt < CROSS_DUR * 0.5) {
+            // Soft dissolve — fade to 65% black then back, smooth sine curve
+            const fadeAmount = Math.sin(t * Math.PI) * 0.65;
+            fadeEl.style.opacity = String(fadeAmount);
+            // At the darkest point (~halfway), snap to next shot start
+            if (t >= 0.45 && t - (dt / CROSS_DUR) < 0.45) {
                 const shot = shots[shotIdx];
                 player.position.set(shot.from[0], shot.from[1], shot.from[2]);
                 player.group.position.set(shot.from[0], shot.from[1], shot.from[2]);
                 fpYaw = shot.yaw0; fpPitch = shot.pitch0;
             }
-            // Aggressively process chunks during crossfade (screen partially black)
+            // Aggressively process chunks during crossfade (screen partially obscured)
             if (chunkManager) chunkManager._processQueue(64, 80);
+            // Keep camera roll smooth through transitions
+            if (camera) camera.rotation.z = Math.sin(totalPlayTime * 0.4) * 0.008 + Math.sin(totalPlayTime * 0.7) * 0.005;
             if (t >= 1) {
                 fadeEl.style.opacity = '0';
                 phase = 'playing'; phaseTime = 0;
@@ -2109,8 +2143,12 @@ function _playIntroCinematic(onDone) {
         else if (phase === 'fadeout') {
             phaseTime += dt;
             const t = Math.min(phaseTime / FADE_DUR, 1);
-            fadeEl.style.opacity = String(t);
-            if (t >= 1) { finish(); return; }
+            fadeEl.style.opacity = String(easeSine(t));
+            // Retract letterbox bars
+            if (t > 0.3) { barT.style.height = '0'; barB.style.height = '0'; }
+            vignetteEl.style.opacity = String(1 - t);
+            if (camera) camera.rotation.z *= (1 - t); // ease roll back to zero
+            if (t >= 1) { if (camera) camera.rotation.z = 0; finish(); return; }
         }
 
         player.group.visible = false;
