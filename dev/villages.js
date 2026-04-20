@@ -814,12 +814,12 @@ export class VillageManager {
             const smithSkills = vd.smiths || [3];
             const shopDist = 28;
             const firstSmithAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
+            // Total shops: smiths + magic + armor + stable — evenly space around circle
+            const totalShops = smithSkills.length + 3; // +3 for magic, armor, stable
             for (let si = 0; si < smithSkills.length; si++) {
                 const skill = smithSkills[si];
                 const skillName = SMITH_SKILL_NAMES[skill] || 'Smith';
-                // Space smiths around the village at different angles (reserve one side for magic shop)
-                const angSpread = Math.PI * 0.8; // leave ~40% of circle for other shops
-                const bsAngle = firstSmithAngle + (smithSkills.length === 1 ? 0 : (si / (smithSkills.length - 1) - 0.5) * angSpread);
+                const bsAngle = firstSmithAngle + (si / totalShops) * Math.PI * 2;
                 const bsX = vd.x + Math.cos(bsAngle) * shopDist;
                 const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
                 const bsY = this.world.getHeight(bsX, bsZ);
@@ -845,7 +845,7 @@ export class VillageManager {
             }
 
             // Spawn magic shop keeper
-            const msAngle = firstSmithAngle + Math.PI; // opposite side of village
+            const msAngle = firstSmithAngle + (smithSkills.length / totalShops) * Math.PI * 2;
             const msX = vd.x + Math.cos(msAngle) * shopDist;
             const msZ = vd.z + Math.sin(msAngle) * shopDist;
             const msY = this.world.getHeight(msX, msZ);
@@ -870,7 +870,7 @@ export class VillageManager {
             msV.group.add(msLabel);
 
             // Spawn armor shopkeeper
-            const asAngle = firstSmithAngle + Math.PI * 0.5; // 90 degrees from blacksmith
+            const asAngle = firstSmithAngle + ((smithSkills.length + 1) / totalShops) * Math.PI * 2;
             const asX = vd.x + Math.cos(asAngle) * shopDist;
             const asZ = vd.z + Math.sin(asAngle) * shopDist;
             const asY = this.world.getHeight(asX, asZ);
@@ -894,7 +894,7 @@ export class VillageManager {
             asV.group.add(asLabel);
 
             // Spawn stablemaster
-            const stAngle = firstSmithAngle + Math.PI * 1.5; // 270 degrees from blacksmith
+            const stAngle = firstSmithAngle + ((smithSkills.length + 2) / totalShops) * Math.PI * 2;
             const stX = vd.x + Math.cos(stAngle) * shopDist;
             const stZ = vd.z + Math.sin(stAngle) * shopDist;
             const stY = this.world.getHeight(stX, stZ);

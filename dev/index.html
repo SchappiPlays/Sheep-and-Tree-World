@@ -458,6 +458,7 @@ canvas { display: block; }
 </div>
 <canvas id="minimap" width="160" height="160" style="position:fixed;bottom:10px;left:10px;z-index:20;border-radius:50%;border:2px solid rgba(80,60,30,0.6);pointer-events:none;background:rgba(20,30,20,0.5);"></canvas>
 <div id="hearts" style="position:fixed;top:8px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
+<div id="hungerBar" style="position:fixed;top:8px;left:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
 <div id="manaBar" style="position:fixed;top:48px;right:8px;z-index:20;pointer-events:none;display:flex;gap:1px;"></div>
 <div id="staminaBar" style="position:fixed;top:78px;right:8px;z-index:20;pointer-events:none;width:100px;height:6px;background:rgba(40,40,40,0.5);border-radius:3px;"><div id="staminaFill" style="width:100%;height:100%;background:rgba(220,180,50,0.8);border-radius:3px;transition:width 0.1s;"></div></div>
 <div id="prompt" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font:13px monospace;text-shadow:0 0 6px #000;z-index:15;pointer-events:none;display:none;"></div>
@@ -1633,7 +1634,7 @@ function collectSaveData() {
         selectedSlot,
         armorSlots: JSON.parse(JSON.stringify(armorSlots)),
         equippedShield,
-        playerHP, playerMaxHP, playerMana, playerMaxMana, staffDamageDealt, timeOfDay,
+        playerHP, playerMaxHP, playerMana, playerMaxMana, playerHunger, playerMaxHunger, staffDamageDealt, timeOfDay,
         playerStats: { ...playerStats },
         killedBosses: [...killedBosses],
         playerXP, playerLevel, skillPoints, availableStatPoints,
@@ -6126,6 +6127,7 @@ function startGame(loadSlotName, clipShotIdx) {
             if (s.equippedShield) equippedShield = s.equippedShield;
             if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
+            if (s.playerHunger !== undefined) { playerHunger = s.playerHunger; playerMaxHunger = s.playerMaxHunger || 20; }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
@@ -6301,6 +6303,7 @@ function startGame(loadSlotName, clipShotIdx) {
         activeSpellSlot = 1;
         playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
         playerHP = playerMaxHP;
+        playerHunger = playerMaxHunger;
         playerMaxMana = Math.round(10 * getStatManaMult());
         playerMana = playerMaxMana;
         killedBosses.clear();
@@ -6386,6 +6389,7 @@ function startGame(loadSlotName, clipShotIdx) {
     }
 
     refreshUI();
+    updateHungerUI();
 
     // Show loading screen while chunks build
     const loadingEl = document.getElementById('loadingScreen');
@@ -6831,14 +6835,14 @@ document.addEventListener('mousemove', e => {
 });
 // Click to lock pointer (only in mouse look mode)
 const _tryPointerLock = () => {
-    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
+    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
         renderer.domElement.requestPointerLock();
         fpYaw = player ? player.group.rotation.y : 0;
         fpPitch = 0;
     }
 };
 renderer.domElement.addEventListener('click', () => {
-    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
+    if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
         renderer.domElement.requestPointerLock();
         fpYaw = player ? player.group.rotation.y : 0;
         fpPitch = 0;
@@ -7274,6 +7278,20 @@ document.getElementById('saveQuitBtn').addEventListener('click', () => {
 // ── Player HP ──
 let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
 let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
+let playerHunger = 20, playerMaxHunger = 20; // 10 drumsticks, each = 2 hunger
+let hungerDrainTimer = 0; // accumulates dt for hunger drain
+const FOOD_STATS = {
+    // Raw foods: low hunger restore, no HP
+    raw_mutton:  { hunger: 2, hp: 0 },
+    raw_beef:    { hunger: 3, hp: 0 },
+    raw_pork:    { hunger: 2, hp: 0 },
+    raw_venison: { hunger: 2, hp: 0 },
+    // Cooked foods: good hunger restore + small HP
+    cooked_mutton:  { hunger: 6, hp: 2 },
+    cooked_beef:    { hunger: 8, hp: 3 },
+    cooked_pork:    { hunger: 6, hp: 2 },
+    cooked_venison: { hunger: 7, hp: 2 },
+};
 const killedBosses = new Set(); // boss names that have been killed
 window._killedBosses = killedBosses;
 // Day/night cycle: 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
@@ -7350,8 +7368,10 @@ function respawnPlayer() {
     // Restore HP to current max (which is reduced by broken hearts)
     playerHP = playerMaxHP;
     playerMana = playerMaxMana;
+    playerHunger = playerMaxHunger;
     updateHeartsUI();
     updateManaUI();
+    updateHungerUI();
     // Move to spawn (0, 0)
     const spawnY = getTerrainHeight(0, 0) + 0.1;
     player.position.set(0, spawnY, 0);
@@ -7693,6 +7713,32 @@ function fireProjectile(staffType) {
     });
 }
 
+// Helper: drop loot from a killed creature (used by both melee and spell kills)
+function _creatureLootDrop(c) {
+    if (!creatures._onCreatureDrop) return;
+    if (c.type === 'goblin') {
+        creatures._onCreatureDrop('stick', 1 + Math.floor(Math.random() * 3), c.type);
+        if (Math.random() < 0.3) creatures._onCreatureDrop('iron_bar', 1, c.type);
+    } else if (c.type === 'skeleton') {
+        creatures._onCreatureDrop('bone', 1 + Math.floor(Math.random() * 2), c.type);
+        if (Math.random() < 0.4) creatures._onCreatureDrop('stick', 2, c.type);
+    } else if (c.type === 'wolf') {
+        creatures._onCreatureDrop('leather', 1 + Math.floor(Math.random() * 2), c.type);
+        if (Math.random() < 0.3) creatures._onCreatureDrop('bone', 1, c.type);
+    } else if (c.type === 'sheep') {
+        creatures._onCreatureDrop('raw_mutton', 1 + Math.floor(Math.random() * 2), c.type);
+        creatures._onCreatureDrop('wool', 1 + Math.floor(Math.random() * 2), c.type);
+    } else if (c.type === 'cow') {
+        creatures._onCreatureDrop('raw_beef', 2 + Math.floor(Math.random() * 2), c.type);
+        creatures._onCreatureDrop('leather', 1, c.type);
+    } else if (c.type === 'pig') {
+        creatures._onCreatureDrop('raw_pork', 1 + Math.floor(Math.random() * 2), c.type);
+    } else if (c.type === 'deer') {
+        creatures._onCreatureDrop('raw_venison', 1 + Math.floor(Math.random() * 2), c.type);
+        if (Math.random() < 0.4) creatures._onCreatureDrop('leather', 1, c.type);
+    }
+}
+
 // Helper: deal spell damage to a creature, triggering boss death handlers if killed
 function spellDamage(c, dmg) {
     if (c.dead || c._shielded) return;
@@ -7702,6 +7748,7 @@ function spellDamage(c, dmg) {
     staffDamageDealt += dmg;
     if (c.hp <= 0) {
         c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0;
+        _creatureLootDrop(c);
         if (c._isBoss) {
             if (c._bossName) {
                 killedBosses.add(c._bossName);
@@ -8339,6 +8386,7 @@ function updateProjectiles(dt) {
                     sh.x += dx * 0.1; sh.z += dz * 0.1; // tiny knockback
                     if (sh.hp <= 0) {
                         sh.hp = 0; sh.dead = true; sh.deathTimer = 0; sh.walking = false; sh.speed = 0;
+                        _creatureLootDrop(sh);
                         // Trigger boss death handlers for projectile kills
                         if (sh._isBoss) {
                             if (sh._bossName) {
@@ -8426,6 +8474,24 @@ function updateHeartsUI() {
             + '<span style="position:absolute;left:0;top:0;width:19px;height:38px;overflow:hidden;color:#444;transform:translateX(-1px) rotate(-8deg);transform-origin:right center;">❤</span>'
             + '<span style="position:absolute;left:19px;top:0;width:19px;height:38px;overflow:hidden;color:#444;transform:translateX(1px) rotate(8deg) translateY(2px);transform-origin:left center;"><span style="margin-left:-19px;">❤</span></span>'
             + '</span>';
+    }
+    el.innerHTML = html;
+}
+
+function updateHungerUI() {
+    const el = document.getElementById('hungerBar');
+    if (!el) return;
+    let html = '';
+    const drumstickCount = Math.ceil(playerMaxHunger / 2);
+    for (let i = 0; i < drumstickCount; i++) {
+        const hungerForDrum = (i + 1) * 2;
+        if (playerHunger >= hungerForDrum) {
+            html += '<span style="font-size:28px;color:#c98a4a;">🍗</span>'; // full
+        } else if (playerHunger >= hungerForDrum - 1) {
+            html += '<span style="font-size:14px;color:#c98a4a;opacity:0.5;">🍗</span>'; // half
+        } else {
+            html += '<span style="font-size:28px;color:#444;opacity:0.3;">🍗</span>'; // empty
+        }
     }
     el.innerHTML = html;
 }
@@ -8697,7 +8763,7 @@ document.addEventListener('keydown', e => {
         document.getElementById('staminaBar').style.display = vis;
         if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
     }
-    if (e.code === 'KeyH' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen) {
+    if (e.code === 'KeyH' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen) {
         peacefulMode = !peacefulMode;
         addChatMessage(peacefulMode ? 'Peaceful mode ON — creatures are no longer hostile' : 'Peaceful mode OFF — creatures are hostile again', peacefulMode ? 'rgba(150,220,150,0.9)' : 'rgba(220,150,150,0.9)');
     }
@@ -8728,7 +8794,7 @@ document.addEventListener('keydown', e => {
     if (e.code === 'KeyF') {
         if (e.repeat) return; // ignore held key repeats
         if (whistleMenuOpen) { closeWhistleMenu(); e.preventDefault(); return; }
-        if (gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
+        if (gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !settingsOpen && !mapOpen && !chestOpen && !guideBookOpen && dragonMgr && !dragonMgr.ridingDragon) {
             if (!_fHoldTimer) {
                 _fHoldFired = false;
                 console.log('WHISTLE: timer started');
@@ -8773,7 +8839,7 @@ let zoomLevel = 1.0;
 const minZoom = 0.05; // below ~0.15 triggers first person
 const maxZoom = 5.0;
 addEventListener('wheel', e => {
-    if (inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || blastFurnaceOpen || chestOpen || settingsOpen || guideBookOpen) return;
+    if (inventoryOpen || craftingTableOpen || furnaceOpen || campfireCookOpen || anvilOpen || blastFurnaceOpen || chestOpen || settingsOpen || guideBookOpen) return;
     e.preventDefault();
     const zoomSpeed = 0.001;
     zoomLevel += e.deltaY * zoomSpeed;
@@ -9648,10 +9714,14 @@ function getItemInfo(key) {
     if (key === 'bone') return { name: 'Bone', top: '#e8e0d0', front: '#c8c0b0' };
     if (key === 'leather') return { name: 'Leather', top: '#8b5a2b', front: '#6b3a1b' };
     if (key === 'wool') return { name: 'Wool', top: '#f0ead6', front: '#d8d0c0' };
-    if (key === 'raw_mutton') return { name: 'Raw Mutton', top: '#cc6666', front: '#aa4444' };
-    if (key === 'raw_beef') return { name: 'Raw Beef', top: '#cc4444', front: '#992222' };
-    if (key === 'raw_pork') return { name: 'Raw Pork', top: '#dd8888', front: '#bb6666' };
-    if (key === 'raw_venison') return { name: 'Raw Venison', top: '#bb5544', front: '#993322' };
+    if (key === 'raw_mutton') return { name: 'Raw Mutton', top: '#cc6666', front: '#aa4444', isFood: true };
+    if (key === 'raw_beef') return { name: 'Raw Beef', top: '#cc4444', front: '#992222', isFood: true };
+    if (key === 'raw_pork') return { name: 'Raw Pork', top: '#dd8888', front: '#bb6666', isFood: true };
+    if (key === 'raw_venison') return { name: 'Raw Venison', top: '#bb5544', front: '#993322', isFood: true };
+    if (key === 'cooked_mutton') return { name: 'Cooked Mutton', top: '#aa5533', front: '#884422', isFood: true };
+    if (key === 'cooked_beef') return { name: 'Cooked Beef', top: '#993322', front: '#771a11', isFood: true };
+    if (key === 'cooked_pork') return { name: 'Cooked Pork', top: '#bb7755', front: '#995533', isFood: true };
+    if (key === 'cooked_venison') return { name: 'Cooked Venison', top: '#994433', front: '#772211', isFood: true };
     if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
     if (key === 'anvil_block') return { name: 'Iron Anvil', top: '#666', front: '#444' };
     if (key === 'steel_anvil_block') return { name: 'Steel Anvil', top: '#607080', front: '#506070' };
@@ -10001,6 +10071,13 @@ function _getItemTooltip(key) {
     if (key === 'hp_potion') html += `<div style="color:#e88;">Restores 6 HP</div>`;
     if (key === 'mana_crystal') html += `<div style="color:#88e;">Permanently +1 mana star</div>`;
     if (key === 'guide_book') html += `<div style="color:#aa8;">Right-click to read</div>`;
+    // Food
+    if (FOOD_STATS[key]) {
+        const fs = FOOD_STATS[key];
+        html += `<div style="color:#c98a4a;">🍗 +${fs.hunger} hunger</div>`;
+        if (fs.hp > 0) html += `<div style="color:#e88;">❤ +${fs.hp} HP</div>`;
+        if (fs.hp === 0) html += `<div style="color:#888;">Cook for better effects</div>`;
+    }
     // Eggs
     if (info.isEgg) html += `<div style="color:#da8;">Hatch at a stone altar</div>`;
     // Stack count
@@ -10366,6 +10443,10 @@ document.addEventListener('keydown', e => {
         blastFurnaceOpen = false;
         blastFurnaceMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && campfireCookOpen) {
+        campfireCookOpen = false;
+        campfireCookMenuEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && levelMenuOpen) {
         levelMenuOpen = false; levelMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
@@ -10385,7 +10466,7 @@ document.addEventListener('keydown', e => {
         chestOpen = false; chestOpenKey = null;
         chestMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
-    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
+    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
         gamePaused = !gamePaused;
         pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
         if (!gamePaused && useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
@@ -10393,6 +10474,7 @@ document.addEventListener('keydown', e => {
     if (e.code === keybinds.inventory) {
         if (craftingTableOpen) { craftingTableOpen = false; craftTableMenuEl.style.display = 'none'; }
         if (furnaceOpen) { furnaceOpen = false; furnaceMenuEl.style.display = 'none'; }
+        if (campfireCookOpen) { campfireCookOpen = false; campfireCookMenuEl.style.display = 'none'; }
         if (anvilOpen) { anvilOpen = false; anvilMenuEl.style.display = 'none'; }
         if (blastFurnaceOpen) { blastFurnaceOpen = false; blastFurnaceMenuEl.style.display = 'none'; }
         if (chestOpen) { chestOpen = false; chestOpenKey = null; chestMenuEl.style.display = 'none'; }
@@ -10510,7 +10592,7 @@ document.addEventListener('keydown', e => {
 });
 // Brush size toggle + rotate
 document.addEventListener('keydown', e => {
-    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen && gameStarted) {
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !mapOpen && gameStarted) {
         if (e.code === keybinds.brush) {
             // Cycle: 1x1x1 → 3x3x1 → 1x1x1
             if (brushW === 1 && brushH === 1) { brushW = 2; brushH = 2; brushD = 1; }
@@ -10660,7 +10742,7 @@ document.body.appendChild(mineBarEl);
 
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen) return;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || campfireCookOpen || anvilOpen) return;
 
     // Rotate player to face camera direction on click, angled slightly for staff aiming
     if (useMouseLook && pointerLocked) {
@@ -10713,6 +10795,25 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             m.position.set(player.position.x+(Math.random()-0.5)*0.5, player.position.y+0.5+Math.random()*1.2, player.position.z+(Math.random()-0.5)*0.5);
             scene.add(m);
             setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},600);
+        }
+        return;
+    }
+
+    // Eat food
+    const _foodStat = FOOD_STATS[held];
+    if (_foodStat && inventory[held] > 0 && (playerHunger < playerMaxHunger || (_foodStat.hp > 0 && playerHP < playerMaxHP))) {
+        if (_foodStat.hunger > 0) { playerHunger = Math.min(playerMaxHunger, playerHunger + _foodStat.hunger); updateHungerUI(); }
+        if (_foodStat.hp > 0) { playerHP = Math.min(playerMaxHP, playerHP + _foodStat.hp); updateHeartsUI(); }
+        inventory[held]--;
+        if (inventory[held] <= 0) { delete inventory[held]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === held) hotbarSlots[i] = 0; }
+        refreshUI();
+        // Eating particles (green for raw, orange for cooked)
+        const eatColor = held.startsWith('cooked_') ? 0xdd8844 : 0x88cc66;
+        for (let i = 0; i < 4; i++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), new THREE.MeshBasicMaterial({color:eatColor,transparent:true,opacity:0.7}));
+            m.position.set(player.position.x+(Math.random()-0.5)*0.4, player.position.y+0.8+Math.random()*0.6, player.position.z+(Math.random()-0.5)*0.4);
+            scene.add(m);
+            setTimeout(()=>{scene.remove(m);m.geometry.dispose();m.material.dispose();},500);
         }
         return;
     }
@@ -11212,6 +11313,12 @@ const SMELT_RECIPES = [
     { input: BLOCK.GOLD_ORE, output: 'gold_ingot', label: 'Gold Ore → Gold Ingot', time: 5 },
     { input: BLOCK.SAND, output: BLOCK.CLAY, label: 'Sand → Clay (brick)', time: 3 },
 ];
+const COOK_RECIPES = [
+    { input: 'raw_mutton', output: 'cooked_mutton', label: 'Raw Mutton → Cooked Mutton', time: 3 },
+    { input: 'raw_beef', output: 'cooked_beef', label: 'Raw Beef → Cooked Beef', time: 3 },
+    { input: 'raw_pork', output: 'cooked_pork', label: 'Raw Pork → Cooked Pork', time: 3 },
+    { input: 'raw_venison', output: 'cooked_venison', label: 'Raw Venison → Cooked Venison', time: 3 },
+];
 
 // Smelting queue — items being smelted
 let smeltQueue = []; // { recipe, progress, duration, count }
@@ -11250,7 +11357,26 @@ function updateFurnaceUI() {
         const outColor = outInfo ? (outInfo.front || outInfo.top) : '#555';
         const inName = inInfo ? inInfo.name : '?';
         const outName = outInfo ? outInfo.name : '?';
-        html += `<div class="craft-row${canSmelt ? '' : ' disabled'}" data-ri="${ri}">
+        html += `<div class="craft-row${canSmelt ? '' : ' disabled'}" data-ri="${ri}" data-type="smelt">
+            <span class="craft-icon" style="background:${inColor}"></span><span>${inName}</span>
+            <span class="craft-arrow">→</span>
+            <span class="craft-icon" style="background:${outColor}"></span><span>${outName}</span>
+            <span style="color:rgba(150,130,80,0.6);margin-left:auto;font-size:10px;">${r.time}s</span>
+        </div>`;
+    }
+    html += '</div>';
+    // Cooking section
+    html += '<div class="craft-cat">Cooking</div><div class="craft-grid">';
+    for (let ci = 0; ci < COOK_RECIPES.length; ci++) {
+        const r = COOK_RECIPES[ci];
+        const canCook = (inventory[r.input] || 0) >= 1 && coalCount >= 1;
+        const inInfo = getItemInfo(r.input);
+        const outInfo = getItemInfo(r.output);
+        const inColor = inInfo ? (inInfo.front || inInfo.top) : '#555';
+        const outColor = outInfo ? (outInfo.front || outInfo.top) : '#555';
+        const inName = inInfo ? inInfo.name : '?';
+        const outName = outInfo ? outInfo.name : '?';
+        html += `<div class="craft-row${canCook ? '' : ' disabled'}" data-ri="${ci}" data-type="cook">
             <span class="craft-icon" style="background:${inColor}"></span><span>${inName}</span>
             <span class="craft-arrow">→</span>
             <span class="craft-icon" style="background:${outColor}"></span><span>${outName}</span>
@@ -11263,20 +11389,84 @@ function updateFurnaceUI() {
 
     furnaceMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
         row.addEventListener('click', () => {
-            const r = SMELT_RECIPES[Number(row.dataset.ri)];
+            const recipeType = row.dataset.type;
+            const recipes = recipeType === 'cook' ? COOK_RECIPES : SMELT_RECIPES;
+            const r = recipes[Number(row.dataset.ri)];
             const inputCount = inventory[r.input] || 0;
             const coalAvail = inventory['coal'] || 0;
             if (inputCount < 1 || coalAvail < 1) return;
-            const canSmelt = Math.min(inputCount, 3);
+            const batchCount = Math.min(inputCount, 3);
             // Consume input and coal immediately
-            inventory[r.input] -= canSmelt;
+            inventory[r.input] -= batchCount;
             if (inventory[r.input] <= 0) { delete inventory[r.input]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.input) hotbarSlots[i] = 0; }
             inventory['coal']--;
             if (inventory['coal'] <= 0) { delete inventory['coal']; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === 'coal') hotbarSlots[i] = 0; }
             // Add to smelt queue
-            smeltQueue.push({ recipe: r, progress: 0, duration: r.time, count: canSmelt, type: 'furnace' });
+            smeltQueue.push({ recipe: r, progress: 0, duration: r.time, count: batchCount, type: 'furnace' });
             refreshUI();
             updateFurnaceUI();
+        });
+    });
+}
+
+// ── Campfire cooking system ──
+let campfireCookOpen = false;
+const campfireCookMenuEl = document.createElement('div');
+campfireCookMenuEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;background:rgba(10,12,10,0.94);border:2px solid rgba(160,100,40,0.5);border-radius:8px;padding:16px;min-width:320px;user-select:none;';
+document.body.appendChild(campfireCookMenuEl);
+
+function updateCampfireCookUI() {
+    let html = '<h2 style="color:rgba(240,180,100,0.9);font:bold 15px monospace;text-align:center;margin-bottom:6px;">Campfire</h2>';
+    // Active cooking
+    const cookingItems = smeltQueue.filter(sq => sq.type === 'campfire');
+    if (cookingItems.length > 0) {
+        html += '<div class="inv-section-label">Cooking...</div>';
+        for (const sq of cookingItems) {
+            const pct = Math.min(100, (sq.progress / sq.duration) * 100);
+            const outInfo = getItemInfo(sq.recipe.output);
+            html += `<div style="padding:4px 8px;margin-bottom:4px;background:rgba(40,25,15,0.4);border-radius:4px;">
+                <div style="display:flex;align-items:center;gap:6px;font:11px monospace;color:rgba(200,190,160,0.8);margin-bottom:3px;">
+                    <span>${outInfo?.name || '?'} ×${sq.count}</span>
+                    <span style="margin-left:auto;">${Math.ceil(sq.duration - sq.progress)}s</span>
+                </div>
+                <div style="width:100%;height:4px;background:rgba(40,40,40,0.6);border-radius:2px;">
+                    <div style="width:${pct}%;height:100%;background:rgba(220,140,40,0.8);border-radius:2px;"></div>
+                </div>
+            </div>`;
+        }
+    }
+    html += '<div class="craft-cat">Cook Food (no fuel needed)</div><div class="craft-grid">';
+    for (let ci = 0; ci < COOK_RECIPES.length; ci++) {
+        const r = COOK_RECIPES[ci];
+        const canCook = (inventory[r.input] || 0) >= 1;
+        const inInfo = getItemInfo(r.input);
+        const outInfo = getItemInfo(r.output);
+        const inColor = inInfo ? (inInfo.front || inInfo.top) : '#555';
+        const outColor = outInfo ? (outInfo.front || outInfo.top) : '#555';
+        const inName = inInfo ? inInfo.name : '?';
+        const outName = outInfo ? outInfo.name : '?';
+        html += `<div class="craft-row${canCook ? '' : ' disabled'}" data-ci="${ci}">
+            <span class="craft-icon" style="background:${inColor}"></span><span>${inName}</span>
+            <span class="craft-arrow">→</span>
+            <span class="craft-icon" style="background:${outColor}"></span><span>${outName}</span>
+            <span style="color:rgba(150,130,80,0.6);margin-left:auto;font-size:10px;">${r.time}s</span>
+        </div>`;
+    }
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:8px;color:rgba(150,130,100,0.4);font:10px monospace;">Escape to close</div>';
+    campfireCookMenuEl.innerHTML = html;
+
+    campfireCookMenuEl.querySelectorAll('.craft-row:not(.disabled)').forEach(row => {
+        row.addEventListener('click', () => {
+            const r = COOK_RECIPES[Number(row.dataset.ci)];
+            const inputCount = inventory[r.input] || 0;
+            if (inputCount < 1) return;
+            const batchCount = Math.min(inputCount, 3);
+            inventory[r.input] -= batchCount;
+            if (inventory[r.input] <= 0) { delete inventory[r.input]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.input) hotbarSlots[i] = 0; }
+            smeltQueue.push({ recipe: r, progress: 0, duration: r.time, count: batchCount, type: 'campfire' });
+            refreshUI();
+            updateCampfireCookUI();
         });
     });
 }
@@ -13444,7 +13634,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function doPlace(e) {
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || chestOpen || shopOpen || stableOpen) return false;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || campfireCookOpen || anvilOpen || chestOpen || shopOpen || stableOpen) return false;
     const mouseEvt = e || { clientX: lastMouseX, clientY: lastMouseY };
 
     // Check for Necromancer conversation (right-click while looking at passive necromancer)
@@ -13675,6 +13865,14 @@ function doPlace(e) {
         if (pointerLocked) document.exitPointerLock();
         return false;
     }
+    if (hit.block === BLOCK.CAMPFIRE && placeHoldTime < 0.05) {
+        campfireCookOpen = true;
+        campfireCookMenuEl.style.display = 'block';
+        updateCampfireCookUI();
+        placingHeld = false;
+        if (pointerLocked) document.exitPointerLock();
+        return false;
+    }
 
     // Right-click on chest → open chest
     if (hit.block === BLOCK.CHEST && placeHoldTime < 0.05) {
@@ -13868,7 +14066,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
             return; // don't place blocks while shielding
         }
     }
-    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen) return;
+    if (mapOpen || inventoryOpen || craftingTableOpen || furnaceOpen || campfireCookOpen || anvilOpen) return;
     if (!placingHeld) {
         placingHeld = true;
         placeTimer = 0;
@@ -13930,7 +14128,7 @@ function animate() {
 
     // Player update
     fpActive = zoomLevel < 0.15 && !(dragonMgr && dragonMgr.ridingDragon);
-    if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !anvilOpen) {
+    if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen) {
         const useMouse = useMouseLook && pointerLocked;
         // Axis-lock movement to placement direction while place-locking
         let moveKeys = keys;
@@ -14722,9 +14920,25 @@ function animate() {
         playerMana = Math.min(playerMaxMana, playerMana + dt * 0.5 * getManaRegenMult());
         updateManaUI();
     }
-    // Health regeneration — passive 0.5 HP/s, scaled by fortitude
-    if (playerHP < playerMaxHP) {
-        playerHP = Math.min(playerMaxHP, playerHP + dt * 0.5 * getStatHPRegenMult());
+    // Hunger drain — lose 1 hunger every 45 seconds
+    hungerDrainTimer += dt;
+    if (hungerDrainTimer >= 45) {
+        hungerDrainTimer -= 45;
+        if (playerHunger > 0) {
+            playerHunger = Math.max(0, playerHunger - 1);
+            updateHungerUI();
+        }
+    }
+    // Starving damage — take 0.5 HP/s when hunger is 0
+    if (playerHunger <= 0 && playerHP > 1) {
+        playerHP = Math.max(1, playerHP - dt * 0.5);
+        updateHeartsUI();
+    }
+    // Health regeneration — passive 0.5 HP/s, scaled by fortitude and hunger
+    // Full hunger = 100% regen, empty hunger = 0% regen
+    const hungerRegenMult = playerHunger / playerMaxHunger;
+    if (playerHP < playerMaxHP && hungerRegenMult > 0) {
+        playerHP = Math.min(playerMaxHP, playerHP + dt * 0.5 * getStatHPRegenMult() * hungerRegenMult);
         updateHeartsUI();
     }
     // Hold right-click to channel mana (2/s extra regen)
@@ -15760,7 +15974,7 @@ function animate() {
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}${mpInfo}`;
 
     // ── Update block highlight ──
-    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen && !hudHidden) {
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !mapOpen && !hudHidden) {
         const hlHit = raycastBlock(null);
         if (hlHit) {
             const BS = BLOCK_SIZE;
@@ -16436,10 +16650,10 @@ document.addEventListener('keydown', e => {
             e.preventDefault();
         }
         e.stopPropagation(); // don't let game keys fire while typing
-    } else if (e.code === 'KeyT' && gameStarted && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen && !mapOpen) {
+    } else if (e.code === 'KeyT' && gameStarted && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen && !mapOpen) {
         openChat();
         e.preventDefault();
-    } else if (e.code === 'Slash' && gameStarted && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen && !mapOpen) {
+    } else if (e.code === 'Slash' && gameStarted && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen && !mapOpen) {
         // / key opens chat with / pre-filled
         openChat();
         chatInput.value = '/';
