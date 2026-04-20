@@ -6139,7 +6139,7 @@ function startGame(loadSlotName, clipShotIdx) {
             if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.playerHunger !== undefined) { playerHunger = s.playerHunger; playerMaxHunger = s.playerMaxHunger || 20; }
-            if (s.dragonFormActive) { dragonFormActive = true; }
+            if (s.dragonFormActive) { dragonFormActive = true; player.setDragonForm(true); }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
@@ -8751,17 +8751,19 @@ document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
     // Dragon form flight — double-tap space to toggle
-    if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player) {
+    if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player
+        && !player._dragonGrabbed && !(horseMgr && horseMgr.ridingHorse)) {
         const now = performance.now();
         if (now - _lastSpaceTime < 300) {
             dragonFormFlying = !dragonFormFlying;
             player.dragonFlying = dragonFormFlying;
             if (dragonFormFlying) {
-                addChatMessage('Wings spread — you take flight!', 'rgba(180,120,200,0.9)');
+                player.jumpVel = 6.0; // initial launch upward
+                addChatMessage('Wings spread — you take flight! [Shift to boost]', 'rgba(180,120,200,0.9)');
             } else {
                 addChatMessage('You fold your wings and descend.', 'rgba(180,120,200,0.9)');
             }
-            _lastSpaceTime = 0; // reset so triple-tap doesn't re-toggle
+            _lastSpaceTime = 0;
         } else {
             _lastSpaceTime = now;
         }
@@ -14324,7 +14326,7 @@ function animate() {
             }
         }
         if (!player._dragonGrabbed) {
-            player.update(dt, moveKeys, useMouse, fpYaw, keybinds);
+            player.update(dt, moveKeys, useMouse, fpYaw, keybinds, fpPitch);
         } else {
             // While grabbed, just update group position to match
             player.group.position.copy(player.position);
@@ -14337,6 +14339,19 @@ function animate() {
         player.dragonFlying = false;
     }
     if (dragonFormActive) player.animateDragonParts(dt);
+    // Dragon flight body tilt — lean forward when flying, more when boosting
+    if (dragonFormFlying && player) {
+        const tiltTarget = player._flyBoosting ? 0.45 : 0.25;
+        player.spine.rotation.x = player.spine.rotation.x * 0.9 + tiltTarget * 0.1;
+        // Arms swept back
+        player.leftArm.shoulder.rotation.x = -0.3;
+        player.rightArm.shoulder.rotation.x = -0.3;
+        player.leftArm.shoulder.rotation.z = 0.15;
+        player.rightArm.shoulder.rotation.z = -0.15;
+        // Legs trailing behind
+        player.leftLeg.hip.rotation.x = 0.25;
+        player.rightLeg.hip.rotation.x = 0.25;
+    }
 
     // Staff magic shield visual
     if (staffShielding && player.staffHeld.visible) {

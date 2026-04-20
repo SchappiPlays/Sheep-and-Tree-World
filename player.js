@@ -1341,7 +1341,7 @@ export class Player {
         return { hip, knee };
     }
 
-    update(dt, keys, fpMode, fpYaw, kb) {
+    update(dt, keys, fpMode, fpYaw, kb, fpPitch) {
         // kb = keybinds map (optional, falls back to defaults)
         const kf = kb ? kb.forward : 'KeyW';
         const kk = kb ? kb.back : 'KeyS';
@@ -1397,14 +1397,13 @@ export class Player {
         const moveX = hasInput ? Math.sin(moveAngle) * this.speed * dt : 0;
         const moveZ = hasInput ? Math.cos(moveAngle) * this.speed * dt : 0;
 
-        // Creative mode or Dragon Form flight — fly, no gravity, no collision
-        if (this.creative || this.dragonFlying) {
-            const flySpeed = this.dragonFlying ? (wantSprint ? 20.0 : 12.0) : (wantSprint ? 16.0 : 8.0);
+        // Creative mode — flat fly, no gravity, no collision
+        if (this.creative && !this.dragonFlying) {
+            const flySpeed = wantSprint ? 16.0 : 8.0;
             this.position.x += moveX;
             this.position.z += moveZ;
-            if (keys[kj]) this.position.y += flySpeed * dt; // Space = up
-            if (keys['ShiftLeft'] || keys['ShiftRight']) this.position.y -= flySpeed * dt; // Shift = down
-            // Arrow keys — slow creative movement
+            if (keys[kj]) this.position.y += flySpeed * dt;
+            if (keys['ShiftLeft'] || keys['ShiftRight']) this.position.y -= flySpeed * dt;
             const slowSpeed = 0.5;
             if (keys['ArrowUp']) this.position.y += slowSpeed * dt;
             if (keys['ArrowDown']) this.position.y -= slowSpeed * dt;
@@ -1416,6 +1415,52 @@ export class Player {
             }
             this.jumpVel = 0;
             this.isGrounded = false;
+        } else if (this.dragonFlying) {
+            // Dragon flight — fly in the direction camera is looking, shift = boost
+            const pitch = fpPitch || 0;
+            const yaw = fpMode ? fpYaw : this.group.rotation.y;
+            const boosting = keys['ShiftLeft'] || keys['ShiftRight'];
+            const baseSpeed = 14.0;
+            const boostSpeed = 28.0;
+            const flySpeed = boosting ? boostSpeed : baseSpeed;
+
+            // Forward movement follows camera look direction (pitch + yaw)
+            const wantFwd = keys[kf] ? 1 : keys[kk] ? -1 : 0;
+            const wantStrafe = keys[kl] ? 1 : keys[kr] ? -1 : 0;
+            const hasInput = wantFwd !== 0 || wantStrafe !== 0;
+
+            if (hasInput) {
+                // Movement angle on the horizontal plane
+                const moveAngle = Math.atan2(
+                    wantFwd * Math.sin(yaw) + wantStrafe * Math.cos(yaw),
+                    wantFwd * Math.cos(yaw) - wantStrafe * Math.sin(yaw)
+                );
+                // Horizontal speed scaled by cos(pitch) so looking straight down = no horizontal movement
+                const horizScale = Math.cos(pitch);
+                const hSpeed = flySpeed * horizScale;
+                this.position.x += Math.sin(moveAngle) * hSpeed * dt;
+                this.position.z += Math.cos(moveAngle) * hSpeed * dt;
+                // Vertical speed from pitch — looking up = ascend, looking down = descend (only when moving forward)
+                if (wantFwd !== 0) {
+                    this.position.y += -Math.sin(pitch) * flySpeed * dt * wantFwd;
+                }
+            }
+
+            // Space = ascend, can be used alongside WASD
+            if (keys[kj]) this.position.y += flySpeed * 0.6 * dt;
+
+            // Prevent going below terrain
+            const terrainY = this.world.getHeight(this.position.x, this.position.z);
+            if (this.position.y < terrainY + 0.5) {
+                this.position.y = terrainY + 0.5;
+            }
+
+            this.jumpVel = 0;
+            this.isGrounded = false;
+
+            // Store flight state for animation
+            this._flyBoosting = boosting;
+            this._flyHasInput = hasInput;
         } else {
         // Jump — exact same as game.html
         if (keys[kj] && this.isGrounded) {
@@ -2235,13 +2280,17 @@ export class Player {
             const si = w._s;
 
             if (flying) {
-                // Flying pose — wings spread out, flapping (same as dragon flying animation)
-                const [sFlap, eFlap] = computeFlap(this._flapT);
+                // Flying pose — wings spread, flapping. Boost = faster flaps + swept-back wings
+                const boosting = this._flyBoosting;
+                const flapScale = boosting ? 1.8 : 1.0; // boost = faster wing beats
+                const [sFlap, eFlap] = computeFlap(this._flapT * flapScale);
                 w.rotation.set(0, 0, 0);
-                w.rotation.y = si * 0.15;
-                w.rotation.z = si * (-0.1 + sFlap * 0.4);
-                w.rotation.x = sFlap * 0.08;
-                w._elbow.rotation.set(0, si * -0.25, si * (-0.15 + eFlap * 0.45));
+                // When boosting, sweep wings back more for speed look
+                const sweepBack = boosting ? 0.35 : 0.15;
+                w.rotation.y = si * sweepBack;
+                w.rotation.z = si * (-0.1 + sFlap * (boosting ? 0.5 : 0.4));
+                w.rotation.x = sFlap * (boosting ? 0.12 : 0.08);
+                w._elbow.rotation.set(0, si * (boosting ? -0.35 : -0.25), si * (-0.15 + eFlap * (boosting ? 0.55 : 0.45)));
                 w._hand.rotation.set(0, 0, 0);
                 this._dwApplyFingerRots(w, w._flyFRots);
             } else {
