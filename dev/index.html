@@ -1882,7 +1882,9 @@ function _playIntroCinematic(onDone) {
     // Castle (-800,40) spans to (-635,175)
     _rawPreload.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
     // Ruined fortress area
-    _rawPreload.push([-1010, -670]);
+    _rawPreload.push([-1010, -670], [-1010, -620], [-960, -670]);
+    // Ancient forest — dense area that needs chunks ready
+    _rawPreload.push([-60, -700], [-60, -620], [-60, -780], [20, -700], [-140, -700]);
     // Deduplicate nearby positions (within 60 units)
     const preloadPositions = [];
     for (const p of _rawPreload) {
@@ -7201,7 +7203,7 @@ document.body.appendChild(deathScreen);
 
 window.playerTakeDamage = playerTakeDamage;
 function playerTakeDamage(dmg) {
-    if (playerDead || creativeMode) return;
+    if (playerDead || creativeMode || _introActive) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
     // If riding a dragon, share damage with it (50/50)
     if (dragonMgr && dragonMgr.ridingDragon && dragonMgr.ridingRef) {
@@ -15651,7 +15653,7 @@ function animate() {
             horsePrompt = 'Right-click to mount horse' + (horseMgr.nearHorse._name ? ` (${horseMgr.nearHorse._name})` : '');
         }
     }
-    const promptText = horsePrompt || colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player);
+    const promptText = _introActive ? '' : (horsePrompt || colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player));
     if (promptText) { promptEl.textContent = promptText; promptEl.style.display = 'block'; }
     else { promptEl.style.display = 'none'; }
 
