@@ -268,7 +268,7 @@ canvas { display: block; }
 </style>
 </head>
 <body>
-<div id="loadingScreen" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:520;background:rgba(10,15,10,0.95);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+<div id="loadingScreen" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:520;background:rgba(10,15,10,0.95);flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer;" onclick="this.style.cursor='none';window._loadCursorHidden=true">
     <h2 style="color:rgba(220,200,160,0.9);font:bold 28px monospace;margin:0;">Loading World...</h2>
     <div style="width:300px;height:8px;background:rgba(40,40,40,0.8);border-radius:4px;overflow:hidden;">
         <div id="loadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:4px;transition:width 0.2s;"></div>
@@ -1899,7 +1899,7 @@ function _playIntroCinematic(onDone) {
     // Overlay
     const overlay = document.createElement('div');
     overlay.id = 'introOverlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;cursor:pointer;';
     const fadeEl = document.createElement('div');
     fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;pointer-events:none;transition:none;';
     overlay.appendChild(fadeEl);
@@ -1993,8 +1993,17 @@ function _playIntroCinematic(onDone) {
         onDone();
     };
 
-    const skipClick = () => finish();
-    const skipKey = (e) => { if (e.key !== 'F11' && e.key !== 'F12') finish(); };
+    let _cursorHidden = !!window._loadCursorHidden;
+    if (_cursorHidden) overlay.style.cursor = 'none';
+    const skipClick = () => {
+        if (!_cursorHidden) { overlay.style.cursor = 'none'; _cursorHidden = true; return; }
+        finish();
+    };
+    const skipKey = (e) => {
+        if (e.key === 'F11' || e.key === 'F12') return;
+        if (!_cursorHidden) { overlay.style.cursor = 'none'; _cursorHidden = true; return; }
+        finish();
+    };
     overlay.addEventListener('click', skipClick);
     window.addEventListener('keydown', skipKey);
 
