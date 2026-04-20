@@ -1634,7 +1634,7 @@ function collectSaveData() {
         selectedSlot,
         armorSlots: JSON.parse(JSON.stringify(armorSlots)),
         equippedShield,
-        playerHP, playerMaxHP, playerMana, playerMaxMana, playerHunger, playerMaxHunger, staffDamageDealt, timeOfDay,
+        playerHP, playerMaxHP, playerMana, playerMaxMana, playerHunger, playerMaxHunger, staffDamageDealt, timeOfDay, dragonFormActive,
         playerStats: { ...playerStats },
         killedBosses: [...killedBosses],
         playerXP, playerLevel, skillPoints, availableStatPoints,
@@ -4234,6 +4234,7 @@ function startGame(loadSlotName, clipShotIdx) {
     player.sprintSpeed = 8.0 * getStatSpeedMult();
     saveCharColors(); // read from inputs
     applyCharColors(player);
+    if (dragonFormActive) player.setDragonForm(true);
     // Name label above player
     if (player._nameLabel) player.group.remove(player._nameLabel);
     const nameCanvas = document.createElement('canvas');
@@ -5206,6 +5207,8 @@ function startGame(loadSlotName, clipShotIdx) {
             if (!boss._isBoss) return;
             giveGateDrops('The Ancient One falls!',
                 ['Bonecrusher', 'Soulreaver', 'Deathwhisper', 'Gravekeeper', 'Cryptblade', 'Marrowsplitter', 'Doomfang', 'Wraithcutter']);
+            addToInventory('essence_decay');
+            addChatMessage('Obtained: Essence of Decay', 'rgba(136,204,68,0.95)');
         };
     }
 
@@ -5329,6 +5332,8 @@ function startGame(loadSlotName, clipShotIdx) {
         creatures._onGateBossDeath = (boss) => {
             giveGateDrops('The Colossus crumbles!',
                 ['Earthshaker', 'Stonefist', 'Worldsplitter', 'Groundbreaker', 'Mountaincleaver', 'Rootcutter', 'Quakeborn']);
+            addToInventory('essence_stone');
+            addChatMessage('Obtained: Essence of Stone', 'rgba(153,153,136,0.95)');
         };
     }
 
@@ -5407,6 +5412,8 @@ function startGame(loadSlotName, clipShotIdx) {
         creatures._onDarkKnightDeath = (boss) => {
             giveGateDrops('The Dark Knight has been vanquished!',
                 ['Frostmourne', 'Duskbringer', 'Shadowedge', 'Nightfall', 'Voidstrike', 'Darkrender']);
+            addToInventory('essence_shadow');
+            addChatMessage('Obtained: Essence of Shadow', 'rgba(80,80,120,0.95)');
         };
     }
 
@@ -5804,6 +5811,8 @@ function startGame(loadSlotName, clipShotIdx) {
         creatures._onHobgoblinDeath = (boss) => {
             giveGateDrops('Grokthak falls! The goblins scatter!',
                 ['Goblinbane', 'Skulltaker', 'Warchief\'s Cleaver', 'Raider\'s Edge', 'Hordecutter', 'Grumsplitter']);
+            addToInventory('essence_fury');
+            addChatMessage('Obtained: Essence of Fury', 'rgba(255,68,34,0.95)');
         };
     }
 
@@ -6130,6 +6139,7 @@ function startGame(loadSlotName, clipShotIdx) {
             if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.playerHunger !== undefined) { playerHunger = s.playerHunger; playerMaxHunger = s.playerMaxHunger || 20; }
+            if (s.dragonFormActive) { dragonFormActive = true; }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
@@ -6303,6 +6313,7 @@ function startGame(loadSlotName, clipShotIdx) {
         // New game — spawn at center, reset progression
         staffDamageDealt = 0;
         activeSpellSlot = 1;
+        dragonFormActive = false;
         playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
         playerHP = playerMaxHP;
         playerHunger = playerMaxHunger;
@@ -7282,6 +7293,9 @@ let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
 let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
 let playerHunger = 20, playerMaxHunger = 20; // 10 drumsticks, each = 2 hunger
 let hungerDrainTimer = 0; // accumulates dt for hunger drain
+// Dragon form — player transformation
+let dragonFormActive = false;
+
 // Dragon corpses that can be harvested by hitting with a weapon
 // Each: { x, z, harvested, hitCount }
 const dragonCorpses = [];
@@ -7589,12 +7603,14 @@ function getWarriorDamageBonus() {
     if (skills.warrior[1]) mult += 0.15; // Sharp Edge
     if (skills.warrior[4] && playerHP / playerMaxHP < 0.3) mult += 0.40; // Berserker
     if (skills.warrior[9]) mult += 0.30; // Warlord
+    if (dragonFormActive) mult += 0.25; // Dragon Rite
     return mult;
 }
 function getWizardDamageBonus() {
     let mult = 1.0;
     if (skills.wizard[3]) mult += 0.20; // Spell Power
     if (skills.wizard[9]) mult += 0.40; // Archmage
+    if (dragonFormActive) mult += 0.25; // Dragon Rite
     return mult;
 }
 function getDamageReduction() {
@@ -9731,6 +9747,11 @@ function getItemInfo(key) {
     if (key === 'dragon_bone') return { name: 'Dragon Bone', top: '#d4cbb0', front: '#b0a890' };
     if (key === 'dragon_flesh') return { name: 'Dragon Flesh', top: '#882244', front: '#661133' };
     if (key === 'dragon_heart') return { name: 'Dragon Heart', top: '#cc1133', front: '#990022' };
+    if (key === 'essence_decay') return { name: 'Essence of Decay', top: '#88cc44', front: '#446622' };
+    if (key === 'essence_stone') return { name: 'Essence of Stone', top: '#999988', front: '#666655' };
+    if (key === 'essence_shadow') return { name: 'Essence of Shadow', top: '#333355', front: '#1a1a33' };
+    if (key === 'essence_fury') return { name: 'Essence of Fury', top: '#ff4422', front: '#cc2200' };
+    if (key === 'dragon_rite') return { name: 'Dragon Rite', top: '#cc44ff', front: '#8822aa' };
     if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
     if (key === 'anvil_block') return { name: 'Iron Anvil', top: '#666', front: '#444' };
     if (key === 'steel_anvil_block') return { name: 'Steel Anvil', top: '#607080', front: '#506070' };
@@ -10092,7 +10113,14 @@ function _getItemTooltip(key) {
     // Dragon materials
     if (key === 'dragon_bone') html += `<div style="color:#d4cbb0;">Ancient dragon bone</div>`;
     if (key === 'dragon_flesh') html += `<div style="color:#882244;">Raw dragon meat</div>`;
-    if (key === 'dragon_heart') html += `<div style="color:#cc1133;">A rare and powerful organ</div>`;
+    if (key === 'dragon_heart') html += `<div style="color:#cc1133;">Pulsing with ancient power</div>`;
+    // Boss essences
+    if (key === 'essence_decay') html += `<div style="color:#88cc44;">Dropped by the Ancient One</div>`;
+    if (key === 'essence_stone') html += `<div style="color:#999988;">Dropped by the Colossus</div>`;
+    if (key === 'essence_shadow') html += `<div style="color:#6666aa;">Dropped by the Dark Knight</div>`;
+    if (key === 'essence_fury') html += `<div style="color:#ff4422;">Dropped by Grokthak</div>`;
+    if (key.startsWith('essence_') || key === 'dragon_heart') html += `<div style="color:#daa520;">Ingredient for the Dragon Rite</div>`;
+    if (key === 'dragon_rite') html += `<div style="color:#cc44ff;">Transforms you into a Dragonborn</div><div style="color:#daa520;">+25% damage, wings, horns, tail</div>`;
     // Stack count
     const count = inventory[key] || 0;
     if (count > 1) html += `<div style="color:#888;margin-top:3px;">Quantity: ${count}</div>`;
@@ -11280,6 +11308,11 @@ const WB_CATEGORIES = [
         { from: 'iron_ingot', fromAlt: BLOCK.SNOW, to: 'ice_staff', fc: 2, fcAlt: 8, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: BLOCK.SAND, to: 'lightning_staff', fc: 3, fcAlt: 6, tc: 1, multi: true },
     ]},
+    { name: 'Legendary', recipes: [
+        { from: 'dragon_heart', fromAlt: 'essence_decay', to: 'dragon_rite', fc: 1, fcAlt: 1, tc: 1, multi: true,
+          _extraReqs: [['essence_stone', 1], ['essence_shadow', 1], ['essence_fury', 1]],
+          _special: 'dragon_rite' },
+    ]},
 ];
 // Flat list for index lookup
 const WORKBENCH_RECIPES = WB_CATEGORIES.flatMap(c => c.recipes);
@@ -11298,16 +11331,58 @@ function renderRecipeRow(r, ri, canCraft) {
         const altName = altInfo ? altInfo.name : '?';
         inputs += ` + <span class="craft-icon" style="background:${altColor}"></span><span>${r.fcAlt}× ${altName}</span>`;
     }
+    if (r._extraReqs) {
+        for (const [item, count] of r._extraReqs) {
+            const ei = getItemInfo(item);
+            const ec = ei ? (ei.front || ei.top) : '#555';
+            const en = ei ? ei.name : '?';
+            inputs += ` + <span class="craft-icon" style="background:${ec}"></span><span>${count}× ${en}</span>`;
+        }
+    }
     return `<div class="craft-row${canCraft ? '' : ' disabled'}" data-ri="${ri}">
         ${inputs} <span class="craft-arrow">→</span>
         <span class="craft-icon" style="background:${toColor}"></span><span>${r.tc}× ${toName}</span>
     </div>`;
 }
 
+function _canCraftRecipe(r) {
+    if ((inventory[r.from] || 0) < r.fc) return false;
+    if (r.multi && (inventory[r.fromAlt] || 0) < r.fcAlt) return false;
+    if (r._extraReqs) for (const [item, count] of r._extraReqs) if ((inventory[item] || 0) < count) return false;
+    return true;
+}
+
 function doCraft(r) {
     if (!r || !r.from) return;
-    if ((inventory[r.from] || 0) < r.fc) return;
-    if (r.multi && (inventory[r.fromAlt] || 0) < r.fcAlt) return;
+    if (!_canCraftRecipe(r)) return;
+
+    // Special: Dragon Rite — transformation, not an item
+    if (r._special === 'dragon_rite') {
+        if (dragonFormActive) { addChatMessage('You have already undergone the Dragon Rite.', 'rgba(200,150,100,0.9)'); return; }
+        // Consume all ingredients
+        const _consume = (item, count) => {
+            inventory[item] -= count;
+            if (inventory[item] <= 0) { delete inventory[item]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === item) hotbarSlots[i] = 0; }
+        };
+        _consume(r.from, r.fc);
+        _consume(r.fromAlt, r.fcAlt);
+        for (const [item, count] of r._extraReqs) _consume(item, count);
+        // Activate dragon form
+        dragonFormActive = true;
+        player.setDragonForm(true);
+        addChatMessage('The essences merge with the dragon heart...', 'rgba(200,100,200,0.95)');
+        setTimeout(() => addChatMessage('Ancient power surges through you!', 'rgba(255,180,50,0.95)'), 1500);
+        setTimeout(() => addChatMessage('You have become Dragonborn. +25% damage, wings, horns.', 'rgba(255,220,100,0.95)'), 3000);
+        // Screen flash effect
+        const flash = document.createElement('div');
+        flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(200,100,255,0.4);z-index:200;pointer-events:none;transition:opacity 2s;';
+        document.body.appendChild(flash);
+        setTimeout(() => { flash.style.opacity = '0'; }, 100);
+        setTimeout(() => document.body.removeChild(flash), 2200);
+        refreshUI();
+        return;
+    }
+
     // Consume primary
     inventory[r.from] -= r.fc;
     if (inventory[r.from] <= 0) { delete inventory[r.from]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.from) hotbarSlots[i] = 0; }
@@ -11315,6 +11390,11 @@ function doCraft(r) {
     if (r.multi) {
         inventory[r.fromAlt] -= r.fcAlt;
         if (inventory[r.fromAlt] <= 0) { delete inventory[r.fromAlt]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === r.fromAlt) hotbarSlots[i] = 0; }
+    }
+    // Consume extra requirements
+    if (r._extraReqs) for (const [item, count] of r._extraReqs) {
+        inventory[item] -= count;
+        if (inventory[item] <= 0) { delete inventory[item]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === item) hotbarSlots[i] = 0; }
     }
     // Produce
     const toKey = r.to;
@@ -11340,7 +11420,7 @@ function updateCraftTableUI() {
         html += `<div class="craft-cat${isOpen ? ' open' : ''}" data-cat="${cat.name}">${cat.name}</div>`;
         html += `<div class="craft-grid${isOpen ? '' : ' collapsed'}">`;
         for (const r of cat.recipes) {
-            const canCraft = (inventory[r.from] || 0) >= r.fc && (!r.multi || (inventory[r.fromAlt] || 0) >= r.fcAlt);
+            const canCraft = _canCraftRecipe(r);
             html += renderRecipeRow(r, globalIdx, canCraft);
             globalIdx++;
         }
@@ -14230,6 +14310,7 @@ function animate() {
         }
     }
     dragonMgr.applyPlayerPose(player);
+    if (dragonFormActive) player.animateDragonParts(dt);
 
     // Staff magic shield visual
     if (staffShielding && player.staffHeld.visible) {

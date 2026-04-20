@@ -432,12 +432,12 @@ export class Player {
         // Two-handed if blade is big enough (length >= 3 or length + thickness >= 5)
         const bLen = swordData.bladeLength || 2;
         const bThick = swordData.bladeThickness || 1;
-        this._twoHanded = (bLen >= 3 || bLen + bThick >= 5);
+        this._twoHanded = (bLen >= 3 || bLen + bThick >= 5 || (swordData.isWarhammer && bLen >= 2.5));
         // Blade — scale by length and thickness
         _applyMat(tool._bladeMat, swordData.bladeMat);
         const bLenScale = bLen / 2;   // normalize: 2 = default (1.0x)
-        if (swordData.isBattleaxe) {
-            // Keep the blade group at its natural size so our axe mesh isn't distorted
+        if (swordData.isBattleaxe || swordData.isWarhammer) {
+            // Keep the blade group at its natural size so our axe/hammer mesh isn't distorted
             tool._bladeGrp.scale.set(1, 1, 1);
             tool._bladeGrp.position.y = 0;
         } else {
@@ -445,7 +445,7 @@ export class Player {
             // Offset blade group so the base stays at the guard (y≈0.1)
             tool._bladeGrp.position.y = 0.1 * (1 - bLenScale);
         }
-        // Battleaxe head — built lazily, toggled with the default blade/tip.
+        // Battleaxe / War hammer heads — built lazily, toggled with the default blade/tip.
         const defaultBlade = tool._bladeGrp.children[0];
         const defaultTip = tool._bladeGrp.children[1];
         const trim1 = tool._trimStripe, trim2 = tool._trimStripe2;
@@ -455,6 +455,7 @@ export class Player {
                 tool._bladeGrp.add(tool._axeHead);
             }
             if (tool._axeHead) tool._axeHead.visible = true;
+            if (tool._hammerHead) tool._hammerHead.visible = false;
             if (defaultBlade) defaultBlade.visible = false;
             if (defaultTip) defaultTip.visible = false;
             if (trim1) trim1.visible = false;
@@ -464,12 +465,111 @@ export class Player {
             if (tool._guardExtra1) tool._guardExtra1.visible = false;
             if (tool._guardExtra2) tool._guardExtra2.visible = false;
             this._isBattleaxe = true;
+            this._isWarhammer = false;
+        } else if (swordData.isWarhammer) {
+            if (!tool._hammerHead && typeof window !== 'undefined' && window.buildHammerHead) {
+                tool._hammerHead = window.buildHammerHead(tool._bladeMat, tool._handleMat);
+                tool._bladeGrp.add(tool._hammerHead);
+            }
+            if (tool._hammerHead) tool._hammerHead.visible = true;
+            if (tool._axeHead) tool._axeHead.visible = false;
+            if (defaultBlade) defaultBlade.visible = false;
+            if (defaultTip) defaultTip.visible = false;
+            if (trim1) trim1.visible = false;
+            if (trim2) trim2.visible = false;
+            if (tool._guardMesh) tool._guardMesh.visible = false;
+            if (tool._guardExtra1) tool._guardExtra1.visible = false;
+            if (tool._guardExtra2) tool._guardExtra2.visible = false;
+            this._isWarhammer = true;
+            this._isBattleaxe = false;
         } else {
             if (tool._axeHead) tool._axeHead.visible = false;
+            if (tool._hammerHead) tool._hammerHead.visible = false;
             if (defaultBlade) defaultBlade.visible = true;
             if (defaultTip) defaultTip.visible = true;
             if (tool._guardMesh) tool._guardMesh.visible = true;
             this._isBattleaxe = false;
+            this._isWarhammer = false;
+            // Blade style — only for normal swords (not axes/hammers)
+            const bladeStyle = swordData.bladeStyle || 'straight';
+            if (tool._currentBladeStyle !== bladeStyle) {
+                tool._currentBladeStyle = bladeStyle;
+                // Remove old serration teeth if switching away
+                if (tool._serrationTeeth) {
+                    for (const t of tool._serrationTeeth) {
+                        t.geometry.dispose();
+                        tool._bladeGrp.remove(t);
+                    }
+                    tool._serrationTeeth = null;
+                }
+                if (defaultBlade) {
+                    defaultBlade.geometry.dispose();
+                    defaultBlade.rotation.z = 0;
+                }
+                if (defaultTip) {
+                    defaultTip.geometry.dispose();
+                    defaultTip.position.x = 0;
+                }
+                if (bladeStyle === 'curved') {
+                    // Build a curved blade from segments that arc to one side
+                    const segs = 8, w = 0.035, d = 0.012, h = 0.6;
+                    const verts = [], indices = [];
+                    for (let i = 0; i <= segs; i++) {
+                        const t = i / segs;
+                        // Y centered like BoxGeometry (spans -h/2 to +h/2)
+                        const y = -h/2 + t * h;
+                        // Quadratic curve: 0 at base, peaks at tip
+                        const xOff = t * t * 0.04;
+                        verts.push(xOff - w/2, y, -d/2);
+                        verts.push(xOff + w/2, y, -d/2);
+                        verts.push(xOff + w/2, y,  d/2);
+                        verts.push(xOff - w/2, y,  d/2);
+                    }
+                    for (let i = 0; i < segs; i++) {
+                        const b = i * 4, t = (i + 1) * 4;
+                        indices.push(b, t, t+1, b, t+1, b+1);     // -z face
+                        indices.push(b+3, b+2, t+2, b+3, t+2, t+3); // +z face
+                        indices.push(b+1, t+1, t+2, b+1, t+2, b+2); // +x face
+                        indices.push(b+3, t+3, t, b+3, t, b);       // -x face
+                    }
+                    const top = segs * 4;
+                    indices.push(top, top+1, top+2, top, top+2, top+3);
+                    indices.push(0, 2, 1, 0, 3, 2);
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+                    geo.setIndex(indices);
+                    geo.computeVertexNormals();
+                    defaultBlade.geometry = geo;
+                    defaultBlade.position.y = 0.4; // same as default
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                    defaultTip.position.set(0.04, 0.74, 0); // tip follows curve end
+                } else if (bladeStyle === 'falchion') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.055, 0.6, 0.014);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.02, 0.08, 4);
+                } else if (bladeStyle === 'serrated') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.035, 0.6, 0.012);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                    // Add small teeth along one edge
+                    tool._serrationTeeth = [];
+                    for (let i = 0; i < 5; i++) {
+                        const tooth = new THREE.Mesh(
+                            new THREE.ConeGeometry(0.008, 0.03, 3),
+                            tool._bladeMat
+                        );
+                        tooth.position.set(0.02, 0.18 + i * 0.1, 0);
+                        tooth.rotation.z = -Math.PI / 2;
+                        tool._bladeGrp.add(tooth);
+                        tool._serrationTeeth.push(tooth);
+                    }
+                } else if (bladeStyle === 'leaf') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.05, 0.6, 0.014);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.018, 0.08, 4);
+                } else {
+                    // straight (default)
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.035, 0.6, 0.012);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                }
+            }
         }
         // Handle
         _applyMat(tool._handleMat, swordData.handleMat);
@@ -1304,6 +1404,16 @@ export class Player {
             this.position.z += moveZ;
             if (keys[kj]) this.position.y += flySpeed * dt; // Space = up
             if (keys['ShiftLeft'] || keys['ShiftRight']) this.position.y -= flySpeed * dt; // Shift = down
+            // Arrow keys — slow creative movement
+            const slowSpeed = 0.5;
+            if (keys['ArrowUp']) this.position.y += slowSpeed * dt;
+            if (keys['ArrowDown']) this.position.y -= slowSpeed * dt;
+            if (keys['ArrowLeft'] || keys['ArrowRight']) {
+                if (fpMode) this.group.rotation.y = fpYaw;
+                const dir = keys['ArrowLeft'] ? 1 : -1;
+                this.position.x += Math.sin(this.group.rotation.y) * slowSpeed * dir * dt;
+                this.position.z += Math.cos(this.group.rotation.y) * slowSpeed * dir * dt;
+            }
             this.jumpVel = 0;
             this.isGrounded = false;
         } else {
@@ -1640,5 +1750,222 @@ export class Player {
             }
         }
         return false;
+    }
+
+    // ── Dragon Form ──
+    setDragonForm(enabled) {
+        if (enabled === this._dragonForm) return;
+        this._dragonForm = enabled;
+        if (enabled) {
+            this._buildDragonParts();
+        } else {
+            this._removeDragonParts();
+        }
+    }
+
+    _buildDragonParts() {
+        const wingMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.4, metalness: 0.3, side: THREE.DoubleSide });
+        const membraneMat = new THREE.MeshStandardMaterial({ color: 0x331133, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+        const hornMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.5 });
+        const glowMat = new THREE.MeshStandardMaterial({ color: 0xcc2255, emissive: 0xcc2255, emissiveIntensity: 0.4 });
+
+        // === WINGS ===
+        this._dragonWings = new THREE.Group();
+        this._dragonWingParts = [];
+
+        for (let side = -1; side <= 1; side += 2) {
+            const wing = new THREE.Group();
+            wing._side = side;
+
+            // Shoulder joint — attaches to upper back
+            wing.position.set(side * 0.18, 0.45, -0.12);
+            wing.rotation.z = side * 0.2;
+
+            // Upper arm bone
+            const upperArm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.35), wingMat);
+            upperArm.position.set(side * 0.08, 0, -0.15);
+            upperArm.rotation.y = side * 0.3;
+            wing.add(upperArm);
+
+            // Elbow joint
+            const elbow = new THREE.Group();
+            elbow.position.set(side * 0.18, 0, -0.32);
+            wing.add(elbow);
+            wing._elbow = elbow;
+
+            // Forearm bone
+            const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.025, 0.45), wingMat);
+            forearm.position.set(side * 0.12, 0, -0.2);
+            forearm.rotation.y = side * 0.25;
+            elbow.add(forearm);
+
+            // Wing tip
+            const hand = new THREE.Group();
+            hand.position.set(side * 0.25, 0, -0.42);
+            elbow.add(hand);
+            wing._hand = hand;
+
+            const fingerBone = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.3), wingMat);
+            fingerBone.position.set(side * 0.05, 0, -0.12);
+            fingerBone.rotation.y = side * 0.15;
+            hand.add(fingerBone);
+
+            // Membrane panels — triangular shapes between bones
+            // Main membrane (shoulder to elbow to tip)
+            const memShape = new THREE.Shape();
+            memShape.moveTo(0, 0);
+            memShape.lineTo(side * 0.55, -0.65);
+            memShape.lineTo(side * 0.15, -0.3);
+            memShape.closePath();
+            const memGeo = new THREE.ShapeGeometry(memShape);
+            const membrane = new THREE.Mesh(memGeo, membraneMat);
+            membrane.rotation.x = Math.PI / 2;
+            membrane.position.set(0, 0.01, -0.05);
+            wing.add(membrane);
+
+            // Second membrane panel (lower section)
+            const mem2Shape = new THREE.Shape();
+            mem2Shape.moveTo(side * 0.15, -0.3);
+            mem2Shape.lineTo(side * 0.55, -0.65);
+            mem2Shape.lineTo(side * 0.7, -0.55);
+            mem2Shape.closePath();
+            const mem2Geo = new THREE.ShapeGeometry(mem2Shape);
+            const membrane2 = new THREE.Mesh(mem2Geo, membraneMat);
+            membrane2.rotation.x = Math.PI / 2;
+            membrane2.position.set(0, -0.01, -0.05);
+            wing.add(membrane2);
+
+            // Claw at wing tip
+            const claw = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), hornMat);
+            claw.rotation.x = Math.PI * 0.7;
+            claw.position.set(side * 0.08, -0.01, -0.28);
+            hand.add(claw);
+
+            this._dragonWings.add(wing);
+            this._dragonWingParts.push(wing);
+        }
+        this.spine.add(this._dragonWings);
+
+        // === HORNS ===
+        this._dragonHorns = new THREE.Group();
+
+        for (let side = -1; side <= 1; side += 2) {
+            // Main horn — curved backward
+            const horn = new THREE.Group();
+
+            const hornBase = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.08, 6), hornMat);
+            hornBase.position.y = 0.04;
+            horn.add(hornBase);
+
+            const hornMid = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 6), hornMat);
+            hornMid.position.set(0, 0.1, -0.02);
+            hornMid.rotation.x = 0.3;
+            horn.add(hornMid);
+
+            const hornTip = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.08, 5), hornMat);
+            hornTip.position.set(0, 0.18, -0.06);
+            hornTip.rotation.x = 0.5;
+            horn.add(hornTip);
+
+            horn.position.set(side * 0.09, 0.12, -0.03);
+            horn.rotation.z = side * -0.25;
+            horn.rotation.x = -0.15;
+            this._dragonHorns.add(horn);
+
+            // Small secondary horn in front
+            const smallHorn = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.06, 5), hornMat);
+            smallHorn.position.set(side * 0.07, 0.1, 0.04);
+            smallHorn.rotation.z = side * -0.15;
+            smallHorn.rotation.x = -0.1;
+            this._dragonHorns.add(smallHorn);
+        }
+        this.headGroup.add(this._dragonHorns);
+
+        // === GLOWING EYES effect — small emissive accent ===
+        this._dragonEyeGlow = [];
+        for (let side = -1; side <= 1; side += 2) {
+            const glow = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), glowMat);
+            glow.position.set(side * 0.06, 0.03, 0.115);
+            this.headGroup.add(glow);
+            this._dragonEyeGlow.push(glow);
+        }
+
+        // === TAIL — small segmented tail ===
+        this._dragonTail = new THREE.Group();
+        const tailMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.5, metalness: 0.3 });
+        this._dragonTailSegs = [];
+        let prevSeg = this._dragonTail;
+        for (let i = 0; i < 5; i++) {
+            const seg = new THREE.Group();
+            const s = 0.08 - i * 0.012;
+            const piece = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.7, 0.08), tailMat);
+            seg.add(piece);
+            seg.position.set(0, i === 0 ? -0.05 : 0, -0.08);
+            prevSeg.add(seg);
+            prevSeg = seg;
+            this._dragonTailSegs.push(seg);
+        }
+        // Tail spike
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), hornMat);
+        spike.rotation.x = Math.PI / 2;
+        spike.position.z = -0.06;
+        prevSeg.add(spike);
+        this._dragonTail.position.set(0, -0.2, -0.11);
+        this.spine.add(this._dragonTail);
+
+        // Store wing phase for animation
+        this._wingPhase = 0;
+    }
+
+    _removeDragonParts() {
+        if (this._dragonWings) { this.spine.remove(this._dragonWings); this._dragonWings = null; }
+        if (this._dragonHorns) { this.headGroup.remove(this._dragonHorns); this._dragonHorns = null; }
+        if (this._dragonTail) { this.spine.remove(this._dragonTail); this._dragonTail = null; }
+        if (this._dragonEyeGlow) {
+            for (const g of this._dragonEyeGlow) this.headGroup.remove(g);
+            this._dragonEyeGlow = null;
+        }
+        this._dragonWingParts = null;
+        this._dragonTailSegs = null;
+    }
+
+    animateDragonParts(dt) {
+        if (!this._dragonForm || !this._dragonWingParts) return;
+        this._wingPhase = (this._wingPhase || 0) + dt;
+
+        // Wing idle animation — gentle breathing motion
+        const isMoving = Math.abs(this.speed) > 0.5;
+        const isSprinting = Math.abs(this.speed) > 5;
+        const flapSpeed = isSprinting ? 6 : isMoving ? 3 : 1.2;
+        const flapAmp = isSprinting ? 0.35 : isMoving ? 0.2 : 0.08;
+
+        for (const wing of this._dragonWingParts) {
+            const s = wing._side;
+            const phase = this._wingPhase * flapSpeed;
+
+            // Shoulder flap
+            wing.rotation.z = s * (0.2 + Math.sin(phase) * flapAmp);
+            // Elbow fold/extend
+            if (wing._elbow) {
+                wing._elbow.rotation.y = s * (0.1 + Math.sin(phase + 0.5) * flapAmp * 0.6);
+            }
+            // Hand/fingers
+            if (wing._hand) {
+                wing._hand.rotation.y = s * (Math.sin(phase + 1.0) * flapAmp * 0.3);
+            }
+        }
+
+        // Tail sway
+        if (this._dragonTailSegs) {
+            for (let i = 0; i < this._dragonTailSegs.length; i++) {
+                this._dragonTailSegs[i].rotation.y = Math.sin(this._wingPhase * 1.5 + i * 0.8) * 0.12;
+            }
+        }
+
+        // Eye glow pulse
+        if (this._dragonEyeGlow) {
+            const pulse = 0.3 + Math.sin(this._wingPhase * 2) * 0.15;
+            for (const g of this._dragonEyeGlow) g.material.emissiveIntensity = pulse;
+        }
     }
 }
