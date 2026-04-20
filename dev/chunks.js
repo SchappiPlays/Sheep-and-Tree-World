@@ -281,6 +281,10 @@ export class ChunkManager {
             if (old.water) { this.scene.remove(old.water); old.water.geometry.dispose(); }
             if (old.leaves) { this.scene.remove(old.leaves); old.leaves.geometry.dispose(); }
         }
+        // Ensure chunk data (and neighbors for face culling) exists before meshing
+        for (let dx = -1; dx <= 1; dx++)
+            for (let dz = -1; dz <= 1; dz++)
+                this.world.getOrCreateChunk(cx + dx, cz + dz);
         const entry = this._buildChunkMeshes(cx, cz, 1);
         entry.lod = 1;
         if (entry.terrain) this.scene.add(entry.terrain);

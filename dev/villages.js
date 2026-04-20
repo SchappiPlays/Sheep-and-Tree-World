@@ -759,16 +759,8 @@ export class VillageManager {
                 const W = wallBlock, R = roofBlock, F = floorBlock || BLOCK.PLANKS;
                 const _set = (dx, dy, dz, b) => {
                     const abx = bx+dx, aby = by+dy, abz = bz+dz;
+                    // setBlock handles _modifiedBlocks and _modsByChunk internally
                     this.world.setBlock(abx, aby, abz, b);
-                    // Store as modification so it persists in chunk generation
-                    if (!this.world._modifiedBlocks) this.world._modifiedBlocks = new Map();
-                    this.world._modifiedBlocks.set(abx+','+aby+','+abz, b);
-                    const mcx = Math.floor(abx/16), mcz = Math.floor(abz/16);
-                    const mlx = ((abx%16)+16)%16, mlz = ((abz%16)+16)%16;
-                    if (!this.world._modsByChunk) this.world._modsByChunk = new Map();
-                    const ck = mcx+','+mcz;
-                    if (!this.world._modsByChunk.has(ck)) this.world._modsByChunk.set(ck, []);
-                    this.world._modsByChunk.get(ck).push({ lx: mlx, y: aby, lz: mlz, block: b });
                 };
                 const _rebuildChunks = new Set();
                 const hw = 5, hd = 4, wallH = 7, roofH = 4;
