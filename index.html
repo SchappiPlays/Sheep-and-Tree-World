@@ -16569,13 +16569,20 @@ function executeCommand(input) {
     switch (cmd) {
         case 'give': {
             // /give <player> <item> [quantity]
-            if (args.length < 2) { addChatMessage('Usage: /give <player> <item> [quantity]', 'rgba(255,100,100,0.9)'); return; }
+            if (args.length < 2) { addChatMessage('Usage: /give <player> <item> [quantity]', 'rgba(255,100,100,0.9)'); addChatMessage('Type /items for a list of all items', 'rgba(180,180,220,0.9)'); return; }
             const targets = resolvePlayerSelector(args[0]);
             const item = args[1];
             const qty = Number(args[2]) || 1;
             for (const t of targets) {
                 if (t.notFound) { addChatMessage('Player not found: ' + t.name, 'rgba(255,100,100,0.9)'); continue; }
                 if (t.isSelf) {
+                    // Special: /give @s dragonform activates dragon rite
+                    if (item === 'dragonform' || item === 'dragon_rite') {
+                        dragonFormActive = true;
+                        player.setDragonForm(true);
+                        addChatMessage('Dragon Rite activated!', 'rgba(200,100,255,0.95)');
+                        continue;
+                    }
                     const invItem = isNaN(item) ? item : Number(item);
                     inventory[invItem] = (inventory[invItem] || 0) + qty;
                     if (!hotbarSlots.includes(invItem)) {
@@ -16764,8 +16771,26 @@ function executeCommand(input) {
             }
             break;
         }
+        case 'items': {
+            const c = 'rgba(180,180,220,0.9)';
+            addChatMessage('=== Giveable Items ===', 'rgba(220,200,160,0.95)');
+            addChatMessage('Tools: pickaxe, stone_pickaxe, copper_pickaxe, iron_pickaxe, wood_axe, stone_axe, iron_axe, wood_sword, stone_sword, copper_sword, iron_sword, gold_sword, steel_sword, diamond_sword, dragonsteel_sword, longbow, arrow', c);
+            addChatMessage('Staffs: basic_staff, fire_staff, ice_staff, lightning_staff, void_staff', c);
+            addChatMessage('Materials: stick, coal, copper_ingot, iron_ingot, gold_ingot, iron_bar, steel_ingot, diamond, dragonsteel_ingot, leather, wool, bone, star_fragment, mana_crystal', c);
+            addChatMessage('Food: raw_mutton, raw_beef, raw_pork, raw_venison, cooked_mutton, cooked_beef, cooked_pork, cooked_venison', c);
+            addChatMessage('Dragon: dragon_bone, dragon_flesh, dragon_heart', c);
+            addChatMessage('Essences: essence_decay, essence_stone, essence_shadow, essence_fury', c);
+            addChatMessage('Potions: hp_potion', c);
+            addChatMessage('Armor: [wood/stone/copper/iron/gold/steel/diamond/dragonsteel]_[helmet/chestplate/leggings/boots]', c);
+            addChatMessage('Shields: wood_shield, stone_shield, copper_shield, iron_shield, steel_shield', c);
+            addChatMessage('Blocks: Use block IDs (1=stone, 2=dirt, 3=grass, 4=wood, 5=leaves, 6=sand, 7=planks, 8=snow, 9=ice)', c);
+            addChatMessage('Stations: furnace_block, anvil_block, steel_anvil_block, blast_furnace_block, campfire_block, chest_block', c);
+            addChatMessage('Special: /give @s dragonform — Activate Dragon Rite', c);
+            break;
+        }
         case 'help': {
             addChatMessage('/give <player> <item> [qty] — Give items', 'rgba(180,180,220,0.9)');
+            addChatMessage('/items — List all giveable items', 'rgba(180,180,220,0.9)');
             addChatMessage('/tp <player> <x> <y> <z> — Teleport', 'rgba(180,180,220,0.9)');
             addChatMessage('/clear [player] — Clear inventory', 'rgba(180,180,220,0.9)');
             addChatMessage('/kill <player> — Kill player', 'rgba(180,180,220,0.9)');
