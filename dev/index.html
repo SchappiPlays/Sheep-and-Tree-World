@@ -15362,7 +15362,7 @@ function animate() {
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 
-        if (fortDist < breathRange && playerHP > 0 && fd._nightState === 'flying') {
+        if (fortDist < breathRange && playerHP > 0 && fd._nightState === 'flying' && !_introActive) {
             fd._breathTimer += dt;
             if (!fd._exposureTimer) fd._exposureTimer = 0;
 
