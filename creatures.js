@@ -881,6 +881,17 @@ export class CreatureManager {
             }
 
             // ── Hostile AI — chase and attack player ──
+            // Peaceful mode — all creatures wander instead of attacking
+            if (this.peacefulMode && sh.hostile) {
+                sh.wanderTimer -= dt;
+                if (sh.wanderTimer <= 0) { sh.walking = !sh.walking; if (sh.walking) sh.angle += (Math.random()-0.5)*2.2; sh.wanderTimer = 1.5+Math.random()*3; }
+                sh.speed += ((sh.walking ? 0.5 : 0) - sh.speed) * 4 * dt;
+                let da = sh.angle - sh.group.rotation.y; while(da>Math.PI)da-=Math.PI*2; while(da<-Math.PI)da+=Math.PI*2;
+                sh.group.rotation.y += da * 3 * dt;
+                if (sh.speed > 0.01) { sh.x += Math.sin(sh.group.rotation.y)*sh.speed*dt; sh.z += Math.cos(sh.group.rotation.y)*sh.speed*dt; }
+                const _pty = this.world.getHeight(sh.x, sh.z); sh.group.position.set(sh.x, _pty, sh.z);
+                continue;
+            }
             // Skip aggro if player is too far above (flying on dragon)
             const vertDist = Math.abs(this._playerY - sh.group.position.y);
             if (sh.hostile && vertDist > 8) {

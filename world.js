@@ -199,35 +199,89 @@ function getScorchedBlend(x, z) {
 }
 
 const riverDefs = [
-    // Winding river from Forest Lake area to the east coast
-    { name: 'East River', width: 4, pts: [
-        [-500,200],[-440,190],[-380,170],[-320,160],[-260,180],[-200,190],[-140,170],[-80,150],
-        [-20,130],[40,110],[110,100],[180,110],[240,130],[300,116],[360,90],[420,76],
-        [480,84],[540,110],[600,120],[660,100],[720,70],[780,60],[840,76],[900,100],
-        [960,90],[1020,64],[1080,40],[1140,30],[1200,20],[1280,0],[1360,-16],[1440,-10],
-        [1520,10],[1600,20],[1700,30],[1820,36],[1960,40],[2120,44],[2300,48],
-        [2380,42],[2440,35],[2500,28],[2540,20],[2570,12],[2590,5],[2610,0]
+    // Glacial River — source: southern foot of frozen mountains, flows south then SW to NW coast
+    // Avoids east mountains entirely by curving west, empties on north-west coast
+    { name: 'Glacial River', width: 5, sourceRadius: 12, pts: [
+        [-60,-1650],[-55,-1580],[-45,-1500],[-30,-1420],[-20,-1340],[-15,-1260],
+        [-30,-1180],[-10,-1100],[0,-1020],[20,-940],[0,-860],[20,-780],
+        [50,-700],[40,-620],[20,-540],[0,-460],[-20,-380],[-60,-300],
+        [-120,-260],[-200,-230],[-300,-210],[-400,-200],[-500,-190],
+        [-600,-185],[-700,-180],[-800,-175],[-900,-170],[-1000,-165],
+        [-1100,-160],[-1200,-150],[-1280,-140]
     ]},
-    // Southern river — winds through temperate into desert transition
-    { name: 'South River', width: 3, pts: [
+    // Mountain River — source: NW mountains, flows south then SW to west coast
+    // Starts in NW mountains (510,-130), curves south of east mountains
+    { name: 'Mountain River', width: 4, sourceRadius: 10, pts: [
+        [510,-150],[480,-120],[450,-90],[420,-60],[390,-30],[360,0],
+        [330,30],[300,60],[270,90],[240,120],[200,150],[160,170],
+        [110,185],[60,195],[0,200],[-60,210],[-120,220],[-180,230],
+        [-250,235],[-320,240],[-400,240],[-480,235],[-560,225],
+        [-640,210],[-720,195],[-800,180],[-880,160],[-960,140],
+        [-1040,120],[-1120,100],[-1200,60],[-1280,20]
+    ]},
+    // Highland River — source: east mountains (1050,-274), NE around Great Peak (1640,-80) east side, south to z=43, then east past Dragon's Reach
+    // Great Peak extends to ~x=1800, z=-220 to +60 — river must clear x>1850
+    { name: 'Highland River', width: 3, sourceRadius: 8, pts: [
+        [1050,-274],[1100,-280],[1200,-280],[1300,-275],[1400,-265],
+        [1500,-250],[1600,-230],[1700,-210],[1780,-180],[1840,-145],
+        [1870,-100],[1880,-50],[1870,0],[1850,30],[1830,43],
+        [1850,43],[1900,43],[2000,43],[2100,43],[2220,43],
+        [2400,30],[2600,20]
+    ]},
+    // Southern Stream — source: hills south of center, flows south to desert coast
+    { name: 'Southern Stream', width: 3, sourceRadius: 8, pts: [
         [20,80],[30,140],[50,200],[40,260],[20,320],[30,390],[60,450],[100,500],
-        [90,560],[60,620],[40,680],[50,740],[70,790],[60,840],[30,900]
-    ]},
-    // Western river — from highlands toward the bay
-    { name: 'West River', width: 3, pts: [
-        [-400,200],[-460,180],[-520,160],[-580,170],[-640,190],[-710,180],[-780,160],
-        [-840,140],[-910,120],[-980,100],[-1040,90],[-1110,80],[-1180,70],[-1260,60]
+        [90,560],[60,620],[40,680],[50,740],[70,790],[60,840],[30,900],
+        [10,960],[0,1020],[-10,1100]
     ]},
 ];
-for (const riv of riverDefs) {
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of riv.pts) {
-        if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
-        if (p[1] < minZ) minZ = p[1]; if (p[1] > maxZ) maxZ = p[1];
+
+// Pre-calculate bounding boxes and per-waypoint heights for downhill flow
+function _initRiverHeights() {
+    for (const riv of riverDefs) {
+        // Bounding box
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const p of riv.pts) {
+            if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+            if (p[1] < minZ) minZ = p[1]; if (p[1] > maxZ) maxZ = p[1];
+        }
+        const pad = riv.width + 6;
+        riv.bbMinX = minX - pad; riv.bbMaxX = maxX + pad;
+        riv.bbMinZ = minZ - pad; riv.bbMaxZ = maxZ + pad;
+
+        // Cumulative path distance for each waypoint
+        riv.cumDist = [0];
+        for (let i = 1; i < riv.pts.length; i++) {
+            const dx = riv.pts[i][0] - riv.pts[i-1][0];
+            const dz = riv.pts[i][1] - riv.pts[i-1][1];
+            riv.cumDist.push(riv.cumDist[i-1] + Math.sqrt(dx*dx + dz*dz));
+        }
+        riv.totalLen = riv.cumDist[riv.cumDist.length - 1];
+
+        // Calculate heights: smooth linear gradient from source to mouth.
+        // Start height is low (max 3) so water sits deep in carved channel.
+        // No per-waypoint terrain cap — those cause sudden drops when the
+        // river path crosses any terrain depression.
+        const sourceH = _getRawTerrainHeight(riv.pts[0][0], riv.pts[0][1]);
+        const startH = Math.min(Math.max(sourceH * 0.1, 1.2), 2.0);
+        const endH = 0.3; // just above sea level at river mouth
+        riv.heights = [];
+        for (let i = 0; i < riv.pts.length; i++) {
+            const t = riv.cumDist[i] / riv.totalLen;
+            riv.heights.push(startH + (endH - startH) * t);
+        }
     }
-    const pad = riv.width + 6;
-    riv.bbMinX = minX - pad; riv.bbMaxX = maxX + pad;
-    riv.bbMinZ = minZ - pad; riv.bbMaxZ = maxZ + pad;
+}
+
+// Temporary flag to avoid recursion when sampling terrain for river heights
+let _skipRivers = false;
+
+// Get terrain height without river carving (for calculating river bank heights)
+function _getRawTerrainHeight(x, z) {
+    _skipRivers = true;
+    const h = getTerrainHeight(x, z);
+    _skipRivers = false;
+    return h;
 }
 
 function getRiverBlend(x, z, riv) {
@@ -248,6 +302,48 @@ function getRiverBlend(x, z, riv) {
     return 1 - (minDist - riv.width * 0.5) / (riv.width * 0.5 + 3);
 }
 
+// Get the water surface height at a river point — interpolated from waypoint heights
+function getRiverWaterHeight(x, z, riv) {
+    if (!riv.heights) return 0.5; // fallback before init
+    const pts = riv.pts;
+    let bestSeg = 0, bestT = 0, bestDist = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const ax = pts[i][0], az = pts[i][1], bx = pts[i+1][0], bz = pts[i+1][1];
+        const dx = bx - ax, dz = bz - az;
+        const len2 = dx * dx + dz * dz;
+        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+        const px = ax + t * dx, pz = az + t * dz;
+        const d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d < bestDist) { bestDist = d; bestSeg = i; bestT = t; }
+    }
+    // Interpolate height between the two endpoints of the closest segment
+    const h0 = riv.heights[bestSeg];
+    const h1 = riv.heights[bestSeg + 1];
+    return h0 + (h1 - h0) * bestT;
+}
+
+// Get flow direction at a river point (normalized dx, dz along the path)
+function getRiverFlowDir(x, z, riv) {
+    const pts = riv.pts;
+    let bestSeg = 0, bestDist = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const ax = pts[i][0], az = pts[i][1], bx = pts[i+1][0], bz = pts[i+1][1];
+        const dx = bx - ax, dz = bz - az;
+        const len2 = dx * dx + dz * dz;
+        let t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+        const px = ax + t * dx, pz = az + t * dz;
+        const d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d < bestDist) { bestDist = d; bestSeg = i; }
+    }
+    const dx = pts[bestSeg+1][0] - pts[bestSeg][0];
+    const dz = pts[bestSeg+1][1] - pts[bestSeg][1];
+    const len = Math.sqrt(dx*dx + dz*dz) || 1;
+    return [dx/len, dz/len];
+}
+
+// Initialize river heights (must be called after terrain is available)
+function initRivers() { _initRiverHeights(); }
+
 // Path flattening points from game.html (structures removed, terrain-only kept)
 const pathFlat = [
     {x:0,z:0},{x:28,z:28},{x:140,z:32},{x:170,z:32},{x:154,z:16},{x:170,z:14},{x:170,z:50},{x:154,z:50},
@@ -263,6 +359,10 @@ const pondLocs = [
     {x:-120,z:-1020,radius:10},{x:60,z:-1080,radius:7},{x:-200,z:-1120,radius:8},
     {x:20,z:1000,radius:8},{x:1010,z:-40,radius:10},
     {x:-500,z:200,radius:28},{x:-300,z:-1300,radius:36},{x:300,z:1200,radius:24},
+    // River source lakes — sourceDepth creates a bowl instead of flattening to 0
+    {x:-60,z:-1650,radius:12,sourceDepth:3},   // Glacial River source — mountain foot lake
+    {x:510,z:-150,radius:10,sourceDepth:3},    // Mountain River source — NW mountain spring
+    {x:1050,z:-274,radius:8,sourceDepth:3},    // Highland River source — east mountains
 ];
 
 // ── Path system — connects villages, fortress, castle ──
@@ -319,7 +419,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -361,7 +461,15 @@ function getTerrainHeight(x, z) {
     // Pond depressions
     for (const p of pondLocs) {
         const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
-        if (d < p.radius + 6) { const t = Math.max(0, 1 - d / (p.radius + 6)); h *= (1 - t * 0.9); }
+        if (d < p.radius + 6) {
+            const t = Math.max(0, 1 - d / (p.radius + 6));
+            if (p.sourceDepth) {
+                // River source lake — shallow bowl at current terrain height
+                h -= t * t * p.sourceDepth;
+            } else {
+                h *= (1 - t * 0.9);
+            }
+        }
     }
 
     // Western Bay — single large elliptical inlet at the coast
@@ -636,13 +744,23 @@ function getTerrainHeight(x, z) {
     }
 
 
-    // Rivers — paths act as bridges (don't carve terrain there)
-    const onPath = isOnPath(x, z);
-    for (const riv of riverDefs) {
-        const rb = getRiverBlend(x, z, riv);
-        if (rb > 0) {
-            if (onPath) h = Math.max(h, 2); // bridge deck sits above water
-            else h = h * (1 - rb) + 0.1 * rb;
+    // Rivers — carve channels that follow terrain downhill
+    if (!_skipRivers) {
+        const onPath = isOnPath(x, z);
+        for (const riv of riverDefs) {
+            const rb = getRiverBlend(x, z, riv);
+            if (rb > 0) {
+                if (onPath) {
+                    h = Math.max(h, 2); // bridge deck sits above water
+                } else {
+                    // Carve river channel: bed sits below water level, banks slope up
+                    const waterH = getRiverWaterHeight(x, z, riv);
+                    const bedH = waterH - 1.2; // channel bed well below water surface
+                    // rb=1 at center → full depth. rb<1 at edges → gradual slope up
+                    const carveH = bedH * rb + h * (1 - rb);
+                    h = Math.min(h, carveH);
+                }
+            }
         }
     }
 
@@ -771,21 +889,29 @@ export class World {
                     const pd = Math.sqrt((wx - p.x) ** 2 + (wz - p.z) ** 2);
                     if (pd < p.radius + 1) {
                         inPond = true;
-                        // Water sits at a natural level based on surrounding terrain
-                        pondWaterLevel = Math.floor(1.5 / BLOCK_SIZE) + yOff;
+                        if (p.sourceDepth) {
+                            // River source lake — water fills to bank height
+                            const bankH = _getRawTerrainHeight(p.x, p.z);
+                            pondWaterLevel = Math.floor((bankH - 1.0) / BLOCK_SIZE) + yOff;
+                        } else {
+                            // Regular pond — fixed level near sea level
+                            pondWaterLevel = Math.floor(1.5 / BLOCK_SIZE) + yOff;
+                        }
                         break;
                     }
                 }
-                let inRiver = false;
+                let inRiver = false, riverWaterLevel = yOff;
                 for (const riv of riverDefs) {
                     if (getRiverBlend(wx, wz, riv) > 0.5) {
                         inRiver = true;
+                        // Variable water height — follows terrain downhill from source
+                        const waterH = getRiverWaterHeight(wx, wz, riv);
+                        riverWaterLevel = Math.floor(waterH / BLOCK_SIZE) + yOff;
                         break;
                     }
                 }
                 const onPathBridge = inRiver && isOnPath(wx, wz);
                 if (onPathBridge) inRiver = false; // bridge overrides — no water, no river sand
-                const riverWaterLevel = Math.floor(0.5 / BLOCK_SIZE) + yOff;
 
                 // Near coast = sand. Inland low areas = grass/water
                 const _sz = wz / ISLAND_NS_SCALE;
@@ -894,6 +1020,10 @@ export class World {
                     const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
                     const distToCenter = Math.sqrt((wx-hillCX)*(wx-hillCX) + (wz-hillCZ)*(wz-hillCZ));
                     if (distToCenter > hillR - 10) continue; // fade at edges
+                    // No trees in rivers
+                    let _aInRiv = false;
+                    for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.2) { _aInRiv = true; break; } }
+                    if (_aInRiv) continue;
                     // Moderate density — ~10% chance, spaced out
                     if (this._hash(bx * 0.37 + 1111, bz * 0.53 + 2222) > 0.10) continue;
                     if (lx % 3 !== 0 || lz % 3 !== 0) continue;
@@ -958,6 +1088,10 @@ export class World {
                 const plainsB = getPlainsBlend(wx, wz);
                 if (plainsB > 0.15) continue;
                 if (isOnPath(wx, wz)) continue; // no trees on paths
+                // No trees in rivers
+                let _inRiv = false;
+                for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.2) { _inRiv = true; break; } }
+                if (_inRiv) continue;
 
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
                 const trunkH = 4 + Math.floor(this._hash(jx*1.7, jz*2.3) * 4);
@@ -1007,6 +1141,9 @@ export class World {
                 const allMtn = getMountainBlend(pWx,pWz)+getNWMountainBlend(pWx,pWz)+getSWMountainBlend(pWx,pWz)+getNEMountainBlend(pWx,pWz)+getSEMountainBlend(pWx,pWz)+getFarEastMountainBlend(pWx,pWz);
                 if (allMtn > 0.5) continue; // not on steep mountains
                 if (isOnPath(pWx, pWz)) continue;
+                let _pInRiv = false;
+                for (const riv of riverDefs) { if (getRiverBlend(pWx, pWz, riv) > 0.2) { _pInRiv = true; break; } }
+                if (_pInRiv) continue;
                 const surfaceBlock = Math.floor(h / BLOCK_SIZE) + yOff;
                 // Tall trunk, narrow conical canopy
                 const trunkH = 6 + Math.floor(this._hash(jx*1.3, jz*2.1) * 5); // 6-10
@@ -1183,5 +1320,311 @@ export class World {
         const bz = Math.floor(wz / BLOCK_SIZE);
         const b = this.getBlockAt(bx, by, bz);
         return b !== BLOCK.AIR && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES && b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE && b !== BLOCK.FLOWER_WHITE && b !== BLOCK.TORCH;
+    }
+}
+
+// ── Water Simulation ──
+// Cellular automaton: water flows downhill, sources are infinite, ocean drains
+
+export class WaterSim {
+    constructor(world) {
+        this.world = world;
+        this._dirtyChunks = new Set();
+        this._activeWater = new Set(); // blocks that need flow processing
+        this._sources = [];
+        this._yOff = 128;
+        this._tickTimer = 0;
+        this._tickRate = 0.25;
+        this._simRadius = 50;
+        this._playerBX = 0;
+        this._playerBZ = 0;
+        this._drainQueue = []; // pending downstream drain operations
+        this._initSources();
+    }
+
+    _initSources() {
+        for (const riv of riverDefs) {
+            const [sx, sz] = riv.pts[0];
+            const bx = Math.floor(sx / BLOCK_SIZE);
+            const bz = Math.floor(sz / BLOCK_SIZE);
+            const waterH = riv.heights[0];
+            const by = Math.floor(waterH / BLOCK_SIZE) + this._yOff;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    this._sources.push({ bx: bx + dx, by, bz: bz + dz });
+                }
+            }
+        }
+    }
+
+    setPlayerPos(wx, wz) {
+        this._playerBX = Math.floor(wx / BLOCK_SIZE);
+        this._playerBZ = Math.floor(wz / BLOCK_SIZE);
+    }
+
+    update(dt) {
+        this._tickTimer += dt;
+        if (this._tickTimer < this._tickRate) return;
+        this._tickTimer = 0;
+        this._tick();
+        const dirty = this._dirtyChunks;
+        if (dirty.size > 0) {
+            this._dirtyChunks = new Set();
+            return dirty;
+        }
+        return null;
+    }
+
+    _isNearPlayer(bx, bz) {
+        const dx = bx - this._playerBX, dz = bz - this._playerBZ;
+        return dx * dx + dz * dz < this._simRadius * this._simRadius;
+    }
+
+    _isOcean(bx, bz) {
+        const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+        const sz = wz / ISLAND_NS_SCALE;
+        const dist = Math.sqrt(wx * wx + sz * sz);
+        return dist > getIslandRadius(wx, wz) - 80;
+    }
+
+    // Called when a block is broken — wake adjacent water to flow
+    onBlockBroken(bx, by, bz) {
+        const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+        for (const [dx, dy, dz] of dirs) {
+            const nx = bx + dx, ny = by + dy, nz = bz + dz;
+            if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                this._activeWater.add(nx + ',' + ny + ',' + nz);
+            }
+        }
+        for (let dy = 1; dy <= 3; dy++) {
+            if (this.world.getBlockAt(bx, by + dy, bz) === BLOCK.WATER) {
+                this._activeWater.add(bx + ',' + (by + dy) + ',' + bz);
+            }
+        }
+    }
+
+    // Called when a block is placed — if in a river, check if it forms a real dam
+    onBlockPlaced(bx, by, bz) {
+        const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
+        for (const riv of riverDefs) {
+            if (getRiverBlend(wx, wz, riv) > 0.3) {
+                const fd = getRiverFlowDir(wx, wz, riv);
+                // Only drain if this block actually dams the river —
+                // check if upstream water can still reach downstream water
+                if (!this._canWaterBypass(bx, by, bz, fd[0], fd[1])) {
+                    this._drainDownstream(bx, by, bz, fd[0], fd[1]);
+                }
+                break;
+            }
+        }
+    }
+
+    // BFS: can upstream water reach downstream water by flowing around?
+    _canWaterBypass(bx, by, bz, fdx, fdz) {
+        // Find a downstream water block to use as target
+        let targetKey = null;
+        const dsDirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
+        for (const [dx, dy, dz] of dsDirs) {
+            const dot = dx * fdx + dz * fdz;
+            if (dot < 0.1) continue; // not downstream
+            const nx = bx + dx, nz = bz + dz;
+            if (this.world.getBlockAt(nx, by, nz) === BLOCK.WATER) {
+                targetKey = nx + ',' + by + ',' + nz;
+                break;
+            }
+        }
+        if (!targetKey) return false; // no downstream water — nothing to drain
+
+        // Find an upstream water start
+        let startX = null, startZ = null;
+        for (const [dx, dy, dz] of dsDirs) {
+            const dot = dx * fdx + dz * fdz;
+            if (dot > -0.1) continue; // not upstream
+            const nx = bx + dx, nz = bz + dz;
+            if (this.world.getBlockAt(nx, by, nz) === BLOCK.WATER) {
+                startX = nx; startZ = nz;
+                break;
+            }
+        }
+        if (startX === null) return false; // no upstream water
+
+        // BFS from upstream, see if we can reach the downstream target
+        // Only search horizontally at the same Y level + one above (water surface)
+        const visited = new Set();
+        const queue = [{ x: startX, z: startZ }];
+        visited.add(startX + ',' + by + ',' + startZ);
+        let steps = 0;
+        const maxSteps = 200; // don't search forever
+        while (queue.length > 0 && steps < maxSteps) {
+            const { x, z } = queue.shift();
+            steps++;
+            for (const [dx, , dz] of dsDirs) {
+                const nx = x + dx, nz = z + dz;
+                for (let dy = 0; dy <= 1; dy++) {
+                    const ny = by + dy;
+                    const key = nx + ',' + ny + ',' + nz;
+                    if (key === targetKey) return true; // water can get around!
+                    if (visited.has(key)) continue;
+                    visited.add(key);
+                    const b = this.world.getBlockAt(nx, ny, nz);
+                    if (b === BLOCK.WATER || b === BLOCK.AIR) {
+                        queue.push({ x: nx, z: nz });
+                    }
+                }
+            }
+        }
+        return false; // can't reach downstream — it's a real dam
+    }
+
+    // Walk downstream from a dam and remove water blocks
+    _drainDownstream(startBX, startBY, startBZ, fdx, fdz) {
+        this._drainVisited = new Set();
+        this._drainFillQueue = [];
+        const dirs = [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0]];
+        for (const [dx, dy, dz] of dirs) {
+            const nx = startBX + dx, ny = startBY + dy, nz = startBZ + dz;
+            const dot = dx * fdx + dz * fdz;
+            if (dot < -0.1) continue; // upstream side, skip
+            if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                this._drainFillQueue.push({ bx: nx, by: ny, bz: nz });
+                this._drainVisited.add(nx + ',' + ny + ',' + nz);
+            }
+        }
+    }
+
+    // Continue flood-fill exploration, called each tick
+    _continueDrainFill() {
+        if (!this._drainFillQueue || this._drainFillQueue.length === 0) return;
+        let filled = 0;
+        const maxPerTick = 200;
+        while (this._drainFillQueue.length > 0 && filled < maxPerTick) {
+            const { bx, by, bz } = this._drainFillQueue.shift();
+            this._drainQueue.push({ bx, by, bz });
+            filled++;
+            for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,-1,0],[0,1,0]]) {
+                const nx = bx + dx, ny = by + dy, nz = bz + dz;
+                const key = nx + ',' + ny + ',' + nz;
+                if (this._drainVisited.has(key)) continue;
+                this._drainVisited.add(key);
+                if (this.world.getBlockAt(nx, ny, nz) === BLOCK.WATER) {
+                    if (ny <= this._yOff && this._isOcean(nx, nz)) continue;
+                    this._drainFillQueue.push({ bx: nx, by: ny, bz: nz });
+                }
+            }
+        }
+        // Clean up when done
+        if (this._drainFillQueue.length === 0) {
+            this._drainFillQueue = null;
+            this._drainVisited = null;
+        }
+    }
+
+    _markDirty(bx, bz) {
+        const cx = Math.floor(bx / CHUNK_SIZE);
+        const cz = Math.floor(bz / CHUNK_SIZE);
+        this._dirtyChunks.add(cx + ',' + cz);
+    }
+
+    _setWater(bx, by, bz) {
+        if (this.world.getBlockAt(bx, by, bz) === BLOCK.WATER) return false;
+        this.world.setBlock(bx, by, bz, BLOCK.WATER);
+        this._activeWater.add(bx + ',' + by + ',' + bz);
+        this._markDirty(bx, bz);
+        return true;
+    }
+
+    _removeWater(bx, by, bz) {
+        if (this.world.getBlockAt(bx, by, bz) !== BLOCK.WATER) return;
+        this.world.setBlock(bx, by, bz, BLOCK.AIR);
+        this._activeWater.delete(bx + ',' + by + ',' + bz);
+        this._markDirty(bx, bz);
+    }
+
+    _tick() {
+        const world = this.world;
+
+        // 0. Continue flood-fill exploration for drain (spreads across ticks)
+        this._continueDrainFill();
+
+        // 1. Process drain queue (gradual — 30 blocks per tick for visual effect)
+        let drained = 0;
+        while (this._drainQueue.length > 0 && drained < 30) {
+            const { bx, by, bz } = this._drainQueue.shift();
+            if (world.getBlockAt(bx, by, bz) === BLOCK.WATER) {
+                this._removeWater(bx, by, bz);
+                drained++;
+            }
+        }
+
+        // 2. Spawn water at sources
+        for (const s of this._sources) {
+            if (!this._isNearPlayer(s.bx, s.bz)) continue;
+            this._setWater(s.bx, s.by, s.bz);
+        }
+
+        // 3. Flow simulation — process active water
+        const toDeactivate = [];
+        const newWater = [];
+        let processed = 0;
+        const maxProcess = 500;
+
+        for (const key of this._activeWater) {
+            if (processed >= maxProcess) break;
+            const parts = key.split(',');
+            const bx = +parts[0], by = +parts[1], bz = +parts[2];
+            if (!this._isNearPlayer(bx, bz)) continue;
+            processed++;
+
+            if (world.getBlockAt(bx, by, bz) !== BLOCK.WATER) {
+                toDeactivate.push(key);
+                continue;
+            }
+
+            // Ocean drain
+            if (by <= this._yOff && this._isOcean(bx, bz)) {
+                this._removeWater(bx, by, bz);
+                toDeactivate.push(key);
+                continue;
+            }
+
+            let settled = true;
+
+            // Flow DOWN (gravity)
+            const below = world.getBlockAt(bx, by - 1, bz);
+            if (below === BLOCK.AIR) {
+                newWater.push({ bx, by: by - 1, bz });
+                settled = false;
+                toDeactivate.push(key);
+                continue;
+            }
+
+            // Horizontal neighbors
+            for (let di = 0; di < 4; di++) {
+                const nx = bx + (di === 0 ? 1 : di === 1 ? -1 : 0);
+                const nz = bz + (di === 2 ? 1 : di === 3 ? -1 : 0);
+                const nbLow = world.getBlockAt(nx, by - 1, nz);
+                if (nbLow === BLOCK.AIR) {
+                    newWater.push({ bx: nx, by: by - 1, bz: nz });
+                    settled = false;
+                    continue;
+                }
+                const nb = world.getBlockAt(nx, by, nz);
+                if (nb === BLOCK.AIR && below !== BLOCK.AIR) {
+                    newWater.push({ bx: nx, by, bz: nz });
+                    settled = false;
+                }
+            }
+
+            if (settled) toDeactivate.push(key);
+        }
+
+        for (const key of toDeactivate) this._activeWater.delete(key);
+
+        let placed = 0;
+        const maxPerTick = 60;
+        for (const { bx, by, bz } of newWater) {
+            if (placed >= maxPerTick) break;
+            if (this._setWater(bx, by, bz)) placed++;
+        }
     }
 }

@@ -355,7 +355,12 @@ canvas { display: block; }
 <div id="statAllocationMenu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:550;flex-direction:column;align-items:center;justify-content:center;">
     <div style="background:rgba(25,35,20,0.95);border:2px solid rgba(120,160,80,0.4);border-radius:10px;padding:24px 32px;min-width:340px;">
         <h2 style="color:rgba(220,200,160,0.9);font:bold 20px monospace;margin:0 0 4px;text-align:center;">Allocate Stats</h2>
-        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:14px;">Points remaining: 25</div>
+        <div id="statPointsLeft" style="color:rgba(150,200,100,0.8);font:12px monospace;text-align:center;margin-bottom:8px;">Points remaining: 25</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button onclick="window._statPreset('warrior')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(80,30,30,0.5);color:rgba(220,180,150,0.9);border:1px solid rgba(180,100,80,0.4);border-radius:4px;cursor:pointer;">&#x2694; Warrior</button>
+            <button onclick="window._statPreset('mage')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(30,30,80,0.5);color:rgba(180,180,220,0.9);border:1px solid rgba(100,100,180,0.4);border-radius:4px;cursor:pointer;">&#x2605; Mage</button>
+            <button onclick="window._statPreset('rogue')" style="flex:1;padding:8px 4px;font:11px monospace;background:rgba(30,60,30,0.5);color:rgba(180,220,180,0.9);border:1px solid rgba(80,140,80,0.4);border-radius:4px;cursor:pointer;">&#x27A4; Rogue</button>
+        </div>
         <div id="statRows" style="display:flex;flex-direction:column;gap:8px;"></div>
         <button id="statConfirmBtn" class="menu-btn" style="width:100%;margin-top:16px;padding:12px;font-size:14px;">Begin Adventure</button>
     </div>
@@ -488,9 +493,9 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers, WaterSim } from './world.js';
 import { Player } from './player.js';
-import { ChunkManager } from './chunks.js';
+import { ChunkManager, updateWaterTime } from './chunks.js';
 import { CreatureManager } from './creatures.js';
 import { DragonManager, makeBabyDragon, computeFlap, applyFingerRots, updateWyvernMembrane } from './dragons.js';
 import { HorseManager } from './horses.js';
@@ -541,6 +546,32 @@ function buildAxeHead(bladeMat, handleMat) {
 }
 window.buildAxeHead = buildAxeHead;
 
+// War hammer head builder. Returns a Group to attach to a sword mesh's _bladeGrp.
+// Includes a wooden haft and a rectangular hammer head with a flat striking face
+// on one side and a pointed spike/pick on the other.
+function buildHammerHead(bladeMat, handleMat) {
+    const grp = new THREE.Group();
+    // Wooden haft
+    const haft = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.55, 0.032), handleMat || bladeMat);
+    haft.position.y = 0.4;
+    grp.add(haft);
+    // Hammer head block
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 0.10), bladeMat);
+    head.position.y = 0.70;
+    grp.add(head);
+    // Flat striking face (+x side)
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.12), bladeMat);
+    face.position.set(0.08, 0.70, 0);
+    grp.add(face);
+    // Pointed spike/pick (-x side)
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 4), bladeMat);
+    spike.position.set(-0.10, 0.70, 0);
+    spike.rotation.z = Math.PI / 2; // point -x
+    grp.add(spike);
+    return grp;
+}
+window.buildHammerHead = buildHammerHead;
+
 const SKY_COLOR = 0x87CEEB;
 
 // ── Renderer ──
@@ -579,7 +610,7 @@ scene.add(sun.target);
 // ── Sun Sphere in Sky ──
 const sunSphere = new THREE.Mesh(
     new THREE.SphereGeometry(400, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffdd44, fog: false, depthWrite: false, depthTest: false })
 );
 sunSphere.position.set(800, 600, -600);
 sunSphere.renderOrder = -10;
@@ -588,7 +619,7 @@ scene.add(sunSphere);
 // Sun glow (larger transparent sphere)
 const sunGlow = new THREE.Mesh(
     new THREE.SphereGeometry(700, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffcc22, transparent: true, opacity: 0.18, fog: false, depthWrite: false, depthTest: false })
 );
 sunGlow.position.copy(sunSphere.position);
 sunGlow.renderOrder = -10;
@@ -597,7 +628,7 @@ scene.add(sunGlow);
 // ── Moon ──
 const moonSphere = new THREE.Mesh(
     new THREE.SphereGeometry(300, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xdde8f0, fog: false, depthWrite: false, depthTest: false })
 );
 moonSphere.position.set(-800, 600, 600);
 moonSphere.renderOrder = -10;
@@ -606,7 +637,7 @@ scene.add(moonSphere);
 
 const moonGlow = new THREE.Mesh(
     new THREE.SphereGeometry(500, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xaabbcc, transparent: true, opacity: 0.1, fog: false, depthWrite: false, depthTest: false })
 );
 moonGlow.position.copy(moonSphere.position);
 moonGlow.renderOrder = -10;
@@ -1112,8 +1143,7 @@ document.getElementById('titlePlayBtn').addEventListener('click', () => {
     titleActive = false;
     document.getElementById('titleScreen').style.display = 'none';
     document.getElementById('mainMenu').style.display = 'flex';
-    // Start menu music
-    musicSystem.play('menu');
+    // Menu music now starts with cinematic intro instead
 });
 
 window.addEventListener('resize', () => {
@@ -1375,11 +1405,15 @@ function buildFarTerrain(centerX, centerZ) {
             if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
+                // Ancient forest detection — center (-60, -700), radius 170
+                const _afDx = wx - (-60), _afDz = wz - (-700);
+                const _afDist = Math.sqrt(_afDx*_afDx + _afDz*_afDz);
+                const _inAncient = _afDist < 170;
                 // Vary forest density — same noise as world.js _placeTreesInChunk
                 const _fn = (Math.sin(wx * 0.004 + 1.7) * Math.cos(wz * 0.005 + 0.3) +
                     Math.sin(wx * 0.007 - wz * 0.006 + 2.5) * 0.5 +
                     Math.cos(wx * 0.003 + wz * 0.004 - 1.0) * 0.3) / 1.8;
-                const _baseDensity = _fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003;
+                const _baseDensity = _inAncient ? 0.03 : (_fn > 0.5 ? 0.05 : _fn > 0.1 ? 0.015 : 0.003);
                 const _lodDensity = 1 - Math.pow(1 - _baseDensity, 36);
                 if (treeChance < _lodDensity) {
                     // Jitter position to break grid pattern
@@ -1389,11 +1423,13 @@ function buildFarTerrain(centerX, centerZ) {
                     const _jz = (_jh2 - Math.floor(_jh2) - 0.5) * S * 0.7;
                     const twx = wx + _jx, twz = wz + _jz;
                     const tTop = Math.floor(Math.max(getTerrainHeight(twx, twz), -0.3) / BS) * BS + BS;
-                    const trunkH = BS * 5;
-                    const leafR = BS * 2.5;
-                    const trunkR = BS * 0.5;
-                    const trunkCol = 0x5a3a1a;
-                    const leafCol = (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
+                    // Ancient forest trees are much larger
+                    const _tScale = _inAncient ? 2.5 : 1.0;
+                    const trunkH = BS * 5 * _tScale;
+                    const leafR = BS * 2.5 * _tScale;
+                    const trunkR = BS * 0.5 * _tScale;
+                    const trunkCol = _inAncient ? 0x3a2810 : 0x5a3a1a;
+                    const leafCol = _inAncient ? 0x1a4a15 : (treeChance < 0.06) ? 0x2d6b1e : (treeChance < 0.12) ? 0x3a8a2a : 0x4a9a3a;
                     const tBase = tTop;
 
                     // Trunk — 4 side faces
@@ -1403,13 +1439,13 @@ function buildFarTerrain(centerX, centerZ) {
                     pushFace(twx+trunkR, tBase+trunkH, twz-trunkR, twx+trunkR, tBase, twz-trunkR, twx-trunkR, tBase, twz-trunkR, twx-trunkR, tBase+trunkH, twz-trunkR, trunkCol);
 
                     // Leaves — blocky canopy (top + 4 sides)
-                    const lBase = tBase + trunkH - BS * 1.5;
-                    const lTop = lBase + BS * 5;
+                    const lBase = tBase + trunkH - BS * 1.5 * _tScale;
+                    const lTop = lBase + BS * 5 * _tScale;
                     pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lTop, twz+leafR, twx+leafR, lTop, twz+leafR, twx+leafR, lTop, twz-leafR, leafCol);
                     pushFace(twx-leafR, lTop, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lBase, twz+leafR, twx-leafR, lTop, twz+leafR, leafCol);
                     pushFace(twx+leafR, lTop, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lBase, twz-leafR, twx+leafR, lTop, twz-leafR, leafCol);
                     pushFace(twx-leafR, lTop, twz+leafR, twx-leafR, lBase, twz+leafR, twx+leafR, lBase, twz+leafR, twx+leafR, lTop, twz+leafR, leafCol);
-                    pushFace(wx+leafR, lTop, wz-leafR, wx+leafR, lBase, wz-leafR, wx-leafR, lBase, wz-leafR, wx-leafR, lTop, wz-leafR, leafCol);
+                    pushFace(twx+leafR, lTop, twz-leafR, twx+leafR, lBase, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lTop, twz-leafR, leafCol);
                 }
             }
             // LOD pine trees — snow biome, conical shape
@@ -1793,8 +1829,294 @@ document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
 });
 
 // ── World (created once, reset on new game) ──
-let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr;
+let world, chunkManager, creatures, dragonMgr, player, villageMgr, horseMgr, waterSim;
+const _waterDirtyCarry = new Set();
 const mp = new Multiplayer(scene);
+
+// ── Intro Cinematic — aerial tour of the world for new players ──
+let _introActive = false;
+function _playIntroCinematic(onDone) {
+    // Cinematic runs INSIDE the game loop — player teleports to each location
+    // so chunks load naturally. First-person, HUD hidden, peaceful mode.
+    // Phase 1: preload all shot locations (black screen + progress bar)
+    // Phase 2: play shots seamlessly with no loading pauses
+
+    const shots = [
+        // All yaw values computed as atan2(target.x - cam.x, target.z - cam.z)
+        // Fly TOWARD each landmark so yaw stays consistent (small change per shot)
+
+        // Wide aerial sweep NE across the island, looking forward-down
+        { from: [-250, 200, -250], to: [150, 180, 150], yaw0: 0.79, yaw1: 0.79, pitch0: -0.55, pitch1: -0.5, dur: 6 },
+        // Castle (-800, 40) — approach from NE looking down at it
+        { from: [-680, 70, -30], to: [-780, 55, 35], yaw0: -1.04, yaw1: -1.33, pitch0: -0.45, pitch1: -0.4, dur: 6 },
+        // Meadow Village (160, 32) — approach from SW
+        { from: [80, 30, 70], to: [150, 20, 38], yaw0: 2.06, yaw1: 2.11, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        // Ancient Forest (-60, -700) — approach from NE looking down into canopy
+        { from: [30, 90, -620], to: [-50, 70, -690], yaw0: -2.30, yaw1: -2.36, pitch0: -0.5, pitch1: -0.45, dur: 6 },
+        // Great Peak (1640, -80) — view from east side (x=1950), well outside mountain
+        // Mountain: 1480-1800 X, -220 to 60 Z, peaks 130+
+        { from: [1950, 220, -150], to: [1940, 200, -10], yaw0: -1.35, yaw1: -1.80, pitch0: -0.45, pitch1: -0.4, dur: 6 },
+        // Dragon's Reach (2160, 10) — approach from south
+        { from: [2100, 50, 70], to: [2150, 35, 20], yaw0: 2.36, yaw1: 2.36, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        // Scorched Fortress (-600, 560) — approach from NE
+        { from: [-520, 55, 500], to: [-590, 45, 550], yaw0: -0.93, yaw1: -0.79, pitch0: -0.4, pitch1: -0.35, dur: 5 },
+        // Ruined Fortress (-1010, -670) — approach from south, dragon flies nearby
+        // yaw = atan2(-1010 - (-950), -670 - (-600)) = atan2(-60, -70) ≈ -2.43
+        { from: [-950, 50, -600], to: [-1000, 35, -660], yaw0: -2.43, yaw1: -2.43, pitch0: -0.35, pitch1: -0.3, dur: 5 },
+        // Dragon flying over east mountains (602, -30) — camera tracks from below
+        // yaw = atan2(602 - 550, -30 - 20) = atan2(52, -50) ≈ 2.37
+        { from: [550, 80, 20], to: [590, 100, -20], yaw0: 2.37, yaw1: 2.37, pitch0: -0.1, pitch1: 0.1, dur: 5 },
+        // Coastal Village (-855, -150) — approach from east
+        { from: [-780, 30, -120], to: [-845, 22, -145], yaw0: -1.95, yaw1: -2.03, pitch0: -0.35, pitch1: -0.3, dur: 5 },
+        // Final — descend toward spawn from NE
+        { from: [50, 80, 50], to: [5, 8, 5], yaw0: -2.36, yaw1: -2.36, pitch0: -0.55, pitch1: -0.1, dur: 5 },
+    ];
+
+    // Collect positions to preload — from and to for each shot (midpoints rarely need separate loading)
+    const _rawPreload = [];
+    for (const s of shots) {
+        _rawPreload.push([s.from[0], s.from[2]]);
+        _rawPreload.push([s.to[0], s.to[2]]);
+    }
+    // Extra positions for large structures the camera looks AT
+    // Castle (-800,40) spans to (-635,175)
+    _rawPreload.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
+    // Ruined fortress area
+    _rawPreload.push([-1010, -670], [-1010, -620], [-960, -670]);
+    // Ancient forest — dense area that needs extra preloading (expensive chunks)
+    _rawPreload.push([-60, -700], [-60, -620], [-60, -780], [20, -700], [-140, -700]);
+    // Camera path through ancient forest: (30,-620) → (-50,-690), add midpoints
+    _rawPreload.push([30, -620], [-10, -655], [-50, -690]);
+    // Deduplicate nearby positions (within 60 units)
+    const preloadPositions = [];
+    for (const p of _rawPreload) {
+        let dup = false;
+        for (const q of preloadPositions) {
+            const dx = p[0]-q[0], dz = p[1]-q[1];
+            if (dx*dx+dz*dz < 3600) { dup = true; break; }
+        }
+        if (!dup) preloadPositions.push(p);
+    }
+
+    // Overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'introOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;pointer-events:all;';
+    const fadeEl = document.createElement('div');
+    fadeEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:black;opacity:1;pointer-events:none;';
+    overlay.appendChild(fadeEl);
+    // Loading progress (shown during preload)
+    const loadInfoEl = document.createElement('div');
+    loadInfoEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;';
+    loadInfoEl.innerHTML = '<div style="color:rgba(220,200,160,0.9);font:bold 20px serif;letter-spacing:2px;margin-bottom:16px;">Preparing your world...</div>' +
+        '<div style="width:240px;height:6px;background:rgba(60,50,40,0.6);border-radius:3px;overflow:hidden;margin:0 auto;">' +
+        '<div id="introLoadBar" style="width:0%;height:100%;background:rgba(120,160,80,0.8);border-radius:3px;transition:width 0.2s;"></div></div>';
+    overlay.appendChild(loadInfoEl);
+    const titleTextEl = document.createElement('div');
+    titleTextEl.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.2s;';
+    overlay.appendChild(titleTextEl);
+    const skipEl = document.createElement('div');
+    skipEl.style.cssText = 'position:absolute;bottom:20px;width:100%;text-align:center;font-size:13px;color:rgba(255,255,255,0.4);font-family:sans-serif;pointer-events:none;';
+    skipEl.textContent = 'Click or press any key to skip';
+    overlay.appendChild(skipEl);
+    const barT = document.createElement('div');
+    barT.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
+    const barB = document.createElement('div');
+    barB.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:50px;background:black;pointer-events:none;';
+    overlay.appendChild(barT); overlay.appendChild(barB);
+    document.body.appendChild(overlay);
+
+    // State
+    let done = false;
+    let preloadIdx = 0, preloadTicks = 0;
+    const PRELOAD_TICKS_PER = 6; // ~0.1s per location
+    let phase = 'preload'; // preload → fadein → playing → fadeout → done
+    let shotIdx = 0, phaseTime = 0;
+    let totalPlayTime = 0;
+    let titlePhase = 0; // 0=waiting, 1=presents showing, 2=presents fading, 3=title showing, 4=title fading, 5=done
+    const FADE_DUR = 0.8;
+
+    // Save & set cinematic state
+    const savedHud = hudHidden;
+    const savedPeaceful = peacefulMode;
+    const savedZoom = zoomLevel;
+    hudHidden = true;
+    peacefulMode = true;
+    zoomLevel = 0;
+    _introActive = true;
+    gamePaused = false;
+
+    const hudIds = ['debug','crosshair','hotbar','hearts','prompt','saveToast','minimap','manaBar','staminaBar'];
+    hudIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    if (player && player._nameLabel) player._nameLabel.visible = false;
+    if (player) player.group.visible = false;
+
+    // Prevent chunk unloading during cinematic
+    if (chunkManager) chunkManager.skipUnload = true;
+
+    const finish = () => {
+        if (done) return;
+        done = true;
+        _introActive = false;
+        window._introCinematicTick = null;
+        overlay.remove();
+        window.removeEventListener('keydown', skipKey);
+        if (chunkManager) chunkManager.skipUnload = false;
+
+        hudHidden = savedHud;
+        peacefulMode = savedPeaceful;
+        zoomLevel = savedZoom;
+        const vis = hudHidden ? 'none' : '';
+        hudIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = vis; });
+        if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
+        if (player) player.group.visible = true;
+
+        // Transition from menu music to calm
+        if (musicSystem.current) {
+            musicSystem.fadeOut(musicSystem.current);
+            musicSystem.currentName = null;
+            musicSystem.current = null;
+            setTimeout(() => musicSystem.play('calm'), 1200);
+        } else {
+            musicSystem.play('calm');
+        }
+
+        const spawnY = getTerrainHeight(0, 0);
+        player.position.set(0, spawnY + 1, 0);
+        player.group.position.set(0, spawnY + 1, 0);
+        player.jumpVel = 0;
+        onDone();
+    };
+
+    const skipClick = () => finish();
+    const skipKey = (e) => { if (e.key !== 'F11' && e.key !== 'F12') finish(); };
+    overlay.addEventListener('click', skipClick);
+    window.addEventListener('keydown', skipKey);
+
+    window._introCinematicTick = (dt) => {
+        if (done) { window._introCinematicTick = null; return; }
+        const ease = t => t * t * (3 - 2 * t);
+
+        if (phase === 'preload') {
+            // Cycle through all positions, loading chunks at each
+            fadeEl.style.opacity = '1';
+            const [px, pz] = preloadPositions[preloadIdx];
+            player.position.set(px, 100, pz);
+            player.group.position.set(px, 100, pz);
+            player.jumpVel = 0;
+            // Aggressively process more chunks during preload (behind black screen, use big time budget)
+            if (chunkManager) chunkManager._processQueue(128, 150);
+            preloadTicks++;
+            // Update progress bar
+            const progress = (preloadIdx + preloadTicks / PRELOAD_TICKS_PER) / preloadPositions.length;
+            const bar = document.getElementById('introLoadBar');
+            if (bar) bar.style.width = (progress * 100).toFixed(1) + '%';
+            if (preloadTicks >= PRELOAD_TICKS_PER) {
+                preloadTicks = 0;
+                preloadIdx++;
+                if (preloadIdx >= preloadPositions.length) {
+                    // All preloaded — stop any playing music, start menu music
+                    phase = 'fadein';
+                    phaseTime = 0;
+                    loadInfoEl.style.display = 'none';
+                    if (musicSystem.current) {
+                        musicSystem.current.pause();
+                        musicSystem.current.currentTime = 0;
+                        musicSystem.current = null;
+                        musicSystem.currentName = null;
+                    }
+                    musicSystem.play('menu');
+                    // Position at first shot
+                    const s0 = shots[0];
+                    player.position.set(s0.from[0], s0.from[1], s0.from[2]);
+                    player.group.position.set(s0.from[0], s0.from[1], s0.from[2]);
+                    fpYaw = s0.yaw0; fpPitch = s0.pitch0;
+                }
+            }
+        }
+        else if (phase === 'fadein') {
+            phaseTime += dt;
+            const t = Math.min(phaseTime / FADE_DUR, 1);
+            fadeEl.style.opacity = String(1 - t);
+            if (t >= 1) { phase = 'playing'; phaseTime = 0; }
+        }
+        else if (phase === 'playing') {
+            phaseTime += dt;
+            totalPlayTime += dt;
+            const shot = shots[shotIdx];
+            const t = Math.min(phaseTime / shot.dur, 1);
+            const e = ease(t);
+
+            const px = shot.from[0] + (shot.to[0] - shot.from[0]) * e;
+            const py = shot.from[1] + (shot.to[1] - shot.from[1]) * e;
+            const pz = shot.from[2] + (shot.to[2] - shot.from[2]) * e;
+            player.position.set(px, py, pz);
+            player.group.position.set(px, py, pz);
+            player.jumpVel = 0;
+            // Extra chunk processing during cinematic to avoid freezes in dense areas
+            if (chunkManager) chunkManager._processQueue(32, 40);
+
+            fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
+            fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
+
+            // Title text: "Schappi Studios Presents:" during shot 0, "Sheep and Tree World" during shot 1
+            if (titlePhase === 0 && totalPlayTime > 1.5) {
+                titleTextEl.innerHTML = '<div style="color:rgba(220,200,170,0.9);font:300 18px serif;letter-spacing:3px;">Schappi Studios Presents:</div>';
+                titleTextEl.style.opacity = '1';
+                titlePhase = 1;
+            } else if (titlePhase === 1 && totalPlayTime > 5.0) {
+                titleTextEl.style.opacity = '0';
+                titlePhase = 2;
+            } else if (titlePhase === 2 && totalPlayTime > 6.5) {
+                titleTextEl.innerHTML = '<div style="color:white;font:bold 42px serif;letter-spacing:4px;text-shadow:0 2px 20px rgba(0,0,0,0.8);">Sheep and Tree World</div>';
+                titleTextEl.style.opacity = '1';
+                titlePhase = 3;
+            } else if (titlePhase === 3 && totalPlayTime > 11.0) {
+                titleTextEl.style.opacity = '0';
+                titlePhase = 4;
+            }
+
+            if (t >= 1) {
+                shotIdx++;
+                if (shotIdx >= shots.length) {
+                    phase = 'fadeout'; phaseTime = 0;
+                } else {
+                    // Quick crossfade between shots
+                    phase = 'crossfade'; phaseTime = 0;
+                }
+            }
+        }
+        else if (phase === 'crossfade') {
+            phaseTime += dt;
+            const CROSS_DUR = 0.5;
+            const t = Math.min(phaseTime / CROSS_DUR, 1);
+            // Fade to black then back
+            fadeEl.style.opacity = String(t < 0.5 ? t * 2 : 2 - t * 2);
+            // At halfway, snap to next shot start
+            if (t >= 0.5 && phaseTime - dt < CROSS_DUR * 0.5) {
+                const shot = shots[shotIdx];
+                player.position.set(shot.from[0], shot.from[1], shot.from[2]);
+                player.group.position.set(shot.from[0], shot.from[1], shot.from[2]);
+                fpYaw = shot.yaw0; fpPitch = shot.pitch0;
+            }
+            // Aggressively process chunks during crossfade (screen partially black)
+            if (chunkManager) chunkManager._processQueue(64, 80);
+            if (t >= 1) {
+                fadeEl.style.opacity = '0';
+                phase = 'playing'; phaseTime = 0;
+            }
+        }
+        else if (phase === 'fadeout') {
+            phaseTime += dt;
+            const t = Math.min(phaseTime / FADE_DUR, 1);
+            fadeEl.style.opacity = String(t);
+            if (t >= 1) { finish(); return; }
+        }
+
+        player.group.visible = false;
+        player.jumpVel = 0;
+    };
+}
 
 function startGame(loadSlotName) {
     mainMenuEl.style.display = 'none';
@@ -1809,14 +2131,16 @@ function startGame(loadSlotName) {
         while (existingSaves['Save ' + n]) n++;
         _currentSaveName = 'Save ' + n;
     }
-    // Stop menu music, then start calm after fade
-    if (musicSystem.current) {
-        musicSystem.fadeOut(musicSystem.current);
-        musicSystem.currentName = null;
-        musicSystem.current = null;
-        setTimeout(() => musicSystem.play('calm'), 1200);
-    } else {
-        musicSystem.play('calm');
+    // Stop menu music, then start calm after fade (unless cinematic is running)
+    if (!_introActive) {
+        if (musicSystem.current) {
+            musicSystem.fadeOut(musicSystem.current);
+            musicSystem.currentName = null;
+            musicSystem.current = null;
+            setTimeout(() => musicSystem.play('calm'), 1200);
+        } else {
+            musicSystem.play('calm');
+        }
     }
 
     // Clean up previous game if any
@@ -1834,6 +2158,8 @@ function startGame(loadSlotName) {
 
     world = new World();
     if (!world._modifiedBlocks) world._modifiedBlocks = new Map();
+    initRivers(); // Pre-calculate river heights for downhill flow
+    waterSim = new WaterSim(world);
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
     chunkManager.initChunkMap();
@@ -3310,7 +3636,7 @@ function startGame(loadSlotName) {
         const gy = Math.floor(getTerrainHeight(FX, FZ) / BS) + yOff;
         const S = BLOCK.STONE, DS = BLOCK.DARK_STONE, A = BLOCK.AIR, D = BLOCK.DIRT;
         const hash = (x, z) => { const d = Math.sin(x * 127.1 + z * 311.7 + 17.0) * 43758.5453; return d - Math.floor(d); };
-        const R = 0.02;
+        const R = 0; // no ruin — Dragon's Reach is intact
 
         const _pb = (bx, by, bz, bl) => {
             if (by < 0 || by >= 256) return;
@@ -3501,54 +3827,50 @@ function startGame(loadSlotName) {
         }
         scene.add(cg);
 
-        // === NPCS — villager model, correct terrain Y ===
-        // Helper: spawn villager and optionally pose them
-        const spawnNPC = (wx, wz, seed, poseAngle, lookDown) => {
-            const ty = getTerrainHeight(wx, wz);
-            const v = makeVillager(scene, wx, wz, ty, seed);
-            v.group.rotation.y = poseAngle;
-            if (lookDown) {
-                v.headGroup.rotation.x = -0.45; // looking down at dragon
-                v.leftArm.shoulder.rotation.x = 0.6; // arm reaching forward
-            }
+        // === NPCS — real villagers that study the dragon half the day, wander the other half ===
+        // Match the fortress floor calculation: gy is in block coords, convert to world Y
+        const fortFloorY = (gy - yOff + 1) * BS; // top of the stone floor block
+        const spawnDRVillager = (wx, wz, seed, poseAngle, lookDown, poseData) => {
+            const v = makeVillager(scene, wx, wz, fortFloorY, seed);
+            v._dragonReach = true;
+            v._floorY = fortFloorY; // lock to fortress ground, don't climb onto roof
+            v._studyPoseAngle = poseAngle;
+            v._studyLookDown = lookDown;
+            v._studyPose = poseData || null; // extra pose overrides
+            v._studyX = wx;
+            v._studyZ = wz;
+            v.homeX = FX; v.homeZ = FZ; // wander around fortress
+            villageMgr.villagers.push(v);
             return v;
         };
 
-        // Close observers — crouching/leaning in near the dragon head and body
-        const obs1 = spawnNPC(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true);
-        obs1.body.position.y = 0.65; obs1.spine.rotation.x = 0.55; // crouch
-        const obs2 = spawnNPC(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true);
-        obs2.body.position.y = 0.65; obs2.spine.rotation.x = 0.5;
+        // Close observers
+        spawnDRVillager(CORP_X + 2.5, CORP_Z - 1.2, 0.11, Math.PI * 1.35, true, { crouch: true, spineX: 0.55 });
+        spawnDRVillager(CORP_X - 1.5, CORP_Z + 2.0, 0.37, Math.PI * 0.82, true, { crouch: true, spineX: 0.5 });
 
-        // Mid-ring — standing scholars with scrolls/notes
-        spawnNPC(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
-        spawnNPC(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
-        spawnNPC(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
-        spawnNPC(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
+        // Mid-ring — standing scholars
+        spawnDRVillager(CORP_X + 4.8, CORP_Z + 0.5, 0.55, Math.PI * 1.2, true);
+        spawnDRVillager(CORP_X - 4.0, CORP_Z - 1.0, 0.72, Math.PI * 0.25, true);
+        spawnDRVillager(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
+        spawnDRVillager(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
 
-        // Outer ring — arriving, writing notes, discussing
-        spawnNPC(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
-        spawnNPC(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
-        spawnNPC(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
+        // Outer ring
+        spawnDRVillager(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        spawnDRVillager(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
+        spawnDRVillager(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
 
-        // Two guards near the inner dividing wall gate
-        const guardZ = FZ + (-10) * 0; // inner wall in world coords ≈ FZ - 9.5
+        // Guards near inner wall gate
         const divWorldZ = (Math.round(FZ / BS) - 10) * BS;
-        spawnNPC(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
-        spawnNPC(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
+        spawnDRVillager(FX - 5, divWorldZ + 2.5, 0.91, Math.PI * 0.5, false);
+        spawnDRVillager(FX + 5, divWorldZ + 2.5, 0.08, Math.PI * 1.5, false);
 
-        // ── LEADER: Archon Vael — head of the expedition ──
-        // Stands prominently north of the corpse, facing it
+        // ── LEADER: Archon Vael ──
         const leaderX = CORP_X - 6, leaderZ = CORP_Z - 5;
-        const leader = spawnNPC(leaderX, leaderZ, 0.42, Math.PI * 0.15, true);
-        // Distinctive appearance: crimson robes, grey hair, larger scale
-        leader._shirtMat.color.setHex(0x8B0000);  // deep crimson
-        leader._pantsMat.color.setHex(0x4a2200);  // dark brown
-        leader._hairMat.color.setHex(0xaaaaaa);   // grey/white hair
-        leader.group.scale.setScalar(1.12);        // taller
-        // Arm raised slightly — gesturing as if explaining
-        leader.rightArm.shoulder.rotation.x = -0.5;
-        leader.rightArm.shoulder.rotation.z = -0.3;
+        const leader = spawnDRVillager(leaderX, leaderZ, 0.42, Math.PI * 0.15, true, { leader: true });
+        leader._shirtMat.color.setHex(0x8B0000);
+        leader._pantsMat.color.setHex(0x4a2200);
+        leader._hairMat.color.setHex(0xaaaaaa);
+        leader.group.scale.setScalar(1.12);
     }
 
     // Naturally spawning chests in ruins
@@ -3905,18 +4227,22 @@ function startGame(loadSlotName) {
             sm._bladeGrp.scale.set(cs.bladeThickness || 1, bLenS, cs.bladeThickness || 1);
             sm._bladeGrp.position.y = 0.1 * (1 - bLenS);
             // Battleaxe silhouette — double-bit head + extended haft.
-            if (cs.isBattleaxe && !sm._axeHead) {
+            if ((cs.isBattleaxe || cs.isWarhammer) && !sm._axeHead && !sm._hammerHead) {
                 sm._bladeGrp.scale.set(1, 1, 1);
                 sm._bladeGrp.position.y = 0;
-                // Hide the default blade/tip and guard — an axe has no crossguard
                 for (const child of sm._bladeGrp.children) child.visible = false;
                 if (sm._guardMesh) sm._guardMesh.visible = false;
                 if (sm._guardExtra1) sm._guardExtra1.visible = false;
                 if (sm._guardExtra2) sm._guardExtra2.visible = false;
                 if (sm._trimStripe) sm._trimStripe.visible = false;
                 if (sm._trimStripe2) sm._trimStripe2.visible = false;
-                sm._axeHead = buildAxeHead(sm._bladeMat, sm._handleMat);
-                sm._bladeGrp.add(sm._axeHead);
+                if (cs.isBattleaxe) {
+                    sm._axeHead = buildAxeHead(sm._bladeMat, sm._handleMat);
+                    sm._bladeGrp.add(sm._axeHead);
+                } else {
+                    sm._hammerHead = buildHammerHead(sm._bladeMat, sm._handleMat);
+                    sm._bladeGrp.add(sm._hammerHead);
+                }
             }
             // Position in world — stuck in ground at angle
             const gy = getTerrainHeight(fs.wx, fs.wz);
@@ -5998,7 +6324,7 @@ function startGame(loadSlotName) {
 
     const checkLoaded = () => {
         // Build chunks aggressively during loading (8 per tick)
-        chunkManager.update(px, pz, 0);
+        chunkManager.update(px, pz);
         chunkManager._processQueue(8);
 
         const loaded = chunkManager.loadedCount || 0;
@@ -6017,8 +6343,16 @@ function startGame(loadSlotName) {
                 loadText.textContent = 'Ready!';
                 setTimeout(() => {
                     loadingEl.style.display = 'none';
-                    gamePaused = false;
-                    if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                    if (!loadSlotName) {
+                        // New game — play intro cinematic
+                        _playIntroCinematic(() => {
+                            gamePaused = false;
+                            if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                        });
+                    } else {
+                        gamePaused = false;
+                        if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                    }
                 }, 200);
             }, 50);
         } else {
@@ -6034,6 +6368,7 @@ let _autosaveTimer = 0;
 let gamePaused = false;
 let settingsOpen = false;
 let hudHidden = false;
+let peacefulMode = false;
 
 // ── Settings ──
 let useMouseLook = true; // true = new (mouse look), false = classic (A/D turn)
@@ -6141,6 +6476,15 @@ function buildStatUI() {
     }
 }
 
+window._statPreset = (preset) => {
+    const presets = {
+        warrior: { strength: 8, agility: 3, fortitude: 8, dexterity: 3, wisdom: 3 },
+        mage:    { strength: 2, agility: 3, fortitude: 3, dexterity: 7, wisdom: 10 },
+        rogue:   { strength: 5, agility: 8, fortitude: 3, dexterity: 7, wisdom: 2 },
+    };
+    Object.assign(playerStats, presets[preset]);
+    buildStatUI();
+};
 window._statInc = (key) => {
     if (playerStats[key] >= STAT_MAX_EACH || getStatPointsUsed() >= STAT_MAX_POINTS) return;
     playerStats[key]++;
@@ -6865,7 +7209,7 @@ document.body.appendChild(deathScreen);
 
 window.playerTakeDamage = playerTakeDamage;
 function playerTakeDamage(dmg) {
-    if (playerDead || creativeMode) return;
+    if (playerDead || creativeMode || _introActive) return;
     dmg = Math.max(1, Math.round(dmg * (1 - getDamageReduction())));
     // If riding a dragon, share damage with it (50/50)
     if (dragonMgr && dragonMgr.ridingDragon && dragonMgr.ridingRef) {
@@ -8264,6 +8608,11 @@ document.addEventListener('keydown', e => {
         document.getElementById('minimap').style.display = vis;
         document.getElementById('manaBar').style.display = vis;
         document.getElementById('staminaBar').style.display = vis;
+        if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
+    }
+    if (e.code === 'KeyH' && gameStarted && !chatOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !blastFurnaceOpen && !settingsOpen) {
+        peacefulMode = !peacefulMode;
+        addChatMessage(peacefulMode ? 'Peaceful mode ON — creatures are no longer hostile' : 'Peaceful mode OFF — creatures are hostile again', peacefulMode ? 'rgba(150,220,150,0.9)' : 'rgba(220,150,150,0.9)');
     }
     if (e.code === 'KeyL' && gameStarted && !gamePaused) {
         levelMenuOpen = !levelMenuOpen;
@@ -8282,7 +8631,10 @@ document.addEventListener('keydown', e => {
             if (pointerLocked) document.exitPointerLock();
             mapViewX = player.position.x;
             mapViewZ = player.position.z;
-            drawWorldMap();
+            _mapDrawProgress = 0;
+            _mapDrawStart = performance.now();
+            _mapLayers = null; // force full redraw
+            _mapAnimateLoop();
         }
     }
     // F key — tap to cycle all dragons, hold to open whistle menu
@@ -8334,6 +8686,7 @@ let zoomLevel = 1.0;
 const minZoom = 0.05; // below ~0.15 triggers first person
 const maxZoom = 5.0;
 addEventListener('wheel', e => {
+    if (inventoryOpen || craftingTableOpen || furnaceOpen || anvilOpen || blastFurnaceOpen || chestOpen || settingsOpen || guideBookOpen) return;
     e.preventDefault();
     const zoomSpeed = 0.001;
     zoomLevel += e.deltaY * zoomSpeed;
@@ -8348,29 +8701,212 @@ let mapOpen = false;
 let mapViewX = 0, mapViewZ = 0, mapViewSize = 3200;
 let mapDragging = false, mapDragX = 0, mapDragY = 0, mapDragVX = 0, mapDragVZ = 0, mapDidDrag = false;
 let mapCache = null, mapCacheVX = null, mapCacheVZ = null, mapCacheSize = null;
+let _mapBgCache = null, _mapBgCacheVX = null, _mapBgCacheVZ = null, _mapBgCacheSize = null;
+let _mapLayers = null;
+let _mapDrawProgress = 1; // 0→1 animated draw-in
+let _mapDrawStart = 0;
 
 // Parchment background
 const parchmentImg = new Image();
 parchmentImg.src = 'parchment.png';
 
+function _drawMapMarkers(ctx, w, h, scale, vx, vz, vs, progress) {
+    const ink = 'rgba(60, 40, 20, 0.85)';
+    const inkLight = 'rgba(80, 55, 30, 0.55)';
+    const inkRed = 'rgba(130, 40, 30, 0.7)';
+    const toX = wx => (wx - vx + vs) * scale;
+    const toY = wz => (wz - vz + vs) * scale;
+
+    // All markers in draw order — each gets a sequential index
+    const markers = [];
+    const addMarker = (fn) => markers.push(fn);
+
+    // Helper draw functions (capture ctx)
+    const drawCastle = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(10, 6 * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.fillStyle = ink;
+        ctx.strokeRect(x - s*0.6, y - s, s*1.2, s*1.4);
+        for (let i = -1; i <= 1; i++) ctx.fillRect(x + i*s*0.4 - s*0.15, y - s - s*0.35, s*0.3, s*0.35);
+        ctx.fillRect(x - s*0.15, y + s*0.1, s*0.3, s*0.4);
+        if (label) { ctx.font = `italic ${Math.max(8, Math.min(13, 10 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*1.4 + Math.max(8, 10 * scale)); }
+    };
+    const drawMountain = (wx, wz, label, sz) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(4, Math.min(14, (sz||8) * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s*0.5); ctx.lineTo(x, y - s); ctx.lineTo(x + s, y + s*0.5); ctx.stroke();
+        for (let i = 1; i <= 3; i++) { const t = i * 0.25; ctx.beginPath(); ctx.moveTo(x + s*t*0.5, y - s + s*1.5*t); ctx.lineTo(x + s*t*0.5 + s*0.3, y - s + s*1.5*t + s*0.3); ctx.stroke(); }
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*0.5 + Math.max(8, 10 * scale)); }
+    };
+    const drawRuins = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(8, 5 * scale));
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s*0.5); ctx.lineTo(x - s, y - s*0.6); ctx.moveTo(x - s*0.1, y + s*0.5); ctx.lineTo(x - s*0.1, y - s); ctx.moveTo(x + s*0.8, y + s*0.5); ctx.lineTo(x + s*0.8, y - s*0.3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x - s*0.8, y - s*0.4); ctx.lineTo(x + s*0.5, y + s*0.1); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkLight; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s*0.5 + Math.max(7, 9 * scale)); }
+    };
+    const drawGate = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(8, 5 * scale));
+        ctx.strokeStyle = inkRed; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x - s, y + s); ctx.lineTo(x - s, y - s*0.5); ctx.moveTo(x + s, y + s); ctx.lineTo(x + s, y - s*0.5); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y - s*0.5, s, Math.PI, 0); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkRed; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(7, 9 * scale)); }
+    };
+    const drawVillage = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(2, Math.min(6, 4 * scale));
+        ctx.fillStyle = ink;
+        ctx.fillRect(x - s*1.2, y - s*0.3, s*0.8, s*0.6); ctx.fillRect(x + s*0.2, y - s*0.5, s*0.9, s*0.7); ctx.fillRect(x - s*0.4, y + s*0.3, s*0.7, s*0.5);
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(8, 10 * scale)); }
+    };
+    const drawLabel = (wx, wz, label, color, size) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -40 || x > w+40 || y < -20 || y > h+20) return;
+        const fs = Math.max(7, Math.min(size || 11, (size || 11) * scale));
+        ctx.font = `italic ${fs}px Georgia, serif`; ctx.fillStyle = color || ink; ctx.textAlign = 'center'; ctx.fillText(label, x, y);
+    };
+    const drawDanger = (wx, wz, label) => {
+        const x = toX(wx), y = toY(wz);
+        if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
+        const s = Math.max(3, Math.min(7, 5 * scale));
+        ctx.strokeStyle = inkRed; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.moveTo(x+s, y-s); ctx.lineTo(x-s, y+s); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, s*0.3, 0, Math.PI*2); ctx.stroke();
+        if (label) { ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = inkRed; ctx.textAlign = 'center'; ctx.fillText(label, x, y + s + Math.max(8, 10 * scale)); }
+    };
+
+    // ── Register all markers in draw order ──
+    // Compass rose first
+    addMarker(() => {
+        const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.fillStyle = ink;
+        ctx.beginPath(); ctx.moveTo(crX, crY - crS); ctx.lineTo(crX, crY + crS); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(crX - crS, crY); ctx.lineTo(crX + crS, crY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(crX, crY - crS - 4); ctx.lineTo(crX - 3, crY - crS + 3); ctx.lineTo(crX + 3, crY - crS + 3); ctx.closePath(); ctx.fill();
+        ctx.font = `bold ${Math.max(8, crS * 0.5)}px Georgia, serif`; ctx.textAlign = 'center';
+        ctx.fillText('N', crX, crY - crS - 7);
+        ctx.font = `${Math.max(6, crS * 0.35)}px Georgia, serif`;
+        ctx.fillText('S', crX, crY + crS + 10); ctx.fillText('E', crX + crS + 8, crY + 3); ctx.fillText('W', crX - crS - 8, crY + 3);
+    });
+    // Mountains
+    addMarker(() => drawMountain(1204, -60, 'East Mountains', 10));
+    addMarker(() => drawMountain(1020, -260, 'NW Peaks', 7));
+    addMarker(() => drawMountain(1020, 160, 'SW Hills', 6));
+    addMarker(() => drawMountain(1640, -80, 'Great Peak', 12));
+    addMarker(() => drawMountain(1460, -190, 'NE Ridge', 6));
+    addMarker(() => drawMountain(1470, 80, 'SE Ridge', 6));
+    addMarker(() => drawMountain(-60, -2100, 'Frozen Mountains', 14));
+    addMarker(() => drawMountain(-500, -2700, 'Frostfang Ridge', 10));
+    addMarker(() => drawMountain(400, -2600, 'Icespire Peaks', 9));
+    addMarker(() => drawMountain(100, -2800, 'Pale Spine', 8));
+    addMarker(() => drawMountain(-800, -2400, 'Howling Crags', 8));
+    addMarker(() => drawMountain(760, -2360, 'Rimestone Peaks', 8));
+    // Castles
+    addMarker(() => drawCastle(-800, 40, 'The Castle'));
+    addMarker(() => drawCastle(2160, 10, "Dragon's Reach"));
+    // Ruins
+    addMarker(() => drawRuins(-1010, -670, 'Ruined Fortress'));
+    addMarker(() => drawRuins(0, -1080, 'Abandoned Village'));
+    // Villages
+    addMarker(() => drawVillage(160, 32, 'Meadow Village'));
+    addMarker(() => drawVillage(-200, -100, 'Forest Edge'));
+    addMarker(() => drawVillage(400, 120, 'Hillside Town'));
+    addMarker(() => drawVillage(-400, 200, 'Western Hamlet'));
+    addMarker(() => drawVillage(100, -300, 'Northwatch'));
+    addMarker(() => drawVillage(-300, 400, 'Southmoor'));
+    addMarker(() => drawVillage(2040, 60, 'Farwatch'));
+    addMarker(() => drawVillage(-2100, -120, 'Bay Watch'));
+    addMarker(() => drawVillage(-2150, 200, 'Tidecrest'));
+    // Gates
+    addMarker(() => drawGate(-280, -700, 'West Gate'));
+    addMarker(() => drawGate(160, -700, 'East Gate'));
+    addMarker(() => drawGate(-60, -920, 'North Gate'));
+    addMarker(() => drawGate(-60, -480, 'South Gate'));
+    // Danger markers
+    addMarker(() => drawDanger(-250, -700, 'Colossus'));
+    addMarker(() => drawDanger(130, -700, 'Skeleton'));
+    addMarker(() => drawDanger(-60, -570, 'Dark Knight'));
+    addMarker(() => drawDanger(-60, -190, 'Hobgoblin'));
+    addMarker(() => drawDanger(-230, 70, 'Goblin Outpost'));
+    // Region labels
+    addMarker(() => drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13));
+    addMarker(() => drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12));
+    addMarker(() => drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10));
+    addMarker(() => { const rs = 'rgba(80, 55, 30, 0.5)'; drawLabel(-120, -420, 'Broken Temple', rs, 8); drawLabel(-20, -320, 'Old Tower', rs, 8); drawLabel(-40, -440, 'Stone Circle', rs, 8); });
+    // Dragon altar
+    addMarker(() => {
+        const ax = toX(-1010), ay = toY(-670);
+        if (ax < -20 || ax > w+20 || ay < -20 || ay > h+20) return;
+        const s = Math.max(3, Math.min(7, 5 * scale));
+        ctx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ax, ay - s*3, s, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax, ay - s*3 - s*0.5); ctx.lineTo(ax, ay - s*3 + s*0.5); ctx.moveTo(ax - s*0.5, ay - s*3); ctx.lineTo(ax + s*0.5, ay - s*3); ctx.stroke();
+    });
+    // Cave
+    addMarker(() => {
+        const cx = toX(1120), cy = toY(-100);
+        if (cx < -20 || cx > w+20 || cy < -20 || cy > h+20) return;
+        const s = Math.max(3, Math.min(6, 4 * scale));
+        ctx.fillStyle = 'rgba(40, 30, 20, 0.6)'; ctx.beginPath(); ctx.arc(cx, cy, s, Math.PI, 0); ctx.fill();
+        ctx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`; ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.fillText('Cave', cx, cy + Math.max(8, 10 * scale));
+    });
+
+    // ── Draw markers with staggered fade-in ──
+    const total = markers.length;
+    for (let i = 0; i < total; i++) {
+        // Each marker fades in over a window; staggered start
+        const markerStart = i / total;
+        const markerEnd = markerStart + 0.15; // each takes 15% of total time to fade in
+        const alpha = progress >= 1 ? 1 : Math.max(0, Math.min(1, (progress - markerStart) / (markerEnd - markerStart)));
+        if (alpha <= 0) continue;
+        ctx.globalAlpha = alpha;
+        markers[i]();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function _mapAnimateLoop() {
+    if (!mapOpen) return;
+    const elapsed = (performance.now() - _mapDrawStart) / 1000;
+    const DRAW_DUR = 2.0; // seconds to draw all markers
+    _mapDrawProgress = Math.min(1, elapsed / DRAW_DUR);
+    drawWorldMap();
+    if (_mapDrawProgress < 1) requestAnimationFrame(_mapAnimateLoop);
+}
+
 function drawWorldMap() {
     const w = mapCanvas.width, h = mapCanvas.height;
     const scale = w / (mapViewSize * 2);
+    const toX = wx => (wx - mapViewX + mapViewSize) * scale;
+    const toY = wz => (wz - mapViewZ + mapViewSize) * scale;
 
-    if (!mapCache || mapCacheVX !== mapViewX || mapCacheVZ !== mapViewZ || mapCacheSize !== mapViewSize) {
-        // Draw parchment background
-        if (parchmentImg.complete) {
-            mapCtx.drawImage(parchmentImg, 0, 0, w, h);
-        } else {
-            mapCtx.fillStyle = '#d4bc8b';
-            mapCtx.fillRect(0, 0, w, h);
-        }
+    // ── Build cached layers if viewport changed ──
+    if (!_mapLayers || _mapBgCacheVX !== mapViewX || _mapBgCacheVZ !== mapViewZ || _mapBgCacheSize !== mapViewSize) {
+        _mapBgCacheVX = mapViewX; _mapBgCacheVZ = mapViewZ; _mapBgCacheSize = mapViewSize;
 
-        // Build height data for contour lines
-        const step = 3;
+        // Parchment base
+        const parchCanvas = document.createElement('canvas');
+        parchCanvas.width = w; parchCanvas.height = h;
+        const pCtx = parchCanvas.getContext('2d');
+        if (parchmentImg.complete) pCtx.drawImage(parchmentImg, 0, 0, w, h);
+        else { pCtx.fillStyle = '#d4bc8b'; pCtx.fillRect(0, 0, w, h); }
+        // Border
+        pCtx.strokeStyle = 'rgba(80, 55, 30, 0.6)'; pCtx.lineWidth = 3; pCtx.strokeRect(2, 2, w-4, h-4);
+        pCtx.strokeStyle = 'rgba(80, 55, 30, 0.3)'; pCtx.lineWidth = 1; pCtx.strokeRect(6, 6, w-12, h-12);
+
+        // ── Compute terrain data ──
+        const step = 5;
         const cols = Math.ceil(w / step), rows = Math.ceil(h / step);
         const heightData = new Float32Array(cols * rows);
-        const biomeData = new Uint8Array(cols * rows); // 0=land, 1=ocean, 2=beach, 3=snow, 4=desert, 5=mountain, 6=scorched, 7=enchanted, 8=forest
+        const biomeData = new Uint8Array(cols * rows);
 
         for (let gx = 0; gx < cols; gx++) {
             for (let gy = 0; gy < rows; gy++) {
@@ -8378,465 +8914,308 @@ function drawWorldMap() {
                 const wx = (px / scale) + mapViewX - mapViewSize;
                 const wz = (py / scale) + mapViewZ - mapViewSize;
                 const idx = gy * cols + gx;
-
                 const sz = wz / ISLAND_NS_SCALE;
                 const dist = Math.sqrt(wx * wx + sz * sz);
                 const localR = getIslandRadius(wx, wz);
-
-                if (dist > localR - 20) {
-                    heightData[idx] = -5;
-                    biomeData[idx] = 1; // ocean
-                    continue;
-                }
-                if (dist > localR - 50) {
-                    heightData[idx] = 0.5;
-                    biomeData[idx] = 2; // beach
-                    continue;
-                }
-
+                if (dist > localR - 20) { heightData[idx] = -5; biomeData[idx] = 1; continue; }
+                if (dist > localR - 50) { heightData[idx] = 0.5; biomeData[idx] = 2; continue; }
                 const th = getTerrainHeight(wx, wz);
                 heightData[idx] = th;
-
-                const snow = getSnowBlend(wz);
-                const desert = getDesertBlend(wz);
-                const mtn = getMountainBlend(wx, wz);
-                const scorch = getScorchedBlend(wx, wz);
-                const ench = getEnchantedBlend(wx, wz);
-
+                const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx, wz);
+                const scorch = getScorchedBlend(wx, wz), ench = getEnchantedBlend(wx, wz);
                 if (scorch > 0.1) biomeData[idx] = 6;
                 else if (ench > 0.1) biomeData[idx] = 7;
                 else if (mtn > 0.3) biomeData[idx] = 5;
                 else if (snow > 0.3) biomeData[idx] = 3;
                 else if (desert > 0.3) biomeData[idx] = 4;
-                else if (isOnPath(wx, wz)) biomeData[idx] = 9; // path
-                else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8; // forest
+                else if (isOnPath(wx, wz)) biomeData[idx] = 9;
+                else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8;
                 else biomeData[idx] = 0;
-                // River override — check on top of other biomes
-                for (const riv of riverDefs) {
-                    if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; }
-                }
+                for (const riv of riverDefs) { if (getRiverBlend(wx, wz, riv) > 0.3) { biomeData[idx] = 10; break; } }
             }
         }
 
-        // Draw biome tints (subtle, ink-wash style over parchment)
-        const imgData = mapCtx.getImageData(0, 0, w, h);
-        const pixels = imgData.data;
-
-        for (let gx = 0; gx < cols; gx++) {
-            for (let gy = 0; gy < rows; gy++) {
-                const idx = gy * cols + gx;
-                const biome = biomeData[idx];
-                const th = heightData[idx];
-                let tintR = 0, tintG = 0, tintB = 0, tintA = 0;
-
-                if (biome === 1) { // ocean — blue-grey wash
-                    tintR = 70; tintG = 100; tintB = 130; tintA = 0.45;
-                } else if (biome === 2) { // beach — warm sand
-                    tintR = 190; tintG = 170; tintB = 120; tintA = 0.1;
-                } else if (biome === 3) { // snow — pale blue-white
-                    tintR = 180; tintG = 195; tintB = 210; tintA = 0.35;
-                } else if (biome === 4) { // desert — warm ochre
-                    tintR = 170; tintG = 140; tintB = 70; tintA = 0.25;
-                } else if (biome === 5) { // mountain — grey-brown, darken with height
-                    const hFactor = Math.min(1, th / 80);
-                    tintR = 80 - hFactor*30; tintG = 75 - hFactor*30; tintB = 70 - hFactor*25; tintA = 0.25 + hFactor*0.15;
-                } else if (biome === 6) { // scorched — dark charcoal
-                    tintR = 30; tintG = 20; tintB = 15; tintA = 0.4;
-                } else if (biome === 7) { // enchanted — purple wash
-                    tintR = 90; tintG = 50; tintB = 130; tintA = 0.25;
-                } else if (biome === 10) { // river — blue water
-                    tintR = 50; tintG = 90; tintB = 150; tintA = 0.5;
-                } else if (biome === 9) { // path — sandy brown line
-                    tintR = 120; tintG = 100; tintB = 60; tintA = 0.4;
-                } else if (biome === 8) { // forest — deep green
-                    tintR = 45; tintG = 85; tintB = 35; tintA = 0.2;
-                } else { // grass — rich green
-                    tintR = 40; tintG = 80; tintB = 30; tintA = 0.15;
-                }
-
-                if (tintA > 0) {
-                    for (let sy = 0; sy < step && gy * step + sy < h; sy++) {
-                        for (let sx = 0; sx < step && gx * step + sx < w; sx++) {
-                            const pi = ((gy * step + sy) * w + gx * step + sx) * 4;
-                            pixels[pi]     = Math.round(pixels[pi] * (1 - tintA) + tintR * tintA);
-                            pixels[pi + 1] = Math.round(pixels[pi+1] * (1 - tintA) + tintG * tintA);
-                            pixels[pi + 2] = Math.round(pixels[pi+2] * (1 - tintA) + tintB * tintA);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Draw contour lines — interval scales with zoom (finer when zoomed in)
-        // mapViewSize=1200 (zoomed out) → interval=10, mapViewSize=100 (zoomed in) → interval=1
+        // ── Layer 2: Contour lines as canvas paths ──
+        const contourCanvas = document.createElement('canvas');
+        contourCanvas.width = w; contourCanvas.height = h;
+        const cCtx = contourCanvas.getContext('2d');
         const contourInterval = Math.max(0.5, Math.min(5, mapViewSize / 200));
-        const majorMult = contourInterval <= 2 ? 5 : 3; // major line every 3rd or 5th
-        const inkR = 70, inkG = 45, inkB = 25;
+        const majorMult = contourInterval <= 2 ? 5 : 3;
 
+        // Build contour segments: for each contour level, collect connected points
+        // Use marching squares to find line segments crossing each cell
+        const contourLines = []; // { points:[[x,y],...], major:bool }
+        const levelsFound = new Set();
         for (let gx = 1; gx < cols - 1; gx++) {
             for (let gy = 1; gy < rows - 1; gy++) {
                 const idx = gy * cols + gx;
                 if (biomeData[idx] === 1) continue;
                 const th = heightData[idx];
-                const hRight = heightData[idx + 1];
-                const hDown = heightData[(gy + 1) * cols + gx];
-                const hDiag = heightData[(gy + 1) * cols + gx + 1];
-
-                const minH = Math.min(th, hRight, hDown, hDiag);
-                const maxH = Math.max(th, hRight, hDown, hDiag);
-
-                // Check all contour levels that cross this cell
+                const hR = heightData[idx + 1], hD = heightData[(gy+1)*cols+gx];
+                const minH = Math.min(th, hR, hD), maxH = Math.max(th, hR, hD);
                 for (let lvl = Math.ceil(minH / contourInterval) * contourInterval; lvl <= maxH; lvl += contourInterval) {
                     if (lvl <= 0) continue;
-                    const majorInterval = contourInterval * majorMult;
-                    const isMajor = (Math.abs(lvl % majorInterval) < 0.01);
-                    const lineAlpha = isMajor ? 0.75 : 0.45;
+                    levelsFound.add(lvl);
+                }
+            }
+        }
+        // For each level, trace connected contour line segments
+        for (const lvl of [...levelsFound].sort((a,b) => a-b)) {
+            const majorInterval = contourInterval * majorMult;
+            const isMajor = Math.abs(lvl % majorInterval) < 0.01;
+            // Collect all edge segments via marching squares
+            const segs = [];
+            for (let gx = 0; gx < cols - 1; gx++) {
+                for (let gy = 0; gy < rows - 1; gy++) {
+                    const i00 = gy*cols+gx, i10 = i00+1, i01 = (gy+1)*cols+gx, i11 = i01+1;
+                    if (biomeData[i00]===1 && biomeData[i10]===1 && biomeData[i01]===1 && biomeData[i11]===1) continue;
+                    const v00=heightData[i00], v10=heightData[i10], v01=heightData[i01], v11=heightData[i11];
+                    const b0 = v00 >= lvl ? 1:0, b1 = v10 >= lvl ? 1:0, b2 = v11 >= lvl ? 1:0, b3 = v01 >= lvl ? 1:0;
+                    const config = b0|b1<<1|b2<<2|b3<<3;
+                    if (config === 0 || config === 15) continue;
+                    const lerp = (a,b,va,vb) => va===vb ? 0.5 : (lvl-va)/(vb-va);
+                    const top = () => [(gx + lerp(0,1,v00,v10))*step, gy*step];
+                    const right = () => [(gx+1)*step, (gy + lerp(0,1,v10,v11))*step];
+                    const bottom = () => [(gx + lerp(0,1,v01,v11))*step, (gy+1)*step];
+                    const left = () => [gx*step, (gy + lerp(0,1,v00,v01))*step];
+                    const addSeg = (a,b) => segs.push([a,b]);
+                    switch(config) {
+                        case 1: case 14: addSeg(top(),left()); break;
+                        case 2: case 13: addSeg(top(),right()); break;
+                        case 3: case 12: addSeg(left(),right()); break;
+                        case 4: case 11: addSeg(right(),bottom()); break;
+                        case 5: addSeg(top(),right()); addSeg(left(),bottom()); break;
+                        case 6: case 9: addSeg(top(),bottom()); break;
+                        case 7: case 8: addSeg(left(),bottom()); break;
+                        case 10: addSeg(top(),left()); addSeg(right(),bottom()); break;
+                    }
+                }
+            }
+            // Chain segments into polylines
+            if (segs.length === 0) continue;
+            const eps = 0.5;
+            const eq = (a,b) => Math.abs(a[0]-b[0])<eps && Math.abs(a[1]-b[1])<eps;
+            const used = new Uint8Array(segs.length);
+            for (let si = 0; si < segs.length; si++) {
+                if (used[si]) continue;
+                used[si] = 1;
+                const chain = [segs[si][0], segs[si][1]];
+                let found = true;
+                while (found) {
+                    found = false;
+                    for (let j = 0; j < segs.length; j++) {
+                        if (used[j]) continue;
+                        if (eq(chain[chain.length-1], segs[j][0])) { chain.push(segs[j][1]); used[j]=1; found=true; }
+                        else if (eq(chain[chain.length-1], segs[j][1])) { chain.push(segs[j][0]); used[j]=1; found=true; }
+                        else if (eq(chain[0], segs[j][1])) { chain.unshift(segs[j][0]); used[j]=1; found=true; }
+                        else if (eq(chain[0], segs[j][0])) { chain.unshift(segs[j][1]); used[j]=1; found=true; }
+                    }
+                }
+                contourLines.push({ points: chain, major: isMajor });
+            }
+        }
+        // Draw contour lines on contour canvas
+        for (const cl of contourLines) {
+            cCtx.strokeStyle = cl.major ? 'rgba(70,45,25,0.75)' : 'rgba(70,45,25,0.40)';
+            cCtx.lineWidth = cl.major ? 1.5 : 0.8;
+            cCtx.beginPath();
+            cCtx.moveTo(cl.points[0][0], cl.points[0][1]);
+            for (let i = 1; i < cl.points.length; i++) cCtx.lineTo(cl.points[i][0], cl.points[i][1]);
+            cCtx.stroke();
+        }
+        // ── Coastline + trees on separate canvas ──
+        const coastTreeCanvas = document.createElement('canvas');
+        coastTreeCanvas.width = w; coastTreeCanvas.height = h;
+        const ctCtx = coastTreeCanvas.getContext('2d');
+        // Coastline
+        for (let gx = 1; gx < cols-1; gx++) {
+            for (let gy = 1; gy < rows-1; gy++) {
+                const idx = gy*cols+gx;
+                if (biomeData[idx] === 1) continue;
+                const nb = [biomeData[idx-1],biomeData[idx+1],biomeData[(gy-1)*cols+gx],biomeData[(gy+1)*cols+gx]];
+                if (!nb.some(n=>n===1)) continue;
+                ctCtx.fillStyle = 'rgba(60,45,30,0.6)';
+                ctCtx.fillRect(gx*step, gy*step, step, step);
+            }
+        }
+        // Tree symbols
+        for (let gx = 2; gx < cols-2; gx += 3) {
+            for (let gy = 2; gy < rows-2; gy += 3) {
+                if (biomeData[gy*cols+gx] !== 8) continue;
+                const hash = Math.sin(gx*73.1+gy*197.3)*43758.5;
+                if ((hash-Math.floor(hash)) > 0.5) continue;
+                const cx = gx*step+1, cy = gy*step+1;
+                ctCtx.fillStyle = 'rgba(50,70,35,0.5)';
+                ctCtx.beginPath(); ctCtx.moveTo(cx,cy-2); ctCtx.lineTo(cx-2,cy+1); ctCtx.lineTo(cx+2,cy+1); ctCtx.closePath(); ctCtx.fill();
+            }
+        }
 
-                    // Draw a 2px or 3px dot at this grid cell
-                    const spread = isMajor ? 2 : 1;
-                    for (let sy = 0; sy < spread; sy++) {
-                        for (let sx = 0; sx < spread; sx++) {
-                            const ppx = gx * step + sx, ppy = gy * step + sy;
-                            if (ppx >= w || ppy >= h) continue;
-                            const pi = (ppy * w + ppx) * 4;
-                            pixels[pi]     = Math.round(pixels[pi] * (1 - lineAlpha) + inkR * lineAlpha);
-                            pixels[pi + 1] = Math.round(pixels[pi+1] * (1 - lineAlpha) + inkG * lineAlpha);
-                            pixels[pi + 2] = Math.round(pixels[pi+2] * (1 - lineAlpha) + inkB * lineAlpha);
+        // ── Layer 3: Biome colors (no rivers, no contour lines) ──
+        const colorCanvas = document.createElement('canvas');
+        colorCanvas.width = w; colorCanvas.height = h;
+        const colCtx = colorCanvas.getContext('2d');
+        // Draw parchment first so we can tint it
+        if (parchmentImg.complete) colCtx.drawImage(parchmentImg, 0, 0, w, h);
+        else { colCtx.fillStyle = '#d4bc8b'; colCtx.fillRect(0, 0, w, h); }
+        const colImg = colCtx.getImageData(0, 0, w, h);
+        const colPx = colImg.data;
+        for (let gx = 0; gx < cols; gx++) {
+            for (let gy = 0; gy < rows; gy++) {
+                const idx = gy*cols+gx;
+                const biome = biomeData[idx];
+                if (biome === 10) continue; // rivers drawn separately
+                const th = heightData[idx];
+                let tR=0,tG=0,tB=0,tA=0;
+                if (biome===1){tR=70;tG=100;tB=130;tA=0.45;}
+                else if(biome===2){tR=190;tG=170;tB=120;tA=0.1;}
+                else if(biome===3){tR=180;tG=195;tB=210;tA=0.35;}
+                else if(biome===4){tR=170;tG=140;tB=70;tA=0.25;}
+                else if(biome===5){const f=Math.min(1,th/80);tR=80-f*30;tG=75-f*30;tB=70-f*25;tA=0.25+f*0.15;}
+                else if(biome===6){tR=30;tG=20;tB=15;tA=0.4;}
+                else if(biome===7){tR=90;tG=50;tB=130;tA=0.25;}
+                else if(biome===9){tR=120;tG=100;tB=60;tA=0.4;}
+                else if(biome===8){const f=Math.min(1,Math.max(0,th/50));tR=25+f*40;tG=55+f*50;tB=18+f*30;tA=0.45-f*0.25;}
+                else{const f=Math.min(1,Math.max(0,th/40));tR=20+f*40;tG=50+f*50;tB=15+f*30;tA=0.4-f*0.25;}
+                if(tA>0){
+                    for(let sy=0;sy<step&&gy*step+sy<h;sy++){
+                        for(let sx=0;sx<step&&gx*step+sx<w;sx++){
+                            const pi=((gy*step+sy)*w+gx*step+sx)*4;
+                            colPx[pi]=Math.round(colPx[pi]*(1-tA)+tR*tA);
+                            colPx[pi+1]=Math.round(colPx[pi+1]*(1-tA)+tG*tA);
+                            colPx[pi+2]=Math.round(colPx[pi+2]*(1-tA)+tB*tA);
                         }
                     }
                 }
             }
         }
+        colCtx.putImageData(colImg, 0, 0);
 
-        // Draw coastline (darker ink line at land/ocean boundary)
-        for (let gx = 1; gx < cols - 1; gx++) {
-            for (let gy = 1; gy < rows - 1; gy++) {
-                const idx = gy * cols + gx;
-                const isLand = biomeData[idx] !== 1;
-                if (!isLand) continue;
-                const neighbors = [
-                    biomeData[idx - 1], biomeData[idx + 1],
-                    biomeData[(gy-1) * cols + gx], biomeData[(gy+1) * cols + gx]
-                ];
-                if (!neighbors.some(n => n === 1)) continue;
-                // This is a coastline cell
-                for (let sy = 0; sy < step; sy++) {
-                    for (let sx = 0; sx < step; sx++) {
-                        const ppx = gx * step + sx, ppy = gy * step + sy;
-                        if (ppx >= w || ppy >= h) continue;
-                        const pi = (ppy * w + ppx) * 4;
-                        pixels[pi]     = Math.round(pixels[pi] * 0.4 + 60 * 0.6);
-                        pixels[pi + 1] = Math.round(pixels[pi+1] * 0.4 + 45 * 0.6);
-                        pixels[pi + 2] = Math.round(pixels[pi+2] * 0.4 + 30 * 0.6);
-                    }
-                }
+        // ── Layer 4: River paths (canvas polylines from riverDefs waypoints) ──
+        const riverPaths = [];
+        for (const riv of riverDefs) {
+            const pts = riv.pts.map(p => [toX(p[0]), toY(p[1])]);
+            let totalLen = 0;
+            for (let i = 1; i < pts.length; i++) {
+                const dx = pts[i][0]-pts[i-1][0], dy = pts[i][1]-pts[i-1][1];
+                totalLen += Math.sqrt(dx*dx+dy*dy);
             }
+            riverPaths.push({ pts, width: Math.max(1.5, riv.width * scale * 0.8), name: riv.name, totalLen });
         }
 
-        // Draw small tree symbols in forest areas
-        for (let gx = 2; gx < cols - 2; gx += 3) {
-            for (let gy = 2; gy < rows - 2; gy += 3) {
-                const idx = gy * cols + gx;
-                if (biomeData[idx] !== 8) continue;
-                const hash = Math.sin(gx * 73.1 + gy * 197.3) * 43758.5;
-                if ((hash - Math.floor(hash)) > 0.5) continue;
-                const cx = gx * step + 1, cy = gy * step + 1;
-                // Tiny tree symbol: small triangle
-                for (let dy = -2; dy <= 1; dy++) {
-                    const hw = Math.max(0, 2 - Math.abs(dy + 1)); // width narrows at top
-                    for (let dx = -hw; dx <= hw; dx++) {
-                        const ppx = cx + dx, ppy = cy + dy;
-                        if (ppx < 0 || ppx >= w || ppy < 0 || ppy >= h) continue;
-                        const pi = (ppy * w + ppx) * 4;
-                        pixels[pi]     = Math.round(pixels[pi] * 0.5 + 50 * 0.5);
-                        pixels[pi + 1] = Math.round(pixels[pi+1] * 0.5 + 70 * 0.5);
-                        pixels[pi + 2] = Math.round(pixels[pi+2] * 0.5 + 35 * 0.5);
-                    }
-                }
+        // ── Compute contour line total lengths for draw animation ──
+        let totalContourLen = 0;
+        for (const cl of contourLines) {
+            let len = 0;
+            for (let i = 1; i < cl.points.length; i++) {
+                const dx = cl.points[i][0]-cl.points[i-1][0], dy = cl.points[i][1]-cl.points[i-1][1];
+                len += Math.sqrt(dx*dx+dy*dy);
             }
+            cl._len = len;
+            totalContourLen += len;
         }
 
-        mapCtx.putImageData(imgData, 0, 0);
-
-        // Decorative border (drawn on top)
-        mapCtx.strokeStyle = 'rgba(80, 55, 30, 0.6)';
-        mapCtx.lineWidth = 3;
-        mapCtx.strokeRect(2, 2, w - 4, h - 4);
-        mapCtx.strokeStyle = 'rgba(80, 55, 30, 0.3)';
-        mapCtx.lineWidth = 1;
-        mapCtx.strokeRect(6, 6, w - 12, h - 12);
-
-        // ── Map markers and drawings ──
-        const ink = 'rgba(60, 40, 20, 0.85)';
-        const inkLight = 'rgba(80, 55, 30, 0.55)';
-        const inkRed = 'rgba(130, 40, 30, 0.7)';
-        const toX = wx => (wx - mapViewX + mapViewSize) * scale;
-        const toY = wz => (wz - mapViewZ + mapViewSize) * scale;
-
-        // Helper: draw a small castle/tower icon
-        const drawCastle = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(10, 6 * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5; mapCtx.fillStyle = ink;
-            // Tower body
-            mapCtx.strokeRect(x - s*0.6, y - s, s*1.2, s*1.4);
-            // Crenellations
-            for (let i = -1; i <= 1; i++) {
-                mapCtx.fillRect(x + i*s*0.4 - s*0.15, y - s - s*0.35, s*0.3, s*0.35);
-            }
-            // Door
-            mapCtx.fillRect(x - s*0.15, y + s*0.1, s*0.3, s*0.4);
-            // Label
-            if (label) {
-                mapCtx.font = `italic ${Math.max(8, Math.min(13, 10 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*1.4 + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Helper: draw mountain peak symbol (small inverted V with hatching)
-        const drawMountain = (wx, wz, label, sz) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(4, Math.min(14, (sz||8) * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5;
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s*0.5);
-            mapCtx.lineTo(x, y - s);
-            mapCtx.lineTo(x + s, y + s*0.5);
-            mapCtx.stroke();
-            // Hatching on right side
-            for (let i = 1; i <= 3; i++) {
-                const t = i * 0.25;
-                mapCtx.beginPath();
-                mapCtx.moveTo(x + s*t*0.5, y - s + s*1.5*t);
-                mapCtx.lineTo(x + s*t*0.5 + s*0.3, y - s + s*1.5*t + s*0.3);
-                mapCtx.stroke();
-            }
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*0.5 + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Helper: draw ruins symbol (broken pillars)
-        const drawRuins = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(8, 5 * scale));
-            mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.2;
-            // Broken columns
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s*0.5); mapCtx.lineTo(x - s, y - s*0.6);
-            mapCtx.moveTo(x - s*0.1, y + s*0.5); mapCtx.lineTo(x - s*0.1, y - s);
-            mapCtx.moveTo(x + s*0.8, y + s*0.5); mapCtx.lineTo(x + s*0.8, y - s*0.3);
-            mapCtx.stroke();
-            // Fallen beam
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s*0.8, y - s*0.4);
-            mapCtx.lineTo(x + s*0.5, y + s*0.1);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkLight; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s*0.5 + Math.max(7, 9 * scale));
-            }
-        };
-
-        // Helper: draw gate symbol (two pillars with arch)
-        const drawGate = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(8, 5 * scale));
-            mapCtx.strokeStyle = inkRed; mapCtx.lineWidth = 1.5;
-            // Two pillars
-            mapCtx.beginPath();
-            mapCtx.moveTo(x - s, y + s); mapCtx.lineTo(x - s, y - s*0.5);
-            mapCtx.moveTo(x + s, y + s); mapCtx.lineTo(x + s, y - s*0.5);
-            mapCtx.stroke();
-            // Arch
-            mapCtx.beginPath();
-            mapCtx.arc(x, y - s*0.5, s, Math.PI, 0);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkRed; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(7, 9 * scale));
-            }
-        };
-
-        // Helper: draw village symbol (small cluster of houses)
-        const drawVillage = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(2, Math.min(6, 4 * scale));
-            mapCtx.fillStyle = ink;
-            // Small house shapes
-            mapCtx.fillRect(x - s*1.2, y - s*0.3, s*0.8, s*0.6);
-            mapCtx.fillRect(x + s*0.2, y - s*0.5, s*0.9, s*0.7);
-            mapCtx.fillRect(x - s*0.4, y + s*0.3, s*0.7, s*0.5);
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(11, 9 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(8, 10 * scale));
-            }
-        };
-
-        // ── Place markers (actual coordinates from the codebase) ──
-
-        // Helper: draw label only (for region names)
-        const drawLabel = (wx, wz, label, color, size) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -40 || x > w+40 || y < -20 || y > h+20) return;
-            const fs = Math.max(7, Math.min(size || 11, (size || 11) * scale));
-            mapCtx.font = `italic ${fs}px Georgia, serif`;
-            mapCtx.fillStyle = color || ink;
-            mapCtx.textAlign = 'center';
-            mapCtx.fillText(label, x, y);
-        };
-
-        // Helper: draw a danger marker (skull-like X)
-        const drawDanger = (wx, wz, label) => {
-            const x = toX(wx), y = toY(wz);
-            if (x < -20 || x > w+20 || y < -20 || y > h+20) return;
-            const s = Math.max(3, Math.min(7, 5 * scale));
-            mapCtx.strokeStyle = inkRed; mapCtx.lineWidth = 1.8;
-            mapCtx.beginPath();
-            mapCtx.moveTo(x-s, y-s); mapCtx.lineTo(x+s, y+s);
-            mapCtx.moveTo(x+s, y-s); mapCtx.lineTo(x-s, y+s);
-            mapCtx.stroke();
-            mapCtx.beginPath(); mapCtx.arc(x, y, s*0.3, 0, Math.PI*2);
-            mapCtx.stroke();
-            if (label) {
-                mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-                mapCtx.fillStyle = inkRed; mapCtx.textAlign = 'center';
-                mapCtx.fillText(label, x, y + s + Math.max(8, 10 * scale));
-            }
-        };
-
-        // Castle (the western castle from villages.js)
-        drawCastle(-800, 40, 'The Castle');
-
-        // Ruined Fortress
-        drawRuins(-1010, -670, 'Ruined Fortress');
-
-        // Mountains
-        drawMountain(1204, -60, 'East Mountains', 10);
-        drawMountain(1020, -260, 'NW Peaks', 7);
-        drawMountain(1020, 160, 'SW Hills', 6);
-        drawMountain(1640, -80, 'Great Peak', 12);
-        drawMountain(1460, -190, 'NE Ridge', 6);
-        drawMountain(1470, 80, 'SE Ridge', 6);
-        drawMountain(-60, -2100, 'Frozen Mountains', 14);
-        drawMountain(-500, -2700, 'Frostfang Ridge', 10);
-        drawMountain(400, -2600, 'Icespire Peaks', 9);
-        drawMountain(100, -2800, 'Pale Spine', 8);
-        drawMountain(-800, -2400, 'Howling Crags', 8);
-        drawMountain(760, -2360, 'Rimestone Peaks', 8);
-
-        // Villages
-        drawVillage(160, 32, 'Meadow Village');
-        drawVillage(-200, -100, 'Forest Edge');
-        drawVillage(400, 120, 'Hillside Town');
-        drawVillage(-400, 200, 'Western Hamlet');
-        drawVillage(100, -300, 'Northwatch');
-        drawVillage(-300, 400, 'Southmoor');
-        drawVillage(2040, 60, 'Farwatch');
-        drawCastle(2160, 10, "Dragon's Reach");
-        drawVillage(-2100, -120, 'Bay Watch');
-        drawVillage(-2150, 200, 'Tidecrest');
-
-        // Forest Gates (around the ancient forest hill ring at -60, -700)
-        drawGate(-280, -700, 'West Gate');
-        drawGate(160, -700, 'East Gate');
-        drawGate(-60, -920, 'North Gate');
-        drawGate(-60, -480, 'South Gate');
-
-        // Gate bosses
-        drawDanger(-250, -700, 'Colossus');
-        drawDanger(130, -700, 'Skeleton');
-        drawDanger(-60, -570, 'Dark Knight');
-        drawDanger(-60, -190, 'Hobgoblin');
-
-        // Goblin camps
-        drawDanger(-230, 70, 'Goblin Outpost');
-
-        // Ancient forest — large italic label
-        drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13);
-
-        // Forest ruins (inside the ancient forest)
-        const ruinStyle = 'rgba(80, 55, 30, 0.5)';
-        drawLabel(-120, -420, 'Broken Temple', ruinStyle, 8);
-        drawLabel(-20, -320, 'Old Tower', ruinStyle, 8);
-        drawLabel(-40, -440, 'Stone Circle', ruinStyle, 8);
-
-        // Dragon altar
-        const altX = toX(-1010), altY = toY(-670);
-        if (altX > -20 && altX < w+20 && altY > -20 && altY < h+20) {
-            const s = Math.max(3, Math.min(7, 5 * scale));
-            mapCtx.strokeStyle = 'rgba(100, 40, 120, 0.7)'; mapCtx.lineWidth = 1.5;
-            mapCtx.beginPath();
-            mapCtx.arc(altX, altY - s*3, s, 0, Math.PI*2);
-            mapCtx.stroke();
-            mapCtx.beginPath();
-            mapCtx.moveTo(altX, altY - s*3 - s*0.5);
-            mapCtx.lineTo(altX, altY - s*3 + s*0.5);
-            mapCtx.moveTo(altX - s*0.5, altY - s*3);
-            mapCtx.lineTo(altX + s*0.5, altY - s*3);
-            mapCtx.stroke();
-        }
-
-        // Cave entrance
-        const caveX = toX(1120), caveY = toY(-100);
-        if (caveX > -20 && caveX < w+20 && caveY > -20 && caveY < h+20) {
-            const s = Math.max(3, Math.min(6, 4 * scale));
-            mapCtx.fillStyle = 'rgba(40, 30, 20, 0.6)';
-            mapCtx.beginPath();
-            mapCtx.arc(caveX, caveY, s, Math.PI, 0);
-            mapCtx.fill();
-            mapCtx.font = `italic ${Math.max(7, Math.min(10, 8 * scale))}px Georgia, serif`;
-            mapCtx.fillStyle = ink; mapCtx.textAlign = 'center';
-            mapCtx.fillText('Cave', caveX, caveY + Math.max(8, 10 * scale));
-        }
-
-        // Abandoned Village
-        drawRuins(0, -1080, 'Abandoned Village');
-
-        // Scorched Lands region label
-        drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12);
-
-        // Enchanted Forest region label
-        drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10);
-
-        // Compass rose (top-right corner)
-        const crX = w - 45, crY = 45, crS = Math.min(30, w * 0.04);
-        mapCtx.strokeStyle = ink; mapCtx.lineWidth = 1.5; mapCtx.fillStyle = ink;
-        // N-S line
-        mapCtx.beginPath(); mapCtx.moveTo(crX, crY - crS); mapCtx.lineTo(crX, crY + crS); mapCtx.stroke();
-        // E-W line
-        mapCtx.beginPath(); mapCtx.moveTo(crX - crS, crY); mapCtx.lineTo(crX + crS, crY); mapCtx.stroke();
-        // N arrow
-        mapCtx.beginPath();
-        mapCtx.moveTo(crX, crY - crS - 4);
-        mapCtx.lineTo(crX - 3, crY - crS + 3);
-        mapCtx.lineTo(crX + 3, crY - crS + 3);
-        mapCtx.closePath(); mapCtx.fill();
-        // Labels
-        mapCtx.font = `bold ${Math.max(8, crS * 0.5)}px Georgia, serif`;
-        mapCtx.textAlign = 'center';
-        mapCtx.fillText('N', crX, crY - crS - 7);
-        mapCtx.font = `${Math.max(6, crS * 0.35)}px Georgia, serif`;
-        mapCtx.fillText('S', crX, crY + crS + 10);
-        mapCtx.fillText('E', crX + crS + 8, crY + 3);
-        mapCtx.fillText('W', crX - crS - 8, crY + 3);
-
-        mapCache = mapCtx.getImageData(0, 0, w, h);
-        mapCacheVX = mapViewX; mapCacheVZ = mapViewZ; mapCacheSize = mapViewSize;
-    } else {
-        mapCtx.putImageData(mapCache, 0, 0);
+        _mapLayers = { parchCanvas, contourCanvas, coastTreeCanvas, colorCanvas, contourLines, totalContourLen, riverPaths };
     }
+
+    // ── Animation phases ──
+    // Phase 0: 0.0-0.0  parchment only (instant)
+    // Phase 1: 0.0-0.3  contour lines draw in + coastline/trees fade in
+    // Phase 2: 0.3-0.7  colors pour in (top→bottom) + rivers draw simultaneously
+    // Phase 3: 0.7-1.0  markers appear
+    const p = _mapDrawProgress;
+    const L = _mapLayers;
+
+    // Always start with parchment
+    mapCtx.drawImage(L.parchCanvas, 0, 0);
+
+    // ── Phase 2 (drawn first so contours render on top): Colors pour in ──
+    if (p > 0.3) {
+        const colorP = Math.min(1, (p - 0.3) / 0.4);
+        const revealY = Math.floor(colorP * h);
+        if (revealY > 0) {
+            mapCtx.save();
+            mapCtx.beginPath();
+            mapCtx.rect(0, 0, w, revealY);
+            mapCtx.clip();
+            mapCtx.drawImage(L.colorCanvas, 0, 0);
+            mapCtx.restore();
+        }
+    }
+
+    // ── Phase 1: Contour lines drawing in + coastline/trees fade ──
+    if (p > 0) {
+        const contourP = Math.min(1, p / 0.3);
+        // Coastline + trees fade in with contour progress
+        mapCtx.globalAlpha = contourP;
+        mapCtx.drawImage(L.coastTreeCanvas, 0, 0);
+        mapCtx.globalAlpha = 1;
+        if (contourP >= 1) {
+            // All contour lines complete — draw cached canvas
+            mapCtx.drawImage(L.contourCanvas, 0, 0);
+        } else {
+            // Draw contour lines progressively
+            const inkCol = ['rgba(70,45,25,0.40)', 'rgba(70,45,25,0.75)'];
+            const inkW = [0.8, 1.5];
+            let cumLen = 0;
+            const drawLen = contourP * L.totalContourLen;
+            for (const cl of L.contourLines) {
+                if (cumLen >= drawLen) break;
+                const remaining = drawLen - cumLen;
+                mapCtx.strokeStyle = inkCol[cl.major?1:0];
+                mapCtx.lineWidth = inkW[cl.major?1:0];
+                mapCtx.beginPath();
+                mapCtx.moveTo(cl.points[0][0], cl.points[0][1]);
+                let segLen = 0;
+                for (let i = 1; i < cl.points.length; i++) {
+                    const dx = cl.points[i][0]-cl.points[i-1][0], dy = cl.points[i][1]-cl.points[i-1][1];
+                    const d = Math.sqrt(dx*dx+dy*dy);
+                    if (segLen + d <= remaining) {
+                        mapCtx.lineTo(cl.points[i][0], cl.points[i][1]);
+                        segLen += d;
+                    } else {
+                        const t = (remaining - segLen) / d;
+                        mapCtx.lineTo(cl.points[i-1][0]+dx*t, cl.points[i-1][1]+dy*t);
+                        break;
+                    }
+                }
+                mapCtx.stroke();
+                cumLen += cl._len;
+            }
+        }
+    }
+
+    // ── Phase 2 continued: Rivers draw progressively ──
+    if (p > 0.3) {
+        const colorP = Math.min(1, (p - 0.3) / 0.4);
+        for (const riv of L.riverPaths) {
+            if (riv.pts.length < 2) continue;
+            mapCtx.strokeStyle = 'rgba(50,90,150,0.6)';
+            mapCtx.lineWidth = riv.width;
+            mapCtx.lineCap = 'round';
+            mapCtx.lineJoin = 'round';
+            mapCtx.beginPath();
+            mapCtx.moveTo(riv.pts[0][0], riv.pts[0][1]);
+            const drawLen = colorP * riv.totalLen;
+            let drawn = 0;
+            for (let i = 1; i < riv.pts.length; i++) {
+                const dx = riv.pts[i][0]-riv.pts[i-1][0], dy = riv.pts[i][1]-riv.pts[i-1][1];
+                const d = Math.sqrt(dx*dx+dy*dy);
+                if (drawn + d <= drawLen) {
+                    mapCtx.lineTo(riv.pts[i][0], riv.pts[i][1]);
+                    drawn += d;
+                } else {
+                    const t = (drawLen - drawn) / d;
+                    mapCtx.lineTo(riv.pts[i-1][0]+dx*t, riv.pts[i-1][1]+dy*t);
+                    break;
+                }
+            }
+            mapCtx.stroke();
+        }
+    }
+
+    // ── Phase 3: Markers ──
+    const markerP = p > 0.7 ? Math.min(1, (p - 0.7) / 0.3) : 0;
+    _drawMapMarkers(mapCtx, w, h, scale, mapViewX, mapViewZ, mapViewSize, markerP);
 
     // Waypoint markers
     _drawWaypointsOnMap(mapCtx, scale, mapViewX, mapViewZ, mapViewSize);
@@ -10521,6 +10900,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                         const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
                         addToInventory(getBlockDrop(block));
                         world.setBlock(bx, by, bz, BLOCK.AIR);
+                        if (waterSim) waterSim.onBlockBroken(bx, by, bz);
                         rebuildSet.add(bx + ',' + bz);
                         if (isTree) fellTree(bx, by, bz, rebuildSet);
                     }
@@ -10553,6 +10933,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
                         const isTree = block === BLOCK.WOOD && isNaturalTree(bx, by, bz);
                         addToInventory(getBlockDrop(block));
                         world.setBlock(bx, by, bz, BLOCK.AIR);
+                        if (waterSim) waterSim.onBlockBroken(bx, by, bz);
                         rebuildSet.add(bx + ',' + bz);
                         if (isTree) fellTree(bx, by, bz, rebuildSet);
                     }
@@ -10568,6 +10949,7 @@ function doBreakBlock(hit, hasPickaxe, hasAxe) {
         const isTree = hit.block === BLOCK.WOOD && isNaturalTree(hit.x, hit.y, hit.z);
         addToInventory(getBlockDrop(hit.block));
         world.setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
+        if (waterSim) waterSim.onBlockBroken(hit.x, hit.y, hit.z);
         if (isTree) {
             const rs = new Set();
             rs.add(hit.x + ',' + hit.z);
@@ -11121,6 +11503,8 @@ const _IRON_ANVIL_MATS = new Set(['stick', String(BLOCK.STONE), 'copper_ingot', 
 // Sword customization options
 const GUARD_STYLES = ['straight', 'curved', 'wide', 'spiked', 'ring'];
 const POMMEL_STYLES = ['round', 'gem', 'skull', 'wolf', 'claw'];
+const BLADE_STYLES = ['straight', 'curved', 'falchion', 'serrated', 'leaf'];
+const WEAPON_TYPES = ['sword', 'battleaxe', 'warhammer'];
 const SWORD_MATERIALS = [
     { key: 'stick', name: 'Wood', cost: 'stick' },
     { key: BLOCK.STONE, name: 'Stone', cost: BLOCK.STONE },
@@ -11173,9 +11557,10 @@ let anvilSwordConfig = {
     handleMat: 'stick',
     guardStyle: 'straight', guardMat: 'iron_ingot',
     bladeMat: 'iron_ingot', bladeLength: 2, bladeThickness: 1,
+    bladeStyle: 'straight',
     trimMat: '',
     name: '',
-    isBattleaxe: false,
+    weaponType: 'sword', // 'sword', 'battleaxe', 'warhammer'
 };
 
 const _anvilCollapsed = {}; // track which categories are collapsed
@@ -11232,8 +11617,17 @@ function updateAnvilUI() {
 
     const swordCollapsed = _anvilCollapsed['_swordForge'];
     html += '<div style="margin-top:12px;border-top:1px solid rgba(120,160,80,0.3);padding-top:10px;">';
-    html += `<div data-toggle="_swordForge" style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${swordCollapsed ? '▶' : '▼'} Custom Sword Forge</div>`;
+    html += `<div data-toggle="_swordForge" style="color:rgba(200,180,140,0.7);font:bold 11px monospace;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;">${swordCollapsed ? '▶' : '▼'} Custom Weapon Forge</div>`;
     html += `<div style="${swordCollapsed ? 'display:none;' : ''}">`;
+
+    // Weapon type selector (sword / battleaxe / warhammer)
+    const _wt = anvilSwordConfig.weaponType || 'sword';
+    html += `<div style="${_row};margin-bottom:4px;">`;
+    for (const wt of WEAPON_TYPES) {
+        const sel = wt === _wt;
+        html += `<button class="menu-btn anvilWeaponType" data-wt="${wt}" style="flex:1;padding:6px 4px;font-size:11px;font-weight:${sel ? 'bold' : 'normal'};${sel ? 'background:rgba(120,160,80,0.4);border-color:rgba(120,160,80,0.8);' : ''}">${wt.charAt(0).toUpperCase() + wt.slice(1)}</button>`;
+    }
+    html += '</div>';
 
     // 1. Pommel (1x material + style)
     html += `<div style="${_row}"><span style="${_lbl}width:55px;">Pommel</span>`;
@@ -11271,21 +11665,27 @@ function updateAnvilUI() {
     html += `<span style="flex:1;">${_sel('anvilTrimMat', _matOptsWithNone, anvilSwordConfig.trimMat)}</span>`;
     html += `<span style="${_lbl}">×1</span></div>`;
 
-    // 6. Blade name
+    // 6. Blade style (only for swords)
+    if (_wt === 'sword') {
+        html += `<div style="${_row}"><span style="${_lbl}width:55px;">Style</span>`;
+        html += `<span style="flex:1;">${_sel('anvilBladeStyle', _styleOpts(BLADE_STYLES), anvilSwordConfig.bladeStyle || 'straight')}</span>`;
+        html += `</div>`;
+    }
+
+    // 7. Blade name
+    const _placeholders = { sword: 'Unnamed Blade', battleaxe: 'Unnamed Battleaxe', warhammer: 'Unnamed War Hammer' };
     html += `<div style="${_row}"><span style="${_lbl}width:55px;">Name</span>`;
-    html += `<input type="text" id="anvilName" maxlength="24" placeholder="${anvilSwordConfig.isBattleaxe ? 'Unnamed Battleaxe' : 'Unnamed Blade'}" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
+    html += `<input type="text" id="anvilName" maxlength="24" placeholder="${_placeholders[_wt]}" value="${anvilSwordConfig.name || ''}" style="flex:1;padding:3px;font:10px monospace;background:rgba(20,30,15,0.7);color:rgba(220,210,180,0.9);border:1px solid rgba(120,160,80,0.4);border-radius:3px;">`;
     html += `</div>`;
 
-    // 7. Battleaxe toggle — swaps the forged weapon for a double-bit axe with bigger
-    // per-hit damage but slower swing speed.
-    html += `<div style="${_row}"><span style="${_lbl}width:55px;">Battleaxe</span>`;
-    html += `<label style="flex:1;display:flex;align-items:center;gap:6px;font:10px monospace;color:rgba(200,180,140,0.8);cursor:pointer;">`;
-    html += `<input type="checkbox" id="anvilIsBattleaxe" ${anvilSwordConfig.isBattleaxe ? 'checked' : ''}>`;
-    html += `<span>Forge as double-bit battleaxe (+50% damage, 40% slower swing)</span></label></div>`;
+    // Weapon info
+    const _weaponInfo = { sword: '', battleaxe: '<span style="color:rgba(200,160,80,0.6);font:9px monospace;">+50% damage, slower swing</span>', warhammer: '<span style="color:rgba(200,160,80,0.6);font:9px monospace;">+30% damage, slowest swing, stun chance</span>' };
+    if (_weaponInfo[_wt]) html += `<div style="padding:2px 0;">${_weaponInfo[_wt]}</div>`;
 
     // Cost summary + forge button
+    const _forgeLabels = { sword: 'Forge Sword', battleaxe: 'Forge Battleaxe', warhammer: 'Forge War Hammer' };
     html += '<div id="anvilCostSummary" style="margin-top:6px;font:10px monospace;color:rgba(180,170,140,0.5);"></div>';
-    html += `<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">${anvilSwordConfig.isBattleaxe ? 'Forge Battleaxe' : 'Forge Sword'}</button>`;
+    html += `<button class="menu-btn" id="forgeBtn" style="width:100%;margin-top:6px;padding:10px;font-size:13px;font-weight:bold;">${_forgeLabels[_wt]}</button>`;
     html += '</div></div>'; // close sword collapsible + outer div
 
     // ── Custom Staff Forge ──
@@ -11381,8 +11781,8 @@ function updateAnvilUI() {
         c.bladeLength = Number(document.getElementById('anvilBladeLen')?.value || 20) / 10;
         c.bladeThickness = Number(document.getElementById('anvilBladeThick')?.value || 10) / 10;
         c.trimMat = document.getElementById('anvilTrimMat')?.value || '';
+        c.bladeStyle = document.getElementById('anvilBladeStyle')?.value || 'straight';
         c.name = document.getElementById('anvilName')?.value?.trim() || '';
-        c.isBattleaxe = !!document.getElementById('anvilIsBattleaxe')?.checked;
         // Parse mat keys back to numbers if needed
         if (!isNaN(c.pommelMat)) c.pommelMat = Number(c.pommelMat);
         if (!isNaN(c.handleMat)) c.handleMat = Number(c.handleMat);
@@ -11409,7 +11809,9 @@ function updateAnvilUI() {
             if (!ok) canForge = false;
             text += `<span style="color:${ok ? 'rgba(150,200,100,0.8)' : 'rgba(200,80,80,0.8)'}">${count}× ${info?.name || mat}</span> `;
         }
-        const dmg = BLADE_DAMAGE[anvilSwordConfig.bladeMat] || 3;
+        const baseDmg = BLADE_DAMAGE[anvilSwordConfig.bladeMat] || 3;
+        const _wtype = anvilSwordConfig.weaponType || 'sword';
+        const dmg = _wtype === 'battleaxe' ? Math.floor(baseDmg * 1.5) : _wtype === 'warhammer' ? Math.floor(baseDmg * 1.3) : baseDmg;
         text += ` | Damage: ${dmg}`;
         const el = document.getElementById('anvilCostSummary');
         if (el) el.innerHTML = text;
@@ -11422,11 +11824,14 @@ function updateAnvilUI() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', _updateCost);
     }
-    const _axeToggle = document.getElementById('anvilIsBattleaxe');
-    if (_axeToggle) _axeToggle.addEventListener('change', () => {
-        anvilSwordConfig.isBattleaxe = _axeToggle.checked;
-        updateAnvilUI();
-    });
+    for (const btn of document.querySelectorAll('.anvilWeaponType')) {
+        btn.addEventListener('click', () => {
+            anvilSwordConfig.weaponType = btn.dataset.wt;
+            updateAnvilUI();
+        });
+    }
+    const _bladeStyleSel = document.getElementById('anvilBladeStyle');
+    if (_bladeStyleSel) _bladeStyleSel.addEventListener('change', _updateCost);
     for (const id of ['anvilBladeLen','anvilBladeThick']) {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', () => {
@@ -11464,17 +11869,22 @@ function updateAnvilUI() {
         // Create custom sword
         const swordId = 'csword_' + Date.now();
         if (!window._customSwords) window._customSwords = {};
-        const weaponLabel = c.isBattleaxe ? 'battleaxe' : 'sword';
+        const wt = c.weaponType || 'sword';
+        const weaponLabels = { sword: 'Sword', battleaxe: 'Battleaxe', warhammer: 'War Hammer' };
+        const weaponLabel = weaponLabels[wt] || 'Sword';
+        const speedMults = { sword: 1.0, battleaxe: 1.6, warhammer: 1.8 };
         window._customSwords[swordId] = {
             tier, damage: BLADE_DAMAGE[c.bladeMat] || 3,
             pommelStyle: c.pommelStyle, pommelMat: c.pommelMat,
             handleMat: c.handleMat,
             guardStyle: c.guardStyle, guardMat: c.guardMat,
             bladeMat: c.bladeMat, bladeLength: c.bladeLength, bladeThickness: c.bladeThickness,
+            bladeStyle: wt === 'sword' ? (c.bladeStyle || 'straight') : undefined,
             trimMat: c.trimMat,
-            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' ' + (c.isBattleaxe ? 'Battleaxe' : 'Sword')),
-            isBattleaxe: !!c.isBattleaxe,
-            speedMult: c.isBattleaxe ? 1.4 : 1.0,
+            name: c.name || (tier.charAt(0).toUpperCase() + tier.slice(1) + ' ' + weaponLabel),
+            isBattleaxe: wt === 'battleaxe',
+            isWarhammer: wt === 'warhammer',
+            speedMult: speedMults[wt] || 1.0,
         };
         inventory[swordId] = 1;
         const emptyIdx = hotbarSlots.indexOf(0);
@@ -11603,10 +12013,14 @@ const _getSwordDamage = (held) => {
         const cs = window._customSwords[held];
         if (cs.tier === 'damaged_dragonsteel') return 5; // flat — salvage & reforge at a blacksmith for full power
         if (cs.isBattleaxe) {
-            // Battleaxes: dragonsteel scales like a normal dragonsteel sword but with a
-            // higher base (8 vs 5); non-dragonsteel adds +50% flat damage for the slower swing.
+            // Battleaxes: dragonsteel scales with higher base (8); non-dragonsteel +50% damage
             if (cs.tier === 'dragonsteel' || cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(8);
             return Math.floor((cs.damage || 6) * 1.5);
+        }
+        if (cs.isWarhammer) {
+            // War hammers: dragonsteel scales with base 7; non-dragonsteel +30% damage
+            if (cs.tier === 'dragonsteel' || cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(7);
+            return Math.floor((cs.damage || 6) * 1.3);
         }
         if (cs.tier === 'dragonsteel_heavy') return _getDragonsteelDmg(cs.damage || 8);
         if (cs.tier === 'dragonsteel') return _getDragonsteelDmg(5);
@@ -13254,14 +13668,17 @@ function doPlace(e) {
         world.setBlock(px, py, pz, placeBlock);
         rebuildNear(px, pz);
         placeTorchModel(px, py, pz);
+        if (waterSim) waterSim.onBlockPlaced(px, py, pz);
     } else if (placeBlock === BLOCK.CAMPFIRE) {
         // 2x1x2 campfire
         for (let dx = 0; dx <= 1; dx++)
             for (let dz = 0; dz <= 1; dz++)
                 world.setBlock(px + dx, py, pz + dz, placeBlock);
         for (let dx = 0; dx <= 1; dx++)
-            for (let dz = 0; dz <= 1; dz++)
+            for (let dz = 0; dz <= 1; dz++) {
                 rebuildNear(px + dx, pz + dz);
+                if (waterSim) waterSim.onBlockPlaced(px + dx, py, pz + dz);
+            }
         placeCampfireModel(px, py, pz);
     } else if (placeBlock === BLOCK.CRAFTING || placeBlock === 15 || placeBlock === BLOCK.ANVIL || placeBlock === BLOCK.STEEL_ANVIL || placeBlock === BLOCK.BLAST_FURNACE || placeBlock === BLOCK.CHEST) {
         for (let dx = 0; dx <= 1; dx++)
@@ -13269,8 +13686,10 @@ function doPlace(e) {
                 for (let dz = 0; dz <= 1; dz++)
                     world.setBlock(px + dx, py + dy, pz + dz, placeBlock);
         for (let dx = 0; dx <= 1; dx++)
-            for (let dz = 0; dz <= 1; dz++)
+            for (let dz = 0; dz <= 1; dz++) {
                 rebuildNear(px + dx, pz + dz);
+                if (waterSim) waterSim.onBlockPlaced(px + dx, py, pz + dz);
+            }
         if (placeBlock === BLOCK.ANVIL) placeAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.STEEL_ANVIL) placeSteelAnvilModel(px, py, pz);
         if (placeBlock === BLOCK.CHEST) _registerChest(px, py, pz);
@@ -13293,7 +13712,10 @@ function doPlace(e) {
         for (let i = 0; i < activeCount - 1; i++) { if (!removeFromInventory(bt)) break; }
         for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) for (let dx=0;dx<2;dx++)
             if (getSnapBlock(dy,dz,dx)) world.setBlock(sx+dx, sy+dy, sz+dz, placeBlock);
-        for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) rebuildNear(sx+dx, sz+dz);
+        for (let dx = 0; dx < 2; dx++) for (let dz = 0; dz < 2; dz++) {
+            rebuildNear(sx+dx, sz+dz);
+            for (let dy = 0; dy < 2; dy++) if (getSnapBlock(dy,dx,dz) && waterSim) waterSim.onBlockPlaced(sx+dx, sy+dy, sz+dz);
+        }
     } else {
         // Brush placement — always a vertical wall (Y + one horizontal axis)
         // Determine horizontal axis for brush
@@ -13326,10 +13748,12 @@ function doPlace(e) {
             if (!placedFirst) {
                 world.setBlock(bx, by, bz, bt);
                 rebuildNear(bx, bz);
+                if (waterSim) waterSim.onBlockPlaced(bx, by, bz);
                 placedFirst = true;
             } else if (removeFromInventory(bt)) {
                 world.setBlock(bx, by, bz, bt);
                 rebuildNear(bx, bz);
+                if (waterSim) waterSim.onBlockPlaced(bx, by, bz);
             }
         }
     }
@@ -13398,9 +13822,10 @@ function animate() {
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
+    updateWaterTime(now * 0.001);
 
-    // Autosave every 40s
-    _autosaveTimer += dt;
+    // Autosave every 40s (skip during cinematic)
+    if (!_introActive) _autosaveTimer += dt;
     if (_autosaveTimer >= 40) {
         _autosaveTimer = 0;
         saveGame(_currentSaveName);
@@ -13411,9 +13836,14 @@ function animate() {
     fpsTime += dt;
     if (fpsTime >= 1) { fps = frameCount; frameCount = 0; fpsTime = 0; }
 
+    // Cinematic tick — runs inside game loop so chunks load around player
+    if (_introActive && window._introCinematicTick) {
+        window._introCinematicTick(dt);
+    }
+
     // Player update
     fpActive = zoomLevel < 0.15 && !(dragonMgr && dragonMgr.ridingDragon);
-    if (!(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !anvilOpen) {
+    if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !anvilOpen) {
         const useMouse = useMouseLook && pointerLocked;
         // Axis-lock movement to placement direction while place-locking
         let moveKeys = keys;
@@ -13774,10 +14204,10 @@ function animate() {
                     ss._trimStripe.visible = false;
                     ss._trimStripe2.visible = false;
                 }
-                // Battleaxe silhouette for the sheathed version
+                // Battleaxe / warhammer silhouette for the sheathed version
                 const _defBlade = ss._bladeGrp.children[0];
                 const _defTip = ss._bladeGrp.children[1];
-                if (cs.isBattleaxe) {
+                if (cs.isBattleaxe || cs.isWarhammer) {
                     ss._bladeGrp.scale.set(1, 1, 1);
                     ss._bladeGrp.position.y = 0;
                     if (_defBlade) _defBlade.visible = false;
@@ -13787,18 +14217,29 @@ function animate() {
                     if (ss._guardMesh) ss._guardMesh.visible = false;
                     if (ss._guardExtra1) ss._guardExtra1.visible = false;
                     if (ss._guardExtra2) ss._guardExtra2.visible = false;
-                    if (!ss._axeHead) {
-                        ss._axeHead = window.buildAxeHead(ss._bladeMat, ss._handleMat);
-                        ss._bladeGrp.add(ss._axeHead);
+                    if (cs.isBattleaxe) {
+                        if (!ss._axeHead) {
+                            ss._axeHead = window.buildAxeHead(ss._bladeMat, ss._handleMat);
+                            ss._bladeGrp.add(ss._axeHead);
+                        }
+                        ss._axeHead.visible = true;
+                        if (ss._hammerHead) ss._hammerHead.visible = false;
+                    } else {
+                        if (!ss._hammerHead) {
+                            ss._hammerHead = window.buildHammerHead(ss._bladeMat, ss._handleMat);
+                            ss._bladeGrp.add(ss._hammerHead);
+                        }
+                        ss._hammerHead.visible = true;
+                        if (ss._axeHead) ss._axeHead.visible = false;
                     }
-                    ss._axeHead.visible = true;
                 } else {
                     if (ss._axeHead) ss._axeHead.visible = false;
+                    if (ss._hammerHead) ss._hammerHead.visible = false;
                     if (_defBlade) _defBlade.visible = true;
                     if (_defTip) _defTip.visible = true;
                     if (ss._guardMesh) ss._guardMesh.visible = true;
                 }
-                isTwoH = (bLen > 2.3) || cs.isBattleaxe;
+                isTwoH = (bLen > 2.3) || cs.isBattleaxe || cs.isWarhammer;
             } else {
                 // Standard sword — apply tier colors to all parts
                 const SC = {
@@ -13895,7 +14336,7 @@ function animate() {
     }
 
     // Day/night cycle — server is authoritative when connected
-    if (!mp.active) timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
+    if (!mp.active && !_introActive) timeOfDay = (timeOfDay + dt / DAY_LENGTH) % 1.0;
     const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
     const isDusk = timeOfDay > 0.72 && timeOfDay <= 0.78;
     const isDawn = timeOfDay >= 0.22 && timeOfDay < 0.28;
@@ -14132,7 +14573,26 @@ function animate() {
     }
 
     // Load/unload chunks
-    chunkManager.update(player.position.x, player.position.z, player.group.rotation.y);
+    chunkManager.update(player.position.x, player.position.z);
+
+    // Water simulation — throttle chunk rebuilds to max 4 per frame, carry over remainder
+    if (waterSim) {
+        waterSim.setPlayerPos(player.position.x, player.position.z);
+        const dirtyChunks = waterSim.update(dt);
+        if (dirtyChunks) {
+            for (const key of dirtyChunks) _waterDirtyCarry.add(key);
+        }
+        if (_waterDirtyCarry.size > 0) {
+            let rebuilt = 0;
+            for (const key of _waterDirtyCarry) {
+                if (rebuilt >= 4) break;
+                const [cx, cz] = key.split(',').map(Number);
+                chunkManager.rebuildChunkAt(cx * CHUNK_SIZE, cz * CHUNK_SIZE);
+                _waterDirtyCarry.delete(key);
+                rebuilt++;
+            }
+        }
+    }
 
     // Rebuild structure LOD mesh if block counts changed — throttled heavily
     if (world && world._modifiedBlocks) {
@@ -14391,11 +14851,12 @@ function animate() {
         }
     }
 
+    creatures.peacefulMode = peacefulMode;
     creatures.update(dt, player.position.x, player.position.z, player.position.y);
     _updateArrows(dt);
 
     // Villagers
-    villageMgr.update(dt, player.position.x, player.position.z);
+    villageMgr.update(dt, player.position.x, player.position.z, timeOfDay);
 
     // Dragons
     player._lookPitch = fpPitch;
@@ -14563,7 +15024,7 @@ function animate() {
             const bdx = player.position.x - boss.x, bdz = player.position.z - boss.z;
             const bDist = Math.sqrt(bdx*bdx + bdz*bdz);
             // Trigger attack when in range and attack ready (only if hostile)
-            if (boss.hostile && bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
+            if (boss.hostile && !peacefulMode && bDist < boss.attackRange * 5 && boss.attackTimer <= 0.1 && boss._smashTimer < 0) {
                 boss._smashTimer = 0;
                 if (boss._isDarkKnight || boss._isEmberLord) boss._dkCombo = ((boss._dkCombo || 0) + 1) % 3;
             }
@@ -14741,8 +15202,8 @@ function animate() {
         }
     }
 
-    // Context music — boss > fortress > village > calm
-    {
+    // Context music — boss > fortress > village > calm (skip during cinematic)
+    if (!_introActive) {
         const aliveBosses = creatures.creatures.filter(c => c._isBoss && !c.dead);
         const fdx = player.position.x - (-1010), fdz = player.position.z - (-670);
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
@@ -14907,7 +15368,7 @@ function animate() {
         const fortDist = Math.sqrt(fdx*fdx + fdz*fdz);
         const breathRange = 55; // start breathing when player is within this range of fortress center
 
-        if (fortDist < breathRange && playerHP > 0 && fd._nightState === 'flying') {
+        if (fortDist < breathRange && playerHP > 0 && fd._nightState === 'flying' && !_introActive) {
             fd._breathTimer += dt;
             if (!fd._exposureTimer) fd._exposureTimer = 0;
 
@@ -14990,8 +15451,8 @@ function animate() {
         lookOffY = bd.growthScale * 2;
     }
 
-    // Hide player model in first person
-    player.group.visible = !firstPerson;
+    // Hide player model in first person (or during cinematic)
+    player.group.visible = !firstPerson && !_introActive;
 
     if (firstPerson) {
         // First person — camera at eye level, mouse look with pitch
@@ -15198,7 +15659,7 @@ function animate() {
             horsePrompt = 'Right-click to mount horse' + (horseMgr.nearHorse._name ? ` (${horseMgr.nearHorse._name})` : '');
         }
     }
-    const promptText = horsePrompt || colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player);
+    const promptText = _introActive ? '' : (horsePrompt || colossusPrompt || fortressSwordPrompt || dragonMgr.getPrompt(player));
     if (promptText) { promptEl.textContent = promptText; promptEl.style.display = 'block'; }
     else { promptEl.style.display = 'none'; }
 
@@ -15212,7 +15673,7 @@ function animate() {
     debugEl.innerHTML = `FPS: ${fps}<br>X: ${px.toFixed(1)} Y: ${py.toFixed(1)} Z: ${pz.toFixed(1)}<br>Block: ${bx} ${by} ${bz}<br>Chunks: ${chunkManager.loadedCount}${pickInfo}${mpInfo}`;
 
     // ── Update block highlight ──
-    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen) {
+    if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !anvilOpen && !mapOpen && !hudHidden) {
         const hlHit = raycastBlock(null);
         if (hlHit) {
             const BS = BLOCK_SIZE;
@@ -15831,12 +16292,40 @@ function executeCommand(input) {
             }
             break;
         }
+        case 'time': {
+            if (args.length === 0) {
+                // /time — show current time
+                const hrs = Math.floor(timeOfDay * 24);
+                const mins = Math.floor((timeOfDay * 24 - hrs) * 60);
+                const period = hrs >= 12 ? 'PM' : 'AM';
+                const h12 = hrs % 12 || 12;
+                const timeStr = `${h12}:${String(mins).padStart(2,'0')} ${period}`;
+                addChatMessage(`Time: ${timeStr} (${timeOfDay.toFixed(3)})`, 'rgba(180,180,220,0.9)');
+            } else if (args[0] === 'set') {
+                if (args.length < 2) { addChatMessage('Usage: /time set <value|day|noon|night|midnight>', 'rgba(255,100,100,0.9)'); return; }
+                const presets = { day: 0.30, noon: 0.50, night: 0.80, midnight: 0.0, sunrise: 0.22, sunset: 0.78 };
+                const preset = presets[args[1].toLowerCase()];
+                if (preset !== undefined) {
+                    timeOfDay = preset;
+                    addChatMessage(`Time set to ${args[1]} (${timeOfDay.toFixed(2)})`, 'rgba(150,220,150,0.9)');
+                } else {
+                    const val = Number(args[1]);
+                    if (isNaN(val) || val < 0 || val > 1) { addChatMessage('Time must be 0-1 or a preset (day/noon/night/midnight/sunrise/sunset)', 'rgba(255,100,100,0.9)'); return; }
+                    timeOfDay = val;
+                    addChatMessage(`Time set to ${timeOfDay.toFixed(3)}`, 'rgba(150,220,150,0.9)');
+                }
+            } else {
+                addChatMessage('Usage: /time [set <value|day|noon|night|midnight>]', 'rgba(255,100,100,0.9)');
+            }
+            break;
+        }
         case 'help': {
             addChatMessage('/give <player> <item> [qty] — Give items', 'rgba(180,180,220,0.9)');
             addChatMessage('/tp <player> <x> <y> <z> — Teleport', 'rgba(180,180,220,0.9)');
             addChatMessage('/clear [player] — Clear inventory', 'rgba(180,180,220,0.9)');
             addChatMessage('/kill <player> — Kill player', 'rgba(180,180,220,0.9)');
             addChatMessage('/creative — Toggle creative mode (fly + unlimited blocks)', 'rgba(180,180,220,0.9)');
+            addChatMessage('/time [set <value>] — Show/set time of day', 'rgba(180,180,220,0.9)');
             addChatMessage('/export x1 y1 z1 x2 y2 z2 — Export build region', 'rgba(180,180,220,0.9)');
             addChatMessage('/import x y z — Import build at position', 'rgba(180,180,220,0.9)');
             addChatMessage('Selectors: @s=self @a=all @r=random', 'rgba(180,180,220,0.9)');

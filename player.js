@@ -432,12 +432,12 @@ export class Player {
         // Two-handed if blade is big enough (length >= 3 or length + thickness >= 5)
         const bLen = swordData.bladeLength || 2;
         const bThick = swordData.bladeThickness || 1;
-        this._twoHanded = (bLen >= 3 || bLen + bThick >= 5);
+        this._twoHanded = (bLen >= 3 || bLen + bThick >= 5 || (swordData.isWarhammer && bLen >= 2.5));
         // Blade — scale by length and thickness
         _applyMat(tool._bladeMat, swordData.bladeMat);
         const bLenScale = bLen / 2;   // normalize: 2 = default (1.0x)
-        if (swordData.isBattleaxe) {
-            // Keep the blade group at its natural size so our axe mesh isn't distorted
+        if (swordData.isBattleaxe || swordData.isWarhammer) {
+            // Keep the blade group at its natural size so our axe/hammer mesh isn't distorted
             tool._bladeGrp.scale.set(1, 1, 1);
             tool._bladeGrp.position.y = 0;
         } else {
@@ -445,7 +445,7 @@ export class Player {
             // Offset blade group so the base stays at the guard (y≈0.1)
             tool._bladeGrp.position.y = 0.1 * (1 - bLenScale);
         }
-        // Battleaxe head — built lazily, toggled with the default blade/tip.
+        // Battleaxe / War hammer heads — built lazily, toggled with the default blade/tip.
         const defaultBlade = tool._bladeGrp.children[0];
         const defaultTip = tool._bladeGrp.children[1];
         const trim1 = tool._trimStripe, trim2 = tool._trimStripe2;
@@ -455,6 +455,7 @@ export class Player {
                 tool._bladeGrp.add(tool._axeHead);
             }
             if (tool._axeHead) tool._axeHead.visible = true;
+            if (tool._hammerHead) tool._hammerHead.visible = false;
             if (defaultBlade) defaultBlade.visible = false;
             if (defaultTip) defaultTip.visible = false;
             if (trim1) trim1.visible = false;
@@ -464,12 +465,111 @@ export class Player {
             if (tool._guardExtra1) tool._guardExtra1.visible = false;
             if (tool._guardExtra2) tool._guardExtra2.visible = false;
             this._isBattleaxe = true;
+            this._isWarhammer = false;
+        } else if (swordData.isWarhammer) {
+            if (!tool._hammerHead && typeof window !== 'undefined' && window.buildHammerHead) {
+                tool._hammerHead = window.buildHammerHead(tool._bladeMat, tool._handleMat);
+                tool._bladeGrp.add(tool._hammerHead);
+            }
+            if (tool._hammerHead) tool._hammerHead.visible = true;
+            if (tool._axeHead) tool._axeHead.visible = false;
+            if (defaultBlade) defaultBlade.visible = false;
+            if (defaultTip) defaultTip.visible = false;
+            if (trim1) trim1.visible = false;
+            if (trim2) trim2.visible = false;
+            if (tool._guardMesh) tool._guardMesh.visible = false;
+            if (tool._guardExtra1) tool._guardExtra1.visible = false;
+            if (tool._guardExtra2) tool._guardExtra2.visible = false;
+            this._isWarhammer = true;
+            this._isBattleaxe = false;
         } else {
             if (tool._axeHead) tool._axeHead.visible = false;
+            if (tool._hammerHead) tool._hammerHead.visible = false;
             if (defaultBlade) defaultBlade.visible = true;
             if (defaultTip) defaultTip.visible = true;
             if (tool._guardMesh) tool._guardMesh.visible = true;
             this._isBattleaxe = false;
+            this._isWarhammer = false;
+            // Blade style — only for normal swords (not axes/hammers)
+            const bladeStyle = swordData.bladeStyle || 'straight';
+            if (tool._currentBladeStyle !== bladeStyle) {
+                tool._currentBladeStyle = bladeStyle;
+                // Remove old serration teeth if switching away
+                if (tool._serrationTeeth) {
+                    for (const t of tool._serrationTeeth) {
+                        t.geometry.dispose();
+                        tool._bladeGrp.remove(t);
+                    }
+                    tool._serrationTeeth = null;
+                }
+                if (defaultBlade) {
+                    defaultBlade.geometry.dispose();
+                    defaultBlade.rotation.z = 0;
+                }
+                if (defaultTip) {
+                    defaultTip.geometry.dispose();
+                    defaultTip.position.x = 0;
+                }
+                if (bladeStyle === 'curved') {
+                    // Build a curved blade from segments that arc to one side
+                    const segs = 8, w = 0.035, d = 0.012, h = 0.6;
+                    const verts = [], indices = [];
+                    for (let i = 0; i <= segs; i++) {
+                        const t = i / segs;
+                        // Y centered like BoxGeometry (spans -h/2 to +h/2)
+                        const y = -h/2 + t * h;
+                        // Quadratic curve: 0 at base, peaks at tip
+                        const xOff = t * t * 0.04;
+                        verts.push(xOff - w/2, y, -d/2);
+                        verts.push(xOff + w/2, y, -d/2);
+                        verts.push(xOff + w/2, y,  d/2);
+                        verts.push(xOff - w/2, y,  d/2);
+                    }
+                    for (let i = 0; i < segs; i++) {
+                        const b = i * 4, t = (i + 1) * 4;
+                        indices.push(b, t, t+1, b, t+1, b+1);     // -z face
+                        indices.push(b+3, b+2, t+2, b+3, t+2, t+3); // +z face
+                        indices.push(b+1, t+1, t+2, b+1, t+2, b+2); // +x face
+                        indices.push(b+3, t+3, t, b+3, t, b);       // -x face
+                    }
+                    const top = segs * 4;
+                    indices.push(top, top+1, top+2, top, top+2, top+3);
+                    indices.push(0, 2, 1, 0, 3, 2);
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+                    geo.setIndex(indices);
+                    geo.computeVertexNormals();
+                    defaultBlade.geometry = geo;
+                    defaultBlade.position.y = 0.4; // same as default
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                    defaultTip.position.set(0.04, 0.74, 0); // tip follows curve end
+                } else if (bladeStyle === 'falchion') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.055, 0.6, 0.014);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.02, 0.08, 4);
+                } else if (bladeStyle === 'serrated') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.035, 0.6, 0.012);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                    // Add small teeth along one edge
+                    tool._serrationTeeth = [];
+                    for (let i = 0; i < 5; i++) {
+                        const tooth = new THREE.Mesh(
+                            new THREE.ConeGeometry(0.008, 0.03, 3),
+                            tool._bladeMat
+                        );
+                        tooth.position.set(0.02, 0.18 + i * 0.1, 0);
+                        tooth.rotation.z = -Math.PI / 2;
+                        tool._bladeGrp.add(tooth);
+                        tool._serrationTeeth.push(tooth);
+                    }
+                } else if (bladeStyle === 'leaf') {
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.05, 0.6, 0.014);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.018, 0.08, 4);
+                } else {
+                    // straight (default)
+                    defaultBlade.geometry = new THREE.BoxGeometry(0.035, 0.6, 0.012);
+                    defaultTip.geometry = new THREE.ConeGeometry(0.012, 0.08, 4);
+                }
+            }
         }
         // Handle
         _applyMat(tool._handleMat, swordData.handleMat);
@@ -1304,6 +1404,16 @@ export class Player {
             this.position.z += moveZ;
             if (keys[kj]) this.position.y += flySpeed * dt; // Space = up
             if (keys['ShiftLeft'] || keys['ShiftRight']) this.position.y -= flySpeed * dt; // Shift = down
+            // Arrow keys — slow creative movement
+            const slowSpeed = 0.5;
+            if (keys['ArrowUp']) this.position.y += slowSpeed * dt;
+            if (keys['ArrowDown']) this.position.y -= slowSpeed * dt;
+            if (keys['ArrowLeft'] || keys['ArrowRight']) {
+                if (fpMode) this.group.rotation.y = fpYaw;
+                const dir = keys['ArrowLeft'] ? 1 : -1;
+                this.position.x += Math.sin(this.group.rotation.y) * slowSpeed * dir * dt;
+                this.position.z += Math.cos(this.group.rotation.y) * slowSpeed * dir * dt;
+            }
             this.jumpVel = 0;
             this.isGrounded = false;
         } else {
