@@ -1883,8 +1883,10 @@ function _playIntroCinematic(onDone) {
     _rawPreload.push([-800, 40], [-720, 100], [-635, 175], [-800, 175], [-635, 40]);
     // Ruined fortress area
     _rawPreload.push([-1010, -670], [-1010, -620], [-960, -670]);
-    // Ancient forest — dense area that needs chunks ready
+    // Ancient forest — dense area that needs extra preloading (expensive chunks)
     _rawPreload.push([-60, -700], [-60, -620], [-60, -780], [20, -700], [-140, -700]);
+    // Camera path through ancient forest: (30,-620) → (-50,-690), add midpoints
+    _rawPreload.push([30, -620], [-10, -655], [-50, -690]);
     // Deduplicate nearby positions (within 60 units)
     const preloadPositions = [];
     for (const p of _rawPreload) {
@@ -2051,6 +2053,8 @@ function _playIntroCinematic(onDone) {
             player.position.set(px, py, pz);
             player.group.position.set(px, py, pz);
             player.jumpVel = 0;
+            // Extra chunk processing during cinematic to avoid freezes in dense areas
+            if (chunkManager) chunkManager._processQueue(32, 40);
 
             fpYaw = shot.yaw0 + (shot.yaw1 - shot.yaw0) * e;
             fpPitch = shot.pitch0 + (shot.pitch1 - shot.pitch0) * e;
@@ -2095,6 +2099,8 @@ function _playIntroCinematic(onDone) {
                 player.group.position.set(shot.from[0], shot.from[1], shot.from[2]);
                 fpYaw = shot.yaw0; fpPitch = shot.pitch0;
             }
+            // Aggressively process chunks during crossfade (screen partially black)
+            if (chunkManager) chunkManager._processQueue(64, 80);
             if (t >= 1) {
                 fadeEl.style.opacity = '0';
                 phase = 'playing'; phaseTime = 0;
