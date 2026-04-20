@@ -3906,6 +3906,8 @@ function startGame(loadSlotName, clipShotIdx) {
             if (w.rotation) w.rotation.set(0, 0, 0);
         }
         scene.add(cg);
+        // Register as harvestable corpse
+        dragonCorpses.push({ x: CORP_X, z: CORP_Z, harvested: false, hitCount: 0, group: cg });
 
         // === NPCS — real villagers that study the dragon half the day, wander the other half ===
         // Match the fortress floor calculation: gy is in block coords, convert to world Y
@@ -7280,6 +7282,10 @@ let playerHP = 10, playerMaxHP = 10; // 5 hearts, each = 2 HP
 let playerMana = 10, playerMaxMana = 10; // 5 stars, each = 2 mana
 let playerHunger = 20, playerMaxHunger = 20; // 10 drumsticks, each = 2 hunger
 let hungerDrainTimer = 0; // accumulates dt for hunger drain
+// Dragon corpses that can be harvested by hitting with a weapon
+// Each: { x, z, harvested, hitCount }
+const dragonCorpses = [];
+
 const FOOD_STATS = {
     // Raw foods: low hunger restore, no HP
     raw_mutton:  { hunger: 2, hp: 0 },
@@ -9722,6 +9728,9 @@ function getItemInfo(key) {
     if (key === 'cooked_beef') return { name: 'Cooked Beef', top: '#993322', front: '#771a11', isFood: true };
     if (key === 'cooked_pork') return { name: 'Cooked Pork', top: '#bb7755', front: '#995533', isFood: true };
     if (key === 'cooked_venison') return { name: 'Cooked Venison', top: '#994433', front: '#772211', isFood: true };
+    if (key === 'dragon_bone') return { name: 'Dragon Bone', top: '#d4cbb0', front: '#b0a890' };
+    if (key === 'dragon_flesh') return { name: 'Dragon Flesh', top: '#882244', front: '#661133' };
+    if (key === 'dragon_heart') return { name: 'Dragon Heart', top: '#cc1133', front: '#990022' };
     if (key === 'iron_bar') return { name: 'Iron Bar', top: '#b0b8c0', front: '#7a8590' };
     if (key === 'anvil_block') return { name: 'Iron Anvil', top: '#666', front: '#444' };
     if (key === 'steel_anvil_block') return { name: 'Steel Anvil', top: '#607080', front: '#506070' };
@@ -10080,6 +10089,10 @@ function _getItemTooltip(key) {
     }
     // Eggs
     if (info.isEgg) html += `<div style="color:#da8;">Hatch at a stone altar</div>`;
+    // Dragon materials
+    if (key === 'dragon_bone') html += `<div style="color:#d4cbb0;">Ancient dragon bone</div>`;
+    if (key === 'dragon_flesh') html += `<div style="color:#882244;">Raw dragon meat</div>`;
+    if (key === 'dragon_heart') html += `<div style="color:#cc1133;">A rare and powerful organ</div>`;
     // Stack count
     const count = inventory[key] || 0;
     if (count > 1) html += `<div style="color:#888;margin-top:3px;">Quantity: ${count}</div>`;
@@ -10854,6 +10867,56 @@ renderer.domElement.addEventListener('mousedown', (e) => {
                         const dx = c.x - player.position.x, dz = c.z - player.position.z;
                         const d = Math.sqrt(dx*dx+dz*dz);
                         if (d < 4 && d > 0.1 && (dx*sinA+dz*cosA)/d > 0.2) { dragonMgr._playerTarget = c; dragonMgr._playerTargetTimer = 10; break; }
+                    }
+                }
+            }
+            // Harvest dragon corpses (dead dragons + static corpses)
+            {
+                const px = player.position.x, pz = player.position.z;
+                const sinA = Math.sin(player.group.rotation.y), cosA = Math.cos(player.group.rotation.y);
+                const _harvestCorpse = (corpse) => {
+                    if (corpse.harvested) return;
+                    corpse.hitCount = (corpse.hitCount || 0) + 1;
+                    // Drop items on each hit
+                    const boneCount = 1 + Math.floor(Math.random() * 3); // 1-3
+                    const fleshCount = 1 + Math.floor(Math.random() * 4); // 1-4
+                    for (let i = 0; i < boneCount; i++) addToInventory('dragon_bone');
+                    for (let i = 0; i < fleshCount; i++) addToInventory('dragon_flesh');
+                    // Dragon heart on first harvest only
+                    if (corpse.hitCount === 1) addToInventory('dragon_heart');
+                    addChatMessage(`Harvested dragon corpse: ${boneCount} bone, ${fleshCount} flesh${corpse.hitCount === 1 ? ', 1 heart' : ''}`, 'rgba(200,160,100,0.9)');
+                    refreshUI();
+                    // After 3 hits, corpse is fully harvested
+                    if (corpse.hitCount >= 3) {
+                        corpse.harvested = true;
+                        if (corpse.group) corpse.group.visible = false;
+                        addChatMessage('The dragon corpse crumbles to dust.', 'rgba(150,130,100,0.7)');
+                    }
+                };
+                // Check static corpses (Dragon's Reach etc.)
+                for (const dc of dragonCorpses) {
+                    if (dc.harvested) continue;
+                    const dx = dc.x - px, dz = dc.z - pz;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist > 5 || dist < 0.1) continue;
+                    const dot = (dx * sinA + dz * cosA) / dist;
+                    if (dot < 0.1) continue;
+                    _harvestCorpse(dc);
+                    break;
+                }
+                // Check dead baby dragons
+                if (dragonMgr) {
+                    for (const bd of dragonMgr.dragons) {
+                        if (bd.state !== 'dead' || bd._harvested) continue;
+                        const dx = bd.x - px, dz = bd.z - pz;
+                        const dist = Math.sqrt(dx*dx + dz*dz);
+                        if (dist > 5 || dist < 0.1) continue;
+                        const dot = (dx * sinA + dz * cosA) / dist;
+                        if (dot < 0.1) continue;
+                        if (!bd._corpseData) bd._corpseData = { harvested: false, hitCount: 0, group: bd.group };
+                        _harvestCorpse(bd._corpseData);
+                        if (bd._corpseData.harvested) bd._harvested = true;
+                        break;
                     }
                 }
             }
