@@ -6314,6 +6314,7 @@ function startGame(loadSlotName, clipShotIdx) {
         staffDamageDealt = 0;
         activeSpellSlot = 1;
         dragonFormActive = false;
+        dragonFormFlying = false;
         playerMaxHP = Math.max(2, Math.floor(10 + getStatHPBonus()));
         playerHP = playerMaxHP;
         playerHunger = playerMaxHunger;
@@ -7295,6 +7296,8 @@ let playerHunger = 20, playerMaxHunger = 20; // 10 drumsticks, each = 2 hunger
 let hungerDrainTimer = 0; // accumulates dt for hunger drain
 // Dragon form — player transformation
 let dragonFormActive = false;
+let dragonFormFlying = false;
+let _lastSpaceTime = 0; // for double-space flight toggle
 
 // Dragon corpses that can be harvested by hitting with a weapon
 // Each: { x, z, harvested, hitCount }
@@ -7360,6 +7363,8 @@ function playerTakeDamage(dmg) {
     // Check death
     if (playerHP <= 0) {
         playerDead = true;
+        dragonFormFlying = false;
+        if (player) player.dragonFlying = false;
         deathScreenTimer = 3;
         deathScreen.style.display = 'flex';
         // Break a heart and drop life crystal
@@ -8745,6 +8750,22 @@ document.addEventListener('mouseup', e => {
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
+    // Dragon form flight — double-tap space to toggle
+    if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player) {
+        const now = performance.now();
+        if (now - _lastSpaceTime < 300) {
+            dragonFormFlying = !dragonFormFlying;
+            player.dragonFlying = dragonFormFlying;
+            if (dragonFormFlying) {
+                addChatMessage('Wings spread — you take flight!', 'rgba(180,120,200,0.9)');
+            } else {
+                addChatMessage('You fold your wings and descend.', 'rgba(180,120,200,0.9)');
+            }
+            _lastSpaceTime = 0; // reset so triple-tap doesn't re-toggle
+        } else {
+            _lastSpaceTime = now;
+        }
+    }
     // Horse gear control while riding
     if (horseMgr && horseMgr.ridingHorse && !e.repeat) {
         if (e.code === keybinds.forward) { horseMgr.gearUp(); e.preventDefault(); return; }
@@ -14310,6 +14331,11 @@ function animate() {
         }
     }
     dragonMgr.applyPlayerPose(player);
+    // Dragon form flight — sync state and auto-land when touching ground
+    if (dragonFormFlying && player && player.isGrounded) {
+        dragonFormFlying = false;
+        player.dragonFlying = false;
+    }
     if (dragonFormActive) player.animateDragonParts(dt);
 
     // Staff magic shield visual

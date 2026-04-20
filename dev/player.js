@@ -1397,9 +1397,9 @@ export class Player {
         const moveX = hasInput ? Math.sin(moveAngle) * this.speed * dt : 0;
         const moveZ = hasInput ? Math.cos(moveAngle) * this.speed * dt : 0;
 
-        // Creative mode — fly, no gravity, no collision
-        if (this.creative) {
-            const flySpeed = wantSprint ? 16.0 : 8.0;
+        // Creative mode or Dragon Form flight — fly, no gravity, no collision
+        if (this.creative || this.dragonFlying) {
+            const flySpeed = this.dragonFlying ? (wantSprint ? 20.0 : 12.0) : (wantSprint ? 16.0 : 8.0);
             this.position.x += moveX;
             this.position.z += moveZ;
             if (keys[kj]) this.position.y += flySpeed * dt; // Space = up
@@ -1764,264 +1764,433 @@ export class Player {
     }
 
     _buildDragonParts() {
-        const boneMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.4, metalness: 0.35 });
-        const membraneMat = new THREE.MeshStandardMaterial({ color: 0x2a1028, roughness: 0.5, metalness: 0.15, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
-        const veinMat = new THREE.MeshStandardMaterial({ color: 0x441133, roughness: 0.6, metalness: 0.1 });
-        const hornMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.5 });
+        // Scale — proportional to dragon S=2.55, sized for player body
+        const S = 0.28;
+        this._dwS = S;
+
+        // Materials — match dragon
+        const bBone = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.55, metalness: 0.15 });
+        const bMem = new THREE.MeshStandardMaterial({ color: 0x2a1028, roughness: 0.75, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+        const bHorn = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.5 });
         const glowMat = new THREE.MeshStandardMaterial({ color: 0xcc2255, emissive: 0xcc2255, emissiveIntensity: 0.4 });
 
-        // === WINGS (dragon-quality: cylinder bones, sphere joints, multi-finger membrane) ===
+        // Helper — exact copy of makeDragonBone from dragons.js
+        const mkBone = (p1, p2, r1, r2, mat, parent) => {
+            const dx = p2[0]-p1[0], dy = p2[1]-p1[1], dz = p2[2]-p1[2];
+            const len = Math.sqrt(dx*dx+dy*dy+dz*dz);
+            if (len < 0.001) return;
+            const b = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 6), mat);
+            b.position.set((p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2);
+            const dir = new THREE.Vector3(dx,dy,dz).normalize();
+            b.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir));
+            parent.add(b);
+        };
+
+        // Reusable vector for membrane updates
+        this._dwV = new THREE.Vector3();
+
+        // === WINGS — exact same structure as dragon wyvern wings ===
         this._dragonWings = new THREE.Group();
         this._dragonWingParts = [];
 
         for (let s = -1; s <= 1; s += 2) {
-            const wing = new THREE.Group();
-            wing._side = s;
+            const wg = new THREE.Group();
+            wg._s = s;
+            wg.position.set(s * 0.12, 0.40, -0.10);
 
-            // Shoulder joint — upper back
-            wing.position.set(s * 0.15, 0.42, -0.12);
-
-            // Shoulder ball joint
-            const shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), boneMat);
-            wing.add(shoulderJoint);
-
-            // Upper arm bone (humerus)
-            const uLen = 0.4;
-            const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, uLen, 6), boneMat);
+            // Upper arm bone
+            const uLen = 0.75 * S;
+            const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.08*S, 0.06*S, uLen, 6), bBone);
             upperBone.rotation.z = s * -Math.PI / 2;
             upperBone.position.set(s * uLen / 2, 0, 0);
             upperBone.castShadow = true;
-            wing.add(upperBone);
+            wg.add(upperBone);
 
-            // Trailing membrane (shoulder to body)
-            const trailShape = new THREE.Shape();
-            trailShape.moveTo(0, 0);
-            trailShape.lineTo(s * uLen * 0.3, -0.25);
-            trailShape.lineTo(s * -0.05, -0.35);
-            trailShape.closePath();
-            const trailMesh = new THREE.Mesh(new THREE.ShapeGeometry(trailShape), membraneMat);
-            trailMesh.rotation.x = Math.PI / 2;
-            trailMesh.position.y = 0.005;
-            wing.add(trailMesh);
+            // Patagium (upper arm trailing membrane) — BufferGeometry like dragon
+            const patSteps = 6;
+            const patArr = new Float32Array(patSteps * 2 * 9);
+            const patP0 = [s*-0.35*S, 0, -0.1*S];
+            const patP1 = [s*uLen, 0, 0];
+            const patMaxW = 0.9*S;
+            let pvi = 0;
+            for (let i = 0; i < patSteps; i++) {
+                const t0 = i / patSteps, t1 = (i + 1) / patSteps;
+                const w0 = (0.15 + 0.85 * t0) * patMaxW;
+                const w1 = (0.15 + 0.85 * t1) * patMaxW;
+                const ax = patP0[0]+(patP1[0]-patP0[0])*t0, ay = 0, az = patP0[2]+(patP1[2]-patP0[2])*t0;
+                const bx = patP0[0]+(patP1[0]-patP0[0])*t1, by = 0, bz = patP0[2]+(patP1[2]-patP0[2])*t1;
+                patArr[pvi++]=ax; patArr[pvi++]=ay; patArr[pvi++]=az;
+                patArr[pvi++]=ax; patArr[pvi++]=ay; patArr[pvi++]=az-w0;
+                patArr[pvi++]=bx; patArr[pvi++]=by; patArr[pvi++]=bz;
+                patArr[pvi++]=ax; patArr[pvi++]=ay; patArr[pvi++]=az-w0;
+                patArr[pvi++]=bx; patArr[pvi++]=by; patArr[pvi++]=bz-w1;
+                patArr[pvi++]=bx; patArr[pvi++]=by; patArr[pvi++]=bz;
+            }
+            const patGeo = new THREE.BufferGeometry();
+            patGeo.setAttribute('position', new THREE.BufferAttribute(patArr, 3));
+            patGeo.computeVertexNormals();
+            const patMesh = new THREE.Mesh(patGeo, bMem);
+            wg.add(patMesh);
+            wg._patGeo = patGeo; wg._patP0 = patP0; wg._patP1 = patP1; wg._patMaxW = patMaxW; wg._patMesh = patMesh;
 
-            // Elbow joint
-            const elbow = new THREE.Group();
-            elbow.position.set(s * uLen, 0, 0);
-            wing.add(elbow);
-            wing._elbow = elbow;
+            // Elbow group
+            const elbowGrp = new THREE.Group();
+            elbowGrp.position.set(s * uLen, 0, 0);
+            wg.add(elbowGrp);
+            elbowGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.075*S, 6, 4), bBone));
+            wg._elbow = elbowGrp;
 
-            const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), boneMat);
-            elbow.add(elbowJoint);
-
-            // Elbow spur/claw
-            const elbowClaw = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), hornMat);
-            elbowClaw.position.set(s * 0.02, 0.03, 0);
-            elbowClaw.rotation.z = s * 0.5;
-            elbow.add(elbowClaw);
-
-            // Forearm bone (radius)
-            const fLen = 0.55;
-            const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.016, fLen, 6), boneMat);
+            // Forearm bone
+            const fLen = 1.5 * S;
+            const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.045*S, fLen, 6), bBone);
             foreBone.rotation.z = s * -Math.PI / 2;
             foreBone.position.set(s * fLen / 2, 0, 0);
             foreBone.castShadow = true;
-            elbow.add(foreBone);
+            elbowGrp.add(foreBone);
 
-            // Wrist joint
-            const hand = new THREE.Group();
-            hand.position.set(s * fLen, 0, 0);
-            elbow.add(hand);
-            wing._hand = hand;
+            // Wrist knob + claw
+            const wristKnob = new THREE.Mesh(new THREE.SphereGeometry(0.055*S, 6, 4), bBone);
+            wristKnob.position.set(s * fLen, 0, 0);
+            elbowGrp.add(wristKnob);
+            const wristClaw = new THREE.Mesh(new THREE.ConeGeometry(0.035*S, 0.12*S, 4), bHorn);
+            wristClaw.position.set(s * fLen, -0.07*S, 0);
+            elbowGrp.add(wristClaw);
 
-            const wristJoint = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 4), boneMat);
-            hand.add(wristJoint);
+            // Hand group
+            const handGrp = new THREE.Group();
+            handGrp.position.set(s * fLen, 0, 0);
+            elbowGrp.add(handGrp);
+            wg._hand = handGrp;
 
-            // Wrist claw
-            const wristClaw = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.05, 4), hornMat);
-            wristClaw.position.set(0, -0.03, 0);
-            hand.add(wristClaw);
-
-            // 3 finger bones radiating from wrist
+            // 4 finger bones — exact same layout as dragon wyvern wings
             const fingerDefs = [
-                { angle: s * -0.6, len: 0.5 },  // rear finger (toward body)
-                { angle: s * -0.15, len: 0.6 },  // middle finger (longest)
-                { angle: s * 0.3, len: 0.45 },   // front finger
+                { tip: [s*-1.66*S, 0, -1.7*S], mid: [s*-0.6*S, 0, -1.21*S] },
+                { tip: [s*-0.11*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
+                { tip: [s*0.93*S, 0, -2.61*S], mid: [s*1.27*S, 0, -1.38*S] },
+                { tip: [s*2.59*S, 0, -1.66*S], mid: [s*1.46*S, 0, -0.68*S] },
             ];
-            wing._fingers = [];
-            for (let fi = 0; fi < fingerDefs.length; fi++) {
-                const fd = fingerDefs[fi];
-                const fingerGrp = new THREE.Group();
-                fingerGrp.rotation.y = fd.angle;
-
-                // Metacarpal
-                const metaBone = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.01, fd.len * 0.55, 5), boneMat);
-                metaBone.rotation.z = s * -Math.PI / 2;
-                metaBone.position.set(s * fd.len * 0.25, 0, 0);
-                fingerGrp.add(metaBone);
-
-                // Knuckle
-                const knuckle = new THREE.Group();
-                knuckle.position.set(s * fd.len * 0.55, 0, 0);
-                fingerGrp.add(knuckle);
-                const knuckleJoint = new THREE.Mesh(new THREE.SphereGeometry(0.012, 5, 4), boneMat);
-                knuckle.add(knuckleJoint);
-
-                // Phalanx
-                const phalanx = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.005, fd.len * 0.5, 5), boneMat);
-                phalanx.rotation.z = s * -Math.PI / 2;
-                phalanx.position.set(s * fd.len * 0.22, 0, 0);
-                knuckle.add(phalanx);
-
-                // Finger tip claw
-                const fClaw = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.03, 3), hornMat);
-                fClaw.position.set(s * fd.len * 0.48, 0, 0);
-                fClaw.rotation.z = s * -Math.PI / 2;
-                knuckle.add(fClaw);
-
-                hand.add(fingerGrp);
-                wing._fingers.push({ grp: fingerGrp, knuckle, len: fd.len, angle: fd.angle });
+            const fTips = [], fMids = [];
+            const fingerGrps = [];
+            for (const fd of fingerDefs) {
+                fMids.push(fd.mid); fTips.push(fd.tip);
+                const tipLocal = [fd.tip[0]-fd.mid[0], fd.tip[1]-fd.mid[1], fd.tip[2]-fd.mid[2]];
+                const baseGrp = new THREE.Group(); handGrp.add(baseGrp);
+                mkBone([0,0,0], fd.mid, 0.03*S, 0.02*S, bBone, baseGrp);
+                const midGrp = new THREE.Group();
+                midGrp.position.set(fd.mid[0], fd.mid[1], fd.mid[2]); baseGrp.add(midGrp);
+                mkBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
+                fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
             }
+            wg._fingerGrps = fingerGrps;
+            wg._fLen = fLen; wg._uLen = uLen;
 
-            // Membrane panels between fingers (triangular fan from wrist)
-            // Each panel spans from one finger to the next
-            for (let fi = 0; fi < fingerDefs.length; fi++) {
-                const fd = fingerDefs[fi];
-                const nextFd = fi < fingerDefs.length - 1 ? fingerDefs[fi + 1] : null;
+            // Finger rotation presets (same as dragon)
+            wg._foldedFRots = [{spreadY:-0.56,liftX:0,curlX:0},{spreadY:-0.07,liftX:0,curlX:0},{spreadY:0.24,liftX:0,curlX:0},{spreadY:0.52,liftX:0,curlX:0}];
+            wg._flyFRots = [{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0}];
 
-                // Main membrane panel for this finger (wrist to finger tip)
-                if (nextFd) {
-                    const memShape = new THREE.Shape();
-                    const tipX1 = Math.cos(fd.angle) * fd.len * s;
-                    const tipZ1 = Math.sin(fd.angle) * fd.len;
-                    const tipX2 = Math.cos(nextFd.angle) * nextFd.len * s;
-                    const tipZ2 = Math.sin(nextFd.angle) * nextFd.len;
-                    memShape.moveTo(0, 0);
-                    memShape.lineTo(tipX1, tipZ1);
-                    // Scalloped edge between fingers
-                    const midX = (tipX1 + tipX2) / 2;
-                    const midZ = (tipZ1 + tipZ2) / 2;
-                    const inset = 0.85; // scallop depth
-                    memShape.quadraticCurveTo(midX * inset, midZ * inset, tipX2, tipZ2);
-                    memShape.closePath();
-                    const memGeo = new THREE.ShapeGeometry(memShape, 4);
-                    const memMesh = new THREE.Mesh(memGeo, membraneMat);
-                    memMesh.rotation.x = Math.PI / 2;
-                    memMesh.position.y = 0.003 * (fi % 2 === 0 ? 1 : -1); // slight offset to avoid z-fight
-                    hand.add(memMesh);
-
-                    // Vein line between fingers
-                    const veinGeo = new THREE.CylinderGeometry(0.003, 0.001, fd.len * 0.7, 3);
-                    const vein = new THREE.Mesh(veinGeo, veinMat);
-                    vein.rotation.z = s * -Math.PI / 2;
-                    const vAngle = (fd.angle + nextFd.angle) / 2;
-                    vein.position.set(
-                        Math.cos(vAngle) * fd.len * 0.35 * s,
-                        0,
-                        Math.sin(vAngle) * fd.len * 0.35
-                    );
-                    vein.rotation.y = vAngle;
-                    hand.add(vein);
-                }
+            // Main membrane — outline-based triangle fan (same system as dragon)
+            const memOutline = [];
+            memOutline.push({ p: fTips[3], s: 2 });
+            for (let i = 2; i >= 0; i--) {
+                const a = fTips[i+1], b = fTips[i];
+                memOutline.push({ p: [(a[0]+b[0])/2, 0, (a[2]+b[2])/2*0.85], s: 2 });
+                memOutline.push({ p: b, s: 2 });
             }
+            memOutline.push({ p: [s*fLen, 0, -0.5*S], s: 1 });
+            memOutline.push({ p: [s*fLen*0.75, 0, -0.45*S], s: 1 });
+            memOutline.push({ p: [s*fLen*0.45, 0, -0.7*S], s: 1 });
+            memOutline.push({ p: [s*fLen*0.15, 0, -0.85*S], s: 1 });
+            memOutline.push({ p: [0, 0, -0.9*S], s: 1 });
+            memOutline.push({ p: [s*uLen*0.5, 0, -0.7*S], s: 0 });
+            memOutline.push({ p: [s*uLen*0.15, 0, -0.85*S], s: 0 });
+            memOutline.push({ p: [0, 0, -0.9*S], s: 0 });
+            memOutline.push({ p: [0, 0, 0], s: 0 });
+            memOutline.push({ p: [s*uLen*0.5, 0, 0.15*S], s: 0 });
+            memOutline.push({ p: [0, 0, 0.15*S], s: 1 });
+            memOutline.push({ p: [s*fLen*0.5, 0, 0.1*S], s: 1 });
+            memOutline.push({ p: [s*fLen, 0, 0.05*S], s: 1 });
+            const memCenter = { p: [s * fLen, 0, 0], s: 1 };
+            const nFloats = memOutline.length * 2 * 9;
+            const memArr = new Float32Array(nFloats);
+            const memGeo = new THREE.BufferGeometry();
+            memGeo.setAttribute('position', new THREE.BufferAttribute(memArr, 3));
+            const memMesh = new THREE.Mesh(memGeo, bMem);
+            wg.add(memMesh);
+            wg._memGeo = memGeo; wg._memOutline = memOutline; wg._memCenter = memCenter;
 
-            // Forearm-to-rear-finger membrane (connects forearm to first finger)
-            const rearAngle = fingerDefs[0].angle;
-            const rearLen = fingerDefs[0].len;
-            const armMemShape = new THREE.Shape();
-            armMemShape.moveTo(0, 0);
-            armMemShape.lineTo(Math.cos(rearAngle) * rearLen * s, Math.sin(rearAngle) * rearLen);
-            armMemShape.lineTo(s * -fLen * 0.3, -0.15);
-            armMemShape.closePath();
-            const armMemMesh = new THREE.Mesh(new THREE.ShapeGeometry(armMemShape), membraneMat);
-            armMemMesh.rotation.x = Math.PI / 2;
-            hand.add(armMemMesh);
+            // Arm-finger membrane (forearm to first finger)
+            const afArr = new Float32Array(300);
+            const afGeo = new THREE.BufferGeometry();
+            afGeo.setAttribute('position', new THREE.BufferAttribute(afArr, 3));
+            wg.add(new THREE.Mesh(afGeo, bMem));
+            wg._afGeo = afGeo; wg._afFLen = fLen;
+            wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
+            wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
 
-            // Front finger trailing edge membrane
-            const frontAngle = fingerDefs[2].angle;
-            const frontLen = fingerDefs[2].len;
-            const frontMemShape = new THREE.Shape();
-            frontMemShape.moveTo(0, 0);
-            frontMemShape.lineTo(Math.cos(frontAngle) * frontLen * s, Math.sin(frontAngle) * frontLen);
-            frontMemShape.lineTo(s * fLen * 0.2, 0.08);
-            frontMemShape.closePath();
-            const frontMemMesh = new THREE.Mesh(new THREE.ShapeGeometry(frontMemShape), membraneMat);
-            frontMemMesh.rotation.x = Math.PI / 2;
-            hand.add(frontMemMesh);
+            // Inter-finger membranes
+            const ffArr = new Float32Array(324);
+            const ffGeo = new THREE.BufferGeometry();
+            ffGeo.setAttribute('position', new THREE.BufferAttribute(ffArr, 3));
+            wg.add(new THREE.Mesh(ffGeo, bMem));
+            wg._ffGeo = ffGeo; wg._ffStaticTips = fTips; wg._ffStaticMids = fMids;
 
-            this._dragonWings.add(wing);
-            this._dragonWingParts.push(wing);
+            this._dragonWings.add(wg);
+            this._dragonWingParts.push(wg);
         }
         this.spine.add(this._dragonWings);
 
-        // === HORNS ===
+        // === HORNS — exact same as regular dragon horns (makeDragonBone style) ===
         this._dragonHorns = new THREE.Group();
-
-        for (let side = -1; side <= 1; side += 2) {
-            // Main horn — curved backward
-            const horn = new THREE.Group();
-
-            const hornBase = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.08, 6), hornMat);
-            hornBase.position.y = 0.04;
-            horn.add(hornBase);
-
-            const hornMid = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 6), hornMat);
-            hornMid.position.set(0, 0.1, -0.02);
-            hornMid.rotation.x = 0.3;
-            horn.add(hornMid);
-
-            const hornTip = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.08, 5), hornMat);
-            hornTip.position.set(0, 0.18, -0.06);
-            hornTip.rotation.x = 0.5;
-            horn.add(hornTip);
-
-            horn.position.set(side * 0.09, 0.12, -0.03);
-            horn.rotation.z = side * -0.25;
-            horn.rotation.x = -0.15;
-            this._dragonHorns.add(horn);
-
-            // Small secondary horn in front
-            const smallHorn = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.06, 5), hornMat);
-            smallHorn.position.set(side * 0.07, 0.1, 0.04);
-            smallHorn.rotation.z = side * -0.15;
-            smallHorn.rotation.x = -0.1;
-            this._dragonHorns.add(smallHorn);
+        const HS = 0.45; // scale to fit player head
+        for (let s = -1; s <= 1; s += 2) {
+            mkBone([s*0.18*HS, 0.25*HS, -0.1*HS], [s*0.25*HS, 0.5*HS, -0.25*HS], 0.04*HS, 0.05*HS, bHorn, this._dragonHorns);
+            mkBone([s*0.25*HS, 0.5*HS, -0.25*HS], [s*0.28*HS, 0.7*HS, -0.5*HS], 0.015*HS, 0.04*HS, bHorn, this._dragonHorns);
         }
         this.headGroup.add(this._dragonHorns);
 
-        // === GLOWING EYES effect — small emissive accent ===
+        // === GLOWING EYES ===
         this._dragonEyeGlow = [];
-        for (let side = -1; side <= 1; side += 2) {
+        for (let s = -1; s <= 1; s += 2) {
             const glow = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), glowMat);
-            glow.position.set(side * 0.06, 0.03, 0.115);
+            glow.position.set(s * 0.06, 0.03, 0.115);
             this.headGroup.add(glow);
             this._dragonEyeGlow.push(glow);
         }
 
-        // === TAIL — small segmented tail ===
+        // === TAIL ===
         this._dragonTail = new THREE.Group();
         const tailMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.5, metalness: 0.3 });
         this._dragonTailSegs = [];
         let prevSeg = this._dragonTail;
         for (let i = 0; i < 5; i++) {
             const seg = new THREE.Group();
-            const s = 0.08 - i * 0.012;
-            const piece = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.7, 0.08), tailMat);
+            const sz = 0.08 - i * 0.012;
+            const piece = new THREE.Mesh(new THREE.BoxGeometry(sz, sz * 0.7, 0.08), tailMat);
             seg.add(piece);
             seg.position.set(0, i === 0 ? -0.05 : 0, -0.08);
             prevSeg.add(seg);
             prevSeg = seg;
             this._dragonTailSegs.push(seg);
         }
-        // Tail spike
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), hornMat);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), bHorn);
         spike.rotation.x = Math.PI / 2;
         spike.position.z = -0.06;
         prevSeg.add(spike);
         this._dragonTail.position.set(0, -0.2, -0.11);
         this.spine.add(this._dragonTail);
 
-        // Store wing phase for animation
+        // Animation state
         this._wingPhase = 0;
+        this._flapT = 0;
+        this.dragonFlying = false;
+
+        // Set initial folded pose and update membranes
+        this._dwApplyFingerRots = (w, rots) => {
+            if (!w._fingerGrps || !rots) return;
+            const si = w._s;
+            for (let fi = 0; fi < w._fingerGrps.length; fi++) {
+                const fg = w._fingerGrps[fi], rot = rots[fi];
+                fg.baseGrp.rotation.set(rot.liftX, si * rot.spreadY, 0);
+                fg.midGrp.rotation.set(rot.curlX, 0, 0);
+            }
+        };
+        for (const w of this._dragonWingParts) {
+            // Folded backward pose
+            const si = w._s;
+            w.rotation.set(0, si * 0.54, si * 0.35);
+            w._elbow.rotation.set(1.55, si * -1.95, si * 0.74);
+            w._hand.rotation.set(-0.2, si * 1.25, si * -0.48);
+            this._dwApplyFingerRots(w, w._foldedFRots);
+            this._dwUpdateMembrane(w);
+        }
+    }
+
+    // Transform point from joint space to wing-local space (exact copy of toWgSpace from dragons.js)
+    _dwToWg(pt, space, elb, hand) {
+        const v = this._dwV;
+        v.set(pt[0], pt[1], pt[2]);
+        if (space === 2) { v.applyEuler(hand.rotation); v.add(hand.position); }
+        if (space >= 1) { v.applyEuler(elb.rotation); v.add(elb.position); }
+        return [v.x, v.y, v.z];
+    }
+
+    // Update all membrane geometries for a wing (main + arm-finger + inter-finger)
+    _dwUpdateMembrane(w) {
+        const elb = w._elbow, hand = w._hand;
+        // Main outline membrane
+        const outline = w._memOutline, geo = w._memGeo;
+        const pos = geo.attributes.position.array;
+        const pts = [];
+        for (let i = 0; i < outline.length; i++) pts.push(this._dwToWg(outline[i].p, outline[i].s, elb, hand));
+        const cx = w._memCenter;
+        const c = this._dwToWg(cx.p, cx.s, elb, hand);
+        let vi = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+            pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
+            pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+            pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+            pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+            pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
+        }
+        for (; vi < pos.length;) pos[vi++] = 0;
+        geo.attributes.position.needsUpdate = true;
+        geo.computeVertexNormals();
+
+        // Arm-finger membrane (forearm to first finger)
+        if (w._afGeo) this._dwUpdateArmFingerMem(w);
+        // Inter-finger membranes
+        if (w._ffGeo) this._dwUpdateFingerMem(w);
+        // Patagium update (bend toward finger direction)
+        if (w._patGeo) this._dwUpdatePatagium(w);
+    }
+
+    _dwUpdateArmFingerMem(w) {
+        const elb = w._elbow, hand = w._hand;
+        const si = w._s, fl = w._afFLen;
+        const v = this._dwV;
+        let cTip, cMid;
+        if (w._fingerGrps && w._fingerGrps[0]) {
+            const fg = w._fingerGrps[0], br = fg.baseGrp.rotation;
+            v.set(fg.midPos[0], fg.midPos[1], fg.midPos[2]);
+            if (br.x || br.y) v.applyEuler(br);
+            cMid = [v.x, v.y, v.z];
+            v.set(fg.tipLocal[0], fg.tipLocal[1], fg.tipLocal[2]);
+            if (fg.midGrp.rotation.x) v.applyEuler(new THREE.Euler(fg.midGrp.rotation.x, 0, 0));
+            v.x += fg.midPos[0]; v.y += fg.midPos[1]; v.z += fg.midPos[2];
+            if (br.x || br.y) v.applyEuler(br);
+            cTip = [v.x, v.y, v.z];
+        } else { cTip = w._afStaticTip; cMid = w._afStaticMid; }
+        const N = 5;
+        const arm = [], fin = [];
+        for (let i = 0; i <= N; i++) {
+            const t = i / N;
+            arm.push(this._dwToWg([si * fl * (1 - t), 0, 0], 1, elb, hand));
+            let fp;
+            if (t <= 0.5) { const u = t * 2; fp = [cMid[0]*u, cMid[1]*u, cMid[2]*u]; }
+            else { const u = (t - 0.5) * 2; fp = [cMid[0]*(1-u)+cTip[0]*u, cMid[1]*(1-u)+cTip[1]*u, cMid[2]*(1-u)+cTip[2]*u]; }
+            fin.push(this._dwToWg(fp, 2, elb, hand));
+        }
+        const pos = w._afGeo.attributes.position.array;
+        let vi = 0;
+        for (let i = 0; i < N; i++) {
+            const fa = arm[i], fb = arm[i+1], ga = fin[i], gb = fin[i+1];
+            pos[vi++]=fa[0]; pos[vi++]=fa[1]; pos[vi++]=fa[2];
+            pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
+            pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
+            pos[vi++]=ga[0]; pos[vi++]=ga[1]; pos[vi++]=ga[2];
+            pos[vi++]=gb[0]; pos[vi++]=gb[1]; pos[vi++]=gb[2];
+            pos[vi++]=fb[0]; pos[vi++]=fb[1]; pos[vi++]=fb[2];
+        }
+        // Trailing membrane (to body)
+        if (w._afBodyPt) {
+            const bp = this._dwToWg(w._afBodyPt, 0, elb, hand);
+            const armEnd = arm[N], finEnd = fin[N];
+            const armShoulder = this._dwToWg([0, 0, 0], 0, elb, hand);
+            const N2 = 3;
+            const grid = [];
+            for (let u = 0; u <= N2; u++) {
+                grid.push([]);
+                const tu = u / N2;
+                for (let vv = 0; vv <= N2; vv++) {
+                    const tv = vv / N2;
+                    const c00 = finEnd, c01 = bp, c10 = armEnd, c11 = armShoulder;
+                    let x = c00[0]*(1-tu)*(1-tv) + c10[0]*tu*(1-tv) + c01[0]*(1-tu)*tv + c11[0]*tu*tv;
+                    let y = c00[1]*(1-tu)*(1-tv) + c10[1]*tu*(1-tv) + c01[1]*(1-tu)*tv + c11[1]*tu*tv;
+                    let z = c00[2]*(1-tu)*(1-tv) + c10[2]*tu*(1-tv) + c01[2]*(1-tu)*tv + c11[2]*tu*tv;
+                    y -= Math.sin(tu * Math.PI) * Math.sin(tv * Math.PI) * 0.06;
+                    grid[u].push([x, y, z]);
+                }
+            }
+            for (let u = 0; u < N2; u++) {
+                for (let vv = 0; vv < N2; vv++) {
+                    const a = grid[u][vv], b = grid[u+1][vv];
+                    const c = grid[u][vv+1], d = grid[u+1][vv+1];
+                    pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
+                    pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+                    pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+                    pos[vi++]=c[0]; pos[vi++]=c[1]; pos[vi++]=c[2];
+                    pos[vi++]=d[0]; pos[vi++]=d[1]; pos[vi++]=d[2];
+                    pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+                }
+            }
+        }
+        for (; vi < pos.length;) pos[vi++] = 0;
+        w._afGeo.attributes.position.needsUpdate = true;
+        w._afGeo.computeVertexNormals();
+    }
+
+    _dwUpdateFingerMem(w) {
+        const elb = w._elbow, hand = w._hand;
+        const v = this._dwV;
+        const tips = [], mids = [];
+        if (w._fingerGrps) {
+            for (let fi = 0; fi < 4; fi++) {
+                const fg = w._fingerGrps[fi], br = fg.baseGrp.rotation;
+                v.set(fg.midPos[0], fg.midPos[1], fg.midPos[2]);
+                if (br.x || br.y) v.applyEuler(br);
+                mids.push([v.x, v.y, v.z]);
+                v.set(fg.tipLocal[0], fg.tipLocal[1], fg.tipLocal[2]);
+                if (fg.midGrp.rotation.x) v.applyEuler(new THREE.Euler(fg.midGrp.rotation.x, 0, 0));
+                v.x += fg.midPos[0]; v.y += fg.midPos[1]; v.z += fg.midPos[2];
+                if (br.x || br.y) v.applyEuler(br);
+                tips.push([v.x, v.y, v.z]);
+            }
+        } else {
+            for (let fi = 0; fi < 4; fi++) { tips.push(w._ffStaticTips[fi]); mids.push(w._ffStaticMids[fi]); }
+        }
+        const pos = w._ffGeo.attributes.position.array;
+        let vi = 0;
+        const wrist = this._dwToWg([0,0,0], 2, elb, hand);
+        const ffPt = (mid, tip, t) => {
+            if (t <= 0.5) { const u = t*2; return [mid[0]*u, mid[1]*u, mid[2]*u]; }
+            const u = (t-0.5)*2;
+            return [mid[0]*(1-u)+tip[0]*u, mid[1]*(1-u)+tip[1]*u, mid[2]*(1-u)+tip[2]*u];
+        };
+        for (let gap = 0; gap < 3; gap++) {
+            const mA = mids[gap], tA = tips[gap], mB = mids[gap+1], tB = tips[gap+1];
+            const outline = [];
+            for (const t of [0.15, 0.4, 0.7, 1.0]) outline.push(ffPt(mA, tA, t));
+            const cpx = (tA[0]+tB[0])*0.35, cpy = (tA[1]+tB[1])*0.35, cpz = (tA[2]+tB[2])*0.35;
+            for (const t of [0.15, 0.35, 0.5, 0.65, 0.85]) {
+                const u = 1-t;
+                outline.push([u*u*tA[0]+2*u*t*cpx+t*t*tB[0], u*u*tA[1]+2*u*t*cpy+t*t*tB[1], u*u*tA[2]+2*u*t*cpz+t*t*tB[2]]);
+            }
+            for (const t of [1.0, 0.7, 0.4, 0.15]) outline.push(ffPt(mB, tB, t));
+            for (let i = 0; i < outline.length - 1; i++) {
+                const a = this._dwToWg(outline[i], 2, elb, hand);
+                const b = this._dwToWg(outline[i+1], 2, elb, hand);
+                pos[vi++]=wrist[0]; pos[vi++]=wrist[1]; pos[vi++]=wrist[2];
+                pos[vi++]=a[0]; pos[vi++]=a[1]; pos[vi++]=a[2];
+                pos[vi++]=b[0]; pos[vi++]=b[1]; pos[vi++]=b[2];
+            }
+        }
+        for (; vi < pos.length;) pos[vi++] = 0;
+        w._ffGeo.attributes.position.needsUpdate = true;
+        w._ffGeo.computeVertexNormals();
+    }
+
+    _dwUpdatePatagium(w) {
+        // Same as dragon — update patagium to bend toward membrane direction
+        const pp = w._patGeo.attributes.position.array;
+        const p0 = w._patP0, p1 = w._patP1, mw = w._patMaxW;
+        let pv = 0;
+        const steps = 6;
+        for (let i = 0; i < steps; i++) {
+            const t0 = i/steps, t1 = (i+1)/steps;
+            const w0 = (0.15+0.85*t0)*mw, w1 = (0.15+0.85*t1)*mw;
+            const ax = p0[0]+(p1[0]-p0[0])*t0, ay = 0, az = p0[2]+(p1[2]-p0[2])*t0;
+            const bx = p0[0]+(p1[0]-p0[0])*t1, by = 0, bz = p0[2]+(p1[2]-p0[2])*t1;
+            pp[pv++]=ax; pp[pv++]=ay; pp[pv++]=az;
+            pp[pv++]=ax; pp[pv++]=ay; pp[pv++]=az-w0;
+            pp[pv++]=bx; pp[pv++]=by; pp[pv++]=bz;
+            pp[pv++]=ax; pp[pv++]=ay; pp[pv++]=az-w0;
+            pp[pv++]=bx; pp[pv++]=by; pp[pv++]=bz-w1;
+            pp[pv++]=bx; pp[pv++]=by; pp[pv++]=bz;
+        }
+        w._patGeo.attributes.position.needsUpdate = true;
+        w._patGeo.computeVertexNormals();
     }
 
     _removeDragonParts() {
@@ -2034,45 +2203,60 @@ export class Player {
         }
         this._dragonWingParts = null;
         this._dragonTailSegs = null;
+        this.dragonFlying = false;
     }
 
     animateDragonParts(dt) {
         if (!this._dragonForm || !this._dragonWingParts) return;
         this._wingPhase = (this._wingPhase || 0) + dt;
+        this._flapT = (this._flapT || 0) + dt;
 
-        // Wing idle animation — gentle breathing motion
-        const isMoving = Math.abs(this.speed) > 0.5;
-        const isSprinting = Math.abs(this.speed) > 5;
-        const flapSpeed = isSprinting ? 6 : isMoving ? 3 : 1.2;
-        const flapAmp = isSprinting ? 0.35 : isMoving ? 0.2 : 0.08;
+        const flying = this.dragonFlying;
 
-        for (const wing of this._dragonWingParts) {
-            const s = wing._side;
-            const phase = this._wingPhase * flapSpeed;
+        // computeFlap — exact copy from dragons.js
+        const computeFlap = (t) => {
+            const cycle = 1.1, half = 0.55, active = 0.46;
+            let p = ((t % cycle) + cycle) % cycle;
+            let shoulder, elbow;
+            if (p < half) {
+                const st = Math.min(p / active, 1);
+                shoulder = -Math.cos(st * Math.PI);
+                elbow = -Math.cos((p / half) * Math.PI);
+            } else {
+                const upos = p - half;
+                const st = Math.min(upos / active, 1);
+                shoulder = Math.cos(st * Math.PI);
+                elbow = Math.cos((upos / half) * Math.PI);
+            }
+            return [shoulder, elbow];
+        };
 
-            // Shoulder flap
-            wing.rotation.z = s * (0.2 + Math.sin(phase) * flapAmp);
-            // Elbow fold/extend
-            if (wing._elbow) {
-                wing._elbow.rotation.y = s * (0.1 + Math.sin(phase + 0.5) * flapAmp * 0.6);
+        for (const w of this._dragonWingParts) {
+            const si = w._s;
+
+            if (flying) {
+                // Flying pose — wings spread out, flapping (same as dragon flying animation)
+                const [sFlap, eFlap] = computeFlap(this._flapT);
+                w.rotation.set(0, 0, 0);
+                w.rotation.y = si * 0.15;
+                w.rotation.z = si * (-0.1 + sFlap * 0.4);
+                w.rotation.x = sFlap * 0.08;
+                w._elbow.rotation.set(0, si * -0.25, si * (-0.15 + eFlap * 0.45));
+                w._hand.rotation.set(0, 0, 0);
+                this._dwApplyFingerRots(w, w._flyFRots);
+            } else {
+                // Grounded — wings folded backward (same as dragon walking/idle pose)
+                const isMoving = Math.abs(this.speed) > 0.5;
+                const wp = this._wingPhase * 3.0;
+                const wc = isMoving ? Math.sin(wp) : 0;
+                w.rotation.set(0, si * 0.54, si * 0.35);
+                w._elbow.rotation.set(1.55, si * -1.95, si * 0.74);
+                w._hand.rotation.set(-0.2, si * 1.25, si * -0.48);
+                this._dwApplyFingerRots(w, w._foldedFRots);
             }
-            // Hand/wrist
-            if (wing._hand) {
-                wing._hand.rotation.y = s * (Math.sin(phase + 1.0) * flapAmp * 0.3);
-            }
-            // Individual finger spread/curl
-            if (wing._fingers) {
-                for (let fi = 0; fi < wing._fingers.length; fi++) {
-                    const f = wing._fingers[fi];
-                    // Fingers spread outward during downstroke, curl inward on upstroke
-                    const fingerPhase = phase + 0.8 + fi * 0.3;
-                    f.grp.rotation.y = f.angle + s * Math.sin(fingerPhase) * flapAmp * 0.25;
-                    // Knuckle flex — slight curl on upstroke
-                    if (f.knuckle) {
-                        f.knuckle.rotation.z = s * Math.sin(fingerPhase + 0.4) * flapAmp * 0.15;
-                    }
-                }
-            }
+
+            // Update all dynamic membranes
+            this._dwUpdateMembrane(w);
         }
 
         // Tail sway
