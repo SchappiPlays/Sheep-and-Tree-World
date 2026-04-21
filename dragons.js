@@ -325,8 +325,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     else if (isIce) accentHex = 0x9FB9D4;
     else accentHex = 0xE8DCC8; // bone/ivory — all normal dragons get bone-colored horns
     const accentColor = new THREE.Color(accentHex);
-    // Gradient horns/spikes: base matches skin, tip is ivory bone
-    const useBoneGrad = (accentHex === 0xE8DCC8);
+    // Gradient horns/spikes: disabled — solid bone color for consistency
+    const useBoneGrad = false;
 
     const bTop = new THREE.MeshStandardMaterial({ color: baseHue, roughness: 0.55, metalness: 0.2 });
     const bMid = new THREE.MeshStandardMaterial({ color: midHue, roughness: 0.5, metalness: 0.18 });
