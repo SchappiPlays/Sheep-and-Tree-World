@@ -323,9 +323,8 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
     let accentHex;
     if (isLightning) accentHex = 0x2C2C2B;
     else if (isIce) accentHex = 0x9FB9D4;
-    else if (fireUsesIvory || hasTusks) accentHex = 0xE8DCC8;
-    else accentHex = null; // fall through to body-derived bone color
-    const accentColor = accentHex !== null ? new THREE.Color(accentHex) : baseHue.clone().multiplyScalar(0.25);
+    else accentHex = 0xE8DCC8; // bone/ivory — all normal dragons get bone-colored horns
+    const accentColor = new THREE.Color(accentHex);
     // Gradient horns/spikes: base matches skin, tip is ivory bone
     const useBoneGrad = (accentHex === 0xE8DCC8);
 
