@@ -553,12 +553,12 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // 4 finger bones (longer)
+        // 4 finger bones — consistent 35° bend angle, finger 3 slightly shorter
         const fingerDefs = [
-            { tip: [s*-1.66*S, 0, -1.7*S], mid: [s*-0.6*S, 0, -1.21*S] },
-            { tip: [s*-0.11*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
-            { tip: [s*0.93*S, 0, -2.61*S], mid: [s*1.27*S, 0, -1.38*S] },
-            { tip: [s*2.59*S, 0, -1.66*S], mid: [s*1.46*S, 0, -0.68*S] },
+            { tip: [s*-1.63*S, 0, -1.77*S], mid: [s*-0.6*S, 0, -1.21*S] },
+            { tip: [s*-0.12*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
+            { tip: [s*1.41*S, 0, -2.46*S], mid: [s*1.27*S, 0, -1.38*S] },
+            { tip: [s*2.21*S, 0, -1.98*S], mid: [s*1.46*S, 0, -0.68*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
@@ -649,11 +649,12 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); wristClaw.castShadow = true; elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
+        // Consistent 20° bend angle, finger 3 slightly shorter
         const fingerDefs = [
-            { tip: [s*-2.05*S, 0, -0.92*S], mid: [s*-0.74*S, 0, -0.23*S] },
-            { tip: [s*-0.69*S, 0, -1.73*S], mid: [s*-0.18*S, 0, -0.63*S] },
-            { tip: [s*0.74*S, 0, -1.96*S], mid: [s*0.51*S, 0, -0.74*S] },
-            { tip: [s*1.84*S, 0, -1.49*S], mid: [s*1.04*S, 0, -0.46*S] },
+            { tip: [s*-2.22*S, 0, -0.16*S], mid: [s*-0.74*S, 0, -0.23*S] },
+            { tip: [s*-0.89*S, 0, -1.61*S], mid: [s*-0.18*S, 0, -0.63*S] },
+            { tip: [s*0.78*S, 0, -1.76*S], mid: [s*0.51*S, 0, -0.74*S] },
+            { tip: [s*1.98*S, 0, -1.36*S], mid: [s*1.04*S, 0, -0.46*S] },
         ];
         const fTips = [], fMids = [];
         const fingerGrps = [];
