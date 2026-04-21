@@ -131,7 +131,7 @@ export class ChunkManager {
         this.buildQueue = [];
         this._lastPCX = null;
         this._lastPCZ = null;
-        this.maxLod = 4; // cap LOD level (1=full detail, 4=most aggressive)
+        this.maxLod = 3; // cap LOD level (1=full, 4=aggressive) — 3 keeps xzStep<=2 so trees stay visible
     }
 
     setRenderDist(d) {
@@ -414,7 +414,7 @@ export class ChunkManager {
                     // Leaves go to separate transparent mesh
                     if (block === BLOCK.LEAVES || block === BLOCK.PINE_LEAVES) {
                         const isPine = block === BLOCK.PINE_LEAVES;
-                        const LS = Math.min(S, 2); // cap leaf size to avoid oversized blocks at LOD4
+                        const LS = 1; // always render leaves at normal size — LOD scaling makes trees look oversized
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
                             const nbx = bx + face.dir[0] * LS, nby = y + face.dir[1], nbz = bz + face.dir[2] * LS;
@@ -472,8 +472,8 @@ export class ChunkManager {
                         _isSlopeable = _cornerLow[0] || _cornerLow[1] || _cornerLow[2] || _cornerLow[3];
                     }
 
-                    // Cap visual size for tree trunks to avoid oversized blocks at LOD4
-                    const bS = (block === BLOCK.WOOD || block === BLOCK.PINE_WOOD) ? Math.min(S, 2) : S;
+                    // Keep tree trunks at normal size — LOD scaling makes them look oversized
+                    const bS = (block === BLOCK.WOOD || block === BLOCK.PINE_WOOD) ? 1 : S;
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
                         const nbx = bx + face.dir[0] * bS;
