@@ -1393,20 +1393,21 @@ function buildFarTerrain(centerX, centerZ) {
                 wx+halfS, top, wz-halfS, hex
             );
 
-            // Side faces where neighbor is lower
+            // Side faces — always add a skirt so you never see void underneath
             const sideHex = 0x8b6b3d;
+            const skirtDrop = S * 2; // minimum drop below surface to seal gaps
             // +X
             const hpx = gH(gx+1, gz) + BS;
-            if (hpx < top) pushFace(wx+halfS,top,wz+halfS, wx+halfS,top,wz-halfS, wx+halfS,hpx,wz-halfS, wx+halfS,hpx,wz+halfS, (top-hpx>S*2)?sideHex:hex);
+            { const bot = Math.min(hpx, top) - skirtDrop; pushFace(wx+halfS,top,wz+halfS, wx+halfS,top,wz-halfS, wx+halfS,bot,wz-halfS, wx+halfS,bot,wz+halfS, (top-bot>S*2)?sideHex:hex); }
             // -X
             const hmx = gH(gx-1, gz) + BS;
-            if (hmx < top) pushFace(wx-halfS,top,wz-halfS, wx-halfS,top,wz+halfS, wx-halfS,hmx,wz+halfS, wx-halfS,hmx,wz-halfS, (top-hmx>S*2)?sideHex:hex);
+            { const bot = Math.min(hmx, top) - skirtDrop; pushFace(wx-halfS,top,wz-halfS, wx-halfS,top,wz+halfS, wx-halfS,bot,wz+halfS, wx-halfS,bot,wz-halfS, (top-bot>S*2)?sideHex:hex); }
             // +Z
             const hpz = gH(gx, gz+1) + BS;
-            if (hpz < top) pushFace(wx-halfS,top,wz+halfS, wx+halfS,top,wz+halfS, wx+halfS,hpz,wz+halfS, wx-halfS,hpz,wz+halfS, (top-hpz>S*2)?sideHex:hex);
+            { const bot = Math.min(hpz, top) - skirtDrop; pushFace(wx-halfS,top,wz+halfS, wx+halfS,top,wz+halfS, wx+halfS,bot,wz+halfS, wx-halfS,bot,wz+halfS, (top-bot>S*2)?sideHex:hex); }
             // -Z
             const hmz = gH(gx, gz-1) + BS;
-            if (hmz < top) pushFace(wx+halfS,top,wz-halfS, wx-halfS,top,wz-halfS, wx-halfS,hmz,wz-halfS, wx+halfS,hmz,wz-halfS, (top-hmz>S*2)?sideHex:hex);
+            { const bot = Math.min(hmz, top) - skirtDrop; pushFace(wx+halfS,top,wz-halfS, wx-halfS,top,wz-halfS, wx-halfS,bot,wz-halfS, wx+halfS,bot,wz-halfS, (top-bot>S*2)?sideHex:hex); }
 
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
