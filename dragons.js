@@ -257,13 +257,13 @@ function updateFingerMembranes(w) {
     for (let gap = 0; gap < 3; gap++) {
         const mA = mids[gap], tA = tips[gap], mB = mids[gap+1], tB = tips[gap+1];
         const outline = [];
-        for (const t of [0.15, 0.4, 0.7, 1.0]) outline.push(ffPt(mA, tA, t));
+        for (const t of [0.15, 0.35, 0.5, 0.6, 0.8, 1.0]) outline.push(ffPt(mA, tA, t));
         const cpx = (tA[0]+tB[0])*0.35, cpy = (tA[1]+tB[1])*0.35, cpz = (tA[2]+tB[2])*0.35;
         for (const t of [0.15, 0.35, 0.5, 0.65, 0.85]) {
             const u = 1-t;
             outline.push([u*u*tA[0]+2*u*t*cpx+t*t*tB[0], u*u*tA[1]+2*u*t*cpy+t*t*tB[1], u*u*tA[2]+2*u*t*cpz+t*t*tB[2]]);
         }
-        for (const t of [1.0, 0.7, 0.4, 0.15]) outline.push(ffPt(mB, tB, t));
+        for (const t of [1.0, 0.8, 0.6, 0.5, 0.35, 0.15]) outline.push(ffPt(mB, tB, t));
         for (let i = 0; i < outline.length - 1; i++) {
             const a = toWgSpace(outline[i], 2, elb, hand);
             const b = toWgSpace(outline[i+1], 2, elb, hand);
@@ -553,11 +553,11 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // 4 finger bones — consistent 35° bend angle, finger 3 slightly shorter
+        // 4 finger bones — consistent 35° bend, finger 3 shorter + closer to finger 4
         const fingerDefs = [
             { tip: [s*-1.63*S, 0, -1.77*S], mid: [s*-0.6*S, 0, -1.21*S] },
             { tip: [s*-0.12*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
-            { tip: [s*1.41*S, 0, -2.46*S], mid: [s*1.27*S, 0, -1.38*S] },
+            { tip: [s*1.66*S, 0, -2.29*S], mid: [s*1.41*S, 0, -1.24*S] },
             { tip: [s*2.21*S, 0, -1.98*S], mid: [s*1.46*S, 0, -0.68*S] },
         ];
         const fTips = [], fMids = [];
@@ -614,7 +614,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
         // Inter-finger membranes
-        const ffArr = new Float32Array(324);
+        const ffArr = new Float32Array(432);
         const ffGeo = new THREE.BufferGeometry();
         ffGeo.setAttribute('position', new THREE.BufferAttribute(ffArr, 3));
         const ffMesh = new THREE.Mesh(ffGeo, bMem);   wg.add(ffMesh);
@@ -649,11 +649,11 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); wristClaw.castShadow = true; elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // Consistent 20° bend angle, finger 3 slightly shorter
+        // Consistent 20° bend, finger 3 shorter + closer to finger 4
         const fingerDefs = [
             { tip: [s*-2.22*S, 0, -0.16*S], mid: [s*-0.74*S, 0, -0.23*S] },
             { tip: [s*-0.89*S, 0, -1.61*S], mid: [s*-0.18*S, 0, -0.63*S] },
-            { tip: [s*0.78*S, 0, -1.76*S], mid: [s*0.51*S, 0, -0.74*S] },
+            { tip: [s*1.01*S, 0, -1.64*S], mid: [s*0.61*S, 0, -0.66*S] },
             { tip: [s*1.98*S, 0, -1.36*S], mid: [s*1.04*S, 0, -0.46*S] },
         ];
         const fTips = [], fMids = [];
@@ -709,7 +709,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wg._afGeo = afGeo; wg._afFLen = fLen; wg._afBodyPt = [s*-0.35*S, 0, -0.22*S];
         wg._afGroundedBodyPt = [s*-0.05*S, -0.05*S, -1.5*S];
         wg._afStaticTip = fTips[0]; wg._afStaticMid = fMids[0];
-        const ffArr = new Float32Array(324);
+        const ffArr = new Float32Array(432);
         const ffGeo = new THREE.BufferGeometry();
         ffGeo.setAttribute('position', new THREE.BufferAttribute(ffArr, 3));
         const ffMesh = new THREE.Mesh(ffGeo, bMem);   wg.add(ffMesh);
