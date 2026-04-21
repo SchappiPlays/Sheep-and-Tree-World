@@ -4234,7 +4234,8 @@ function startGame(loadSlotName, clipShotIdx) {
     player.sprintSpeed = 8.0 * getStatSpeedMult();
     saveCharColors(); // read from inputs
     applyCharColors(player);
-    if (dragonFormActive) player.setDragonForm(true);
+    // Dragon Rite disabled for now
+    // if (dragonFormActive) player.setDragonForm(true);
     // Name label above player
     if (player._nameLabel) player.group.remove(player._nameLabel);
     const nameCanvas = document.createElement('canvas');
@@ -6139,7 +6140,8 @@ function startGame(loadSlotName, clipShotIdx) {
             if (s.playerHP !== undefined) { playerHP = s.playerHP; playerMaxHP = s.playerMaxHP || 10; }
             if (s.playerMana !== undefined) { playerMana = s.playerMana; playerMaxMana = s.playerMaxMana; }
             if (s.playerHunger !== undefined) { playerHunger = s.playerHunger; playerMaxHunger = s.playerMaxHunger || 20; }
-            if (s.dragonFormActive) { dragonFormActive = true; player.setDragonForm(true); }
+            // Dragon Rite disabled for now
+            // if (s.dragonFormActive) { dragonFormActive = true; player.setDragonForm(true); }
             if (s.staffDamageDealt !== undefined) staffDamageDealt = s.staffDamageDealt;
             if (s.timeOfDay !== undefined) timeOfDay = s.timeOfDay;
             if (s.killedBosses) { killedBosses.clear(); for (const b of s.killedBosses) killedBosses.add(b); }
@@ -7608,14 +7610,14 @@ function getWarriorDamageBonus() {
     if (skills.warrior[1]) mult += 0.15; // Sharp Edge
     if (skills.warrior[4] && playerHP / playerMaxHP < 0.3) mult += 0.40; // Berserker
     if (skills.warrior[9]) mult += 0.30; // Warlord
-    if (dragonFormActive) mult += 0.25; // Dragon Rite
+    // if (dragonFormActive) mult += 0.25; // Dragon Rite (disabled)
     return mult;
 }
 function getWizardDamageBonus() {
     let mult = 1.0;
     if (skills.wizard[3]) mult += 0.20; // Spell Power
     if (skills.wizard[9]) mult += 0.40; // Archmage
-    if (dragonFormActive) mult += 0.25; // Dragon Rite
+    // if (dragonFormActive) mult += 0.25; // Dragon Rite (disabled)
     return mult;
 }
 function getDamageReduction() {
@@ -8750,24 +8752,8 @@ document.addEventListener('mouseup', e => {
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
-    // Dragon form flight — double-tap space to toggle
-    if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player
-        && !player._dragonGrabbed && !(horseMgr && horseMgr.ridingHorse)) {
-        const now = performance.now();
-        if (now - _lastSpaceTime < 300) {
-            dragonFormFlying = !dragonFormFlying;
-            player.dragonFlying = dragonFormFlying;
-            if (dragonFormFlying) {
-                player.jumpVel = 6.0; // initial launch upward
-                addChatMessage('Wings spread — you take flight! [Shift to boost]', 'rgba(180,120,200,0.9)');
-            } else {
-                addChatMessage('You fold your wings and descend.', 'rgba(180,120,200,0.9)');
-            }
-            _lastSpaceTime = 0;
-        } else {
-            _lastSpaceTime = now;
-        }
-    }
+    // Dragon form flight — disabled for now
+    // if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player) { ... }
     // Horse gear control while riding
     if (horseMgr && horseMgr.ridingHorse && !e.repeat) {
         if (e.code === keybinds.forward) { horseMgr.gearUp(); e.preventDefault(); return; }
@@ -11331,11 +11317,12 @@ const WB_CATEGORIES = [
         { from: 'iron_ingot', fromAlt: BLOCK.SNOW, to: 'ice_staff', fc: 2, fcAlt: 8, tc: 1, multi: true },
         { from: 'iron_ingot', fromAlt: BLOCK.SAND, to: 'lightning_staff', fc: 3, fcAlt: 6, tc: 1, multi: true },
     ]},
-    { name: 'Legendary', recipes: [
-        { from: 'dragon_heart', fromAlt: 'essence_decay', to: 'dragon_rite', fc: 1, fcAlt: 1, tc: 1, multi: true,
-          _extraReqs: [['essence_stone', 1], ['essence_shadow', 1], ['essence_fury', 1]],
-          _special: 'dragon_rite' },
-    ]},
+    // Dragon Rite disabled for now
+    // { name: 'Legendary', recipes: [
+    //     { from: 'dragon_heart', fromAlt: 'essence_decay', to: 'dragon_rite', fc: 1, fcAlt: 1, tc: 1, multi: true,
+    //       _extraReqs: [['essence_stone', 1], ['essence_shadow', 1], ['essence_fury', 1]],
+    //       _special: 'dragon_rite' },
+    // ]},
 ];
 // Flat list for index lookup
 const WORKBENCH_RECIPES = WB_CATEGORIES.flatMap(c => c.recipes);
@@ -11379,32 +11366,8 @@ function doCraft(r) {
     if (!r || !r.from) return;
     if (!_canCraftRecipe(r)) return;
 
-    // Special: Dragon Rite — transformation, not an item
-    if (r._special === 'dragon_rite') {
-        if (dragonFormActive) { addChatMessage('You have already undergone the Dragon Rite.', 'rgba(200,150,100,0.9)'); return; }
-        // Consume all ingredients
-        const _consume = (item, count) => {
-            inventory[item] -= count;
-            if (inventory[item] <= 0) { delete inventory[item]; for (let i = 0; i < hotbarSlots.length; i++) if (hotbarSlots[i] === item) hotbarSlots[i] = 0; }
-        };
-        _consume(r.from, r.fc);
-        _consume(r.fromAlt, r.fcAlt);
-        for (const [item, count] of r._extraReqs) _consume(item, count);
-        // Activate dragon form
-        dragonFormActive = true;
-        player.setDragonForm(true);
-        addChatMessage('The essences merge with the dragon heart...', 'rgba(200,100,200,0.95)');
-        setTimeout(() => addChatMessage('Ancient power surges through you!', 'rgba(255,180,50,0.95)'), 1500);
-        setTimeout(() => addChatMessage('You have become Dragonborn. +25% damage, wings, horns.', 'rgba(255,220,100,0.95)'), 3000);
-        // Screen flash effect
-        const flash = document.createElement('div');
-        flash.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(200,100,255,0.4);z-index:200;pointer-events:none;transition:opacity 2s;';
-        document.body.appendChild(flash);
-        setTimeout(() => { flash.style.opacity = '0'; }, 100);
-        setTimeout(() => document.body.removeChild(flash), 2200);
-        refreshUI();
-        return;
-    }
+    // Dragon Rite disabled for now
+    // if (r._special === 'dragon_rite') { ... }
 
     // Consume primary
     inventory[r.from] -= r.fc;
@@ -16617,13 +16580,8 @@ function executeCommand(input) {
             for (const t of targets) {
                 if (t.notFound) { addChatMessage('Player not found: ' + t.name, 'rgba(255,100,100,0.9)'); continue; }
                 if (t.isSelf) {
-                    // Special: /give @s dragonform activates dragon rite
-                    if (item === 'dragonform' || item === 'dragon_rite') {
-                        dragonFormActive = true;
-                        player.setDragonForm(true);
-                        addChatMessage('Dragon Rite activated!', 'rgba(200,100,255,0.95)');
-                        continue;
-                    }
+                    // Dragon Rite disabled for now
+                    // if (item === 'dragonform' || item === 'dragon_rite') { ... }
                     const invItem = isNaN(item) ? item : Number(item);
                     inventory[invItem] = (inventory[invItem] || 0) + qty;
                     if (!hotbarSlots.includes(invItem)) {
@@ -16826,7 +16784,7 @@ function executeCommand(input) {
             addChatMessage('Shields: wood_shield, stone_shield, copper_shield, iron_shield, steel_shield', c);
             addChatMessage('Blocks: Use block IDs (1=stone, 2=dirt, 3=grass, 4=wood, 5=leaves, 6=sand, 7=planks, 8=snow, 9=ice)', c);
             addChatMessage('Stations: furnace_block, anvil_block, steel_anvil_block, blast_furnace_block, campfire_block, chest_block', c);
-            addChatMessage('Special: /give @s dragonform — Activate Dragon Rite', c);
+            // addChatMessage('Special: /give @s dragonform — Activate Dragon Rite', c); // disabled
             break;
         }
         case 'help': {
