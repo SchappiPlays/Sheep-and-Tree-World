@@ -1394,20 +1394,19 @@ function buildFarTerrain(centerX, centerZ) {
             );
 
             // Side faces — always add a skirt so you never see void underneath
-            const sideHex = 0x8b6b3d;
             const skirtDrop = S * 2; // minimum drop below surface to seal gaps
             // +X
             const hpx = gH(gx+1, gz) + BS;
-            { const bot = Math.min(hpx, top) - skirtDrop; pushFace(wx+halfS,top,wz+halfS, wx+halfS,top,wz-halfS, wx+halfS,bot,wz-halfS, wx+halfS,bot,wz+halfS, (top-bot>S*2)?sideHex:hex); }
+            { const bot = Math.min(hpx, top) - skirtDrop; pushFace(wx+halfS,top,wz+halfS, wx+halfS,top,wz-halfS, wx+halfS,bot,wz-halfS, wx+halfS,bot,wz+halfS, hex); }
             // -X
             const hmx = gH(gx-1, gz) + BS;
-            { const bot = Math.min(hmx, top) - skirtDrop; pushFace(wx-halfS,top,wz-halfS, wx-halfS,top,wz+halfS, wx-halfS,bot,wz+halfS, wx-halfS,bot,wz-halfS, (top-bot>S*2)?sideHex:hex); }
+            { const bot = Math.min(hmx, top) - skirtDrop; pushFace(wx-halfS,top,wz-halfS, wx-halfS,top,wz+halfS, wx-halfS,bot,wz+halfS, wx-halfS,bot,wz-halfS, hex); }
             // +Z
             const hpz = gH(gx, gz+1) + BS;
-            { const bot = Math.min(hpz, top) - skirtDrop; pushFace(wx-halfS,top,wz+halfS, wx+halfS,top,wz+halfS, wx+halfS,bot,wz+halfS, wx-halfS,bot,wz+halfS, (top-bot>S*2)?sideHex:hex); }
+            { const bot = Math.min(hpz, top) - skirtDrop; pushFace(wx-halfS,top,wz+halfS, wx+halfS,top,wz+halfS, wx+halfS,bot,wz+halfS, wx-halfS,bot,wz+halfS, hex); }
             // -Z
             const hmz = gH(gx, gz-1) + BS;
-            { const bot = Math.min(hmz, top) - skirtDrop; pushFace(wx+halfS,top,wz-halfS, wx-halfS,top,wz-halfS, wx-halfS,bot,wz-halfS, wx+halfS,bot,wz-halfS, (top-bot>S*2)?sideHex:hex); }
+            { const bot = Math.min(hmz, top) - skirtDrop; pushFace(wx+halfS,top,wz-halfS, wx-halfS,top,wz-halfS, wx-halfS,bot,wz-halfS, wx+halfS,bot,wz-halfS, hex); }
 
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
