@@ -2392,7 +2392,7 @@ export class DragonManager {
         // ── State transitions ──
         if (bd._iceState === 'sleeping') {
             // Wakes only if sprinted near or day breaks
-            if (sprinting && distXZ < 28) {
+            if (sprinting && distXZ < 28 && !this._peacefulMode) {
                 bd._iceState = 'defending';
             } else if (!isNight) {
                 bd._iceState = 'idle';
@@ -2410,7 +2410,7 @@ export class DragonManager {
             }
         } else if (bd._iceState === 'idle') {
             bd._pursuitCooldown = Math.max(0, (bd._pursuitCooldown || 0) - dt);
-            if (distXZ < 40 && bd._pursuitCooldown <= 0) {
+            if (distXZ < 40 && bd._pursuitCooldown <= 0 && !this._peacefulMode) {
                 bd._iceState = 'defending';
                 bd._pursuitTime = 0;
             } else if (bd._iceTimer <= 0) {
@@ -2628,7 +2628,7 @@ export class DragonManager {
             bd._ltState = 'returning';
         } else if (bd._ltState === 'circling') {
             bd._pursuitCooldown = Math.max(0, (bd._pursuitCooldown || 0) - dt);
-            if (distXZ < 45 && bd._pursuitCooldown <= 0) {
+            if (distXZ < 45 && bd._pursuitCooldown <= 0 && !this._peacefulMode) {
                 bd._ltState = 'defending';
                 bd._pursuitTime = 0;
             }

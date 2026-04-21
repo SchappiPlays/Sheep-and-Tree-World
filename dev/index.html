@@ -1711,6 +1711,15 @@ let _cinRadiusPrompt = false;
 let _cinLoadedRadius = false;
 function _cinLoadChunksInRadius(radius) {
     if (!chunkManager) return;
+    // Unload all existing chunks first
+    for (const [key, entry] of chunkManager.loaded) {
+        if (entry.terrain) { chunkManager.scene.remove(entry.terrain); entry.terrain.geometry.dispose(); }
+        if (entry.water) { chunkManager.scene.remove(entry.water); entry.water.geometry.dispose(); }
+        if (entry.leaves) { chunkManager.scene.remove(entry.leaves); entry.leaves.geometry.dispose(); }
+    }
+    chunkManager.loaded.clear();
+    chunkManager.buildQueue.length = 0;
+    chunkManager.loadedCount = 0;
     chunkManager.skipUnload = true;
     chunkManager.maxLod = 2; // cap LOD for cinematic quality — preserves trees
     const oldDist = chunkManager._renderDist;
@@ -4728,7 +4737,7 @@ function startGame(loadSlotName, clipShotIdx) {
         // Start flying high above fortress
         fortDragon._flyAngle = 0;
         fortDragon._flyRadius = 35;
-        fortDragon._flyHeight = 40;
+        fortDragon._flyHeight = 65;
         fortDragon._flySpeed = 0.3;
         fortDragon._breathing = false;
         fortDragon._breathTimer = 0;
@@ -4743,7 +4752,7 @@ function startGame(loadSlotName, clipShotIdx) {
         fortDragon._fireMat = fireMat;
         fortDragon.x = -1010;
         fortDragon.z = -670;
-        fortDragon.group.position.set(-1010, getTerrainHeight(-1010, -670) + 40, -670);
+        fortDragon.group.position.set(-1010, getTerrainHeight(-1010, -670) + 65, -670);
         scene.add(fortDragon.group);
         dragonMgr.dragons.push(fortDragon);
         world._fortressDragon = fortDragon;
@@ -8856,9 +8865,7 @@ document.addEventListener('keydown', e => {
         }
         if (e.code === 'KeyP' && !e.repeat) {
             _cinUIHidden = !_cinUIHidden;
-            const els = ['debug','crosshair','hotbar','hearts','prompt','minimap','manaBar','staminaBar','hungerBar'];
-            els.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = _cinUIHidden ? 'none' : ''; });
-            // Also hide the cinematic controls overlay
+            // Toggle the cinematic controls/tips overlay only — HUD is always hidden
             const ctrl = document.getElementById('cinControls');
             if (ctrl) ctrl.style.display = _cinUIHidden ? 'none' : '';
             e.preventDefault(); e.stopPropagation(); return;
@@ -15431,6 +15438,7 @@ function animate() {
     player._lookPitch = fpPitch;
     player._lookYaw = fpYaw;
     dragonMgr._timeOfDay = timeOfDay;
+    dragonMgr._peacefulMode = peacefulMode;
     dragonMgr._playerRiding = !!(dragonMgr.ridingDragon || (horseMgr && horseMgr.ridingHorse));
     dragonMgr._playerSprinting = !!(keys[keybinds.sprint] || keys['ShiftRight']);
     dragonMgr.update(dt, player, keys);

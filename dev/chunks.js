@@ -414,7 +414,7 @@ export class ChunkManager {
                     // Leaves go to separate transparent mesh
                     if (block === BLOCK.LEAVES || block === BLOCK.PINE_LEAVES) {
                         const isPine = block === BLOCK.PINE_LEAVES;
-                        const LS = 1; // always render leaves at normal size — LOD scaling makes trees look oversized
+                        const LS = Math.min(S, 2); // cap leaf size at 2 — fills canopy gaps while avoiding oversized blocks
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
                             const nbx = bx + face.dir[0] * LS, nby = y + face.dir[1], nbz = bz + face.dir[2] * LS;
