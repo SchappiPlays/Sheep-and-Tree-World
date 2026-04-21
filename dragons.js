@@ -553,11 +553,11 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // 4 finger bones — consistent 35° bend, finger 3 shorter + closer to finger 4
+        // 4 finger bones — consistent 35° bend, finger 3 shorter + closer to finger 2
         const fingerDefs = [
             { tip: [s*-1.63*S, 0, -1.77*S], mid: [s*-0.6*S, 0, -1.21*S] },
             { tip: [s*-0.12*S, 0, -2.78*S], mid: [s*0.36*S, 0, -1.62*S] },
-            { tip: [s*1.66*S, 0, -2.29*S], mid: [s*1.41*S, 0, -1.24*S] },
+            { tip: [s*1.15*S, 0, -2.59*S], mid: [s*1.12*S, 0, -1.51*S] },
             { tip: [s*2.21*S, 0, -1.98*S], mid: [s*1.46*S, 0, -0.68*S] },
         ];
         const fTips = [], fMids = [];
@@ -649,11 +649,11 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         wristClaw.position.set(s * fLen, -0.07*S, 0); wristClaw.castShadow = true; elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
-        // Consistent 20° bend, finger 3 shorter + closer to finger 4
+        // Consistent 20° bend, finger 3 shorter + closer to finger 2
         const fingerDefs = [
             { tip: [s*-2.22*S, 0, -0.16*S], mid: [s*-0.74*S, 0, -0.23*S] },
             { tip: [s*-0.89*S, 0, -1.61*S], mid: [s*-0.18*S, 0, -0.63*S] },
-            { tip: [s*1.01*S, 0, -1.64*S], mid: [s*0.61*S, 0, -0.66*S] },
+            { tip: [s*0.52*S, 0, -1.85*S], mid: [s*0.40*S, 0, -0.80*S] },
             { tip: [s*1.98*S, 0, -1.36*S], mid: [s*1.04*S, 0, -0.46*S] },
         ];
         const fTips = [], fMids = [];
