@@ -1701,6 +1701,38 @@ function showToast(msg) {
     setTimeout(() => t.style.opacity = '0', 1500);
 }
 
+// ── Cinematic/Spectator Mode ──
+const _CINEMATIC_MODE = new URLSearchParams(location.search).has('cinematic');
+let _cinCamX = 0, _cinCamY = 80, _cinCamZ = 0;
+let _cinYaw = 0, _cinPitch = -0.3;
+let _cinUIHidden = false;
+let _cinRadiusInput = '';
+let _cinRadiusPrompt = false;
+let _cinLoadedRadius = false;
+function _cinLoadChunksInRadius(radius) {
+    if (!chunkManager) return;
+    chunkManager.skipUnload = true;
+    chunkManager.maxLod = 2; // cap LOD for cinematic quality — preserves trees
+    const oldDist = chunkManager._renderDist;
+    chunkManager.setRenderDist(radius);
+    chunkManager.update(_cinCamX, _cinCamZ);
+    showToast('Loading ' + radius + ' chunk radius... (may take a moment)');
+    let ticks = 0;
+    const maxTicks = radius * radius * 2;
+    const loadLoop = () => {
+        if (!chunkManager) return;
+        chunkManager._processQueue(64, 200);
+        ticks++;
+        if (chunkManager.buildQueue.length > 0 && ticks < maxTicks) {
+            setTimeout(loadLoop, 0);
+        } else {
+            showToast('Loaded ' + chunkManager.loadedCount + ' chunks');
+            _cinLoadedRadius = true;
+        }
+    };
+    setTimeout(loadLoop, 16);
+}
+
 // ── Main Menu ──
 const mainMenuEl = document.getElementById('mainMenu');
 let gameStarted = false;
@@ -2243,6 +2275,7 @@ function startGame(loadSlotName, clipShotIdx) {
     chunkManager = new ChunkManager(scene, world);
     chunkManager.setRenderDist(settingsRenderDist);
     chunkManager.initChunkMap();
+    if (_CINEMATIC_MODE) chunkManager.skipUnload = true;
     creatures = new CreatureManager(scene, world);
     creatures._onCreatureDrop = (item, count, creatureType) => {
         for (let i = 0; i < count; i++) addToInventory(item);
@@ -6423,14 +6456,17 @@ function startGame(loadSlotName, clipShotIdx) {
 
     const checkLoaded = () => {
         // Build chunks aggressively during loading (8 per tick)
-        chunkManager.update(px, pz);
-        chunkManager._processQueue(8);
+        // In cinematic mode, skip chunk preloading — user loads manually via Enter+radius
+        if (!_CINEMATIC_MODE) {
+            chunkManager.update(px, pz);
+            chunkManager._processQueue(8);
+        }
 
-        const loaded = chunkManager.loadedCount || 0;
+        const loaded = _CINEMATIC_MODE ? targetChunks : (chunkManager.loadedCount || 0);
         const pct = Math.min(100, (loaded / targetChunks) * 100);
         loadBar.style.width = pct + '%';
         loadCheckCount++;
-        loadText.textContent = loadMessages[Math.min(Math.floor(pct / 25), loadMessages.length - 1)];
+        loadText.textContent = _CINEMATIC_MODE ? 'Building world...' : loadMessages[Math.min(Math.floor(pct / 25), loadMessages.length - 1)];
 
         if (pct >= 100 || loadCheckCount > 300) {
             // Stage 2: Build far terrain
@@ -6450,7 +6486,7 @@ function startGame(loadSlotName, clipShotIdx) {
                             gamePaused = true;
                             mainMenuEl.style.display = 'flex';
                         }, shotArg);
-                    } else if (!loadSlotName) {
+                    } else if (!loadSlotName && !_CINEMATIC_MODE) {
                         // New game — play intro cinematic
                         _playIntroCinematic(() => {
                             gamePaused = false;
@@ -6458,7 +6494,25 @@ function startGame(loadSlotName, clipShotIdx) {
                         });
                     } else {
                         gamePaused = false;
-                        if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                        if (_CINEMATIC_MODE) {
+                            // Set up cinematic spectator mode
+                            hudHidden = true;
+                            peacefulMode = true;
+                            _cinUIHidden = true;
+                            const hudEls = ['debug','crosshair','hotbar','hearts','prompt','minimap','manaBar','staminaBar','hungerBar','saveToast'];
+                            hudEls.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                            if (player) { player.group.visible = false; if (player._nameLabel) player._nameLabel.visible = false; }
+                            // Create cinematic controls overlay
+                            const ctrl = document.createElement('div');
+                            ctrl.id = 'cinControls';
+                            ctrl.style.cssText = 'position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:200;color:rgba(255,255,255,0.5);font:11px monospace;text-align:center;pointer-events:none;letter-spacing:1px;text-shadow:1px 1px 2px #000;';
+                            ctrl.innerHTML = 'WASD — move &nbsp;|&nbsp; Mouse — look &nbsp;|&nbsp; Shift — fast &nbsp;|&nbsp; Space/Ctrl — up/down &nbsp;|&nbsp; P — toggle UI &nbsp;|&nbsp; Enter — load chunk radius';
+                            document.body.appendChild(ctrl);
+                            // Lock pointer for camera control
+                            setTimeout(() => renderer.domElement.requestPointerLock(), 300);
+                        } else {
+                            if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 200);
+                        }
                     }
                 }, 200);
             }, 50);
@@ -6828,6 +6882,14 @@ function animatePreview() {
 // Start preview when menu is visible
 setTimeout(initCharPreview, 100);
 
+// ── Cinematic Mode Auto-Start ──
+if (_CINEMATIC_MODE) {
+    setTimeout(() => {
+        mainMenuEl.style.display = 'none';
+        startGame(null); // start fresh world, no cinematic intro
+    }, 200);
+}
+
 // ── First-person mouse look ──
 let fpYaw = 0, fpPitch = 0;
 let fpActive = false; // is first person currently active
@@ -6840,6 +6902,12 @@ document.addEventListener('pointerlockchange', () => {
 // don't auto-retry on window focus — clicking the canvas re-acquires it.
 document.addEventListener('mousemove', e => {
     if (!pointerLocked) return;
+    if (_CINEMATIC_MODE) {
+        _cinYaw -= e.movementX * 0.002 * mouseSensitivity;
+        _cinPitch -= e.movementY * 0.002 * mouseSensitivity;
+        _cinPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, _cinPitch));
+        return;
+    }
     fpYaw -= e.movementX * 0.002 * mouseSensitivity;
     // First person: mouse down = look down. Third person: mouse down = orbit camera down
     if (fpActive) {
@@ -6851,6 +6919,10 @@ document.addEventListener('mousemove', e => {
 });
 // Click to lock pointer (only in mouse look mode)
 const _tryPointerLock = () => {
+    if (_CINEMATIC_MODE && !pointerLocked && gameStarted) {
+        renderer.domElement.requestPointerLock();
+        return;
+    }
     if (useMouseLook && !pointerLocked && gameStarted && !gamePaused && !mapOpen && !inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !settingsOpen && !chestOpen && !guideBookOpen) {
         renderer.domElement.requestPointerLock();
         fpYaw = player ? player.group.rotation.y : 0;
@@ -8739,7 +8811,7 @@ function _updateArrows(dt) {
         if (a.life <= 0) { scene.remove(a.mesh); _arrows.splice(i, 1); }
     }
 }
-renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) _leftMouseDown = true; });
+renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0 && !_CINEMATIC_MODE) _leftMouseDown = true; });
 document.addEventListener('mouseup', e => {
     if (e.button === 0) {
         // If releasing while drawing a bow, fire an arrow
@@ -8752,6 +8824,52 @@ document.addEventListener('mouseup', e => {
 document.addEventListener('keydown', e => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code === keybinds.jump) e.preventDefault();
+    // ── Cinematic Mode Keys ──
+    if (_CINEMATIC_MODE) {
+        if (_cinRadiusPrompt) {
+            // Collecting 2-digit radius number
+            if (e.key >= '0' && e.key <= '9' && _cinRadiusInput.length < 2) {
+                _cinRadiusInput += e.key;
+                showToast('Radius: ' + _cinRadiusInput + (_cinRadiusInput.length < 2 ? '_' : ' — loading...'));
+                if (_cinRadiusInput.length === 2) {
+                    const radius = parseInt(_cinRadiusInput);
+                    _cinRadiusPrompt = false;
+                    _cinRadiusInput = '';
+                    if (radius > 0 && radius <= 99) {
+                        _cinLoadChunksInRadius(radius);
+                    }
+                }
+                e.preventDefault(); e.stopPropagation(); return;
+            } else if (e.key === 'Enter' && _cinRadiusInput.length > 0) {
+                const radius = parseInt(_cinRadiusInput);
+                _cinRadiusPrompt = false;
+                _cinRadiusInput = '';
+                if (radius > 0 && radius <= 99) _cinLoadChunksInRadius(radius);
+                e.preventDefault(); e.stopPropagation(); return;
+            } else if (e.key === 'Escape') {
+                _cinRadiusPrompt = false;
+                _cinRadiusInput = '';
+                showToast('Cancelled');
+                e.preventDefault(); e.stopPropagation(); return;
+            }
+            e.preventDefault(); e.stopPropagation(); return;
+        }
+        if (e.code === 'KeyP' && !e.repeat) {
+            _cinUIHidden = !_cinUIHidden;
+            const els = ['debug','crosshair','hotbar','hearts','prompt','minimap','manaBar','staminaBar','hungerBar'];
+            els.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = _cinUIHidden ? 'none' : ''; });
+            // Also hide the cinematic controls overlay
+            const ctrl = document.getElementById('cinControls');
+            if (ctrl) ctrl.style.display = _cinUIHidden ? 'none' : '';
+            e.preventDefault(); e.stopPropagation(); return;
+        }
+        if (e.code === 'Enter' && !e.repeat && !_cinRadiusPrompt) {
+            _cinRadiusPrompt = true;
+            _cinRadiusInput = '';
+            showToast('Enter chunk radius (01-99):');
+            e.preventDefault(); e.stopPropagation(); return;
+        }
+    }
     // Dragon form flight — disabled for now
     // if ((e.code === 'Space' || e.code === keybinds.jump) && !e.repeat && dragonFormActive && player) { ... }
     // Horse gear control while riding
@@ -8808,7 +8926,7 @@ document.addEventListener('keydown', e => {
             if (useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
         }
     }
-    if (e.code === keybinds.map) {
+    if (e.code === keybinds.map && !_CINEMATIC_MODE) {
         mapOpen = !mapOpen;
         worldMapEl.style.display = mapOpen ? 'block' : 'none';
         if (mapOpen) {
@@ -10516,12 +10634,12 @@ document.addEventListener('keydown', e => {
         chestOpen = false; chestOpenKey = null;
         chestMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
-    } else if (e.code === 'Escape' && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
+    } else if (e.code === 'Escape' && !_CINEMATIC_MODE && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
         gamePaused = !gamePaused;
         pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
         if (!gamePaused && useMouseLook) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     }
-    if (e.code === keybinds.inventory) {
+    if (e.code === keybinds.inventory && !_CINEMATIC_MODE) {
         if (craftingTableOpen) { craftingTableOpen = false; craftTableMenuEl.style.display = 'none'; }
         if (furnaceOpen) { furnaceOpen = false; furnaceMenuEl.style.display = 'none'; }
         if (campfireCookOpen) { campfireCookOpen = false; campfireCookMenuEl.style.display = 'none'; }
@@ -14239,7 +14357,7 @@ function animate() {
     updateWaterTime(now * 0.001);
 
     // Autosave every 40s (skip during cinematic)
-    if (!_introActive) _autosaveTimer += dt;
+    if (!_introActive && !_CINEMATIC_MODE) _autosaveTimer += dt;
     if (_autosaveTimer >= 40) {
         _autosaveTimer = 0;
         saveGame(_currentSaveName);
@@ -14257,7 +14375,9 @@ function animate() {
 
     // Player update
     fpActive = zoomLevel < 0.15 && !(dragonMgr && dragonMgr.ridingDragon);
-    if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen) {
+    if (_CINEMATIC_MODE) {
+        // Skip player physics/movement in cinematic mode — camera override handles position
+    } else if (!_introActive && !(dragonMgr && dragonMgr.ridingDragon) && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen) {
         const useMouse = useMouseLook && pointerLocked;
         // Axis-lock movement to placement direction while place-locking
         let moveKeys = keys;
@@ -15005,8 +15125,8 @@ function animate() {
         }
     }
 
-    // Load/unload chunks
-    chunkManager.update(player.position.x, player.position.z);
+    // Load/unload chunks (skip auto-loading in cinematic — only manual Enter+radius)
+    if (!_CINEMATIC_MODE) chunkManager.update(player.position.x, player.position.z);
 
     // Water simulation — throttle chunk rebuilds to max 4 per frame, carry over remainder
     if (waterSim) {
@@ -15998,6 +16118,32 @@ function animate() {
         camPos.lerp(_idealOffset, 1 - Math.exp(-lerpSpeed * dt));
         camLook.lerp(_idealLook,  1 - Math.exp(-lerpSpeed * 1.5 * dt));
     }
+    // ── Cinematic Mode Camera Override ──
+    if (_CINEMATIC_MODE) {
+        const cinSpeed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 80 : 25;
+        const cinFwd = cinSpeed * dt;
+        const cosY = Math.cos(_cinYaw), sinY = Math.sin(_cinYaw);
+        const cosP = Math.cos(_cinPitch), sinP = Math.sin(_cinPitch);
+        const kb = keybinds || {};
+        if (keys[kb.forward] || keys['ArrowUp']) { _cinCamX -= sinY * cosP * cinFwd; _cinCamZ -= cosY * cosP * cinFwd; _cinCamY += sinP * cinFwd; }
+        if (keys[kb.back] || keys['ArrowDown']) { _cinCamX += sinY * cosP * cinFwd; _cinCamZ += cosY * cosP * cinFwd; _cinCamY -= sinP * cinFwd; }
+        if (keys[kb.left] || keys['ArrowLeft']) { _cinCamX -= cosY * cinFwd; _cinCamZ += sinY * cinFwd; }
+        if (keys[kb.right] || keys['ArrowRight']) { _cinCamX += cosY * cinFwd; _cinCamZ -= sinY * cinFwd; }
+        if (keys['Space']) _cinCamY += cinFwd;
+        if (keys['ControlLeft'] || keys['ControlRight']) _cinCamY -= cinFwd;
+        // Override player position so chunks load around camera
+        player.position.set(_cinCamX, _cinCamY, _cinCamZ);
+        player.group.position.set(_cinCamX, _cinCamY, _cinCamZ);
+        player.group.visible = false;
+        camPos.set(_cinCamX, _cinCamY, _cinCamZ);
+        const lookD = 10;
+        camLook.set(
+            _cinCamX - sinY * cosP * lookD,
+            _cinCamY + sinP * lookD,
+            _cinCamZ - cosY * cosP * lookD
+        );
+    }
+
     camera.position.copy(camPos);
     camera.lookAt(camLook);
 

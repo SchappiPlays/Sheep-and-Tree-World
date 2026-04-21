@@ -131,6 +131,7 @@ export class ChunkManager {
         this.buildQueue = [];
         this._lastPCX = null;
         this._lastPCZ = null;
+        this.maxLod = 4; // cap LOD level (1=full detail, 4=most aggressive)
     }
 
     setRenderDist(d) {
@@ -221,7 +222,7 @@ export class ChunkManager {
         // Only scan nearby chunks first, expand outward in rings
         for (let ring = 0; ring <= RENDER_DIST; ring++) {
             if (ring > RENDER_DIST) break;
-            const lod = ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4;
+            const lod = Math.min(ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4, this.maxLod);
             for (let dx = -ring; dx <= ring; dx++) {
                 for (let dz = -ring; dz <= ring; dz++) {
                     if (Math.abs(dx) !== ring && Math.abs(dz) !== ring) continue; // ring perimeter only
@@ -305,7 +306,7 @@ export class ChunkManager {
                 q.priority = d2;
                 // Update LOD based on current distance
                 const ring = Math.sqrt(d2);
-                q.lod = ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4;
+                q.lod = Math.min(ring <= LOD0_DIST ? 1 : ring <= LOD1_DIST ? 2 : ring <= LOD2_DIST ? 3 : 4, this.maxLod);
             }
             this.buildQueue.sort((a, b) => a.priority - b.priority);
         }
@@ -413,9 +414,10 @@ export class ChunkManager {
                     // Leaves go to separate transparent mesh
                     if (block === BLOCK.LEAVES || block === BLOCK.PINE_LEAVES) {
                         const isPine = block === BLOCK.PINE_LEAVES;
+                        const LS = Math.min(S, 2); // cap leaf size to avoid oversized blocks at LOD4
                         for (let fi = 0; fi < 6; fi++) {
                             const face = FACES[fi];
-                            const nbx = bx + face.dir[0] * S, nby = y + face.dir[1], nbz = bz + face.dir[2] * S;
+                            const nbx = bx + face.dir[0] * LS, nby = y + face.dir[1], nbz = bz + face.dir[2] * LS;
                             const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                             if (neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL) continue;
                             const ch = colorHash(bx, y, bz);
@@ -426,7 +428,7 @@ export class ChunkManager {
                             tmpColor.multiplyScalar(FACE_SHADE[fi] * (0.93 + ch * 0.14));
                             const verts = face.verts;
                             for (let vi = 0; vi < 4; vi++) {
-                                lPos.push((lx + verts[vi][0] * S) * BS, (y - Y_OFF + verts[vi][1]) * BS, (lz + verts[vi][2] * S) * BS);
+                                lPos.push((lx + verts[vi][0] * LS) * BS, (y - Y_OFF + verts[vi][1]) * BS, (lz + verts[vi][2] * LS) * BS);
                                 lNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                                 lCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
                             }
@@ -470,11 +472,13 @@ export class ChunkManager {
                         _isSlopeable = _cornerLow[0] || _cornerLow[1] || _cornerLow[2] || _cornerLow[3];
                     }
 
+                    // Cap visual size for tree trunks to avoid oversized blocks at LOD4
+                    const bS = (block === BLOCK.WOOD || block === BLOCK.PINE_WOOD) ? Math.min(S, 2) : S;
                     for (let fi = 0; fi < 6; fi++) {
                         const face = FACES[fi];
-                        const nbx = bx + face.dir[0] * S;
+                        const nbx = bx + face.dir[0] * bS;
                         const nby = y + face.dir[1];
-                        const nbz = bz + face.dir[2] * S;
+                        const nbz = bz + face.dir[2] * bS;
                         const neighbor = this.world.getBlockAt(nbx, nby, nbz);
                         const _neighborSolid = neighbor !== BLOCK.AIR && neighbor !== BLOCK.WATER && neighbor !== BLOCK.FLOWER_RED && neighbor !== BLOCK.FLOWER_YELLOW && neighbor !== BLOCK.FLOWER_BLUE && neighbor !== BLOCK.FLOWER_WHITE && neighbor !== BLOCK.ANVIL && neighbor !== BLOCK.LEAVES && neighbor !== BLOCK.PINE_LEAVES && neighbor !== BLOCK.TORCH && neighbor !== BLOCK.CAMPFIRE;
                         // For sloped blocks, force-render side faces if any edge corner is dropped (might be visible)
@@ -735,15 +739,17 @@ export class ChunkManager {
                             else tmpColor.setHex(0x6b4a20); // sides = medium brown
                         } else if (block === BLOCK.FLOWER_RED || block === BLOCK.FLOWER_YELLOW || block === BLOCK.FLOWER_BLUE || block === BLOCK.FLOWER_WHITE) {
                             // Flowers: render as small crossed planes, skip normal face rendering
+                            // Skip flowers at LOD2+ — too small to see at distance and they look oversized
+                            if (S > 1) continue;
                             if (fi === 0) { // only on first face to avoid duplicates
-                                const fx = (lx + 0.5 * S) * BS;
-                                const fz = (lz + 0.5 * S) * BS;
+                                const fx = (lx + 0.5) * BS;
+                                const fz = (lz + 0.5) * BS;
                                 const fBot = (y - Y_OFF) * BS;
-                                const stemH = BS * S * 0.5;
-                                const headH = BS * S * 0.35;
-                                const headW = BS * S * 0.35;
+                                const stemH = BS * 0.5;
+                                const headH = BS * 0.35;
+                                const headW = BS * 0.35;
                                 const fTop = fBot + stemH + headH;
-                                const stemW = BS * S * 0.06;
+                                const stemW = BS * 0.06;
                                 const flowerCol = new THREE.Color(BLOCK_COLORS[block]);
                                 const stemCol = new THREE.Color(0x2a7a1a);
                                 flowerCol.multiplyScalar(0.93 + ch * 0.14);
@@ -784,7 +790,7 @@ export class ChunkManager {
                         // Slopeable blocks: top face rendering depends on _slopeStyle
                         if (_isSlopeable && fi === 2) {
                             const baseX = lx * BS, baseZ = lz * BS;
-                            const fullW = S * BS;
+                            const fullW = bS * BS;
                             const halfW = fullW * 0.5;
                             const topY = (y - Y_OFF + 1) * BS;
                             const midY = topY - BS * 0.5;
@@ -859,9 +865,9 @@ export class ChunkManager {
                                 }
                             }
                             tPos.push(
-                                (lx + fv[vi][0] * S) * BS,
+                                (lx + fv[vi][0] * bS) * BS,
                                 vyy,
-                                (lz + fv[vi][2] * S) * BS
+                                (lz + fv[vi][2] * bS) * BS
                             );
                             tNrm.push(face.dir[0], face.dir[1], face.dir[2]);
                             tCol.push(tmpColor.r, tmpColor.g, tmpColor.b);
