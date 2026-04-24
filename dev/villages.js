@@ -1070,8 +1070,31 @@ export class VillageManager {
                 continue;
             }
 
+            // Castle NPCs — wander within the castle
+            if (v._castleRole && !v.fleeing) {
+                const role = v._castleRole;
+                v.wanderTimer = (v.wanderTimer === undefined ? Math.random() * 3 : v.wanderTimer) - dt;
+                if (v.wanderTimer <= 0) {
+                    if (!v.walking) {
+                        v.walking = true;
+                        const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
+                        const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
+                        // Guards patrol further, royalty stays closer to home
+                        const wanderRange = (role === 'guard' || role === 'knight') ? 25 : (role === 'king' || role === 'queen') ? 6 : 15;
+                        if (homeDist > wanderRange) {
+                            v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
+                        } else {
+                            v.angle += (Math.random() - 0.5) * 2.2;
+                        }
+                        v.wanderTimer = (role === 'guard' || role === 'knight') ? 3 + Math.random() * 4 : 2 + Math.random() * 5;
+                    } else {
+                        v.walking = false;
+                        v.wanderTimer = (role === 'king' || role === 'queen') ? 3 + Math.random() * 5 : 1.5 + Math.random() * 3;
+                    }
+                }
+            }
             // Shop keepers stay put (but can still be killed)
-            if (v._stayHome && !v.fleeing) {
+            else if (v._stayHome && !v.fleeing) {
                 v.walking = false; v.speed = 0;
                 v.x = v.homeX; v.z = v.homeZ;
                 const fy = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
@@ -1183,6 +1206,17 @@ export class VillageManager {
             if (v.speed > 0.01) {
                 v.x += Math.sin(v.group.rotation.y) * v.speed * dt;
                 v.z += Math.cos(v.group.rotation.y) * v.speed * dt;
+            }
+            // Keep castle NPCs inside castle walls
+            if (v._castleRole) {
+                const cMinX = CASTLE.wx + 5, cMaxX = CASTLE.wx + 75;
+                const cMinZ = CASTLE.wz + 5, cMaxZ = CASTLE.wz + 60;
+                if (v.x < cMinX || v.x > cMaxX || v.z < cMinZ || v.z > cMaxZ) {
+                    v.x = Math.max(cMinX, Math.min(cMaxX, v.x));
+                    v.z = Math.max(cMinZ, Math.min(cMaxZ, v.z));
+                    v.walking = false; v.wanderTimer = 0.5;
+                    v.angle = Math.atan2(v.homeX - v.x, v.homeZ - v.z);
+                }
             }
 
             const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
