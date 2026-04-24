@@ -57,7 +57,7 @@ function gradientSpike(r, h, segs, skinMat, boneMat) {
 function makeDragonBone(p1, p2, r1, r2, mat, parent) {
     const dx = p2[0]-p1[0], dy = p2[1]-p1[1], dz = p2[2]-p1[2];
     const len = Math.sqrt(dx*dx+dy*dy+dz*dz);
-    const b = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 6), mat);
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, len, 6), mat);
     b.position.set((p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2);
     const dir = new THREE.Vector3(dx,dy,dz).normalize();
     b.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir));
@@ -533,7 +533,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         const wg = new THREE.Group();
         wg.position.set(s * 0.3 * S, 0.1 * S, 0.4 * S);
         const uLen = 0.75 * S;
-        const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.08*S, 0.06*S, uLen, 6), bBone);
+        const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.08*S, uLen, 6), bBone);
         upperBone.rotation.z = s * -Math.PI / 2;
         upperBone.position.set(s * uLen / 2, 0, 0);
         upperBone.castShadow = true; wg.add(upperBone);
@@ -544,12 +544,13 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
         elbowGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.075*S, 6, 4), bBone));
         const fLen = 1.5 * S;
-        const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.045*S, fLen, 6), bBone);
+        const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.045*S, 0.06*S, fLen, 6), bBone);
         foreBone.rotation.z = s * -Math.PI / 2;
         foreBone.position.set(s * fLen / 2, 0, 0); elbowGrp.add(foreBone);
         const wristKnob = new THREE.Mesh(new THREE.SphereGeometry(0.055*S, 6, 4), bBone);
         wristKnob.position.set(s * fLen, 0, 0); elbowGrp.add(wristKnob);
         const wristClaw = new THREE.Mesh(new THREE.ConeGeometry(0.035*S, 0.12*S, 4), bHorn);
+        wristClaw.rotation.x = Math.PI; // flip so tip points downward
         wristClaw.position.set(s * fLen, -0.07*S, 0); elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
@@ -628,7 +629,7 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         const wg = new THREE.Group();
         wg.position.set(s * 0.2 * S, 0.35 * S, 0.4 * S);
         const uLen = 1.1 * S;
-        const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.08*S, 0.06*S, uLen, 6), bBone);
+        const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.08*S, uLen, 6), bBone);
         upperBone.rotation.z = s * -Math.PI / 2;
         upperBone.position.set(s * uLen / 2, 0, 0);
         upperBone.castShadow = true; wg.add(upperBone);
@@ -639,13 +640,14 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
         elbowGrp.position.set(s * uLen, 0, 0); wg.add(elbowGrp);
         elbowGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.075*S, 6, 4), bBone));
         const fLen = 1.2 * S;
-        const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.06*S, 0.045*S, fLen, 6), bBone);
+        const foreBone = new THREE.Mesh(new THREE.CylinderGeometry(0.045*S, 0.06*S, fLen, 6), bBone);
         foreBone.rotation.z = s * -Math.PI / 2;
         foreBone.position.set(s * fLen / 2, 0, 0);
         foreBone.castShadow = true; elbowGrp.add(foreBone);
         const wristKnob = new THREE.Mesh(new THREE.SphereGeometry(0.055*S, 6, 4), bBone);
         wristKnob.position.set(s * fLen, 0, 0); wristKnob.castShadow = true; elbowGrp.add(wristKnob);
         const wristClaw = new THREE.Mesh(new THREE.ConeGeometry(0.035*S, 0.12*S, 4), bHorn);
+        wristClaw.rotation.x = Math.PI; // flip so tip points downward
         wristClaw.position.set(s * fLen, -0.07*S, 0); wristClaw.castShadow = true; elbowGrp.add(wristClaw);
         const handGrp = new THREE.Group();
         handGrp.position.set(s * fLen, 0, 0); elbowGrp.add(handGrp);
