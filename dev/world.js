@@ -677,22 +677,24 @@ function getTerrainHeight(x, z) {
     const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
-    // ── Taiga highlands — rugged elevated terrain before the snow biome ──
+    // ── Northern plateau — slopes up through taiga, stays elevated through snow ──
+    if (z < -1100) {
+        // Ramp: 0 at z=-1100, reaches 1 at z=-1300 (mid-taiga), stays 1 beyond
+        const plateauT = Math.min(1, (-z - 1100) / 200);
+        const plateauH = plateauT * plateauT * 18; // smooth ease-in, max 18 blocks
+        h += plateauH;
+    }
+    // Taiga rugged hills — only in the taiga band itself
     const taigaB = getTaigaBlend(z);
     if (taigaB > 0.01) {
-        // Base elevation: raised 8-18 blocks, higher toward the north
-        const northProgress = Math.max(0, (-z - 1100) / 400); // 0 at z=-1100, 1 at z=-1500
-        const baseRise = taigaB * (8 + northProgress * 10);
-        // Rugged rolling hills
         const hill1 = Math.sin(x * 0.018 + z * 0.015) * 6;
         const hill2 = Math.cos(x * 0.025 - z * 0.02 + 1.5) * 4;
         const hill3 = Math.sin(x * 0.04 + z * 0.035 + 0.7) * 2.5;
-        // Rocky ridges
         const ridge = Math.abs(Math.sin(x * 0.012 + z * 0.008 + 2.1)) * 5;
-        h += taigaB * (baseRise + hill1 + hill2 + hill3 + ridge);
+        h += taigaB * (hill1 + hill2 + hill3 + ridge);
     }
 
-    // ── Deep North Highlands — terrain rises sharply past z=-900 ──
+    // ── Deep North Highlands — terrain rises further past z=-1800 ──
     if (z < -1800) {
         const nht = Math.min(1, (z - (-1800)) / (-2300 - (-1800))); // 0 at -1800, 1 at -2300
         const highlandH = nht * nht * 45;
