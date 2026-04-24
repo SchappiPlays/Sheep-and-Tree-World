@@ -192,10 +192,10 @@ function getDesertBlend(z) {
     return (z - 1000) / 300;
 }
 function getTaigaBlend(z) {
-    // Taiga: dense pine forest zone before snow, z -700 to -1000
-    if (z > -700) return 0; if (z < -1000) return 0;
-    // Bell-shaped: peaks at -850, fades at edges
-    const t = (z - (-700)) / (-1000 - (-700)); // 0 at -700, 1 at -1000
+    // Taiga: dense pine forest zone before snow, z -1100 to -1500
+    if (z > -1100) return 0; if (z < -1500) return 0;
+    // Bell-shaped: peaks at -1300, fades at edges
+    const t = (z - (-1100)) / (-1500 - (-1100)); // 0 at -1100, 1 at -1500
     return 4 * t * (1 - t); // peaks at 1.0 in the middle
 }
 function getScorchedBlend(x, z) {
@@ -681,7 +681,7 @@ function getTerrainHeight(x, z) {
     const taigaB = getTaigaBlend(z);
     if (taigaB > 0.01) {
         // Base elevation: raised 8-18 blocks, higher toward the north
-        const northProgress = Math.max(0, (-z - 700) / 300); // 0 at z=-700, 1 at z=-1000
+        const northProgress = Math.max(0, (-z - 1100) / 400); // 0 at z=-1100, 1 at z=-1500
         const baseRise = taigaB * (8 + northProgress * 10);
         // Rugged rolling hills
         const hill1 = Math.sin(x * 0.018 + z * 0.015) * 6;
