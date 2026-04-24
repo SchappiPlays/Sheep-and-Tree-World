@@ -1,6 +1,6 @@
 // villages.js — Villages with block-built houses and villagers using player model
 
-import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath } from './world.js';
+import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath, getTerrainHeight } from './world.js';
 
 // Village definitions — deterministic positions on the main island
 // Skill levels: 1=Apprentice, 2=Novice, 3=Journeyman, 4=Skilled, 5=Expert, 6=Master, 7=Veteran, 8=Grandmaster, 9=Legendary
@@ -1097,7 +1097,7 @@ export class VillageManager {
             else if (v._stayHome && !v.fleeing) {
                 v.walking = false; v.speed = 0;
                 v.x = v.homeX; v.z = v.homeZ;
-                const fy = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
+                const fy = v._floorY !== undefined ? v._floorY : Math.max(BLOCK_SIZE, getTerrainHeight(v.x, v.z) + BLOCK_SIZE);
                 v.group.position.set(v.x, fy, v.z);
                 // Idle animation still runs below
             }
@@ -1219,7 +1219,7 @@ export class VillageManager {
                 }
             }
 
-            const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
+            const terrainY = v._floorY !== undefined ? v._floorY : Math.max(BLOCK_SIZE, getTerrainHeight(v.x, v.z) + BLOCK_SIZE);
             v.group.position.set(v.x, terrainY, v.z);
 
             // Walk animation — same as player
