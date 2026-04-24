@@ -192,10 +192,10 @@ function getDesertBlend(z) {
     return (z - 1000) / 300;
 }
 function getTaigaBlend(z) {
-    // Taiga: dense pine forest zone before snow, z -1100 to -1500
-    if (z > -1100) return 0; if (z < -1500) return 0;
-    // Bell-shaped: peaks at -1300, fades at edges
-    const t = (z - (-1100)) / (-1500 - (-1100)); // 0 at -1100, 1 at -1500
+    // Taiga: dense pine forest zone before snow, z -950 to -1600
+    if (z > -950) return 0; if (z < -1600) return 0;
+    // Bell-shaped: peaks at -1275, fades at edges
+    const t = (z - (-950)) / (-1600 - (-950)); // 0 at -950, 1 at -1600
     return 4 * t * (1 - t); // peaks at 1.0 in the middle
 }
 function getScorchedBlend(x, z) {
@@ -678,9 +678,9 @@ function getTerrainHeight(x, z) {
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
     // ── Northern plateau — slopes up through taiga, stays elevated through snow ──
-    if (z < -1100) {
-        // Ramp: 0 at z=-1100, reaches 1 at z=-1300 (mid-taiga), stays 1 beyond
-        const plateauT = Math.min(1, (-z - 1100) / 200);
+    if (z < -950) {
+        // Ramp: 0 at z=-950, reaches 1 at z=-1150 (mid-taiga), stays 1 beyond
+        const plateauT = Math.min(1, (-z - 950) / 200);
         const plateauH = plateauT * plateauT * 18; // smooth ease-in, max 18 blocks
         h += plateauH;
     }
