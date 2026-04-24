@@ -1057,11 +1057,11 @@ export class DragonManager {
         // 3D scale: pointed teardrop shape with thickness
         const _scaleW = 0.013, _scaleH = 0.018, _scaleD = 0.006;
         const scaleShape = new THREE.Shape();
-        scaleShape.moveTo(0, -_scaleH);
-        scaleShape.quadraticCurveTo(_scaleW, -_scaleH * 0.3, _scaleW * 0.9, _scaleH * 0.3);
-        scaleShape.quadraticCurveTo(_scaleW * 0.4, _scaleH, 0, _scaleH);
-        scaleShape.quadraticCurveTo(-_scaleW * 0.4, _scaleH, -_scaleW * 0.9, _scaleH * 0.3);
-        scaleShape.quadraticCurveTo(-_scaleW, -_scaleH * 0.3, 0, -_scaleH);
+        scaleShape.moveTo(0, _scaleH);
+        scaleShape.quadraticCurveTo(_scaleW, _scaleH * 0.3, _scaleW * 0.9, -_scaleH * 0.3);
+        scaleShape.quadraticCurveTo(_scaleW * 0.4, -_scaleH, 0, -_scaleH);
+        scaleShape.quadraticCurveTo(-_scaleW * 0.4, -_scaleH, -_scaleW * 0.9, -_scaleH * 0.3);
+        scaleShape.quadraticCurveTo(-_scaleW, _scaleH * 0.3, 0, _scaleH);
         const scaleGeo = new THREE.ExtrudeGeometry(scaleShape, { depth: _scaleD, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 1 });
         // Center the extrusion so it sits on the surface properly
         scaleGeo.translate(0, 0, -_scaleD * 0.5);
