@@ -1052,37 +1052,18 @@ export class DragonManager {
             { dx: 3, dz: -5, color: 0x080808, emissive: 0x1a0800, veinColor: 0xffaa22, glowColor: 0xffcc44, wingColor: 0xdd6600, isWyvern: true, name: 'Obsidian Wyvern' },
             { dx: -3, dz: -6, color: 0x227744, emissive: 0x113a22, veinColor: 0x33cc66, glowColor: 0x33ff77, wingColor: 0x33cc66, isWyvern: true, name: 'Forest Wyvern' },
         ];
-        // Scaly egg geometry — sphere with vertex displacement for bumpy scale texture
-        const eggGeo = new THREE.SphereGeometry(0.22, 20, 16);
-        {
-            const pos = eggGeo.attributes.position;
-            const nrm = eggGeo.attributes.normal;
-            for (let i = 0; i < pos.count; i++) {
-                const nx = nrm.getX(i), ny = nrm.getY(i), nz = nrm.getZ(i);
-                // Scale pattern: overlapping rows of bumps
-                const theta = Math.atan2(nz, nx); // longitude
-                const phi = Math.acos(Math.max(-1, Math.min(1, ny))); // latitude
-                const rows = 8, cols = 12;
-                const row = phi * rows / Math.PI;
-                const col = (theta + Math.PI) * cols / (Math.PI * 2);
-                // Offset every other row for overlapping scale look
-                const stagger = (Math.floor(row) % 2) * 0.5;
-                const scaleU = Math.cos((col + stagger) * Math.PI * 2) * 0.5 + 0.5;
-                const scaleV = Math.cos(row * Math.PI * 2) * 0.5 + 0.5;
-                const bump = scaleU * scaleV * 0.012 + Math.sin(row * Math.PI * 2) * Math.sin((col + stagger) * Math.PI * 2) * 0.006;
-                pos.setXYZ(i,
-                    pos.getX(i) + nx * bump,
-                    pos.getY(i) + ny * bump,
-                    pos.getZ(i) + nz * bump
-                );
-            }
-            eggGeo.computeVertexNormals();
-        }
-        // Individual scale plates on egg surface
-        const scaleGeo = new THREE.CircleGeometry(0.025, 5);
+        // Egg: simple inner sphere + dense individual scale plates
+        const eggGeo = new THREE.SphereGeometry(0.20, 8, 6);
+        // Scale shape: small pointed oval (like a dragon scale)
+        const scaleShape = new THREE.Shape();
+        scaleShape.moveTo(0, -0.018);
+        scaleShape.quadraticCurveTo(0.012, -0.006, 0.011, 0.008);
+        scaleShape.quadraticCurveTo(0, 0.02, 0, 0.02);
+        scaleShape.quadraticCurveTo(0, 0.02, -0.011, 0.008);
+        scaleShape.quadraticCurveTo(-0.012, -0.006, 0, -0.018);
+        const scaleGeo = new THREE.ShapeGeometry(scaleShape, 1);
         const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
         const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
-        const veinGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
 
         for (const ed of eggDefs) {
             const ex = ax + ed.dx, ez = az + ed.dz;
@@ -1098,47 +1079,54 @@ export class DragonManager {
                 nr.rotation.set(Math.random(), Math.random(), Math.random());
                 eggGrp.add(nr);
             }
-            // Egg mesh with scaly surface
-            const eggMat = new THREE.MeshStandardMaterial({ color: ed.color, roughness: 0.4, metalness: 0.25, emissive: ed.emissive, emissiveIntensity: 0.1 });
+            // Inner egg shape (visible in gaps between scales)
+            const eggMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(ed.color).multiplyScalar(0.6).getHex(), roughness: 0.8, metalness: 0.1 });
             const eggMesh = new THREE.Mesh(eggGeo, eggMat);
             eggMesh.scale.set(1.0, 1.35, 1.0);
             eggMesh.position.y = 0.3;
             eggGrp.add(eggMesh);
-            // Scale plates on surface — slightly lighter/darker than base for visible texture
-            const scaleMat = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(ed.color).multiplyScalar(1.15).getHex(),
-                roughness: 0.25, metalness: 0.3,
-                emissive: ed.emissive, emissiveIntensity: 0.05,
-                side: THREE.DoubleSide,
-            });
-            const scaleRows = 6, scaleCols = 8;
+            // Dense individual scales covering the egg surface
+            const baseCol = new THREE.Color(ed.color);
+            const darkCol = new THREE.Color(ed.color).multiplyScalar(0.75);
+            const lightCol = new THREE.Color(ed.color).multiplyScalar(1.2);
+            const accentCol = new THREE.Color(ed.veinColor);
+            const baseMat = new THREE.MeshStandardMaterial({ color: baseCol, roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide });
+            const darkMat = new THREE.MeshStandardMaterial({ color: darkCol, roughness: 0.4, metalness: 0.25, side: THREE.DoubleSide });
+            const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, roughness: 0.3, metalness: 0.35, side: THREE.DoubleSide });
+            const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.15, roughness: 0.25, metalness: 0.3, side: THREE.DoubleSide });
+            const eggR = 0.215, eggYScale = 1.35, eggCY = 0.3;
+            const scaleRows = 12, baseColsPerRow = 10;
             for (let sr = 1; sr < scaleRows; sr++) {
-                const phi = (sr / scaleRows) * Math.PI; // latitude
-                const y = Math.cos(phi) * 0.22 * 1.35;
-                const ringR = Math.sin(phi) * 0.22;
+                const phi = (sr / scaleRows) * Math.PI;
+                const ringR = Math.sin(phi) * eggR;
+                const cy = Math.cos(phi) * eggR * eggYScale + eggCY;
+                // More scales near equator, fewer at poles
+                const cols = Math.max(4, Math.round(baseColsPerRow * Math.sin(phi)));
                 const stagger = (sr % 2) * 0.5;
-                for (let sc = 0; sc < scaleCols; sc++) {
-                    const theta = ((sc + stagger) / scaleCols) * Math.PI * 2;
+                for (let sc = 0; sc < cols; sc++) {
+                    const theta = ((sc + stagger) / cols) * Math.PI * 2;
                     const sx = Math.cos(theta) * ringR;
                     const sz = Math.sin(theta) * ringR;
-                    const plate = new THREE.Mesh(scaleGeo, scaleMat);
-                    plate.position.set(sx, y + 0.3, sz);
-                    // Orient plate to face outward from egg center
-                    plate.lookAt(sx * 2, y + 0.3, sz * 2);
-                    // Tilt scales downward slightly for overlapping look
-                    plate.rotation.x += 0.3;
-                    plate.scale.setScalar(0.7 + Math.sin(sr * 2.1 + sc * 1.3) * 0.2);
-                    eggGrp.add(plate);
+                    // Pick scale color: mostly base, some dark/light variation, ~15% accent (replaces veins)
+                    const hash = Math.sin(sr * 127.1 + sc * 311.7) * 43758.5453;
+                    const rnd = hash - Math.floor(hash);
+                    let mat;
+                    if (rnd < 0.15) mat = accentMat;
+                    else if (rnd < 0.35) mat = darkMat;
+                    else if (rnd < 0.55) mat = lightMat;
+                    else mat = baseMat;
+                    const scale = new THREE.Mesh(scaleGeo, mat);
+                    scale.position.set(sx, cy, sz);
+                    // Orient outward from egg center
+                    const outX = sx, outY = (cy - eggCY) / eggYScale, outZ = sz;
+                    scale.lookAt(sx + outX, cy + outY, sz + outZ);
+                    // Tilt downward so scales overlap like roof tiles
+                    scale.rotateX(0.4);
+                    // Slight size variation
+                    const s = 0.85 + (rnd * 0.3);
+                    scale.scale.setScalar(s);
+                    eggGrp.add(scale);
                 }
-            }
-            // Veins
-            const veinMat = new THREE.MeshStandardMaterial({ color: ed.veinColor, emissive: ed.veinColor, emissiveIntensity: 0.15, roughness: 0.2 });
-            for (let vi = 0; vi < 5; vi++) {
-                const va = (vi / 5) * Math.PI * 2;
-                const vein = new THREE.Mesh(veinGeo, veinMat);
-                vein.position.set(Math.cos(va) * 0.18, 0.3, Math.sin(va) * 0.18);
-                vein.rotation.z = (Math.random() - 0.5) * 0.4;
-                eggGrp.add(vein);
             }
             // No glow light — removed for performance
 
