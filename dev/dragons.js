@@ -57,7 +57,7 @@ function gradientSpike(r, h, segs, skinMat, boneMat) {
 function makeDragonBone(p1, p2, r1, r2, mat, parent) {
     const dx = p2[0]-p1[0], dy = p2[1]-p1[1], dz = p2[2]-p1[2];
     const len = Math.sqrt(dx*dx+dy*dy+dz*dz);
-    const b = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, len, 6), mat);
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 6), mat);
     b.position.set((p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2);
     const dir = new THREE.Vector3(dx,dy,dz).normalize();
     b.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir));
@@ -567,10 +567,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             fMids.push(fd.mid); fTips.push(fd.tip);
             const tipLocal = [fd.tip[0]-fd.mid[0], fd.tip[1]-fd.mid[1], fd.tip[2]-fd.mid[2]];
             const baseGrp = new THREE.Group(); handGrp.add(baseGrp);
-            makeDragonBone([0,0,0], fd.mid, 0.03*S, 0.02*S, bBone, baseGrp);
+            makeDragonBone([0,0,0], fd.mid, 0.02*S, 0.03*S, bBone, baseGrp);
             const midGrp = new THREE.Group();
             midGrp.position.set(fd.mid[0], fd.mid[1], fd.mid[2]); baseGrp.add(midGrp);
-            makeDragonBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
+            makeDragonBone([0,0,0], tipLocal, 0.008*S, 0.02*S, bBone, midGrp);
             fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
         }
         const _groundFRots = [{spreadY:-0.56,liftX:0,curlX:0},{spreadY:-0.07,liftX:0,curlX:0},{spreadY:0.24,liftX:0,curlX:0},{spreadY:0.52,liftX:0,curlX:0}];
@@ -664,10 +664,10 @@ function makeBabyDragon(x, z, terrainY, eggColor, wingColor, isWyvern, isLightni
             fMids.push(fd.mid); fTips.push(fd.tip);
             const tipLocal = [fd.tip[0]-fd.mid[0], fd.tip[1]-fd.mid[1], fd.tip[2]-fd.mid[2]];
             const baseGrp = new THREE.Group(); handGrp.add(baseGrp);
-            makeDragonBone([0,0,0], fd.mid, 0.03*S, 0.02*S, bBone, baseGrp);
+            makeDragonBone([0,0,0], fd.mid, 0.02*S, 0.03*S, bBone, baseGrp);
             const midGrp = new THREE.Group();
             midGrp.position.set(fd.mid[0], fd.mid[1], fd.mid[2]); baseGrp.add(midGrp);
-            makeDragonBone([0,0,0], tipLocal, 0.02*S, 0.008*S, bBone, midGrp);
+            makeDragonBone([0,0,0], tipLocal, 0.008*S, 0.02*S, bBone, midGrp);
             fingerGrps.push({ baseGrp, midGrp, midPos: fd.mid, tipLocal });
         }
         const _groundFRots = [{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0},{spreadY:0,liftX:0,curlX:0}];
