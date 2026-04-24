@@ -502,7 +502,7 @@ canvas { display: block; }
     document.head.appendChild(s);
 "></script>
 <script type="module">
-import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers, WaterSim } from './world.js';
+import { World, BLOCK_SIZE, BLOCK, BLOCK_COLORS, CHUNK_SIZE, getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, getTaigaBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers, WaterSim } from './world.js';
 import { Player } from './player.js';
 import { ChunkManager, updateWaterTime } from './chunks.js';
 import { CreatureManager } from './creatures.js';
@@ -1358,11 +1358,14 @@ function buildFarTerrain(centerX, centerZ) {
             const mtn = getMountainBlend(wx, wz), scorched = getScorchedBlend(wx, wz);
             const glacial = getFrozenBasinBlend(wx, wz);
             const plains = getPlainsBlend(wx, wz);
+            const taiga = getTaigaBlend(wz);
             let hex;
             if (glacial > 0.05) hex = 0x90c8e0;
             else if (scorched > 0.05) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
             else if (snow > 0) hex = 0xb0c8b0;
+            else if (taiga > 0.5) hex = 0x2a5a2a;
+            else if (taiga > 0.2) hex = 0x3a6a30;
             else if (desert > 0.5) hex = 0xd4c07a;
             else if (desert > 0) hex = 0xa0a050;
             else if (mtn > 0.5) hex = 0x888888;
@@ -1411,7 +1414,7 @@ function buildFarTerrain(centerX, centerZ) {
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
+            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && taiga < 0.3 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
                 // Ancient forest detection — center (-60, -700), radius 170
@@ -1457,11 +1460,12 @@ function buildFarTerrain(centerX, centerZ) {
                     pushFace(twx+leafR, lTop, twz-leafR, twx+leafR, lBase, twz-leafR, twx-leafR, lBase, twz-leafR, twx-leafR, lTop, twz-leafR, leafCol);
                 }
             }
-            // LOD pine trees — snow biome, conical shape
-            if (snow > 0.15 && allMtn < 0.5 && rawH >= 1 && rawH <= 60) {
+            // LOD pine trees — snow biome & taiga, conical shape
+            if ((snow > 0.15 || taiga > 0.1) && allMtn < 0.5 && rawH >= 1 && rawH <= 60) {
                 const th2 = Math.sin(gx * 141.3 + gz * 277.9) * 43758.5453;
                 const pineChance = th2 - Math.floor(th2);
-                if (pineChance < 0.12) {
+                const pineDensity = taiga > 0.3 ? 0.25 : 0.12; // denser in taiga
+                if (pineChance < pineDensity) {
                     const trunkH = BS * 7;
                     const trunkR = BS * 0.4;
                     const pineCol = 0x1a4a2a;

@@ -191,6 +191,13 @@ function getDesertBlend(z) {
     if (z < 1000) return 0; if (z > 1300) return 1;
     return (z - 1000) / 300;
 }
+function getTaigaBlend(z) {
+    // Taiga: dense pine forest zone before snow, z -700 to -1000
+    if (z > -700) return 0; if (z < -1000) return 0;
+    // Bell-shaped: peaks at -850, fades at edges
+    const t = (z - (-700)) / (-1000 - (-700)); // 0 at -700, 1 at -1000
+    return 4 * t * (1 - t); // peaks at 1.0 in the middle
+}
 function getScorchedBlend(x, z) {
     const xSpread = x < -600 ? 680 : 440;
     const sx = (x - (-600)) / xSpread, sz = (z - 560) / 440;
@@ -419,7 +426,7 @@ function isOnPath(wx, wz) {
 
 // ── getTerrainHeight — exact port from game.html ──
 // Returns height in game.html world units (player ~1.9 tall)
-export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers };
+export { getTerrainHeight, getIslandRadius, ISLAND_NS_SCALE, getMountainBlend, getNWMountainBlend, getSWMountainBlend, getNEMountainBlend, getSEMountainBlend, getFarEastMountainBlend, getFrozenMountainBlend, getDeepNorthBlend, getFrozenBasinBlend, FM_CX, FM_CZ, FM_INNER, getSnowBlend, getDesertBlend, getScorchedBlend, getEnchantedBlend, getPlainsBlend, getTaigaBlend, isOnPath, riverDefs, getRiverBlend, getRiverWaterHeight, getRiverFlowDir, initRivers };
 
 function getTerrainHeight(x, z) {
     // Use scaled z for elliptical island boundary
@@ -670,6 +677,21 @@ function getTerrainHeight(x, z) {
     const ridgeBlend = Math.exp(-ridgeDz*ridgeDz);
     if (ridgeBlend > 0.01) { h += ridgeBlend * (6 + Math.sin(x * 0.02) * 2); }
 
+    // ── Taiga highlands — rugged elevated terrain before the snow biome ──
+    const taigaB = getTaigaBlend(z);
+    if (taigaB > 0.01) {
+        // Base elevation: raised 8-18 blocks, higher toward the north
+        const northProgress = Math.max(0, (-z - 700) / 300); // 0 at z=-700, 1 at z=-1000
+        const baseRise = taigaB * (8 + northProgress * 10);
+        // Rugged rolling hills
+        const hill1 = Math.sin(x * 0.018 + z * 0.015) * 6;
+        const hill2 = Math.cos(x * 0.025 - z * 0.02 + 1.5) * 4;
+        const hill3 = Math.sin(x * 0.04 + z * 0.035 + 0.7) * 2.5;
+        // Rocky ridges
+        const ridge = Math.abs(Math.sin(x * 0.012 + z * 0.008 + 2.1)) * 5;
+        h += taigaB * (baseRise + hill1 + hill2 + hill3 + ridge);
+    }
+
     // ── Deep North Highlands — terrain rises sharply past z=-900 ──
     if (z < -1800) {
         const nht = Math.min(1, (z - (-1800)) / (-2300 - (-1800))); // 0 at -1800, 1 at -2300
@@ -841,6 +863,8 @@ export class World {
         if (snow > 0.5) return 'snow';
         if (desert > 0.5) return 'desert';
         if (mtn > 0.3) return 'mountain';
+        const taiga = getTaigaBlend(wz);
+        if (taiga > 0.2) return 'taiga';
         if (snow > 0) return 'snow_transition';
         if (desert > 0) return 'desert_transition';
         return 'grass';
@@ -973,6 +997,13 @@ export class World {
                             else if (frMtnB > 0.1 && this._hash(bx*2.3,bz*1.9) > 0.6) block = BLOCK.ICE;
                             else block = BLOCK.SNOW;
                         }
+                        else if (biome === 'taiga') {
+                            // Taiga: mostly dark grass, patches of dirt and gravel
+                            const th = this._hash(bx*2.9, bz*3.3);
+                            if (th > 0.85) block = BLOCK.GRAVEL;
+                            else if (th > 0.7) block = BLOCK.DIRT;
+                            else block = BLOCK.GRASS;
+                        }
                         else if (biome === 'snow_transition') block = this._hash(bx*3.1,bz*2.7) > 0.5 ? BLOCK.SNOW : BLOCK.GRASS;
                         else if (biome === 'desert') block = BLOCK.SAND;
                         else if (biome === 'desert_transition') block = this._hash(bx*2.1,bz*3.7) > 0.5 ? BLOCK.SAND : BLOCK.GRASS;
@@ -1083,6 +1114,7 @@ export class World {
                 const h = getTerrainHeight(wx, wz);
                 const biome = this._getBiome(wx, wz);
                 if (biome !== 'grass' && biome !== 'desert_transition') continue;
+                if (getTaigaBlend(wz) > 0.3) continue; // no deciduous trees in taiga
                 if (h < 1 || h > 50) continue;
                 // Skip trees in plains zones
                 const plainsB = getPlainsBlend(wx, wz);
@@ -1123,14 +1155,17 @@ export class World {
             }
         }
 
-        // Pine trees — snow biome, conical shape (taller, narrower canopy)
+        // Pine trees — taiga + snow biome, conical shape (taller, narrower canopy)
         for (let lx = 0; lx < CHUNK_SIZE; lx += 2) {
             for (let lz = 0; lz < CHUNK_SIZE; lz += 2) {
                 const bx = ox + lx, bz = oz + lz;
                 const wx = bx * BLOCK_SIZE, wz = bz * BLOCK_SIZE;
                 const snowB = getSnowBlend(wz);
-                if (snowB < 0.15) continue; // only in snowy areas
-                if (this._hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > 0.05) continue; // ~5% density
+                const taigaB = getTaigaBlend(wz);
+                if (snowB < 0.15 && taigaB < 0.1) continue; // only in snowy or taiga areas
+                // Taiga is denser (~10%), snow sparser (~5%)
+                const density = taigaB > 0.1 ? 0.10 : 0.05;
+                if (this._hash(bx * 0.41 + 4444, bz * 0.57 + 5555) > density) continue;
                 const jx = bx + Math.floor(this._hash(bx+55,bz+66)*2);
                 const jz = bz + Math.floor(this._hash(bx+77,bz+88)*2);
                 const ljx = jx - ox, ljz = jz - oz;
