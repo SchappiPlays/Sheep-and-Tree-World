@@ -184,8 +184,8 @@ function getPlainsBlend(x, z) {
 }
 
 function getSnowBlend(z) {
-    if (z > -1000) return 0; if (z < -1300) return 1;
-    return (z - (-1000)) / (-1300 - (-1000));
+    if (z > -1400) return 0; if (z < -1700) return 1;
+    return (z - (-1400)) / (-1700 - (-1400));
 }
 function getDesertBlend(z) {
     if (z < 1000) return 0; if (z > 1300) return 1;
