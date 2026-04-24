@@ -1141,8 +1141,8 @@ export class DragonManager {
                         scale.position.y + outY / len,
                         scale.position.z + outZ / len
                     );
-                    // Tilt tips downward for overlapping fish-scale / pinecone look
-                    scale.rotateX(0.5);
+                    // Tilt tips upward for overlapping fish-scale / pinecone look
+                    scale.rotateX(-0.5);
                     eggGrp.add(scale);
                 }
             }
