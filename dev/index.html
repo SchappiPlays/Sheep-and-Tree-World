@@ -1414,7 +1414,7 @@ function buildFarTerrain(centerX, centerZ) {
             // LOD trees — match actual biome check (all mountain blends summed)
             const allMtn = mtn + getNWMountainBlend(wx,wz) + getSWMountainBlend(wx,wz) + getNEMountainBlend(wx,wz) + getSEMountainBlend(wx,wz) + getFarEastMountainBlend(wx,wz) + getFrozenMountainBlend(wx,wz);
             const rawH = getTerrainHeight(wx, wz);
-            if (scorched < 0.1 && snow < 0.5 && desert < 0.5 && taiga < 0.3 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
+            if (scorched < 0.1 && snow < 0.01 && desert < 0.5 && taiga < 0.3 && allMtn < 0.3 && rawH >= 1 && rawH <= 50 && plains <= 0.15 && !_noTrees(wx, wz)) {
                 const th = Math.sin(gx * 127.1 + gz * 311.7) * 43758.5453;
                 const treeChance = th - Math.floor(th);
                 // Ancient forest detection — center (-60, -700), radius 170
@@ -1464,7 +1464,7 @@ function buildFarTerrain(centerX, centerZ) {
             if ((snow > 0.15 || taiga > 0.1) && allMtn < 0.5 && rawH >= 1 && rawH <= 60) {
                 const th2 = Math.sin(gx * 141.3 + gz * 277.9) * 43758.5453;
                 const pineChance = th2 - Math.floor(th2);
-                const pineDensity = taiga > 0.3 ? 0.25 : 0.12; // denser in taiga
+                const pineDensity = taiga > 0.5 ? 0.45 : taiga > 0.2 ? 0.35 : 0.12; // dense in taiga
                 if (pineChance < pineDensity) {
                     const trunkH = BS * 7;
                     const trunkR = BS * 0.4;
