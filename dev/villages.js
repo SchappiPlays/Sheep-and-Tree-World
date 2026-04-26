@@ -1458,23 +1458,41 @@ export class VillageManager {
             // Castle NPCs — wander within the castle
             if (v._castleRole && !v.fleeing) {
                 const role = v._castleRole;
-                v.wanderTimer = (v.wanderTimer === undefined ? Math.random() * 3 : v.wanderTimer) - dt;
-                if (v.wanderTimer <= 0) {
-                    if (!v.walking) {
+                // Taiga castle: non-guards go inside great hall at night
+                const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
+                if (v._taigaCastle && isNight && role !== 'guard') {
+                    const hallX = TAIGA_CASTLE.wx + 19, hallZ = TAIGA_CASTLE.wz + 16;
+                    const hdx = hallX - v.x, hdz = hallZ - v.z;
+                    const hallDist = Math.sqrt(hdx * hdx + hdz * hdz);
+                    if (hallDist > 3) {
                         v.walking = true;
-                        const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
-                        const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
-                        // Guards patrol further, royalty stays closer to home
-                        const wanderRange = (role === 'guard' || role === 'knight') ? 25 : (role === 'king' || role === 'queen') ? 6 : 15;
-                        if (homeDist > wanderRange) {
-                            v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
-                        } else {
-                            v.angle += (Math.random() - 0.5) * 2.2;
-                        }
-                        v.wanderTimer = (role === 'guard' || role === 'knight') ? 3 + Math.random() * 4 : 2 + Math.random() * 5;
+                        v.angle = Math.atan2(hdx, hdz);
                     } else {
-                        v.walking = false;
-                        v.wanderTimer = (role === 'king' || role === 'queen') ? 3 + Math.random() * 5 : 1.5 + Math.random() * 3;
+                        v.walking = false; v.speed = 0;
+                        v.wanderTimer = (v.wanderTimer || 0) - dt;
+                        if (v.wanderTimer <= 0) {
+                            v.angle += (Math.random() - 0.5) * 1.5;
+                            v.wanderTimer = 3 + Math.random() * 5;
+                        }
+                    }
+                } else {
+                    v.wanderTimer = (v.wanderTimer === undefined ? Math.random() * 3 : v.wanderTimer) - dt;
+                    if (v.wanderTimer <= 0) {
+                        if (!v.walking) {
+                            v.walking = true;
+                            const hdx = v.homeX - v.x, hdz = v.homeZ - v.z;
+                            const homeDist = Math.sqrt(hdx * hdx + hdz * hdz);
+                            const wanderRange = (role === 'guard' || role === 'knight') ? 25 : (role === 'king' || role === 'queen') ? 6 : 15;
+                            if (homeDist > wanderRange) {
+                                v.angle = Math.atan2(hdx, hdz) + (Math.random() - 0.5) * 0.5;
+                            } else {
+                                v.angle += (Math.random() - 0.5) * 2.2;
+                            }
+                            v.wanderTimer = (role === 'guard' || role === 'knight') ? 3 + Math.random() * 4 : 2 + Math.random() * 5;
+                        } else {
+                            v.walking = false;
+                            v.wanderTimer = (role === 'king' || role === 'queen') ? 3 + Math.random() * 5 : 1.5 + Math.random() * 3;
+                        }
                     }
                 }
             }
