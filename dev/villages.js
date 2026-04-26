@@ -1325,7 +1325,7 @@ export class VillageManager {
                 ];
                 // Sample courtyard floor (south side, open area near gate)
                 const tcCourtX = TAIGA_CASTLE.wx + 19, tcCourtZ = TAIGA_CASTLE.wz + 24;
-                const tcFloorY = this.world.getHeight(tcCourtX, tcCourtZ) + BLOCK_SIZE;
+                const tcFloorY = this.world.getHeight(tcCourtX, tcCourtZ);
                 for (const n of tcNpcs) {
                     const wx = TAIGA_CASTLE.wx + n.dx;
                     const wz = TAIGA_CASTLE.wz + n.dz;
