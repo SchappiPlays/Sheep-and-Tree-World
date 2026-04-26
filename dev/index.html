@@ -9156,6 +9156,7 @@ function _drawMapMarkers(ctx, w, h, scale, vx, vz, vs, progress) {
     addMarker(() => drawLabel(-60, -700, 'Ancient Forest', 'rgba(25, 55, 20, 0.7)', 13));
     addMarker(() => drawLabel(-600, 520, 'Scorched Lands', 'rgba(80, 25, 15, 0.6)', 12));
     addMarker(() => drawLabel(1430, -60, 'Enchanted Forest', 'rgba(80, 40, 120, 0.6)', 10));
+    addMarker(() => drawLabel(0, -1275, 'Frostpine Taiga', 'rgba(25, 60, 25, 0.65)', 12));
     addMarker(() => { const rs = 'rgba(80, 55, 30, 0.5)'; drawLabel(-120, -420, 'Broken Temple', rs, 8); drawLabel(-20, -320, 'Old Tower', rs, 8); drawLabel(-40, -440, 'Stone Circle', rs, 8); });
     // Dragon altar
     addMarker(() => {
@@ -9239,10 +9240,12 @@ function drawWorldMap() {
                 heightData[idx] = th;
                 const snow = getSnowBlend(wz), desert = getDesertBlend(wz), mtn = getMountainBlend(wx, wz);
                 const scorch = getScorchedBlend(wx, wz), ench = getEnchantedBlend(wx, wz);
+                const taigaB = getTaigaBlend(wz);
                 if (scorch > 0.1) biomeData[idx] = 6;
                 else if (ench > 0.1) biomeData[idx] = 7;
                 else if (mtn > 0.3) biomeData[idx] = 5;
                 else if (snow > 0.3) biomeData[idx] = 3;
+                else if (taigaB > 0.2) biomeData[idx] = 11;
                 else if (desert > 0.3) biomeData[idx] = 4;
                 else if (isOnPath(wx, wz)) biomeData[idx] = 9;
                 else if (th > 1 && th < 50 && snow < 0.1 && desert < 0.1) biomeData[idx] = 8;
@@ -9357,12 +9360,19 @@ function drawWorldMap() {
         // Tree symbols
         for (let gx = 2; gx < cols-2; gx += 3) {
             for (let gy = 2; gy < rows-2; gy += 3) {
-                if (biomeData[gy*cols+gx] !== 8) continue;
+                const bm = biomeData[gy*cols+gx];
+                if (bm !== 8 && bm !== 11) continue;
                 const hash = Math.sin(gx*73.1+gy*197.3)*43758.5;
-                if ((hash-Math.floor(hash)) > 0.5) continue;
+                if ((hash-Math.floor(hash)) > (bm === 11 ? 0.65 : 0.5)) continue;
                 const cx = gx*step+1, cy = gy*step+1;
-                ctCtx.fillStyle = 'rgba(50,70,35,0.5)';
-                ctCtx.beginPath(); ctCtx.moveTo(cx,cy-2); ctCtx.lineTo(cx-2,cy+1); ctCtx.lineTo(cx+2,cy+1); ctCtx.closePath(); ctCtx.fill();
+                if (bm === 11) {
+                    // Pine tree: tall narrow triangle
+                    ctCtx.fillStyle = 'rgba(25,55,25,0.55)';
+                    ctCtx.beginPath(); ctCtx.moveTo(cx,cy-3); ctCtx.lineTo(cx-1.5,cy+1.5); ctCtx.lineTo(cx+1.5,cy+1.5); ctCtx.closePath(); ctCtx.fill();
+                } else {
+                    ctCtx.fillStyle = 'rgba(50,70,35,0.5)';
+                    ctCtx.beginPath(); ctCtx.moveTo(cx,cy-2); ctCtx.lineTo(cx-2,cy+1); ctCtx.lineTo(cx+2,cy+1); ctCtx.closePath(); ctCtx.fill();
+                }
             }
         }
 
@@ -9390,6 +9400,7 @@ function drawWorldMap() {
                 else if(biome===6){tR=30;tG=20;tB=15;tA=0.4;}
                 else if(biome===7){tR=90;tG=50;tB=130;tA=0.25;}
                 else if(biome===9){tR=120;tG=100;tB=60;tA=0.4;}
+                else if(biome===11){tR=20;tG=50;tB=20;tA=0.45;}
                 else if(biome===8){const f=Math.min(1,Math.max(0,th/50));tR=25+f*40;tG=55+f*50;tB=18+f*30;tA=0.45-f*0.25;}
                 else{const f=Math.min(1,Math.max(0,th/40));tR=20+f*40;tG=50+f*50;tB=15+f*30;tA=0.4-f*0.25;}
                 if(tA>0){
