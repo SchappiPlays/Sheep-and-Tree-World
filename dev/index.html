@@ -882,7 +882,7 @@ titleScene.add(new THREE.HemisphereLight(0x88aacc, 0x446622, 0.5));
             if (biome === 'glacial') color = 0x90c8e0;
             else if (biome === 'scorched') color = 0x2a2018;
             else if (biome === 'snow') color = 0xe0e0e8;
-            else if (biome === 'snow_transition') color = 0xb0c8b0;
+            else if (biome === 'snow_transition') color = 0x3a6a30;
             else if (biome === 'desert') color = 0xd4c07a;
             else if (biome === 'desert_transition') color = 0xa0a050;
             else if (biome === 'mountain') color = 0x888888;
@@ -1363,7 +1363,7 @@ function buildFarTerrain(centerX, centerZ) {
             if (glacial > 0.05) hex = 0x90c8e0;
             else if (scorched > 0.05) hex = 0x2a2018;
             else if (snow > 0.5) hex = 0xe0e0e8;
-            else if (snow > 0) hex = 0xb0c8b0;
+            else if (snow > 0) hex = 0x3a6a30; // taiga-like dark green (little actual snow)
             else if (taiga > 0.5) hex = 0x2a5a2a;
             else if (taiga > 0.2) hex = 0x3a6a30;
             else if (desert > 0.5) hex = 0xd4c07a;
