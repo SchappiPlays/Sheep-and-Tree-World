@@ -1056,82 +1056,103 @@ export class DragonManager {
         ];
         // Egg: 3D diamond scales tightly packed on egg surface
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
-        // 3D scale: diamond shape (two equally pointy ends) with curvature
-        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.005;
-        // Build a curved diamond scale using a custom BufferGeometry
-        // Diamond shape: top point, right point, bottom point, left point
-        // Curved outward to conform to egg surface
+        // Diamond scale dimensions — thick enough to look genuinely 3D
+        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.014;
+        // Build a thick, curved diamond scale
+        // Front face: domed outward. Back face: concave inward. Side walls connect them.
         function buildScaleGeo() {
-            // Grid resolution for curvature
-            const segsX = 4, segsY = 6;
-            const verts = [], indices = [], normals = [], uvs = [];
-            for (let iy = 0; iy <= segsY; iy++) {
-                const ty = iy / segsY; // 0=top, 1=bottom
-                const y = _scaleH - ty * 2 * _scaleH; // +_scaleH to -_scaleH
-                // Diamond width: 0 at top & bottom, max at middle
-                const widthT = 1 - Math.abs(ty - 0.5) * 2; // 0→1→0
-                const halfW = _scaleW * widthT;
-                for (let ix = 0; ix <= segsX; ix++) {
-                    const tx = ix / segsX; // 0=left, 1=right
-                    const x = -halfW + tx * 2 * halfW;
-                    // Curvature: bulge outward in center, creating a dome
-                    const cx = (tx - 0.5) * 2; // -1 to 1
-                    const cy = (ty - 0.5) * 2; // -1 to 1
-                    const bulge = (1 - cx*cx) * (1 - cy*cy);
+            const sX = 5, sY = 7; // grid segments
+            const verts = [], idx = [], norms = [], uvs = [];
+            // --- Front face (domed) ---
+            for (let iy = 0; iy <= sY; iy++) {
+                const ty = iy / sY; // 0=top point, 1=bottom point
+                const y = _scaleH * (1 - ty * 2); // +H to -H
+                // Diamond outline: width is 0 at tips, max at center
+                const wt = 1 - Math.abs(ty - 0.5) * 2; // 0→1→0
+                const hw = _scaleW * wt;
+                for (let ix = 0; ix <= sX; ix++) {
+                    const tx = ix / sX;
+                    const x = hw > 0 ? -hw + tx * 2 * hw : 0;
+                    // Dome: strong outward bulge, smooth falloff to edges & tips
+                    const ex = hw > 0 ? (tx - 0.5) * 2 : 0; // -1..1 across width
+                    const ey = (ty - 0.5) * 2; // -1..1 along height
+                    const bulge = Math.max(0, (1 - ex*ex) * (1 - ey*ey));
                     const z = bulge * _scaleD;
                     verts.push(x, y, z);
-                    // Normal: approximate from bulge gradient
-                    const nx = -cx * _scaleD * 2;
-                    const ny = -cy * _scaleD * 0.5;
-                    const nz = 1;
-                    const nl = Math.sqrt(nx*nx + ny*ny + nz*nz);
-                    normals.push(nx/nl, ny/nl, nz/nl);
+                    // Smooth normal from dome gradient
+                    const dzdx = hw > 0 ? -2 * ex / (hw * 2) * (1 - ey*ey) * _scaleD : 0;
+                    const dzdy = -2 * ey / (2 * _scaleH) * (1 - ex*ex) * _scaleD;
+                    const nl = Math.sqrt(dzdx*dzdx + dzdy*dzdy + 1);
+                    norms.push(-dzdx/nl, -dzdy/nl, 1/nl);
                     uvs.push(tx, ty);
                 }
             }
-            for (let iy = 0; iy < segsY; iy++) {
-                for (let ix = 0; ix < segsX; ix++) {
-                    const a = iy * (segsX+1) + ix;
-                    const b = a + 1;
-                    const c = a + segsX + 1;
-                    const d = c + 1;
-                    // Skip degenerate triangles at diamond tips
-                    const ax = verts[a*3], bx = verts[b*3];
-                    if (Math.abs(ax - bx) < 0.0001) { indices.push(a, c, d); }
-                    else { indices.push(a, c, b); indices.push(b, c, d); }
+            const frontCount = (sY+1) * (sX+1);
+            for (let iy = 0; iy < sY; iy++) {
+                for (let ix = 0; ix < sX; ix++) {
+                    const a = iy*(sX+1)+ix, b = a+1, c = a+sX+1, d = c+1;
+                    const va = [verts[a*3], verts[a*3+1]], vb = [verts[b*3], verts[b*3+1]];
+                    if (Math.abs(va[0]-vb[0]) < 0.0001 && Math.abs(va[1]-vb[1]) < 0.0001) {
+                        idx.push(a, c, d); // degenerate at tip
+                    } else {
+                        idx.push(a, c, b); idx.push(b, c, d);
+                    }
                 }
             }
-            // Back face (flat, slightly recessed)
+            // --- Back face (concave / slightly cupped) ---
             const backOff = verts.length / 3;
-            for (let iy = 0; iy <= segsY; iy++) {
-                const ty = iy / segsY;
-                const y = _scaleH - ty * 2 * _scaleH;
-                const widthT = 1 - Math.abs(ty - 0.5) * 2;
-                const halfW = _scaleW * widthT;
-                for (let ix = 0; ix <= segsX; ix++) {
-                    const tx = ix / segsX;
-                    const x = -halfW + tx * 2 * halfW;
-                    verts.push(x, y, -0.001);
-                    normals.push(0, 0, -1);
+            for (let iy = 0; iy <= sY; iy++) {
+                const ty = iy / sY;
+                const y = _scaleH * (1 - ty * 2);
+                const wt = 1 - Math.abs(ty - 0.5) * 2;
+                const hw = _scaleW * wt;
+                for (let ix = 0; ix <= sX; ix++) {
+                    const tx = ix / sX;
+                    const x = hw > 0 ? -hw + tx * 2 * hw : 0;
+                    const ex = hw > 0 ? (tx - 0.5) * 2 : 0;
+                    const ey = (ty - 0.5) * 2;
+                    const cup = Math.max(0, (1 - ex*ex) * (1 - ey*ey));
+                    const z = -cup * _scaleD * 0.3; // shallow concave
+                    verts.push(x, y, z);
+                    norms.push(0, 0, -1);
                     uvs.push(tx, ty);
                 }
             }
-            for (let iy = 0; iy < segsY; iy++) {
-                for (let ix = 0; ix < segsX; ix++) {
-                    const a = backOff + iy * (segsX+1) + ix;
-                    const b = a + 1;
-                    const c = a + segsX + 1;
-                    const d = c + 1;
-                    const ax = verts[a*3], bx = verts[b*3];
-                    if (Math.abs(ax - bx) < 0.0001) { indices.push(a, d, c); }
-                    else { indices.push(a, b, c); indices.push(b, d, c); }
+            for (let iy = 0; iy < sY; iy++) {
+                for (let ix = 0; ix < sX; ix++) {
+                    const a = backOff+iy*(sX+1)+ix, b = a+1, c = a+sX+1, d = c+1;
+                    const va = [verts[a*3], verts[a*3+1]], vb = [verts[b*3], verts[b*3+1]];
+                    if (Math.abs(va[0]-vb[0]) < 0.0001 && Math.abs(va[1]-vb[1]) < 0.0001) {
+                        idx.push(a, d, c);
+                    } else {
+                        idx.push(a, b, c); idx.push(b, d, c);
+                    }
                 }
+            }
+            // --- Side walls: connect front and back edges ---
+            // Walk the diamond perimeter (left edge top→bottom, right edge bottom→top)
+            const edgeF = [], edgeB = [];
+            // Left edge: ix=0 for each row
+            for (let iy = 0; iy <= sY; iy++) { edgeF.push(iy*(sX+1)); edgeB.push(backOff+iy*(sX+1)); }
+            // Right edge: ix=sX for each row (reversed)
+            const rightF = [], rightB = [];
+            for (let iy = 0; iy <= sY; iy++) { rightF.push(iy*(sX+1)+sX); rightB.push(backOff+iy*(sX+1)+sX); }
+            // Left side wall
+            for (let i = 0; i < edgeF.length - 1; i++) {
+                idx.push(edgeF[i], edgeF[i+1], edgeB[i+1]);
+                idx.push(edgeF[i], edgeB[i+1], edgeB[i]);
+            }
+            // Right side wall
+            for (let i = 0; i < rightF.length - 1; i++) {
+                idx.push(rightF[i], rightB[i], rightB[i+1]);
+                idx.push(rightF[i], rightB[i+1], rightF[i+1]);
             }
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
             geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-            geo.setIndex(indices);
+            geo.setIndex(idx);
+            geo.computeVertexNormals(); // recompute for smooth side walls
             return geo;
         }
         const scaleGeo = buildScaleGeo();
@@ -1168,23 +1189,30 @@ export class DragonManager {
             const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, roughness: 0.3, metalness: 0.4 });
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
-            // Row spacing: heavy overlap so top point of each scale is hidden by row above
-            const rowStep = _scaleH * 1.1;
+            // Very tight row overlap — top point fully hidden by row above
+            const rowStep = _scaleH * 0.75;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
+            const _tmpN = new THREE.Vector3();
+            const _tmpUp = new THREE.Vector3();
+            const _tmpRight = new THREE.Vector3();
+            const _tmpDown = new THREE.Vector3();
+            const _tmpMat = new THREE.Matrix4();
             for (let sr = 0; sr <= scaleRows; sr++) {
                 const t = sr / scaleRows; // 0 = top, 1 = bottom
                 const phi = t * Math.PI;
                 const sinPhi = Math.sin(phi);
+                const cosPhi = Math.cos(phi);
                 const ringR = sinPhi * eggR;
-                const cy = Math.cos(phi) * eggR * eggYScale + eggCY;
-                if (ringR < 0.02) continue; // skip poles
-                // Tight horizontal packing — scales touch edge to edge
+                const cy = cosPhi * eggR * eggYScale + eggCY;
+                if (ringR < 0.015) continue; // skip poles
+                // Tight horizontal packing
                 const circumference = 2 * Math.PI * ringR;
-                const cols = Math.max(4, Math.round(circumference / (_scaleW * 1.5)));
+                const cols = Math.max(4, Math.round(circumference / (_scaleW * 1.4)));
                 const stagger = (sr % 2) * 0.5;
                 for (let sc = 0; sc < cols; sc++) {
                     const theta = ((sc + stagger) / cols) * Math.PI * 2;
+                    const cosT = Math.cos(theta), sinT = Math.sin(theta);
                     // Color variation + accent scales
                     const hash = Math.sin(sr * 127.1 + sc * 311.7) * 43758.5453;
                     const rnd = hash - Math.floor(hash);
@@ -1194,27 +1222,26 @@ export class DragonManager {
                     else if (rnd < 0.55) mat = lightMat;
                     else mat = baseMat;
                     const scale = new THREE.Mesh(scaleGeo, mat);
-                    // Position on egg surface
-                    const surfR = ringR + _scaleD * 0.5;
-                    scale.position.set(
-                        Math.cos(theta) * surfR,
-                        cy,
-                        Math.sin(theta) * surfR
-                    );
-                    // Orient: face outward from egg surface normal
-                    // Compute surface normal of the ellipsoid (x, y/yScale², z)
-                    const nx = Math.cos(theta) * sinPhi;
-                    const ny = (cy - eggCY) / (eggYScale * eggYScale * eggR);
-                    const nz = Math.sin(theta) * sinPhi;
-                    const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
-                    scale.lookAt(
-                        scale.position.x + nx / nl,
-                        scale.position.y + ny / nl,
-                        scale.position.z + nz / nl
-                    );
-                    // Tilt so bottom tip points down along egg surface —
-                    // top point gets tucked under the row above
-                    scale.rotateX(-0.45);
+                    // Position on egg surface, pushed out so dome sits on top
+                    const surfR = ringR + _scaleD * 0.3;
+                    scale.position.set(cosT * surfR, cy, sinT * surfR);
+                    // Build orientation matrix from egg surface:
+                    // Normal = ellipsoid outward direction
+                    _tmpN.set(cosT * sinPhi, (cy - eggCY) / (eggYScale * eggYScale * eggR), sinT * sinPhi).normalize();
+                    // "Down" on the egg surface = tangent along phi (toward south pole)
+                    // dphi direction: d/dphi of (sinPhi*cosT, cosPhi*yScale, sinPhi*sinT)
+                    _tmpDown.set(cosPhi * cosT, -sinPhi * eggYScale, cosPhi * sinT).normalize();
+                    // Right = normal × down
+                    _tmpRight.crossVectors(_tmpN, _tmpDown).normalize();
+                    // Recompute down to be exactly perpendicular to normal
+                    _tmpDown.crossVectors(_tmpRight, _tmpN).normalize();
+                    // Matrix: columns = right, down (scale's -Y points down), normal (Z = outward)
+                    // Scale's Y axis = up on scale = -_tmpDown, Z axis = _tmpN, X axis = _tmpRight
+                    _tmpMat.makeBasis(_tmpRight, _tmpDown.clone().negate(), _tmpN);
+                    scale.setRotationFromMatrix(_tmpMat);
+                    // Tilt bottom tip outward (away from egg surface) so it peels away naturally
+                    // and top tip tucks behind the row above
+                    scale.rotateX(0.35);
                     eggGrp.add(scale);
                 }
             }
