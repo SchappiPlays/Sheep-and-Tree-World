@@ -1057,32 +1057,29 @@ export class DragonManager {
         // Egg: 3D diamond scales tightly packed on egg surface
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
         // Diamond scale dimensions — thick enough to look genuinely 3D
-        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.012;
-        // Build a flat diamond scale with a sharp central ridge (keel)
-        // Front face: mostly flat with a ridge along the center line. Side walls give thickness.
+        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.010;
+        // Diamond scale anchored at TOP tip (y=0). Scale hangs downward (y goes negative).
+        // Front: ridged keel. Back: flat. Side walls for thickness.
+        // Top tip is at origin — gets buried at the attachment point by the row above.
         function buildScaleGeo() {
-            const sX = 5, sY = 7; // grid segments
+            const sX = 5, sY = 7;
             const verts = [], idx = [], norms = [], uvs = [];
-            // --- Front face (ridged, not domed) ---
+            // --- Front face (ridged) ---
             for (let iy = 0; iy <= sY; iy++) {
-                const ty = iy / sY; // 0=top point, 1=bottom point
-                const y = _scaleH * (1 - ty * 2); // +H to -H
-                // Diamond outline: width is 0 at tips, max at center
+                const ty = iy / sY; // 0=top tip, 1=bottom tip
+                const y = -ty * 2 * _scaleH; // 0 at top, -2*H at bottom
+                // Diamond width: 0 at both tips, max at middle
                 const wt = 1 - Math.abs(ty - 0.5) * 2; // 0→1→0
                 const hw = _scaleW * wt;
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
-                    // Ridge: sharp peak at center (x=0), falls off to edges
-                    // Uses abs(x) for a V-shaped cross-section instead of smooth dome
-                    const ex = hw > 0 ? Math.abs((tx - 0.5) * 2) : 0; // 0 at center, 1 at edge
-                    // Ridge height tapers toward tips
-                    const tipTaper = wt; // 0 at tips, 1 at widest
-                    const z = _scaleD * (1 - ex) * tipTaper;
+                    // Sharp ridge along center
+                    const ex = hw > 0 ? Math.abs((tx - 0.5) * 2) : 0;
+                    const z = _scaleD * (1 - ex) * wt;
                     verts.push(x, y, z);
-                    // Normal: angled from ridge — two flat planes meeting at center
                     const side = tx < 0.5 ? -1 : tx > 0.5 ? 1 : 0;
-                    const nx = side * _scaleD * tipTaper;
+                    const nx = side * _scaleD * wt;
                     const nz = _scaleW * wt || 0.001;
                     const nl = Math.sqrt(nx*nx + nz*nz);
                     norms.push(nx/nl, 0, nz/nl);
@@ -1105,13 +1102,13 @@ export class DragonManager {
             const backOff = verts.length / 3;
             for (let iy = 0; iy <= sY; iy++) {
                 const ty = iy / sY;
-                const y = _scaleH * (1 - ty * 2);
+                const y = -ty * 2 * _scaleH;
                 const wt = 1 - Math.abs(ty - 0.5) * 2;
                 const hw = _scaleW * wt;
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
-                    verts.push(x, y, -0.001); // flat back
+                    verts.push(x, y, -0.001);
                     norms.push(0, 0, -1);
                     uvs.push(tx, ty);
                 }
@@ -1188,7 +1185,8 @@ export class DragonManager {
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
             // Very tight row overlap — top point fully hidden by row above
-            const rowStep = _scaleH * 0.45;
+            // Row step < full scale height means each row's body covers the top of the row below
+            const rowStep = _scaleH * 0.9;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             const _tmpN = new THREE.Vector3();
@@ -1220,23 +1218,22 @@ export class DragonManager {
                     else if (rnd < 0.55) mat = lightMat;
                     else mat = baseMat;
                     const scale = new THREE.Mesh(scaleGeo, mat);
-                    // Build orientation matrix from egg surface:
-                    // Normal = ellipsoid outward direction
+                    // Build orientation: scale hangs downward from anchor (top tip).
+                    // Normal = outward from ellipsoid
                     _tmpN.set(cosT * sinPhi, (cy - eggCY) / (eggYScale * eggYScale * eggR), sinT * sinPhi).normalize();
-                    // "Down" on the egg surface = tangent along phi (toward south pole)
+                    // "Down" along egg surface = tangent toward south pole
                     _tmpDown.set(cosPhi * cosT, -sinPhi * eggYScale, cosPhi * sinT).normalize();
                     // Right = normal × down
                     _tmpRight.crossVectors(_tmpN, _tmpDown).normalize();
-                    // Recompute down to be exactly perpendicular
+                    // Recompute down perpendicular to normal
                     _tmpDown.crossVectors(_tmpRight, _tmpN).normalize();
-                    // Scale Y-up = -down, Z-out = normal, X = right
+                    // Scale's local: Y- hangs down (scale body), Z+ = outward (ridge), X = sideways
                     _tmpMat.makeBasis(_tmpRight, _tmpDown.clone().negate(), _tmpN);
                     scale.setRotationFromMatrix(_tmpMat);
-                    // Strong tilt: top tip presses INTO egg, bottom tip peels outward
-                    scale.rotateX(0.7);
-                    // Position: anchor at scale's midpoint on egg surface,
-                    // pushed out enough that the ridge clears the core
-                    const surfR = ringR + _scaleD * 0.15;
+                    // Slight tilt so bottom tip peels away from surface
+                    scale.rotateX(0.25);
+                    // Position anchor (top tip) on egg surface
+                    const surfR = ringR + _scaleD * 0.2;
                     scale.position.set(cosT * surfR, cy, sinT * surfR);
                     eggGrp.add(scale);
                 }
