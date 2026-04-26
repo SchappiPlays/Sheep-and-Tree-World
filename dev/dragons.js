@@ -1054,19 +1054,87 @@ export class DragonManager {
             { dx: 3, dz: -5, color: 0x080808, emissive: 0x1a0800, veinColor: 0xffaa22, glowColor: 0xffcc44, wingColor: 0xdd6600, isWyvern: true, name: 'Obsidian Wyvern' },
             { dx: -3, dz: -6, color: 0x227744, emissive: 0x113a22, veinColor: 0x33cc66, glowColor: 0x33ff77, wingColor: 0x33cc66, isWyvern: true, name: 'Forest Wyvern' },
         ];
-        // Egg: 3D extruded scales tightly packed on egg surface
+        // Egg: 3D diamond scales tightly packed on egg surface
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
-        // 3D scale: pointed teardrop shape with thickness
-        const _scaleW = 0.013, _scaleH = 0.018, _scaleD = 0.006;
-        const scaleShape = new THREE.Shape();
-        scaleShape.moveTo(0, _scaleH);
-        scaleShape.quadraticCurveTo(_scaleW, _scaleH * 0.3, _scaleW * 0.9, -_scaleH * 0.3);
-        scaleShape.quadraticCurveTo(_scaleW * 0.4, -_scaleH, 0, -_scaleH);
-        scaleShape.quadraticCurveTo(-_scaleW * 0.4, -_scaleH, -_scaleW * 0.9, -_scaleH * 0.3);
-        scaleShape.quadraticCurveTo(-_scaleW, _scaleH * 0.3, 0, _scaleH);
-        const scaleGeo = new THREE.ExtrudeGeometry(scaleShape, { depth: _scaleD, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 1 });
-        // Center the extrusion so it sits on the surface properly
-        scaleGeo.translate(0, 0, -_scaleD * 0.5);
+        // 3D scale: diamond shape (two equally pointy ends) with curvature
+        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.005;
+        // Build a curved diamond scale using a custom BufferGeometry
+        // Diamond shape: top point, right point, bottom point, left point
+        // Curved outward to conform to egg surface
+        function buildScaleGeo() {
+            // Grid resolution for curvature
+            const segsX = 4, segsY = 6;
+            const verts = [], indices = [], normals = [], uvs = [];
+            for (let iy = 0; iy <= segsY; iy++) {
+                const ty = iy / segsY; // 0=top, 1=bottom
+                const y = _scaleH - ty * 2 * _scaleH; // +_scaleH to -_scaleH
+                // Diamond width: 0 at top & bottom, max at middle
+                const widthT = 1 - Math.abs(ty - 0.5) * 2; // 0→1→0
+                const halfW = _scaleW * widthT;
+                for (let ix = 0; ix <= segsX; ix++) {
+                    const tx = ix / segsX; // 0=left, 1=right
+                    const x = -halfW + tx * 2 * halfW;
+                    // Curvature: bulge outward in center, creating a dome
+                    const cx = (tx - 0.5) * 2; // -1 to 1
+                    const cy = (ty - 0.5) * 2; // -1 to 1
+                    const bulge = (1 - cx*cx) * (1 - cy*cy);
+                    const z = bulge * _scaleD;
+                    verts.push(x, y, z);
+                    // Normal: approximate from bulge gradient
+                    const nx = -cx * _scaleD * 2;
+                    const ny = -cy * _scaleD * 0.5;
+                    const nz = 1;
+                    const nl = Math.sqrt(nx*nx + ny*ny + nz*nz);
+                    normals.push(nx/nl, ny/nl, nz/nl);
+                    uvs.push(tx, ty);
+                }
+            }
+            for (let iy = 0; iy < segsY; iy++) {
+                for (let ix = 0; ix < segsX; ix++) {
+                    const a = iy * (segsX+1) + ix;
+                    const b = a + 1;
+                    const c = a + segsX + 1;
+                    const d = c + 1;
+                    // Skip degenerate triangles at diamond tips
+                    const ax = verts[a*3], bx = verts[b*3];
+                    if (Math.abs(ax - bx) < 0.0001) { indices.push(a, c, d); }
+                    else { indices.push(a, c, b); indices.push(b, c, d); }
+                }
+            }
+            // Back face (flat, slightly recessed)
+            const backOff = verts.length / 3;
+            for (let iy = 0; iy <= segsY; iy++) {
+                const ty = iy / segsY;
+                const y = _scaleH - ty * 2 * _scaleH;
+                const widthT = 1 - Math.abs(ty - 0.5) * 2;
+                const halfW = _scaleW * widthT;
+                for (let ix = 0; ix <= segsX; ix++) {
+                    const tx = ix / segsX;
+                    const x = -halfW + tx * 2 * halfW;
+                    verts.push(x, y, -0.001);
+                    normals.push(0, 0, -1);
+                    uvs.push(tx, ty);
+                }
+            }
+            for (let iy = 0; iy < segsY; iy++) {
+                for (let ix = 0; ix < segsX; ix++) {
+                    const a = backOff + iy * (segsX+1) + ix;
+                    const b = a + 1;
+                    const c = a + segsX + 1;
+                    const d = c + 1;
+                    const ax = verts[a*3], bx = verts[b*3];
+                    if (Math.abs(ax - bx) < 0.0001) { indices.push(a, d, c); }
+                    else { indices.push(a, b, c); indices.push(b, d, c); }
+                }
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+            geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geo.setIndex(indices);
+            return geo;
+        }
+        const scaleGeo = buildScaleGeo();
         const nestRockGeo = new THREE.DodecahedronGeometry(0.2, 0);
         const nestRockMat = new THREE.MeshStandardMaterial({ color: 0x3a3530, roughness: 0.95 });
 
@@ -1100,8 +1168,8 @@ export class DragonManager {
             const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, roughness: 0.3, metalness: 0.4 });
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
-            // Calculate row spacing so scales touch vertically
-            const rowStep = _scaleH * 1.6; // overlap slightly
+            // Row spacing: heavy overlap so top point of each scale is hidden by row above
+            const rowStep = _scaleH * 1.1;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             for (let sr = 0; sr <= scaleRows; sr++) {
@@ -1110,15 +1178,13 @@ export class DragonManager {
                 const sinPhi = Math.sin(phi);
                 const ringR = sinPhi * eggR;
                 const cy = Math.cos(phi) * eggR * eggYScale + eggCY;
-                if (ringR < 0.01) continue; // skip poles
-                // Calculate cols so scales touch horizontally around the circumference
+                if (ringR < 0.02) continue; // skip poles
+                // Tight horizontal packing — scales touch edge to edge
                 const circumference = 2 * Math.PI * ringR;
-                const cols = Math.max(5, Math.round(circumference / (_scaleW * 1.7)));
+                const cols = Math.max(4, Math.round(circumference / (_scaleW * 1.5)));
                 const stagger = (sr % 2) * 0.5;
                 for (let sc = 0; sc < cols; sc++) {
                     const theta = ((sc + stagger) / cols) * Math.PI * 2;
-                    const sx = Math.cos(theta) * ringR;
-                    const sz = Math.sin(theta) * ringR;
                     // Color variation + accent scales
                     const hash = Math.sin(sr * 127.1 + sc * 311.7) * 43758.5453;
                     const rnd = hash - Math.floor(hash);
@@ -1128,23 +1194,27 @@ export class DragonManager {
                     else if (rnd < 0.55) mat = lightMat;
                     else mat = baseMat;
                     const scale = new THREE.Mesh(scaleGeo, mat);
-                    // Position on egg surface, pushed out slightly so scales sit on top
-                    const surfR = ringR + _scaleD * 0.3;
+                    // Position on egg surface
+                    const surfR = ringR + _scaleD * 0.5;
                     scale.position.set(
                         Math.cos(theta) * surfR,
                         cy,
                         Math.sin(theta) * surfR
                     );
-                    // Orient: face outward from egg center axis
-                    const outX = sx, outY = (cy - eggCY) / (eggYScale * eggR) * ringR, outZ = sz;
-                    const len = Math.sqrt(outX*outX + outY*outY + outZ*outZ) || 1;
+                    // Orient: face outward from egg surface normal
+                    // Compute surface normal of the ellipsoid (x, y/yScale², z)
+                    const nx = Math.cos(theta) * sinPhi;
+                    const ny = (cy - eggCY) / (eggYScale * eggYScale * eggR);
+                    const nz = Math.sin(theta) * sinPhi;
+                    const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
                     scale.lookAt(
-                        scale.position.x + outX / len,
-                        scale.position.y + outY / len,
-                        scale.position.z + outZ / len
+                        scale.position.x + nx / nl,
+                        scale.position.y + ny / nl,
+                        scale.position.z + nz / nl
                     );
-                    // Tilt tips upward for overlapping fish-scale / pinecone look
-                    scale.rotateX(-0.5);
+                    // Tilt so bottom tip points down along egg surface —
+                    // top point gets tucked under the row above
+                    scale.rotateX(-0.45);
                     eggGrp.add(scale);
                 }
             }
