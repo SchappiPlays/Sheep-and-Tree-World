@@ -1054,77 +1054,70 @@ export class DragonManager {
             { dx: 3, dz: -5, color: 0x080808, emissive: 0x1a0800, veinColor: 0xffaa22, glowColor: 0xffcc44, wingColor: 0xdd6600, isWyvern: true, name: 'Obsidian Wyvern' },
             { dx: -3, dz: -6, color: 0x227744, emissive: 0x113a22, veinColor: 0x33cc66, glowColor: 0x33ff77, wingColor: 0x33cc66, isWyvern: true, name: 'Forest Wyvern' },
         ];
-        // Egg: 3D diamond scales tightly packed on egg surface
+        // Egg: 3D diamond scales — full diamond shape, anchored at top tip,
+        // tilted outward so bottom lifts off egg. Aggressive row overlap hides top tips.
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
-        // Only render BOTTOM half of diamond: wide flat top edge tapering to pointed bottom.
-        // Anchor at top edge (y=0). Staggered overlapping rows create the diamond look —
-        // each row's wide top covers the narrow part of the row below. No top tip to hide.
-        const _scaleW = 0.013, _scaleH = 0.016, _scaleD = 0.010;
+        const _scaleW = 0.014, _scaleH = 0.022, _scaleD = 0.008;
         function buildScaleGeo() {
-            const sX = 5, sY = 5;
-            const verts = [], idx = [], norms = [], uvs = [];
-            // --- Front face: ridged, wide at top (y=0), pointed at bottom (y=-H) ---
+            // Full diamond: top tip (0,0,0), widest at middle, bottom tip at (0,-H,0)
+            // Front face bulges outward (z+), back face is flat against egg
+            const sX = 6, sY = 8;
+            const verts = [], idx = [], uvs = [];
+            // Front face
             for (let iy = 0; iy <= sY; iy++) {
-                const ty = iy / sY; // 0=top (wide), 1=bottom (point)
+                const ty = iy / sY; // 0=top tip, 1=bottom tip
                 const y = -ty * _scaleH;
-                const hw = _scaleW * (1 - ty); // full width at top, 0 at bottom
+                // Diamond width: 0 at tips, max at middle (ty=0.5)
+                const hw = _scaleW * Math.sin(ty * Math.PI);
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
-                    const ex = hw > 0 ? Math.abs((tx - 0.5) * 2) : 0;
-                    const taper = 1 - ty;
-                    const z = _scaleD * (1 - ex) * taper;
+                    // Edge distance 0=edge, 1=center
+                    const ex = 1 - (hw > 0 ? Math.abs(tx - 0.5) * 2 : 0);
+                    // Tip distance: 0 at tips, 1 at middle
+                    const tipD = Math.sin(ty * Math.PI);
+                    // Dome bulge: peaks at center of diamond
+                    const bulge = ex * tipD;
+                    const z = _scaleD * bulge;
                     verts.push(x, y, z);
-                    const side = tx < 0.5 ? -1 : tx > 0.5 ? 1 : 0;
-                    const nx = side * _scaleD * taper;
-                    const nz = hw || 0.001;
-                    const nl = Math.sqrt(nx*nx + nz*nz);
-                    norms.push(nx/nl, 0, nz/nl);
                     uvs.push(tx, ty);
                 }
             }
+            // Front face indices
             for (let iy = 0; iy < sY; iy++) {
                 for (let ix = 0; ix < sX; ix++) {
                     const a = iy*(sX+1)+ix, b = a+1, c = a+sX+1, d = c+1;
-                    const cw = Math.abs(verts[c*3] - verts[d*3]);
-                    if (cw < 0.0001) { idx.push(a, c, b); }
-                    else { idx.push(a, c, b); idx.push(b, c, d); }
+                    idx.push(a, c, b); idx.push(b, c, d);
                 }
             }
-            // --- Back face (flat) ---
+            // Back face (flat, slight inset)
             const backOff = verts.length / 3;
             for (let iy = 0; iy <= sY; iy++) {
                 const ty = iy / sY;
                 const y = -ty * _scaleH;
-                const hw = _scaleW * (1 - ty);
+                const hw = _scaleW * Math.sin(ty * Math.PI);
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
                     verts.push(x, y, -0.001);
-                    norms.push(0, 0, -1);
                     uvs.push(tx, ty);
                 }
             }
             for (let iy = 0; iy < sY; iy++) {
                 for (let ix = 0; ix < sX; ix++) {
                     const a = backOff+iy*(sX+1)+ix, b = a+1, c = a+sX+1, d = c+1;
-                    const cw = Math.abs(verts[c*3] - verts[d*3]);
-                    if (cw < 0.0001) { idx.push(a, b, c); }
-                    else { idx.push(a, b, c); idx.push(b, d, c); }
+                    idx.push(a, b, c); idx.push(b, d, c);
                 }
             }
-            // --- Side walls ---
+            // Side edges connecting front to back
             for (let iy = 0; iy < sY; iy++) {
                 const fl = iy*(sX+1), fr = fl+sX, bl = backOff+fl, br = backOff+fr;
                 const fl2 = (iy+1)*(sX+1), fr2 = fl2+sX, bl2 = backOff+fl2, br2 = backOff+fr2;
                 idx.push(fl, fl2, bl2); idx.push(fl, bl2, bl);
                 idx.push(fr, br, br2); idx.push(fr, br2, fr2);
             }
-            // Top edge wall
-            idx.push(0, backOff, backOff+sX); idx.push(0, backOff+sX, sX);
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
             geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
             geo.setIndex(idx);
             geo.computeVertexNormals();
@@ -1164,16 +1157,16 @@ export class DragonManager {
             const lightMat = new THREE.MeshStandardMaterial({ color: lightCol, roughness: 0.3, metalness: 0.4 });
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
-            // Very tight row overlap — top point fully hidden by row above
-            // Row step slightly less than scale height so rows overlap
-            const rowStep = _scaleH * 0.8;
+            // Row overlap: each row covers ~55% of the row below, hiding top tips
+            const rowStep = _scaleH * 0.42;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             const _tmpN = new THREE.Vector3();
-            const _tmpUp = new THREE.Vector3();
             const _tmpRight = new THREE.Vector3();
             const _tmpDown = new THREE.Vector3();
             const _tmpMat = new THREE.Matrix4();
+            const _tmpTilt = new THREE.Matrix4();
+            const _tmpQ = new THREE.Quaternion();
             for (let sr = 0; sr <= scaleRows; sr++) {
                 const t = sr / scaleRows; // 0 = top, 1 = bottom
                 const phi = t * Math.PI;
@@ -1181,15 +1174,13 @@ export class DragonManager {
                 const cosPhi = Math.cos(phi);
                 const ringR = sinPhi * eggR;
                 const cy = cosPhi * eggR * eggYScale + eggCY;
-                if (ringR < 0.015) continue; // skip poles
-                // Tight horizontal packing
+                if (ringR < 0.012) continue;
                 const circumference = 2 * Math.PI * ringR;
-                const cols = Math.max(4, Math.round(circumference / (_scaleW * 1.4)));
+                const cols = Math.max(4, Math.round(circumference / (_scaleW * 1.6)));
                 const stagger = (sr % 2) * 0.5;
                 for (let sc = 0; sc < cols; sc++) {
                     const theta = ((sc + stagger) / cols) * Math.PI * 2;
                     const cosT = Math.cos(theta), sinT = Math.sin(theta);
-                    // Color variation + accent scales
                     const hash = Math.sin(sr * 127.1 + sc * 311.7) * 43758.5453;
                     const rnd = hash - Math.floor(hash);
                     let mat;
@@ -1198,16 +1189,22 @@ export class DragonManager {
                     else if (rnd < 0.55) mat = lightMat;
                     else mat = baseMat;
                     const scale = new THREE.Mesh(scaleGeo, mat);
-                    // Orient: Z+ = outward (normal), Y- = downward along egg surface
-                    _tmpN.set(cosT * sinPhi, (cy - eggCY) / (eggYScale * eggYScale * eggR), sinT * sinPhi).normalize();
+                    // Ellipsoid normal
+                    _tmpN.set(cosT * sinPhi, cosPhi / eggYScale, sinT * sinPhi).normalize();
+                    // "Down" along egg surface (toward south pole)
                     _tmpDown.set(cosPhi * cosT, -sinPhi * eggYScale, cosPhi * sinT).normalize();
                     _tmpRight.crossVectors(_tmpN, _tmpDown).normalize();
                     _tmpDown.crossVectors(_tmpRight, _tmpN).normalize();
+                    // Base orientation: Y+ = up along egg, Z+ = outward normal
                     _tmpMat.makeBasis(_tmpRight, _tmpDown.clone().negate(), _tmpN);
+                    // Tilt outward: rotate around local X so bottom lifts off surface
+                    // This makes upper rows naturally cover the top tips of lower rows
+                    const tiltAngle = 0.35; // ~20 degrees outward
+                    _tmpTilt.makeRotationX(-tiltAngle);
+                    _tmpMat.multiply(_tmpTilt);
                     scale.setRotationFromMatrix(_tmpMat);
-                    // Position: wide top edge on egg surface
-                    const surfR = ringR + _scaleD * 0.15;
-                    scale.position.set(cosT * surfR, cy, sinT * surfR);
+                    // Position: top tip sits on egg surface
+                    scale.position.set(cosT * ringR, cy, sinT * ringR);
                     eggGrp.add(scale);
                 }
             }
