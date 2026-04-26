@@ -1302,7 +1302,9 @@ export class VillageManager {
                     { dx: 18, dz: 15, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
                     { dx: 10, dz: 17, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
                 ];
-                const tcFloorY = this.world.getHeight(tccx, tccz) + BLOCK_SIZE;
+                // Sample courtyard floor (not great hall center which returns roof height)
+                const tcCourtX = TAIGA_CASTLE.wx + 19, tcCourtZ = TAIGA_CASTLE.wz + 5;
+                const tcFloorY = this.world.getHeight(tcCourtX, tcCourtZ) + BLOCK_SIZE;
                 for (const n of tcNpcs) {
                     const wx = TAIGA_CASTLE.wx + n.dx;
                     const wz = TAIGA_CASTLE.wz + n.dz;

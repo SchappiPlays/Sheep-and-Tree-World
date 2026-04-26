@@ -1005,13 +1005,18 @@ export class World {
                             else block = BLOCK.SNOW;
                         }
                         else if (biome === 'taiga') {
-                            // Taiga: mostly dark grass, patches of dirt and gravel
-                            const th = this._hash(bx*2.9, bz*3.3);
-                            if (th > 0.85) block = BLOCK.GRAVEL;
-                            else if (th > 0.7) block = BLOCK.DIRT;
-                            else block = BLOCK.GRASS;
+                            if (isOnPath(wx, wz)) block = BLOCK.PATH;
+                            else {
+                                const th = this._hash(bx*2.9, bz*3.3);
+                                if (th > 0.85) block = BLOCK.GRAVEL;
+                                else if (th > 0.7) block = BLOCK.DIRT;
+                                else block = BLOCK.GRASS;
+                            }
                         }
-                        else if (biome === 'snow_transition') block = this._hash(bx*3.1,bz*2.7) > 0.5 ? BLOCK.SNOW : BLOCK.GRASS;
+                        else if (biome === 'snow_transition') {
+                            if (isOnPath(wx, wz)) block = BLOCK.PATH;
+                            else block = this._hash(bx*3.1,bz*2.7) > 0.5 ? BLOCK.SNOW : BLOCK.GRASS;
+                        }
                         else if (biome === 'desert') block = BLOCK.SAND;
                         else if (biome === 'desert_transition') block = this._hash(bx*2.1,bz*3.7) > 0.5 ? BLOCK.SAND : BLOCK.GRASS;
                         else if (biome === 'scorched') block = BLOCK.GRAVEL;
