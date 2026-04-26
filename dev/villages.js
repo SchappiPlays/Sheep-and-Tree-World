@@ -1058,20 +1058,33 @@ export class VillageManager {
         }
 
         // Despawn far villagers
+        // Castle NPCs: despawn ALL at once when player is far from castle center
+        if (this.spawnedVillages.has('__castle__')) {
+            const ccx = CASTLE.wx + 40, ccz = CASTLE.wz + 32.5;
+            const cdx = ccx - playerX, cdz = ccz - playerZ;
+            if (cdx * cdx + cdz * cdz > 90 * 90) {
+                for (let i = this.villagers.length - 1; i >= 0; i--) {
+                    if (this.villagers[i]._castleRole) {
+                        this.scene.remove(this.villagers[i].group);
+                        this.villagers.splice(i, 1);
+                    }
+                }
+                this.spawnedVillages.delete('__castle__');
+            }
+        }
         for (let i = this.villagers.length - 1; i >= 0; i--) {
             const v = this.villagers[i];
+            if (v._castleRole) continue; // handled above
             const dx = v.x - playerX, dz = v.z - playerZ;
             if (dx * dx + dz * dz > 80 * 80) {
                 this.scene.remove(v.group);
                 this.villagers.splice(i, 1);
-                // Allow re-spawn
                 for (const vd of VILLAGE_DEFS) {
                     const vdx = vd.x - v.homeX, vdz = vd.z - v.homeZ;
                     if (vdx * vdx + vdz * vdz < 30 * 30) {
                         this.spawnedVillages.delete(vd.x + ',' + vd.z);
                     }
                 }
-                if (v._castleRole) this.spawnedVillages.delete('__castle__');
             }
         }
 
