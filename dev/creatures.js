@@ -1,6 +1,6 @@
 // creatures.js — Sheep (exact model from game.html) with wandering AI
 
-import { BLOCK_SIZE, CHUNK_SIZE, getPlainsBlend } from './world.js';
+import { BLOCK_SIZE, CHUNK_SIZE, getPlainsBlend, getTerrainHeight } from './world.js';
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
@@ -526,6 +526,86 @@ function makeGoblin(x, z, terrainY) {
     };
 }
 
+const hobSkinMat = new THREE.MeshStandardMaterial({ color: 0x3a5a1a });
+const hobIronMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.6, roughness: 0.3 });
+const hobEyeMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xdd9900, emissiveIntensity: 0.3 });
+
+function makePatrolLeader(x, z, terrainY) {
+    const g = new THREE.Group();
+    // Body — stocky hobgoblin
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.4, 0.24), goblinClothMat);
+    body.position.y = 0.65; g.add(body);
+    // Iron chestplate
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.04), hobIronMat);
+    plate.position.set(0, 0.67, 0.13); g.add(plate);
+    // Head
+    const headGrp = new THREE.Group();
+    headGrp.position.set(0, 0.95, 0); g.add(headGrp);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.24), hobSkinMat);
+    headGrp.add(head);
+    // Pointy ears
+    for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 4), hobSkinMat);
+        ear.position.set(side * 0.16, 0.02, 0); ear.rotation.z = side * (Math.PI/2 + 0.3);
+        headGrp.add(ear);
+    }
+    // Yellow eyes
+    headGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), hobEyeMat)).position.set(-0.07, 0.03, 0.12);
+    headGrp.add(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), hobEyeMat)).position.set(0.07, 0.03, 0.12);
+    // Iron helmet
+    headGrp.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.28), hobIronMat)).position.y = 0.14;
+    // Tusks
+    for (const side of [-1, 1]) {
+        const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.015, 0.06, 4), new THREE.MeshStandardMaterial({ color: 0xddddcc }));
+        tusk.position.set(side * 0.06, -0.1, 0.1); tusk.rotation.x = -0.3;
+        headGrp.add(tusk);
+    }
+    // Arms
+    const armGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1);
+    g.add(new THREE.Mesh(armGeo, hobSkinMat)).position.set(-0.28, 0.55, 0);
+    g.add(new THREE.Mesh(armGeo, hobSkinMat)).position.set(0.28, 0.55, 0);
+    // War axe in right hand
+    const axeHandle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.4, 0.04), new THREE.MeshStandardMaterial({ color: 0x5c3a1e }));
+    axeHandle.position.set(0.28, 0.35, 0.1); g.add(axeHandle);
+    const axeHead = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.03), hobIronMat);
+    axeHead.position.set(0.2, 0.52, 0.1); g.add(axeHead);
+    // Legs
+    const legs = [];
+    const legGeo = new THREE.BoxGeometry(0.1, 0.28, 0.1);
+    for (const lx of [-0.1, 0.1]) {
+        const hip = new THREE.Group(); hip.position.set(lx, 0.42, 0); g.add(hip);
+        hip.add(new THREE.Mesh(legGeo, goblinClothMat)).position.y = -0.14;
+        hip.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.15), hobIronMat)).position.set(0, -0.3, 0.02);
+        legs.push(hip);
+    }
+    g.scale.setScalar(1.3);
+    g.position.set(x, terrainY, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return {
+        group: g, legs, headGrp, x, z, angle: g.rotation.y, speed: 0,
+        walkPhase: Math.random() * Math.PI * 2, wanderTimer: Math.random() * 3,
+        idleHeadTimer: 0, idleHeadTarget: 0, walking: false,
+        type: 'goblin', hostile: true, aggroRange: 12, attackRange: 1.5, attackDmg: 4, attackCD: 1.5, attackTimer: 0,
+        hp: 30, maxHP: 30, dead: false, chaseSpeed: 2.0, _isPatrolLeader: true,
+    };
+}
+
+// Patrol definitions — locations across the map where goblin groups spawn
+const GOBLIN_PATROLS = [
+    { x: -400, z: 0 },      // west of spawn, near goblin outpost
+    { x: -200, z: 200 },    // southwest plains
+    { x: 300, z: -50 },     // east plains
+    { x: -500, z: -100 },   // far west
+    { x: 100, z: 200 },     // south plains
+    { x: -150, z: -300 },   // north of spawn
+    { x: 500, z: 50 },      // near east mountains
+    { x: -600, z: 150 },    // approaching warcamp
+    { x: 0, z: -400 },      // deep north plains
+    { x: -350, z: -200 },   // northwest
+    { x: 200, z: 300 },     // southeast
+    { x: -100, z: 400 },    // approaching desert
+];
+
 function makeSkeleton(x, z, terrainY) {
     const g = new THREE.Group();
 
@@ -653,6 +733,13 @@ export class CreatureManager {
         this.spawnedChunks = new Set();
         this.skipAI = false;
         this._nextId = 0;
+        // Goblin patrol state — each entry tracks spawn time and active creature refs
+        this._patrols = GOBLIN_PATROLS.map(p => ({
+            x: p.x, z: p.z,
+            creatures: [],  // refs to spawned creatures
+            alive: false,
+            respawnTimer: 0, // start ready to spawn
+        }));
     }
 
     spawnGuardSkeleton(x, z, terrainY) {
@@ -695,14 +782,87 @@ export class CreatureManager {
             }
         }
 
-        // Despawn far creatures (but never bosses)
+        // Despawn far creatures (but never bosses or patrol members)
         for (let i = this.creatures.length - 1; i >= 0; i--) {
             const sh = this.creatures[i];
-            if (sh._isBoss || sh._tamed) continue;
+            if (sh._isBoss || sh._tamed || sh._isPatrol) continue;
             const dx = sh.x - playerX, dz = sh.z - playerZ;
             if (dx * dx + dz * dz > 30 * 30) {
                 this.scene.remove(sh.group);
                 this.creatures.splice(i, 1);
+            }
+        }
+
+        // Goblin patrols — spawn when player is near, respawn after 1 hour
+        for (const patrol of this._patrols) {
+            const pdx = patrol.x - playerX, pdz = patrol.z - playerZ;
+            const patrolDist2 = pdx * pdx + pdz * pdz;
+
+            if (patrol.alive) {
+                // Check if all patrol members are dead
+                const allDead = patrol.creatures.every(c => c.dead);
+                if (allDead) {
+                    // Remove dead patrol members after death animation
+                    const allAnimDone = patrol.creatures.every(c => c.deathTimer > 3);
+                    if (allAnimDone) {
+                        for (const c of patrol.creatures) {
+                            this.scene.remove(c.group);
+                            const idx = this.creatures.indexOf(c);
+                            if (idx >= 0) this.creatures.splice(idx, 1);
+                        }
+                        patrol.creatures = [];
+                        patrol.alive = false;
+                        patrol.respawnTimer = 3600; // 1 hour respawn
+                    }
+                }
+                // Despawn patrol if player is very far away (save perf)
+                else if (patrolDist2 > 120 * 120) {
+                    for (const c of patrol.creatures) {
+                        if (!c.dead) {
+                            this.scene.remove(c.group);
+                            const idx = this.creatures.indexOf(c);
+                            if (idx >= 0) this.creatures.splice(idx, 1);
+                        }
+                    }
+                    patrol.creatures = [];
+                    patrol.alive = false;
+                    // No respawn timer — they'll respawn when player returns
+                }
+            } else {
+                // Count down respawn timer
+                if (patrol.respawnTimer > 0) { patrol.respawnTimer -= dt; continue; }
+                // Spawn when player is within range
+                if (patrolDist2 > 60 * 60) continue;
+                // Spawn patrol group: 3-10 goblins + 1 leader
+                const groupSize = 3 + Math.floor(Math.random() * 8);
+                const spawned = [];
+                for (let i = 0; i < groupSize; i++) {
+                    const ang = (i / groupSize) * Math.PI * 2 + Math.random() * 0.5;
+                    const dist = 1.5 + Math.random() * 3;
+                    const gx = patrol.x + Math.cos(ang) * dist;
+                    const gz = patrol.z + Math.sin(ang) * dist;
+                    const gy = Math.max(BLOCK_SIZE, getTerrainHeight(gx, gz) + BLOCK_SIZE);
+                    const gob = makeGoblin(gx, gz, gy);
+                    gob._isPatrol = true;
+                    gob._patrolX = patrol.x;
+                    gob._patrolZ = patrol.z;
+                    gob.cid = this._nextId++;
+                    this.scene.add(gob.group);
+                    this.creatures.push(gob);
+                    spawned.push(gob);
+                }
+                // Leader
+                const ly = Math.max(BLOCK_SIZE, getTerrainHeight(patrol.x, patrol.z) + BLOCK_SIZE);
+                const leader = makePatrolLeader(patrol.x, patrol.z, ly);
+                leader._isPatrol = true;
+                leader._patrolX = patrol.x;
+                leader._patrolZ = patrol.z;
+                leader.cid = this._nextId++;
+                this.scene.add(leader.group);
+                this.creatures.push(leader);
+                spawned.push(leader);
+                patrol.creatures = spawned;
+                patrol.alive = true;
             }
         }
 
@@ -990,7 +1150,17 @@ export class CreatureManager {
                     sh.wanderTimer -= dt;
                     if (sh.wanderTimer <= 0) {
                         sh.walking = !sh.walking;
-                        if (sh.walking) sh.angle += (Math.random() - 0.5) * 2.2;
+                        if (sh.walking) {
+                            // Patrol goblins drift back toward their patrol point
+                            if (sh._isPatrol) {
+                                const tpx = sh._patrolX - sh.x, tpz = sh._patrolZ - sh.z;
+                                const tpDist = Math.sqrt(tpx*tpx + tpz*tpz);
+                                if (tpDist > 8) sh.angle = Math.atan2(tpx, tpz) + (Math.random()-0.5)*1.0;
+                                else sh.angle += (Math.random() - 0.5) * 2.2;
+                            } else {
+                                sh.angle += (Math.random() - 0.5) * 2.2;
+                            }
+                        }
                         sh.wanderTimer = 1.5 + Math.random() * 3;
                     }
                     sh.speed += ((sh.walking ? 0.5 : 0) - sh.speed) * 4 * dt;
@@ -1254,7 +1424,16 @@ export class CreatureManager {
                 }
                 // Enemy drops
                 if (this._onCreatureDrop) {
-                    if (sh.type === 'goblin') {
+                    if (sh.type === 'goblin' && sh._isPatrolLeader) {
+                        // Patrol leader — better loot
+                        this._onCreatureDrop('gold_coin', 3 + Math.floor(Math.random() * 5));
+                        this._onCreatureDrop('iron_bar', 1 + Math.floor(Math.random() * 2));
+                        if (Math.random() < 0.25) this._onCreatureDrop('iron_ingot', 1);
+                    } else if (sh.type === 'goblin' && sh._isPatrol) {
+                        // Patrol goblin — gold + occasional iron
+                        this._onCreatureDrop('gold_coin', 1 + Math.floor(Math.random() * 3));
+                        if (Math.random() < 0.2) this._onCreatureDrop('iron_bar', 1);
+                    } else if (sh.type === 'goblin') {
                         this._onCreatureDrop('stick', 1 + Math.floor(Math.random() * 3));
                         if (Math.random() < 0.3) this._onCreatureDrop('iron_bar', 1);
                     } else if (sh.type === 'skeleton') {
