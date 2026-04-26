@@ -695,6 +695,9 @@ function getTaigaCastleBlocks() {
         blocks.push({ x: wellX - 1, y, z: wellZ + 1, b: S }); blocks.push({ x: wellX + 1, y, z: wellZ + 1, b: S });
     }
 
+    // Rotate 180°: flip z so gate faces south (toward the path)
+    for (const b of blocks) b.z = wallD - b.z;
+
     return blocks;
 }
 
@@ -1287,23 +1290,25 @@ export class VillageManager {
             const tcdx = tccx - playerX, tcdz = tccz - playerZ;
             if (tcdx * tcdx + tcdz * tcdz < 60 * 60 && !this.spawnedVillages.has('__taiga_castle__')) {
                 this.spawnedVillages.add('__taiga_castle__');
-                // dx/dz in world coords (castle is ~38 wide, ~28.5 deep in world units)
+                // dx/dz in world coords — after 180° flip, courtyard is at south (high z), hall at north (low z)
+                // Castle spans ~38 wide (x), ~28.5 deep (z). Gate at z≈28.5, hall interior z≈5-19
                 const tcNpcs = [
-                    { dx: 16, dz: 18, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
-                    { dx: 18, dz: 17, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
-                    { dx: 12, dz: 14, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 26, dz: 14, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 19, dz: 2,  role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 19, dz: 25, role: 'guard',       name: 'Rear Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 5,  dz: 4,  role: 'guard',       name: 'Barracks Guard', shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 14, dz: 12, role: 'huntsman',    name: 'Huntsman',       shirt: 0x556633, pants: 0x443322 },
-                    { dx: 22, dz: 12, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
-                    { dx: 30, dz: 4,  role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
-                    { dx: 18, dz: 15, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
-                    { dx: 10, dz: 17, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
+                    { dx: 16, dz: 10, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
+                    { dx: 18, dz: 11, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
+                    { dx: 12, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 26, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 19, dz: 27, role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 19, dz: 3,  role: 'guard',       name: 'Rear Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 5,  dz: 24, role: 'guard',       name: 'Barracks Guard', shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 14, dz: 16, role: 'huntsman',    name: 'Huntsman',       shirt: 0x556633, pants: 0x443322 },
+                    { dx: 22, dz: 16, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
+                    { dx: 30, dz: 24, role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
+                    { dx: 18, dz: 14, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
+                    { dx: 10, dz: 12, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
+                    { dx: 19, dz: 28, role: 'gatekeeper',  name: 'Gatekeeper',     shirt: 0x556644, pants: 0x334422 },
                 ];
-                // Sample courtyard floor (not great hall center which returns roof height)
-                const tcCourtX = TAIGA_CASTLE.wx + 19, tcCourtZ = TAIGA_CASTLE.wz + 5;
+                // Sample courtyard floor (south side, open area near gate)
+                const tcCourtX = TAIGA_CASTLE.wx + 19, tcCourtZ = TAIGA_CASTLE.wz + 24;
                 const tcFloorY = this.world.getHeight(tcCourtX, tcCourtZ) + BLOCK_SIZE;
                 for (const n of tcNpcs) {
                     const wx = TAIGA_CASTLE.wx + n.dx;
