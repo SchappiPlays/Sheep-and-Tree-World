@@ -1320,6 +1320,7 @@ function buildFarTerrain(centerX, centerZ) {
     // Skip tree rendering inside structures (trees poking through walls look bad)
     const _TREE_SKIP_BOXES = [
         [-800-5, 40-5, -800+165, 40+135],     // Western Castle
+        [140-5, -1300-5, 140+85, -1300+65],     // Taiga Castle (Frostpine)
         [-1010-25, -670-25, -1010+25, -670+25], // Ruined Fortress
         [-1800-50, 1150-50, -1800+50, 1150+50],   // SW Fortress
         [-600-20, 560-20, -600+20, 560+20],   // Scorched Fortress
@@ -9124,6 +9125,7 @@ function _drawMapMarkers(ctx, w, h, scale, vx, vz, vs, progress) {
     addMarker(() => drawMountain(760, -2360, 'Rimestone Peaks', 8));
     // Castles
     addMarker(() => drawCastle(-800, 40, 'The Castle'));
+    addMarker(() => drawCastle(140, -1300, 'Frostpine Keep'));
     addMarker(() => drawCastle(2160, 10, "Dragon's Reach"));
     // Ruins
     addMarker(() => drawRuins(-1010, -670, 'Ruined Fortress'));
@@ -9138,6 +9140,7 @@ function _drawMapMarkers(ctx, w, h, scale, vx, vz, vs, progress) {
     addMarker(() => drawVillage(2040, 60, 'Farwatch'));
     addMarker(() => drawVillage(-2100, -120, 'Bay Watch'));
     addMarker(() => drawVillage(-2150, 200, 'Tidecrest'));
+    addMarker(() => drawVillage(80, -1200, 'Frostpine'));
     // Gates
     addMarker(() => drawGate(-280, -700, 'West Gate'));
     addMarker(() => drawGate(160, -700, 'East Gate'));

@@ -17,6 +17,7 @@ const VILLAGE_DEFS = [
     { x: 2040, z: 60, houses: 8, name: 'Farwatch', smiths: [2, 1] },
     { x: -2100, z: -120, houses: 5, name: 'Bay Watch', smiths: [4, 2] },
     { x: -2150, z: 200, houses: 4, name: 'Tidecrest', smiths: [3] },
+    { x: 80, z: -1200, houses: 4, name: 'Frostpine', biome: 'taiga', smiths: [6, 4] },
 ];
 const SMITH_SKILL_NAMES = { 1:'Apprentice', 2:'Novice', 3:'Journeyman', 4:'Skilled', 5:'Expert', 6:'Master', 7:'Veteran', 8:'Grandmaster', 9:'Legendary' };
 
@@ -32,9 +33,10 @@ function getHouseBlocks(seed, sizeIdx, biome) {
     ];
     const s = sizes[sizeIdx % 3];
     const isDesert = biome === 'desert';
-    const wallMat = isDesert ? BLOCK.SAND : (seed > 0.7 ? BLOCK.PLANKS : BLOCK.STONE);
+    const isTaiga = biome === 'taiga';
+    const wallMat = isDesert ? BLOCK.SAND : isTaiga ? BLOCK.PINE_WOOD : (seed > 0.7 ? BLOCK.PLANKS : BLOCK.STONE);
     const floorMat = isDesert ? BLOCK.SAND : BLOCK.PLANKS;
-    const roofMat = isDesert ? BLOCK.SAND : BLOCK.PLANKS;
+    const roofMat = isDesert ? BLOCK.SAND : isTaiga ? BLOCK.PINE_WOOD : BLOCK.PLANKS;
     const foundationMat = isDesert ? BLOCK.SAND : BLOCK.STONE;
 
     // Foundation — fill deep underneath to handle any slope (20 blocks down)
@@ -475,6 +477,227 @@ function getCastleBlocks() {
     return blocks;
 }
 
+// ── Taiga Castle — Nordic fortress deep in the pine biome ──
+const TAIGA_CASTLE = { wx: 140, wz: -1300 };
+
+function getTaigaCastleBlocks() {
+    const blocks = [];
+    const S = BLOCK.STONE, DS = BLOCK.DARK_STONE, PW = BLOCK.PINE_WOOD, P = BLOCK.PLANKS;
+    const W = BLOCK.WOOD, A = BLOCK.AIR, PATH = BLOCK.PATH, TORCH = BLOCK.TORCH;
+    // Smaller but sturdy — 80x60 blocks, thick walls
+    const wallW = 80, wallD = 60, wallH = 12, crenH = 2;
+    const towerR = 4, towerH = 22;
+
+    // Foundation
+    for (let x = -3; x <= wallW + 3; x++)
+        for (let z = -3; z <= wallD + 3; z++)
+            for (let fy = -20; fy <= 0; fy++)
+                blocks.push({ x, y: fy, z, b: S });
+
+    // Outer walls (2 thick, stone)
+    for (let y = 1; y <= wallH; y++) {
+        for (let x = 0; x <= wallW; x++) {
+            blocks.push({ x, y, z: 0, b: S }); blocks.push({ x, y, z: 1, b: S });
+            blocks.push({ x, y, z: wallD - 1, b: S }); blocks.push({ x, y, z: wallD, b: S });
+        }
+        for (let z = 0; z <= wallD; z++) {
+            blocks.push({ x: 0, y, z, b: S }); blocks.push({ x: 1, y, z, b: S });
+            blocks.push({ x: wallW - 1, y, z, b: S }); blocks.push({ x: wallW, y, z, b: S });
+        }
+    }
+    // Crenellations
+    for (let x = 0; x <= wallW; x += 2)
+        for (let cy = 1; cy <= crenH; cy++) {
+            blocks.push({ x, y: wallH + cy, z: 0, b: S });
+            blocks.push({ x, y: wallH + cy, z: wallD, b: S });
+        }
+    for (let z = 0; z <= wallD; z += 2)
+        for (let cy = 1; cy <= crenH; cy++) {
+            blocks.push({ x: 0, y: wallH + cy, z, b: S });
+            blocks.push({ x: wallW, y: wallH + cy, z, b: S });
+        }
+    // Wall-walk paths and torches
+    for (let x = 1; x < wallW; x++) {
+        blocks.push({ x, y: wallH, z: 2, b: PATH });
+        blocks.push({ x, y: wallH, z: wallD - 2, b: PATH });
+    }
+    for (let z = 1; z < wallD; z++) {
+        blocks.push({ x: 2, y: wallH, z, b: PATH });
+        blocks.push({ x: wallW - 2, y: wallH, z, b: PATH });
+    }
+    for (let x = 5; x < wallW; x += 8) {
+        blocks.push({ x, y: wallH + 1, z: 2, b: TORCH });
+        blocks.push({ x, y: wallH + 1, z: wallD - 2, b: TORCH });
+    }
+    for (let z = 5; z < wallD; z += 8) {
+        blocks.push({ x: 2, y: wallH + 1, z, b: TORCH });
+        blocks.push({ x: wallW - 2, y: wallH + 1, z, b: TORCH });
+    }
+
+    // Gate (front wall center) — 5 wide, 10 tall
+    const gateW2 = 5, gateH2 = 10;
+    const gs = Math.floor(wallW / 2) - Math.floor(gateW2 / 2);
+    for (let y = 1; y <= gateH2 + 1; y++) {
+        blocks.push({ x: gs - 1, y, z: 0, b: PW }); blocks.push({ x: gs - 1, y, z: 1, b: PW });
+        blocks.push({ x: gs + gateW2, y, z: 0, b: PW }); blocks.push({ x: gs + gateW2, y, z: 1, b: PW });
+    }
+    for (let x = gs; x < gs + gateW2; x++) {
+        blocks.push({ x, y: gateH2 + 1, z: 0, b: S }); blocks.push({ x, y: gateH2 + 1, z: 1, b: S });
+    }
+    // Clear gate opening
+    for (let y = 1; y <= gateH2; y++)
+        for (let x = gs; x < gs + gateW2; x++) {
+            blocks.push({ x, y, z: 0, b: A }); blocks.push({ x, y, z: 1, b: A });
+        }
+
+    // Corner towers (4)
+    const tcList = [[0, 0], [wallW, 0], [0, wallD], [wallW, wallD]];
+    for (const [tcx, tcz] of tcList) {
+        for (let y = 1; y <= towerH; y++) {
+            for (let dx = -towerR; dx <= towerR; dx++)
+                for (let dz = -towerR; dz <= towerR; dz++) {
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist <= towerR && dist > towerR - 1.5)
+                        blocks.push({ x: tcx + dx, y, z: tcz + dz, b: S });
+                }
+        }
+        // Tower top + crenellations
+        for (let dx = -towerR; dx <= towerR; dx++)
+            for (let dz = -towerR; dz <= towerR; dz++) {
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist <= towerR) {
+                    blocks.push({ x: tcx + dx, y: towerH, z: tcz + dz, b: S });
+                    if ((dx + dz) % 2 === 0 && dist > towerR - 2)
+                        blocks.push({ x: tcx + dx, y: towerH + 1, z: tcz + dz, b: S });
+                }
+            }
+    }
+
+    // Courtyard floor
+    for (let x = 2; x < wallW - 1; x++)
+        for (let z = 2; z < wallD - 1; z++)
+            blocks.push({ x, y: 0, z, b: S });
+
+    // Path from gate to great hall
+    const gateCenter = Math.floor(wallW / 2);
+    for (let z = 2; z < 20; z++)
+        for (let x = gateCenter - 2; x <= gateCenter + 2; x++)
+            blocks.push({ x, y: 1, z, b: PATH });
+
+    // ── Great Hall (Jarl's Hall) — large pine-wood longhouse ──
+    const ghX = 15, ghZ = 20, ghW = 50, ghD = 30, ghH = 14, roofH = 8;
+    // Floor
+    for (let x = ghX; x <= ghX + ghW; x++)
+        for (let z = ghZ; z <= ghZ + ghD; z++)
+            blocks.push({ x, y: 1, z, b: P });
+    // Walls (pine wood)
+    for (let y = 2; y <= ghH; y++) {
+        for (let x = ghX; x <= ghX + ghW; x++) {
+            blocks.push({ x, y, z: ghZ, b: PW }); blocks.push({ x, y, z: ghZ + ghD, b: PW });
+        }
+        for (let z = ghZ; z <= ghZ + ghD; z++) {
+            blocks.push({ x: ghX, y, z, b: PW }); blocks.push({ x: ghX + ghW, y, z, b: PW });
+        }
+    }
+    // Great hall door (front, facing courtyard)
+    const doorX = ghX + Math.floor(ghW / 2) - 2;
+    for (let y = 2; y <= 8; y++)
+        for (let x = doorX; x < doorX + 5; x++)
+            blocks.push({ x, y, z: ghZ, b: A });
+    // Windows (slots in walls)
+    for (let wx2 = ghX + 6; wx2 < ghX + ghW; wx2 += 8) {
+        for (let wy = 6; wy <= 8; wy++) {
+            blocks.push({ x: wx2, y: wy, z: ghZ, b: A });
+            blocks.push({ x: wx2, y: wy, z: ghZ + ghD, b: A });
+        }
+    }
+    // Peaked roof (planks)
+    for (let rz = ghZ - 1; rz <= ghZ + ghD + 1; rz++) {
+        for (let ry = 0; ry < roofH; ry++) {
+            const rx1 = ghX + ry - 1, rx2 = ghX + ghW - ry + 1;
+            if (rx1 >= rx2) break;
+            blocks.push({ x: rx1, y: ghH + ry + 1, z: rz, b: P });
+            blocks.push({ x: rx2, y: ghH + ry + 1, z: rz, b: P });
+        }
+        // Ridge
+        const ridgeX = ghX + Math.floor(ghW / 2);
+        blocks.push({ x: ridgeX, y: ghH + roofH, z: rz, b: PW });
+    }
+    // Interior — throne at back, long tables, torches
+    // Throne platform
+    for (let x = ghX + 22; x <= ghX + 28; x++)
+        for (let z = ghZ + ghD - 4; z <= ghZ + ghD - 2; z++)
+            blocks.push({ x, y: 2, z, b: DS });
+    // Torches inside
+    for (let tx = ghX + 4; tx < ghX + ghW; tx += 8) {
+        blocks.push({ x: tx, y: 6, z: ghZ + 3, b: TORCH });
+        blocks.push({ x: tx, y: 6, z: ghZ + ghD - 3, b: TORCH });
+    }
+    // Dividing wall for back rooms (armory + storage)
+    for (let y = 2; y <= ghH; y++) {
+        for (let z = ghZ + ghD - 8; z <= ghZ + ghD; z++) {
+            blocks.push({ x: ghX + 10, y, z, b: PW });
+            blocks.push({ x: ghX + ghW - 10, y, z, b: PW });
+        }
+    }
+    // Doorways in dividers
+    for (let y = 2; y <= 8; y++) {
+        blocks.push({ x: ghX + 10, y, z: ghZ + ghD - 6, b: A });
+        blocks.push({ x: ghX + ghW - 10, y, z: ghZ + ghD - 6, b: A });
+    }
+
+    // ── Barracks (left side of courtyard) ──
+    const bkX = 4, bkZ = 4, bkW = 18, bkD = 12, bkH = 10;
+    for (let x = bkX; x <= bkX + bkW; x++)
+        for (let z = bkZ; z <= bkZ + bkD; z++)
+            blocks.push({ x, y: 1, z, b: P });
+    for (let y = 2; y <= bkH; y++) {
+        for (let x = bkX; x <= bkX + bkW; x++) {
+            blocks.push({ x, y, z: bkZ, b: S }); blocks.push({ x, y, z: bkZ + bkD, b: S });
+        }
+        for (let z = bkZ; z <= bkZ + bkD; z++) {
+            blocks.push({ x: bkX, y, z, b: S }); blocks.push({ x: bkX + bkW, y, z, b: S });
+        }
+    }
+    // Barracks door
+    for (let y = 2; y <= 8; y++)
+        for (let x = bkX + 7; x <= bkX + 10; x++)
+            blocks.push({ x, y, z: bkZ, b: A });
+    // Barracks flat roof
+    for (let x = bkX; x <= bkX + bkW; x++)
+        for (let z = bkZ; z <= bkZ + bkD; z++)
+            blocks.push({ x, y: bkH + 1, z, b: P });
+
+    // ── Stable (right side) ──
+    const stX = wallW - 22, stZ = 4, stW = 18, stD = 10, stH = 8;
+    for (let x = stX; x <= stX + stW; x++)
+        for (let z = stZ; z <= stZ + stD; z++)
+            blocks.push({ x, y: 1, z, b: P });
+    for (let y = 2; y <= stH; y++) {
+        for (let x = stX; x <= stX + stW; x++) {
+            blocks.push({ x, y, z: stZ, b: PW }); blocks.push({ x, y, z: stZ + stD, b: PW });
+        }
+        for (let z = stZ; z <= stZ + stD; z++) {
+            blocks.push({ x: stX, y, z, b: PW }); blocks.push({ x: stX + stW, y, z, b: PW });
+        }
+    }
+    for (let y = 2; y <= 7; y++)
+        for (let x = stX + 6; x <= stX + 10; x++)
+            blocks.push({ x, y, z: stZ, b: A });
+    for (let x = stX; x <= stX + stW; x++)
+        for (let z = stZ; z <= stZ + stD; z++)
+            blocks.push({ x, y: stH + 1, z, b: P });
+
+    // Well in courtyard
+    const wellX = gateCenter, wellZ = 12;
+    for (let y = 1; y <= 3; y++) {
+        blocks.push({ x: wellX - 1, y, z: wellZ - 1, b: S }); blocks.push({ x: wellX + 1, y, z: wellZ - 1, b: S });
+        blocks.push({ x: wellX - 1, y, z: wellZ + 1, b: S }); blocks.push({ x: wellX + 1, y, z: wellZ + 1, b: S });
+    }
+
+    return blocks;
+}
+
 // Lightweight LOD-only preplace — fills world._structureBlocks with village
 // house blocks and castle blocks so they appear in the distant terrain LOD
 // without running full chunk generation. Fast.
@@ -512,6 +735,13 @@ export function preplaceVillagesAndCastle(world) {
     const castleBlocks = world._castleBlocks || getCastleBlocks();
     world._castleBlocks = castleBlocks;
     for (const hb of castleBlocks) add(cbx + hb.x, castleBaseY + hb.y, cbz + hb.z, hb.b);
+    // Taiga Castle
+    const tcbx = Math.floor(TAIGA_CASTLE.wx / BLOCK_SIZE);
+    const tcbz = Math.floor(TAIGA_CASTLE.wz / BLOCK_SIZE);
+    const tcBaseY = world.getBaseHeightBlocks(tcbx + 40, tcbz + 30) + yOff;
+    const tcBlocks = world._taigaCastleBlocks || getTaigaCastleBlocks();
+    world._taigaCastleBlocks = tcBlocks;
+    for (const hb of tcBlocks) add(tcbx + hb.x, tcBaseY + hb.y, tcbz + hb.z, hb.b);
 }
 
 export function placeVillageInChunk(world, cx, cz, chunkData) {
@@ -616,6 +846,41 @@ export function placeVillageInChunk(world, cx, cz, chunkData) {
             const bx2 = cbx + hb.x;
             const bz2 = cbz + hb.z;
             const by2 = castleBaseY + hb.y;
+            const lx2 = bx2 - ox, lz2 = bz2 - oz;
+            if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
+            if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
+            chunkData[(by2 * 16 + lz2) * 16 + lx2] = hb.b;
+            if (hb.b !== BLOCK.AIR) {
+                if (!world._structureBlocks) world._structureBlocks = new Map();
+                world._structureBlocks.set(bx2 + ',' + by2 + ',' + bz2, hb.b);
+            }
+        }
+    }
+
+    // ── Taiga Castle ──
+    const tcbx = Math.floor(TAIGA_CASTLE.wx / BLOCK_SIZE);
+    const tcbz = Math.floor(TAIGA_CASTLE.wz / BLOCK_SIZE);
+    if (tcbx + 90 >= ox && tcbx - 10 <= ox + 15 && tcbz + 70 >= oz && tcbz - 10 <= oz + 15) {
+        const tcBaseY = world.getBaseHeightBlocks(tcbx + 40, tcbz + 30) + yOff;
+        if (!world._taigaCastleBlocks) world._taigaCastleBlocks = getTaigaCastleBlocks();
+        const tcBlocks = world._taigaCastleBlocks;
+        // Clear area
+        for (let ix = -3; ix < 85; ix++) {
+            for (let iz = -3; iz < 65; iz++) {
+                for (let iy = 1; iy <= 30; iy++) {
+                    const bx2 = tcbx + ix, bz2 = tcbz + iz, by2 = tcBaseY + iy;
+                    const lx2 = bx2 - ox, lz2 = bz2 - oz;
+                    if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
+                    if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
+                    chunkData[(by2 * 16 + lz2) * 16 + lx2] = BLOCK.AIR;
+                }
+            }
+        }
+        // Place blocks
+        for (const hb of tcBlocks) {
+            const bx2 = tcbx + hb.x;
+            const bz2 = tcbz + hb.z;
+            const by2 = tcBaseY + hb.y;
             const lx2 = bx2 - ox, lz2 = bz2 - oz;
             if (lx2 < 0 || lx2 >= 16 || lz2 < 0 || lz2 >= 16) continue;
             if (by2 < 0 || by2 >= WORLD_HEIGHT) continue;
@@ -1015,6 +1280,60 @@ export class VillageManager {
             }
         }
 
+        // ── Spawn taiga castle NPCs ──
+        {
+            const tccx = TAIGA_CASTLE.wx + 20; // center of 80-wide castle in world coords
+            const tccz = TAIGA_CASTLE.wz + 15;
+            const tcdx = tccx - playerX, tcdz = tccz - playerZ;
+            if (tcdx * tcdx + tcdz * tcdz < 60 * 60 && !this.spawnedVillages.has('__taiga_castle__')) {
+                this.spawnedVillages.add('__taiga_castle__');
+                const tcNpcs = [
+                    { dx: 32, dz: 38, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
+                    { dx: 35, dz: 36, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
+                    { dx: 25, dz: 30, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 55, dz: 30, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 40, dz: 4,  role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 40, dz: 52, role: 'guard',       name: 'Rear Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 10, dz: 8,  role: 'guard',       name: 'Barracks Guard', shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 28, dz: 25, role: 'huntsman',    name: 'Huntsman',       shirt: 0x556633, pants: 0x443322 },
+                    { dx: 45, dz: 25, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
+                    { dx: 60, dz: 8,  role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
+                    { dx: 38, dz: 32, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
+                    { dx: 20, dz: 35, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
+                ];
+                const tcFloorY = this.world.getHeight(tccx, tccz) + BLOCK_SIZE;
+                for (const n of tcNpcs) {
+                    const wx = TAIGA_CASTLE.wx + n.dx * BLOCK_SIZE;
+                    const wz = TAIGA_CASTLE.wz + n.dz * BLOCK_SIZE;
+                    const wy = tcFloorY;
+                    const seed = this.world._hash(wx + 17, wz + 19);
+                    const v = makeVillager(this.scene, wx, wz, wy, seed);
+                    v._floorY = tcFloorY;
+                    v._shirtMat.color.setHex(n.shirt);
+                    v._pantsMat.color.setHex(n.pants);
+                    v._castleRole = n.role;
+                    v._taigaCastle = true;
+                    v._stayHome = true;
+                    v.homeX = wx; v.homeZ = wz;
+                    const nc = document.createElement('canvas');
+                    nc.width = 128; nc.height = 32;
+                    const nctx = nc.getContext('2d');
+                    const nameColor = n.role === 'jarl' ? '#ffcc44' :
+                                      (n.role === 'guard') ? '#cccccc' :
+                                      (n.role === 'huntsman') ? '#88aa66' : '#e8c89a';
+                    nctx.fillStyle = nameColor;
+                    nctx.font = 'bold 12px monospace';
+                    nctx.textAlign = 'center';
+                    nctx.fillText(n.name, 64, 20);
+                    const nt = new THREE.CanvasTexture(nc);
+                    const nl = new THREE.Sprite(new THREE.SpriteMaterial({ map: nt, transparent: true, depthWrite: false }));
+                    nl.position.y = 2.2; nl.scale.set(1.0, 0.25, 1);
+                    v.group.add(nl);
+                    this.villagers.push(v);
+                }
+            }
+        }
+
         // Spawn wandering merchants on paths near player
         if (!this._merchantTimer) this._merchantTimer = 0;
         this._merchantTimer -= dt;
@@ -1064,12 +1383,26 @@ export class VillageManager {
             const cdx = ccx - playerX, cdz = ccz - playerZ;
             if (cdx * cdx + cdz * cdz > 90 * 90) {
                 for (let i = this.villagers.length - 1; i >= 0; i--) {
-                    if (this.villagers[i]._castleRole) {
+                    if (this.villagers[i]._castleRole && !this.villagers[i]._taigaCastle) {
                         this.scene.remove(this.villagers[i].group);
                         this.villagers.splice(i, 1);
                     }
                 }
                 this.spawnedVillages.delete('__castle__');
+            }
+        }
+        // Taiga castle NPCs: same pattern
+        if (this.spawnedVillages.has('__taiga_castle__')) {
+            const tccx = TAIGA_CASTLE.wx + 20, tccz = TAIGA_CASTLE.wz + 15;
+            const tcdx = tccx - playerX, tcdz = tccz - playerZ;
+            if (tcdx * tcdx + tcdz * tcdz > 80 * 80) {
+                for (let i = this.villagers.length - 1; i >= 0; i--) {
+                    if (this.villagers[i]._taigaCastle) {
+                        this.scene.remove(this.villagers[i].group);
+                        this.villagers.splice(i, 1);
+                    }
+                }
+                this.spawnedVillages.delete('__taiga_castle__');
             }
         }
         for (let i = this.villagers.length - 1; i >= 0; i--) {
@@ -1259,8 +1592,14 @@ export class VillageManager {
             }
             // Keep castle NPCs inside castle walls
             if (v._castleRole) {
-                const cMinX = CASTLE.wx + 5, cMaxX = CASTLE.wx + 75;
-                const cMinZ = CASTLE.wz + 5, cMaxZ = CASTLE.wz + 60;
+                let cMinX, cMaxX, cMinZ, cMaxZ;
+                if (v._taigaCastle) {
+                    cMinX = TAIGA_CASTLE.wx + 2 * BLOCK_SIZE; cMaxX = TAIGA_CASTLE.wx + 38 * BLOCK_SIZE;
+                    cMinZ = TAIGA_CASTLE.wz + 2 * BLOCK_SIZE; cMaxZ = TAIGA_CASTLE.wz + 28 * BLOCK_SIZE;
+                } else {
+                    cMinX = CASTLE.wx + 5; cMaxX = CASTLE.wx + 75;
+                    cMinZ = CASTLE.wz + 5; cMaxZ = CASTLE.wz + 60;
+                }
                 if (v.x < cMinX || v.x > cMaxX || v.z < cMinZ || v.z > cMaxZ) {
                     v.x = Math.max(cMinX, Math.min(cMaxX, v.x));
                     v.z = Math.max(cMinZ, Math.min(cMaxZ, v.z));
