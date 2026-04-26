@@ -1234,17 +1234,17 @@ export class VillageManager {
                 const npcs = [
                     { dx: 40, dz: 32, role: 'king',     name: 'King',          shirt: 0x882233, pants: 0x2a2a3a },
                     { dx: 44, dz: 30, role: 'queen',    name: 'Queen',         shirt: 0x8844aa, pants: 0x2a2a3a },
-                    { dx: 38, dz: 35, role: 'advisor',  name: 'Royal Advisor', shirt: 0x2a4488, pants: 0x1a1a2a },
-                    { dx: 30, dz: 40, role: 'knight',   name: 'Knight',        shirt: 0x556677, pants: 0x334455 },
+                    { dx: 38, dz: 35, role: 'advisor',  name: 'Royal Advisor', shirt: 0x2a4488, pants: 0x1a1a2a, quest: 'goblin_menace' },
+                    { dx: 30, dz: 40, role: 'knight',   name: 'Knight',        shirt: 0x556677, pants: 0x334455, quest: 'skeleton_scourge' },
                     { dx: 50, dz: 40, role: 'knight',   name: 'Knight',        shirt: 0x556677, pants: 0x334455 },
                     { dx: 20, dz: 30, role: 'guard',    name: 'Guard',         shirt: 0x3a3a3a, pants: 0x2a2a2a },
                     { dx: 60, dz: 30, role: 'guard',    name: 'Guard',         shirt: 0x3a3a3a, pants: 0x2a2a2a },
-                    { dx: 40, dz: 12, role: 'guard',    name: 'Gate Guard',    shirt: 0x3a3a3a, pants: 0x2a2a2a },
+                    { dx: 40, dz: 12, role: 'guard',    name: 'Gate Guard',    shirt: 0x3a3a3a, pants: 0x2a2a2a, quest: 'warchief_bounty' },
                     { dx: 40, dz: 53, role: 'guard',    name: 'Rear Guard',    shirt: 0x3a3a3a, pants: 0x2a2a2a },
                     { dx: 35, dz: 25, role: 'servant',  name: 'Servant',       shirt: 0xaa9966, pants: 0x553322 },
                     { dx: 45, dz: 25, role: 'servant',  name: 'Servant',       shirt: 0xaa9966, pants: 0x553322 },
                     { dx: 42, dz: 38, role: 'noble',    name: 'Noble',         shirt: 0x884466, pants: 0x2a1a2a },
-                    { dx: 48, dz: 35, role: 'scholar',  name: 'Scholar',       shirt: 0x445522, pants: 0x2a2a1a },
+                    { dx: 48, dz: 35, role: 'scholar',  name: 'Scholar',       shirt: 0x445522, pants: 0x2a2a1a, quest: 'dragon_egg_castle' },
                     { dx: 32, dz: 38, role: 'cook',     name: 'Cook',          shirt: 0xbbaa88, pants: 0x664433 },
                     { dx: 55, dz: 45, role: 'stablehand', name: 'Stablehand',  shirt: 0x886644, pants: 0x443322 },
                 ];
@@ -1278,6 +1278,22 @@ export class VillageManager {
                     const nl = new THREE.Sprite(new THREE.SpriteMaterial({ map: nt, transparent: true, depthWrite: false }));
                     nl.position.y = 2.2; nl.scale.set(1.0, 0.25, 1);
                     v.group.add(nl);
+                    // Quest assignment
+                    if (n.quest) {
+                        v._questId = n.quest;
+                        const qc = document.createElement('canvas');
+                        qc.width = 32; qc.height = 32;
+                        const qctx = qc.getContext('2d');
+                        qctx.fillStyle = '#ffcc00';
+                        qctx.font = 'bold 28px sans-serif';
+                        qctx.textAlign = 'center';
+                        qctx.fillText('!', 16, 26);
+                        const qt = new THREE.CanvasTexture(qc);
+                        const qs = new THREE.Sprite(new THREE.SpriteMaterial({ map: qt, transparent: true, depthWrite: false }));
+                        qs.position.y = 2.8; qs.scale.set(0.4, 0.4, 1);
+                        v.group.add(qs);
+                        v._questMarker = qs;
+                    }
                     this.villagers.push(v);
                 }
             }
@@ -1293,8 +1309,8 @@ export class VillageManager {
                 // dx/dz in world coords — after 180° flip, courtyard is at south (high z), hall at north (low z)
                 // Castle spans ~38 wide (x), ~28.5 deep (z). Gate at z≈28.5, hall interior z≈5-19
                 const tcNpcs = [
-                    { dx: 16, dz: 10, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
-                    { dx: 18, dz: 11, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
+                    { dx: 16, dz: 10, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211, quest: 'wolf_pelts' },
+                    { dx: 18, dz: 11, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344, quest: 'explore_ice_castle' },
                     { dx: 12, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
                     { dx: 26, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
                     { dx: 19, dz: 27, role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
@@ -1304,8 +1320,8 @@ export class VillageManager {
                     { dx: 22, dz: 16, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
                     { dx: 30, dz: 24, role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
                     { dx: 18, dz: 14, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
-                    { dx: 10, dz: 12, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
-                    { dx: 19, dz: 28, role: 'gatekeeper',  name: 'Gatekeeper',     shirt: 0x556644, pants: 0x334422 },
+                    { dx: 10, dz: 12, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a, quest: 'iron_delivery' },
+                    { dx: 19, dz: 28, role: 'gatekeeper',  name: 'Gatekeeper',     shirt: 0x556644, pants: 0x334422, quest: 'dragon_egg_frostpine' },
                 ];
                 // Sample courtyard floor (south side, open area near gate)
                 const tcCourtX = TAIGA_CASTLE.wx + 19, tcCourtZ = TAIGA_CASTLE.wz + 24;
@@ -1336,6 +1352,22 @@ export class VillageManager {
                     const nl = new THREE.Sprite(new THREE.SpriteMaterial({ map: nt, transparent: true, depthWrite: false }));
                     nl.position.y = 2.2; nl.scale.set(1.0, 0.25, 1);
                     v.group.add(nl);
+                    // Quest assignment
+                    if (n.quest) {
+                        v._questId = n.quest;
+                        const qc = document.createElement('canvas');
+                        qc.width = 32; qc.height = 32;
+                        const qctx = qc.getContext('2d');
+                        qctx.fillStyle = '#ffcc00';
+                        qctx.font = 'bold 28px sans-serif';
+                        qctx.textAlign = 'center';
+                        qctx.fillText('!', 16, 26);
+                        const qt = new THREE.CanvasTexture(qc);
+                        const qs = new THREE.Sprite(new THREE.SpriteMaterial({ map: qt, transparent: true, depthWrite: false }));
+                        qs.position.y = 2.8; qs.scale.set(0.4, 0.4, 1);
+                        v.group.add(qs);
+                        v._questMarker = qs;
+                    }
                     this.villagers.push(v);
                 }
             }

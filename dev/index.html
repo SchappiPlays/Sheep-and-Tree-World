@@ -1662,6 +1662,8 @@ function collectSaveData() {
         waypoints: JSON.parse(JSON.stringify(waypoints)),
         brokenHearts,
         lifeCrystals: lifeCrystals.map(lc => ({ x: lc.x, z: lc.z })),
+        questState: JSON.parse(JSON.stringify(questState)),
+        questKills: { ...questKills },
     };
 }
 
@@ -2299,6 +2301,17 @@ function startGame(loadSlotName, clipShotIdx) {
         else if (creatureType === 'skeleton') addXP(8);
         else addXP(6);
         refreshUI();
+    };
+    creatures._onCreatureKill = (creatureType, creature) => {
+        questKills[creatureType] = (questKills[creatureType] || 0) + 1;
+        // Check if any active kill quest just completed
+        for (const [qid, st] of Object.entries(questState)) {
+            if (st.status !== QS_ACTIVE) continue;
+            const def = QUEST_DEFS[qid];
+            if (def && checkQuestComplete(qid)) {
+                completeQuest(qid);
+            }
+        }
     };
     creatures._onPlayerHit = (dmg, type, srcX, srcZ) => {
         if (playerDead) return;
@@ -3983,8 +3996,36 @@ function startGame(loadSlotName, clipShotIdx) {
         spawnDRVillager(CORP_X + 1.0, CORP_Z + 4.5, 0.29, Math.PI * 0.9, true);
         spawnDRVillager(CORP_X - 2.5, CORP_Z - 4.2, 0.61, Math.PI * 0.05, true);
 
-        // Outer ring
-        spawnDRVillager(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        // Outer ring — first one is the Dragon Scholar (quest giver)
+        const drQuestScholar = spawnDRVillager(CORP_X + 7.5, CORP_Z + 2.0, 0.83, Math.PI * 1.4, false);
+        drQuestScholar._questId = 'dragon_reach_proof';
+        {
+            // Name label
+            const nc = document.createElement('canvas');
+            nc.width = 128; nc.height = 32;
+            const nctx = nc.getContext('2d');
+            nctx.fillStyle = '#aaccee';
+            nctx.font = 'bold 12px monospace';
+            nctx.textAlign = 'center';
+            nctx.fillText('Dragon Scholar', 64, 20);
+            const nt = new THREE.CanvasTexture(nc);
+            const nl = new THREE.Sprite(new THREE.SpriteMaterial({ map: nt, transparent: true, depthWrite: false }));
+            nl.position.y = 2.2; nl.scale.set(1.0, 0.25, 1);
+            drQuestScholar.group.add(nl);
+            // Quest marker
+            const qc = document.createElement('canvas');
+            qc.width = 32; qc.height = 32;
+            const qctx = qc.getContext('2d');
+            qctx.fillStyle = '#ffcc00';
+            qctx.font = 'bold 28px sans-serif';
+            qctx.textAlign = 'center';
+            qctx.fillText('!', 16, 26);
+            const qt = new THREE.CanvasTexture(qc);
+            const qs = new THREE.Sprite(new THREE.SpriteMaterial({ map: qt, transparent: true, depthWrite: false }));
+            qs.position.y = 2.8; qs.scale.set(0.4, 0.4, 1);
+            drQuestScholar.group.add(qs);
+            drQuestScholar._questMarker = qs;
+        }
         spawnDRVillager(CORP_X - 6.0, CORP_Z + 3.5, 0.18, Math.PI * 0.6, false);
         spawnDRVillager(CORP_X + 5.5, CORP_Z - 4.0, 0.44, Math.PI * 1.7, false);
 
@@ -6217,6 +6258,13 @@ function startGame(loadSlotName, clipShotIdx) {
                     lifeCrystals.push({ x: lc.x, z: lc.z, group: lcGroup });
                 }
             }
+            // Restore quest state
+            if (s.questState) {
+                for (const [k, v] of Object.entries(s.questState)) questState[k] = v;
+            }
+            if (s.questKills) {
+                for (const [k, v] of Object.entries(s.questKills)) questKills[k] = v;
+            }
             window._customSwords = s.customSwords || {};
             window._customStaffs = s.customStaffs || {};
             world._salvagedSkeletons = s.salvagedSkeletons || {};
@@ -7864,6 +7912,8 @@ function spellDamage(c, dmg) {
     if (c.hp <= 0) {
         c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0;
         _creatureLootDrop(c);
+        // Quest kill tracking
+        if (creatures._onCreatureKill) creatures._onCreatureKill(c.type, c);
         if (c._isBoss) {
             if (c._bossName) {
                 killedBosses.add(c._bossName);
@@ -8815,7 +8865,7 @@ function _updateArrows(dt) {
                 const cdx = a.x - c.x, cdy = a.y - (c.group.position.y + 0.5), cdz = a.z - c.z;
                 if (cdx * cdx + cdy * cdy + cdz * cdz < 0.6 * 0.6) {
                     c.hp -= a.dmg;
-                    if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; }
+                    if (c.hp <= 0) { c.hp = 0; c.dead = true; c.deathTimer = 0; c.walking = false; c.speed = 0; if (creatures._onCreatureKill) creatures._onCreatureKill(c.type, c); _creatureLootDrop(c); }
                     scene.remove(a.mesh);
                     _arrows.splice(i, 1);
                     break;
@@ -10659,6 +10709,9 @@ document.addEventListener('keydown', e => {
         chestOpen = false; chestOpenKey = null;
         chestMenuEl.style.display = 'none';
         if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    } else if (e.code === 'Escape' && questLogOpen) {
+        questLogOpen = false; questLogEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
     } else if (e.code === 'Escape' && !_CINEMATIC_MODE && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !blastFurnaceOpen && !chestOpen && !inventoryOpen && !mapOpen && gameStarted) {
         gamePaused = !gamePaused;
         pauseMenuEl.style.display = gamePaused ? 'flex' : 'none';
@@ -10688,6 +10741,11 @@ document.addEventListener('keydown', e => {
                 setTimeout(() => renderer.domElement.requestPointerLock(), 100);
             }
         }
+    }
+    // Quest log toggle
+    if (e.code === 'KeyJ' && !_CINEMATIC_MODE && gameStarted && !chatOpen) {
+        if (questLogOpen) { questLogOpen = false; questLogEl.style.display = 'none'; if (useMouseLook && !gamePaused) setTimeout(() => renderer.domElement.requestPointerLock(), 100); }
+        else if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !campfireCookOpen && !anvilOpen && !mapOpen && !shopOpen && !villagerDialogOpen) { toggleQuestLog(); }
     }
 });
 
@@ -13547,6 +13605,297 @@ window._unlockSkill = (tree, idx) => {
 
 window._closeLevelMenu = () => { levelMenuOpen = false; levelMenuEl.style.display = 'none'; if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100); };
 
+// ═══════════════════════════════════════════════════════════════════════
+// QUEST SYSTEM
+// ═══════════════════════════════════════════════════════════════════════
+
+// Quest states
+const QS_NONE = 0, QS_ACTIVE = 1, QS_COMPLETE = 2, QS_TURNED_IN = 3;
+
+// Kill counter — incremented on creature death
+const questKills = {}; // { 'goblin': 5, 'wolf': 3, ... }
+
+// Quest definitions
+const QUEST_DEFS = {
+    goblin_menace: {
+        name: 'The Goblin Menace',
+        giver: 'Royal Advisor',
+        location: 'Stone Castle',
+        type: 'kill',
+        description: 'The Royal Advisor asks you to deal with the goblin threat near the outpost.',
+        objectives: [{ type: 'kill', target: 'goblin', count: 5, label: 'Kill goblins' }],
+        dialog_offer: "Goblins have been raiding our supply caravans from their outpost to the west. We need someone to thin their numbers. Slay five of the wretches and report back to me.",
+        dialog_progress: () => `You've slain ${Math.min(questKills.goblin || 0, 5)} of 5 goblins. Keep at it, adventurer.`,
+        dialog_done: "Excellent work! The roads are safer already. Take this reward — you've earned it.",
+        reward: { copper: 50, xp: 30, items: { iron_sword: 1 } },
+    },
+    wolf_pelts: {
+        name: 'Wolves at the Gate',
+        giver: 'Jarl Thorne',
+        location: 'Frostpine Keep',
+        type: 'kill',
+        description: 'Jarl Thorne wants you to cull the wolves threatening Frostpine hunters.',
+        objectives: [{ type: 'kill', target: 'wolf', count: 6, label: 'Kill wolves' }],
+        dialog_offer: "Wolves have grown bold this season. My hunters can barely leave the keep without being set upon. Kill six of them and I'll see you rewarded handsomely.",
+        dialog_progress: () => `${Math.min(questKills.wolf || 0, 6)} of 6 wolves down. The pack still lingers — keep hunting.`,
+        dialog_done: "The howling has quieted. My hunters can work in peace again. You have my thanks, and my coin.",
+        reward: { copper: 60, xp: 35, items: { leather: 5 } },
+    },
+    dragon_egg_frostpine: {
+        name: 'Proof of Dragons',
+        giver: 'Gatekeeper',
+        location: 'Frostpine Keep',
+        type: 'show_item',
+        description: 'The Frostpine Gatekeeper has heard legends of dragon eggs. Show him one to prove they exist.',
+        objectives: [{ type: 'has_item_or', items: ['egg_0','egg_1','egg_2','egg_3','egg_4','egg_5','egg_6','egg_7','egg_8','egg_9','egg_10','egg_11'], label: 'Show a dragon egg' }],
+        dialog_offer: "I've stood at this gate for twenty winters, and in all that time I've heard tales of dragon eggs hidden in the ancient forest. Bah — I say it's nonsense. Prove me wrong, traveller. Show me a real dragon egg... or better yet, a living dragon. I'll let you keep it, of course.",
+        dialog_progress: "Still no egg? I knew it — just old wives' tales. ...Unless you've got a dragon following you around?",
+        dialog_done: "By the gods... it's real. I can feel the warmth through the shell. Twenty years I've waited to see proof. You've made an old guard very happy. Keep it — it chose you, not me.",
+        check: () => {
+            // Check for dragon egg in inventory
+            for (const key in inventory) { if (key.startsWith('egg_') && inventory[key] > 0) return true; }
+            // Check for baby dragon nearby
+            if (dragonMgr && dragonMgr.dragons.length > 0) return true;
+            return false;
+        },
+        reward: { copper: 80, xp: 50 },
+    },
+    dragon_egg_castle: {
+        name: 'The Dragon Scholar',
+        giver: 'Scholar',
+        location: 'Stone Castle',
+        type: 'show_item',
+        description: 'The castle Scholar studies ancient dragon lore. Show him a dragon egg or bring a living dragon.',
+        objectives: [{ type: 'has_item_or', items: ['egg_0','egg_1','egg_2','egg_3','egg_4','egg_5','egg_6','egg_7','egg_8','egg_9','egg_10','egg_11'], label: 'Show a dragon egg or dragon' }],
+        dialog_offer: "I've spent years studying the texts in this library — accounts of dragon riders, egg clutches, bonding rituals. But I've never seen the real thing. If you ever find a dragon egg, or manage to tame a dragon... please, bring it to me. I must see it with my own eyes.",
+        dialog_progress: "Any luck finding a dragon egg? The altar in the ancient forest clearing is where the old texts say they rest...",
+        dialog_done: "Remarkable! Absolutely remarkable! The iridescence, the warmth... it matches the ancient descriptions perfectly. This is the discovery of a lifetime. Thank you, friend — take this, it's the least I can do.",
+        check: () => {
+            for (const key in inventory) { if (key.startsWith('egg_') && inventory[key] > 0) return true; }
+            if (dragonMgr && dragonMgr.dragons.length > 0) return true;
+            return false;
+        },
+        reward: { copper: 100, xp: 60, items: { gold_coin: 1 } },
+    },
+    dragon_reach_proof: {
+        name: 'Living Proof',
+        giver: 'Dragon Scholar',
+        location: "Dragon's Reach",
+        type: 'show_item',
+        description: "A scholar at Dragon's Reach studies the ancient dragon corpse. Show them a living dragon or dragon egg to further their research.",
+        objectives: [{ type: 'has_item_or', items: ['egg_0','egg_1','egg_2','egg_3','egg_4','egg_5','egg_6','egg_7','egg_8','egg_9','egg_10','egg_11'], label: 'Show egg or dragon' }],
+        dialog_offer: "We study this great corpse, trying to understand the dragons that once ruled these skies. But bones only tell half the story. If you could find a living specimen — even an egg — it would revolutionize our understanding. The altar in the ancient forest... that's where the old riders left their clutches.",
+        dialog_progress: "The bones whisper their secrets slowly. A living dragon would speak volumes more...",
+        dialog_done: "I... I can scarcely believe it. A living connection to the creatures we've only known as bones. This changes everything we thought we knew. You've done more for our research than decades of study. Please, accept this.",
+        check: () => {
+            for (const key in inventory) { if (key.startsWith('egg_') && inventory[key] > 0) return true; }
+            if (dragonMgr && dragonMgr.dragons.length > 0) return true;
+            return false;
+        },
+        reward: { copper: 120, xp: 75, items: { 'mana_crystal': 1 } },
+    },
+    skeleton_scourge: {
+        name: 'Restless Dead',
+        giver: 'Knight',
+        location: 'Stone Castle',
+        type: 'kill',
+        description: 'A Knight at the Stone Castle wants you to destroy skeletons in the ancient forest.',
+        objectives: [{ type: 'kill', target: 'skeleton', count: 8, label: 'Destroy skeletons' }],
+        dialog_offer: "The ancient forest is crawling with the undead. Skeletons wander between the trees, attacking anyone who ventures in. Destroy eight of them and help make the forest passable again.",
+        dialog_progress: () => `${Math.min(questKills.skeleton || 0, 8)} of 8 skeletons destroyed. The dead still walk — press on.`,
+        dialog_done: "The forest feels lighter already. You've done the kingdom a great service. Take this — may it serve you well.",
+        reward: { copper: 70, xp: 40, items: { bone: 10 } },
+    },
+    iron_delivery: {
+        name: 'Arms for the Keep',
+        giver: 'Forge-master',
+        location: 'Frostpine Keep',
+        type: 'fetch',
+        description: 'The Frostpine blacksmith needs iron bars to forge weapons for the keep.',
+        objectives: [{ type: 'has_item', item: 'iron_bar', count: 10, label: 'Bring 10 iron bars' }],
+        dialog_offer: "The keep's armoury is running low. I need iron bars — ten of them — to forge new weapons for the guards. Bring them to me and I'll make it worth your while.",
+        dialog_progress: () => `You have ${Math.min(inventory.iron_bar || 0, 10)} of 10 iron bars. I need all ten to start forging.`,
+        dialog_done: "Perfect quality iron. I'll have new blades ready by week's end. Here — take this. Finest piece I've made this season.",
+        consumeItems: { iron_bar: 10 },
+        reward: { copper: 40, xp: 25, items: { iron_axe: 1 } },
+    },
+    warchief_bounty: {
+        name: "The Warchief's Head",
+        giver: 'Gate Guard',
+        location: 'Stone Castle',
+        type: 'kill',
+        description: 'The Gate Guard offers a bounty on the Goblin Warchief at the Western Warcamp.',
+        objectives: [{ type: 'kill_boss', target: 'Goblin Warchief', label: 'Defeat the Goblin Warchief' }],
+        dialog_offer: "There's a bounty on the Goblin Warchief who leads the western warcamp. He's a massive brute — twice the size of a normal goblin, armoured in iron. Take him down and the king himself will hear of your deeds.",
+        dialog_progress: "The Warchief still lives? He's at the warcamp far to the west. Be prepared — he doesn't fight alone.",
+        dialog_done: "The Warchief is dead? Ha! The goblins will scatter without their leader. The king will be most pleased. Here — you've earned every copper.",
+        check: () => killedBosses.has('Goblin Warchief'),
+        reward: { copper: 200, xp: 100, items: { gold_coin: 2 } },
+    },
+    explore_ice_castle: {
+        name: 'The Frozen Throne',
+        giver: 'Elder Sage',
+        location: 'Frostpine Keep',
+        type: 'explore',
+        description: "The Elder Sage asks you to explore the Ice Castle deep in the frozen north.",
+        objectives: [{ type: 'location', x: 10, z: -600, radius: 30, label: 'Reach the Ice Castle' }],
+        dialog_offer: "Far to the north, beyond the frozen wastes, stands a castle of pure ice. Our scouts have seen it glinting in the distance but none have dared approach. Go there. See what secrets it holds. Return to me with your account.",
+        dialog_progress: "The Ice Castle lies deep in the frozen north. Head past the frost outpost and keep going. You'll know it when you see it.",
+        dialog_done: "You made it to the Ice Castle and returned alive! Remarkable. The knowledge you bring is invaluable. Here, take this — and stay warm out there.",
+        reward: { copper: 90, xp: 50, items: { health_potion: 3 } },
+    },
+};
+
+// Quest state — persisted in save
+const questState = {}; // { questId: { status: QS_*, progress: {...} } }
+
+function getQuestStatus(id) { return questState[id] ? questState[id].status : QS_NONE; }
+
+function startQuest(id) {
+    if (questState[id]) return;
+    questState[id] = { status: QS_ACTIVE, progress: {} };
+    // Reset relevant kill counters when starting a kill quest
+    const def = QUEST_DEFS[id];
+    if (def) {
+        for (const obj of def.objectives) {
+            if (obj.type === 'kill') questKills[obj.target] = questKills[obj.target] || 0;
+        }
+    }
+    addChatMessage(`Quest started: ${def.name}`, 'rgba(255,220,100,0.95)');
+}
+
+function checkQuestComplete(id) {
+    const def = QUEST_DEFS[id];
+    const st = questState[id];
+    if (!def || !st || st.status !== QS_ACTIVE) return false;
+    // Custom check function
+    if (def.check) return def.check();
+    for (const obj of def.objectives) {
+        if (obj.type === 'kill') {
+            if ((questKills[obj.target] || 0) < obj.count) return false;
+        } else if (obj.type === 'kill_boss') {
+            if (!killedBosses.has(obj.target)) return false;
+        } else if (obj.type === 'has_item') {
+            if ((inventory[obj.item] || 0) < obj.count) return false;
+        } else if (obj.type === 'has_item_or') {
+            let found = false;
+            for (const it of obj.items) { if (inventory[it] > 0) { found = true; break; } }
+            if (!found) return false;
+        } else if (obj.type === 'location') {
+            const dx = player.position.x - obj.x, dz = player.position.z - obj.z;
+            if (dx * dx + dz * dz > obj.radius * obj.radius) return false;
+        }
+    }
+    return true;
+}
+
+function completeQuest(id) {
+    const def = QUEST_DEFS[id];
+    const st = questState[id];
+    if (!def || !st) return;
+    st.status = QS_COMPLETE;
+    addChatMessage(`Quest complete: ${def.name}`, 'rgba(100,255,100,0.95)');
+}
+
+function turnInQuest(id) {
+    const def = QUEST_DEFS[id];
+    const st = questState[id];
+    if (!def || !st || st.status !== QS_COMPLETE) return;
+    st.status = QS_TURNED_IN;
+    // Consume items if needed
+    if (def.consumeItems) {
+        for (const [item, count] of Object.entries(def.consumeItems)) {
+            for (let i = 0; i < count; i++) removeFromInventory(item);
+        }
+    }
+    // Grant rewards
+    if (def.reward) {
+        if (def.reward.copper) addCopper(def.reward.copper);
+        if (def.reward.xp) addXP(def.reward.xp);
+        if (def.reward.items) {
+            for (const [item, count] of Object.entries(def.reward.items)) {
+                for (let i = 0; i < count; i++) addToInventory(item);
+            }
+        }
+    }
+    refreshUI();
+    addChatMessage(`Quest turned in: ${def.name} — Reward received!`, 'rgba(255,220,100,0.95)');
+}
+
+function getQuestProgress(id) {
+    const def = QUEST_DEFS[id];
+    if (!def) return '';
+    const obj = def.objectives[0];
+    if (obj.type === 'kill') return `${Math.min(questKills[obj.target] || 0, obj.count)}/${obj.count}`;
+    if (obj.type === 'kill_boss') return killedBosses.has(obj.target) ? '1/1' : '0/1';
+    if (obj.type === 'has_item') return `${Math.min(inventory[obj.item] || 0, obj.count)}/${obj.count}`;
+    if (obj.type === 'has_item_or') {
+        for (const it of obj.items) { if (inventory[it] > 0) return '1/1'; }
+        if (dragonMgr && dragonMgr.dragons.length > 0) return '1/1';
+        return '0/1';
+    }
+    if (obj.type === 'location') {
+        const dx = player.position.x - obj.x, dz = player.position.z - obj.z;
+        return dx * dx + dz * dz <= obj.radius * obj.radius ? '1/1' : '0/1';
+    }
+    return '';
+}
+
+// ── Quest Log UI ──
+let questLogOpen = false;
+const questLogEl = document.createElement('div');
+questLogEl.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:115;background:rgba(25,18,8,0.96);border:2px solid rgba(160,130,80,0.6);border-radius:10px;padding:20px 28px;min-width:380px;max-width:500px;max-height:70vh;overflow-y:auto;user-select:none;';
+document.body.appendChild(questLogEl);
+
+function updateQuestLogUI() {
+    let html = '<div style="color:rgba(255,220,140,1);font:bold 16px Georgia,serif;margin-bottom:12px;text-align:center;border-bottom:1px solid rgba(120,100,60,0.4);padding-bottom:8px;">Quest Journal</div>';
+    const activeQuests = [], completedQuests = [], turnedIn = [];
+    for (const [id, st] of Object.entries(questState)) {
+        if (st.status === QS_ACTIVE) activeQuests.push(id);
+        else if (st.status === QS_COMPLETE) completedQuests.push(id);
+        else if (st.status === QS_TURNED_IN) turnedIn.push(id);
+    }
+    if (activeQuests.length === 0 && completedQuests.length === 0 && turnedIn.length === 0) {
+        html += '<div style="color:rgba(160,150,120,0.6);font:13px Georgia,serif;text-align:center;padding:20px 0;">No quests yet. Talk to named NPCs in castles and fortresses.</div>';
+    }
+    if (activeQuests.length > 0 || completedQuests.length > 0) {
+        html += '<div style="color:rgba(220,180,100,0.9);font:bold 13px Georgia,serif;margin:8px 0 4px;">Active Quests</div>';
+        for (const id of [...completedQuests, ...activeQuests]) {
+            const def = QUEST_DEFS[id];
+            const st = questState[id];
+            const done = st.status === QS_COMPLETE;
+            const progress = getQuestProgress(id);
+            html += `<div style="margin:6px 0;padding:8px 10px;background:rgba(${done ? '60,80,40' : '40,35,20'},0.5);border-radius:6px;border-left:3px solid ${done ? 'rgba(100,220,80,0.8)' : 'rgba(200,170,80,0.6)'};">`;
+            html += `<div style="color:${done ? 'rgba(120,255,100,0.95)' : 'rgba(240,220,160,1)'};font:bold 13px Georgia,serif;">${def.name}${done ? ' ✓' : ''}</div>`;
+            html += `<div style="color:rgba(180,170,140,0.7);font:11px Georgia,serif;margin-top:3px;">${def.description}</div>`;
+            html += `<div style="color:rgba(200,190,140,0.8);font:12px Georgia,serif;margin-top:4px;">${def.objectives[0].label}: <span style="color:${done ? '#7f7' : '#fd8'};">${progress}</span></div>`;
+            if (done) html += `<div style="color:rgba(100,220,80,0.7);font:11px Georgia,serif;margin-top:3px;">Return to ${def.giver} at ${def.location}</div>`;
+            html += '</div>';
+        }
+    }
+    if (turnedIn.length > 0) {
+        html += '<div style="color:rgba(160,150,120,0.6);font:bold 13px Georgia,serif;margin:12px 0 4px;">Completed</div>';
+        for (const id of turnedIn) {
+            const def = QUEST_DEFS[id];
+            html += `<div style="margin:3px 0;padding:4px 10px;color:rgba(120,115,100,0.5);font:12px Georgia,serif;text-decoration:line-through;">${def.name}</div>`;
+        }
+    }
+    html += '<div style="color:rgba(100,90,70,0.4);font:9px monospace;text-align:center;margin-top:10px;">J to close</div>';
+    questLogEl.innerHTML = html;
+}
+
+function toggleQuestLog() {
+    questLogOpen = !questLogOpen;
+    if (questLogOpen) {
+        updateQuestLogUI();
+        questLogEl.style.display = 'block';
+        if (pointerLocked) document.exitPointerLock();
+    } else {
+        questLogEl.style.display = 'none';
+        if (useMouseLook && gameStarted) setTimeout(() => renderer.domElement.requestPointerLock(), 100);
+    }
+}
+
 let villagerDialogOpen = false;
 let _dialogNode = null; // current conversation node
 let _dialogSelection = 0; // which option is highlighted
@@ -13683,11 +14032,63 @@ const CONVERSATIONS = [
     },
 ];
 
-function showVillagerDialog(line) {
-    // Start a conversation instead of one-line dialogue
+function showVillagerDialog(line, villager) {
+    // Check if this NPC has a quest
+    if (villager && villager._questId) {
+        const qid = villager._questId;
+        const def = QUEST_DEFS[qid];
+        if (def) {
+            const status = getQuestStatus(qid);
+            if (status === QS_NONE) {
+                // Offer quest
+                _dialogNode = {
+                    text: def.dialog_offer,
+                    options: [
+                        { label: 'I accept.', next: -2, _action: () => startQuest(qid) },
+                        { label: 'Not right now.', next: -1 },
+                    ]
+                };
+            } else if (status === QS_ACTIVE) {
+                const done = checkQuestComplete(qid);
+                if (done) {
+                    completeQuest(qid);
+                    _dialogNode = {
+                        text: def.dialog_done,
+                        options: [{ label: 'Thank you.', next: -1, _action: () => turnInQuest(qid) }]
+                    };
+                } else {
+                    const prog = typeof def.dialog_progress === 'function' ? def.dialog_progress() : def.dialog_progress;
+                    _dialogNode = {
+                        text: prog,
+                        options: [{ label: "I'll keep working on it.", next: -1 }]
+                    };
+                }
+            } else if (status === QS_COMPLETE) {
+                // Already marked complete, just turn in
+                _dialogNode = {
+                    text: def.dialog_done,
+                    options: [{ label: 'Thank you.', next: -1, _action: () => turnInQuest(qid) }]
+                };
+            } else {
+                // Already turned in
+                _dialogNode = {
+                    text: "You've already helped me greatly, friend. Safe travels.",
+                    options: [{ label: 'Goodbye.', next: -1 }]
+                };
+            }
+            _dialogSelection = 0;
+            _dialogVillager = villager;
+            villagerDialogOpen = true;
+            villagerDialogEl.style.display = 'block';
+            if (pointerLocked) document.exitPointerLock();
+            _renderDialog();
+            return;
+        }
+    }
+    // Normal conversation
     _dialogNode = CONVERSATIONS[0];
     _dialogSelection = 0;
-    _dialogVillager = null;
+    _dialogVillager = villager || null;
     villagerDialogOpen = true;
     villagerDialogEl.style.display = 'block';
     if (pointerLocked) document.exitPointerLock();
@@ -13715,7 +14116,9 @@ window._dialogHover = (idx) => { _dialogSelection = idx; _renderDialog(); };
 window._dialogPick = (idx) => {
     if (!_dialogNode) return;
     const opt = _dialogNode.options[idx];
-    if (!opt || opt.next === -1) {
+    if (!opt || opt.next === -1 || opt.next === -2) {
+        // Run action callback if present (quest accept/turn-in)
+        if (opt && opt._action) opt._action();
         // Close conversation
         villagerDialogOpen = false;
         villagerDialogEl.style.display = 'none';
@@ -13949,7 +14352,7 @@ function doPlace(e) {
                         if (v._shopType === 'magic') { openShop('magic'); return false; }
                         if (v._shopType === 'armor') { openShop('armor'); return false; }
                         if (v._shopType === 'stable') { openStableUI(); return false; }
-                        showVillagerDialog(VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)]);
+                        showVillagerDialog(VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)], v);
                         return false;
                     }
                 }
@@ -14109,9 +14512,9 @@ function doPlace(e) {
                 if (v._shopType === 'magic') { openShop('magic'); return false; }
                 if (v._shopType === 'armor') { openShop('armor'); return false; }
                 if (v._shopType === 'stable') { openStableUI(); return false; }
-                // Regular villager dialogue
+                // Regular villager dialogue (pass villager for quest check)
                 const line = VILLAGER_LINES[Math.floor(Math.random() * VILLAGER_LINES.length)];
-                showVillagerDialog(line);
+                showVillagerDialog(line, v);
                 return false;
             }
         }
@@ -14380,6 +14783,27 @@ function animate() {
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
     updateWaterTime(now * 0.001);
+
+    // Quest progress check (location, item, boss quests — once per second)
+    if (!_introActive && !_CINEMATIC_MODE) {
+        if (!window._questCheckTimer) window._questCheckTimer = 0;
+        window._questCheckTimer += dt;
+        if (window._questCheckTimer >= 1.0) {
+            window._questCheckTimer = 0;
+            for (const [qid, st] of Object.entries(questState)) {
+                if (st.status === QS_ACTIVE && checkQuestComplete(qid)) completeQuest(qid);
+            }
+            // Update quest markers on NPCs (hide ! when turned in, show ? when complete)
+            if (villageMgr) {
+                for (const v of villageMgr.villagers) {
+                    if (v._questMarker && v._questId) {
+                        const qs = getQuestStatus(v._questId);
+                        v._questMarker.visible = qs !== QS_TURNED_IN;
+                    }
+                }
+            }
+        }
+    }
 
     // Autosave every 40s (skip during cinematic)
     if (!_introActive && !_CINEMATIC_MODE) _autosaveTimer += dt;

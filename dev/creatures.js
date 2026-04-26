@@ -1425,6 +1425,8 @@ export class CreatureManager {
                     else if (sh._isGateBoss && this._onGateBossDeath) this._onGateBossDeath(sh);
                     else if (this._onBossDeath) this._onBossDeath(sh);
                 }
+                // Quest kill tracking
+                if (this._onCreatureKill) this._onCreatureKill(sh.type, sh);
                 // Enemy drops
                 if (this._onCreatureDrop) {
                     if (sh.type === 'goblin' && sh._isPatrolLeader) {
