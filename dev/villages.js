@@ -1287,24 +1287,25 @@ export class VillageManager {
             const tcdx = tccx - playerX, tcdz = tccz - playerZ;
             if (tcdx * tcdx + tcdz * tcdz < 60 * 60 && !this.spawnedVillages.has('__taiga_castle__')) {
                 this.spawnedVillages.add('__taiga_castle__');
+                // dx/dz in world coords (castle is ~38 wide, ~28.5 deep in world units)
                 const tcNpcs = [
-                    { dx: 32, dz: 38, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
-                    { dx: 35, dz: 36, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
-                    { dx: 25, dz: 30, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 55, dz: 30, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 40, dz: 4,  role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 40, dz: 52, role: 'guard',       name: 'Rear Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 10, dz: 8,  role: 'guard',       name: 'Barracks Guard', shirt: 0x3a4a3a, pants: 0x2a3a2a },
-                    { dx: 28, dz: 25, role: 'huntsman',    name: 'Huntsman',       shirt: 0x556633, pants: 0x443322 },
-                    { dx: 45, dz: 25, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
-                    { dx: 60, dz: 8,  role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
-                    { dx: 38, dz: 32, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
-                    { dx: 20, dz: 35, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
+                    { dx: 16, dz: 18, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211 },
+                    { dx: 18, dz: 17, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
+                    { dx: 12, dz: 14, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 26, dz: 14, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 19, dz: 2,  role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 19, dz: 25, role: 'guard',       name: 'Rear Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 5,  dz: 4,  role: 'guard',       name: 'Barracks Guard', shirt: 0x3a4a3a, pants: 0x2a3a2a },
+                    { dx: 14, dz: 12, role: 'huntsman',    name: 'Huntsman',       shirt: 0x556633, pants: 0x443322 },
+                    { dx: 22, dz: 12, role: 'huntsman',    name: 'Tracker',        shirt: 0x556633, pants: 0x443322 },
+                    { dx: 30, dz: 4,  role: 'stablehand',  name: 'Stablehand',     shirt: 0x886644, pants: 0x443322 },
+                    { dx: 18, dz: 15, role: 'servant',     name: 'Servant',        shirt: 0x998866, pants: 0x554433 },
+                    { dx: 10, dz: 17, role: 'blacksmith',  name: 'Forge-master',   shirt: 0x4a4a4a, pants: 0x2a2a2a },
                 ];
                 const tcFloorY = this.world.getHeight(tccx, tccz) + BLOCK_SIZE;
                 for (const n of tcNpcs) {
-                    const wx = TAIGA_CASTLE.wx + n.dx * BLOCK_SIZE;
-                    const wz = TAIGA_CASTLE.wz + n.dz * BLOCK_SIZE;
+                    const wx = TAIGA_CASTLE.wx + n.dx;
+                    const wz = TAIGA_CASTLE.wz + n.dz;
                     const wy = tcFloorY;
                     const seed = this.world._hash(wx + 17, wz + 19);
                     const v = makeVillager(this.scene, wx, wz, wy, seed);
@@ -1313,7 +1314,6 @@ export class VillageManager {
                     v._pantsMat.color.setHex(n.pants);
                     v._castleRole = n.role;
                     v._taigaCastle = true;
-                    v._stayHome = true;
                     v.homeX = wx; v.homeZ = wz;
                     const nc = document.createElement('canvas');
                     nc.width = 128; nc.height = 32;
@@ -1594,8 +1594,9 @@ export class VillageManager {
             if (v._castleRole) {
                 let cMinX, cMaxX, cMinZ, cMaxZ;
                 if (v._taigaCastle) {
-                    cMinX = TAIGA_CASTLE.wx + 2 * BLOCK_SIZE; cMaxX = TAIGA_CASTLE.wx + 38 * BLOCK_SIZE;
-                    cMinZ = TAIGA_CASTLE.wz + 2 * BLOCK_SIZE; cMaxZ = TAIGA_CASTLE.wz + 28 * BLOCK_SIZE;
+                    // 80 blocks wide = 38 world units, 60 blocks deep = 28.5 world units
+                    cMinX = TAIGA_CASTLE.wx + 2; cMaxX = TAIGA_CASTLE.wx + 36;
+                    cMinZ = TAIGA_CASTLE.wz + 2; cMaxZ = TAIGA_CASTLE.wz + 26;
                 } else {
                     cMinX = CASTLE.wx + 5; cMaxX = CASTLE.wx + 75;
                     cMinZ = CASTLE.wz + 5; cMaxZ = CASTLE.wz + 60;
