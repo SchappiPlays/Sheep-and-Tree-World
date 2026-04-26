@@ -1311,6 +1311,9 @@ export class CreatureManager {
             const biome = this.world._getBiome(sx, sz);
             const terrainY = this.world.getHeight(sx, sz);
             if (terrainY < 0.5 || terrainY > 80) continue;
+            // No creatures inside castles
+            if (sx >= -800 && sx <= -800+80 && sz >= 40 && sz <= 40+65) continue; // Western Castle
+            if (sx >= 140 && sx <= 140+38 && sz >= -1300 && sz <= -1300+29) continue; // Taiga Castle
             // Pick creature type based on biome
             const typeHash = this.world._hash(cx + i * 73 + 5555, cz + i * 97 + 6666);
             let creature;
