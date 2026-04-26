@@ -611,13 +611,13 @@ function getTaigaCastleBlocks() {
             blocks.push({ x: wx2, y: wy, z: ghZ + ghD, b: A });
         }
     }
-    // Peaked roof (planks)
+    // Peaked roof (planks) — fill each stepped layer fully
     for (let rz = ghZ - 1; rz <= ghZ + ghD + 1; rz++) {
         for (let ry = 0; ry < roofH; ry++) {
             const rx1 = ghX + ry - 1, rx2 = ghX + ghW - ry + 1;
             if (rx1 >= rx2) break;
-            blocks.push({ x: rx1, y: ghH + ry + 1, z: rz, b: P });
-            blocks.push({ x: rx2, y: ghH + ry + 1, z: rz, b: P });
+            for (let rx = rx1; rx <= rx2; rx++)
+                blocks.push({ x: rx, y: ghH + ry + 1, z: rz, b: P });
         }
         // Ridge
         const ridgeX = ghX + Math.floor(ghW / 2);

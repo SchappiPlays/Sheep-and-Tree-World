@@ -399,10 +399,11 @@ const PATH_ROUTES = [
     [[400,120],[520,110],[660,100],[840,84],[1020,76],[1220,64],[1400,56],[1580,60],[1760,56],[1920,60],[2040,60]],
     // Branch off main road — runs east along grass south of river, 90° turn north to bridge
     [[1760,56],[1900,56],[2060,56],[2160,56],[2160,44],[2160,36],[2160,32]],
-    // Branch: Northwatch → north toward ancient forest → south into taiga to Frostpine Castle
+    // Branch: Northwatch → north toward ancient forest → south into taiga to Frostpine village & castle
     [[100,-300],[80,-340],[60,-380],[40,-420],
      [50,-500],[65,-580],[75,-660],[85,-740],[90,-820],[95,-900],
-     [100,-980],[110,-1060],[120,-1140],[130,-1220],[140,-1280]],
+     [100,-980],[100,-1060],[95,-1140],[85,-1200],
+     [100,-1230],[120,-1260],[140,-1280],[159,-1300]],
     // Branch: Western Hamlet (-400,200) → Bay Watch (-2100,-120) via west coast
     [[-400,200],[-520,180],[-650,150],[-800,120],[-960,90],[-1120,60],[-1300,30],[-1480,0],[-1660,-30],[-1820,-60],[-1960,-90],[-2100,-120]],
     // Branch: Bay Watch → Tidecrest (-2150,200) along the bay shore
