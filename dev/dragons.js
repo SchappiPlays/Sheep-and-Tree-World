@@ -1057,13 +1057,13 @@ export class DragonManager {
         // Egg: 3D diamond scales tightly packed on egg surface
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
         // Diamond scale dimensions — thick enough to look genuinely 3D
-        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.014;
-        // Build a thick, curved diamond scale
-        // Front face: domed outward. Back face: concave inward. Side walls connect them.
+        const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.012;
+        // Build a flat diamond scale with a sharp central ridge (keel)
+        // Front face: mostly flat with a ridge along the center line. Side walls give thickness.
         function buildScaleGeo() {
             const sX = 5, sY = 7; // grid segments
             const verts = [], idx = [], norms = [], uvs = [];
-            // --- Front face (domed) ---
+            // --- Front face (ridged, not domed) ---
             for (let iy = 0; iy <= sY; iy++) {
                 const ty = iy / sY; // 0=top point, 1=bottom point
                 const y = _scaleH * (1 - ty * 2); // +H to -H
@@ -1073,17 +1073,19 @@ export class DragonManager {
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
-                    // Dome: strong outward bulge, smooth falloff to edges & tips
-                    const ex = hw > 0 ? (tx - 0.5) * 2 : 0; // -1..1 across width
-                    const ey = (ty - 0.5) * 2; // -1..1 along height
-                    const bulge = Math.max(0, (1 - ex*ex) * (1 - ey*ey));
-                    const z = bulge * _scaleD;
+                    // Ridge: sharp peak at center (x=0), falls off to edges
+                    // Uses abs(x) for a V-shaped cross-section instead of smooth dome
+                    const ex = hw > 0 ? Math.abs((tx - 0.5) * 2) : 0; // 0 at center, 1 at edge
+                    // Ridge height tapers toward tips
+                    const tipTaper = wt; // 0 at tips, 1 at widest
+                    const z = _scaleD * (1 - ex) * tipTaper;
                     verts.push(x, y, z);
-                    // Smooth normal from dome gradient
-                    const dzdx = hw > 0 ? -2 * ex / (hw * 2) * (1 - ey*ey) * _scaleD : 0;
-                    const dzdy = -2 * ey / (2 * _scaleH) * (1 - ex*ex) * _scaleD;
-                    const nl = Math.sqrt(dzdx*dzdx + dzdy*dzdy + 1);
-                    norms.push(-dzdx/nl, -dzdy/nl, 1/nl);
+                    // Normal: angled from ridge — two flat planes meeting at center
+                    const side = tx < 0.5 ? -1 : tx > 0.5 ? 1 : 0;
+                    const nx = side * _scaleD * tipTaper;
+                    const nz = _scaleW * wt || 0.001;
+                    const nl = Math.sqrt(nx*nx + nz*nz);
+                    norms.push(nx/nl, 0, nz/nl);
                     uvs.push(tx, ty);
                 }
             }
@@ -1109,11 +1111,7 @@ export class DragonManager {
                 for (let ix = 0; ix <= sX; ix++) {
                     const tx = ix / sX;
                     const x = hw > 0 ? -hw + tx * 2 * hw : 0;
-                    const ex = hw > 0 ? (tx - 0.5) * 2 : 0;
-                    const ey = (ty - 0.5) * 2;
-                    const cup = Math.max(0, (1 - ex*ex) * (1 - ey*ey));
-                    const z = -cup * _scaleD * 0.3; // shallow concave
-                    verts.push(x, y, z);
+                    verts.push(x, y, -0.001); // flat back
                     norms.push(0, 0, -1);
                     uvs.push(tx, ty);
                 }
