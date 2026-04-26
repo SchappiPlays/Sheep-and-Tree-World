@@ -2030,7 +2030,7 @@ function _playIntroCinematic(onDone, singleShotIdx) {
     _introActive = true;
     gamePaused = false;
 
-    const hudIds = ['debug','crosshair','hotbar','hearts','prompt','saveToast','minimap','manaBar','staminaBar'];
+    const hudIds = ['debug','crosshair','hotbar','hearts','prompt','saveToast','minimap','manaBar','hungerBar','staminaBar'];
     hudIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     if (player && player._nameLabel) player._nameLabel.visible = false;
     if (player) player.group.visible = false;
@@ -8971,6 +8971,7 @@ document.addEventListener('keydown', e => {
         document.getElementById('saveToast').style.display = vis;
         document.getElementById('minimap').style.display = vis;
         document.getElementById('manaBar').style.display = vis;
+        document.getElementById('hungerBar').style.display = vis;
         document.getElementById('staminaBar').style.display = vis;
         if (player && player._nameLabel) player._nameLabel.visible = !hudHidden;
     }
