@@ -727,7 +727,7 @@ export class VillageManager {
         this.world = world;
         this.villagers = [];
         this.spawnedVillages = new Set();
-        // Pre-compute house footprints (world coords) for villager avoidance
+        // Pre-compute house interiors (world coords + floor Y) so villagers walk inside at floor level
         this._houseRects = [];
         const sizes = [{ w: 12, d: 10 }, { w: 15, d: 12 }, { w: 18, d: 14 }];
         for (const vd of VILLAGE_DEFS) {
@@ -739,23 +739,31 @@ export class VillageManager {
                 const hx = vbx + Math.round(Math.cos(angle) * dist);
                 const hz = vbz + Math.round(Math.sin(angle) * dist);
                 const s = sizes[hi % 3];
-                // Convert block coords to world coords with margin
-                const margin = 1.5 * BLOCK_SIZE;
+                // Sample terrain to get house floor height (same logic as chunk builder)
+                const pts = [[hx,hz],[hx+s.w,hz],[hx,hz+s.d],[hx+s.w,hz+s.d],[hx+Math.floor(s.w/2),hz+Math.floor(s.d/2)]];
+                let maxH = -Infinity;
+                for (const [px,pz] of pts) {
+                    const th = world.getBaseHeightBlocks(px, pz);
+                    if (th > maxH) maxH = th;
+                }
+                // Floor world Y = (maxH + 1) * BLOCK_SIZE (baseY block + 1 for floor surface)
+                const floorY = (maxH + 1) * BLOCK_SIZE;
                 this._houseRects.push({
-                    x1: (hx - 1) * BLOCK_SIZE - margin,
-                    z1: (hz - 1) * BLOCK_SIZE - margin,
-                    x2: (hx + s.w + 1) * BLOCK_SIZE + margin,
-                    z2: (hz + s.d + 1) * BLOCK_SIZE + margin,
+                    x1: hx * BLOCK_SIZE,
+                    z1: hz * BLOCK_SIZE,
+                    x2: (hx + s.w) * BLOCK_SIZE,
+                    z2: (hz + s.d) * BLOCK_SIZE,
+                    floorY,
                 });
             }
         }
     }
 
-    _isOnHouse(wx, wz) {
+    _getHouseFloorY(wx, wz) {
         for (const r of this._houseRects) {
-            if (wx >= r.x1 && wx <= r.x2 && wz >= r.z1 && wz <= r.z2) return true;
+            if (wx >= r.x1 && wx <= r.x2 && wz >= r.z1 && wz <= r.z2) return r.floorY;
         }
-        return false;
+        return -1;
     }
 
     update(dt, playerX, playerZ, timeOfDay) {
@@ -1233,15 +1241,8 @@ export class VillageManager {
             v.group.rotation.y += da * 3 * dt;
 
             if (v.speed > 0.01) {
-                const prevX = v.x, prevZ = v.z;
                 v.x += Math.sin(v.group.rotation.y) * v.speed * dt;
                 v.z += Math.cos(v.group.rotation.y) * v.speed * dt;
-                // Prevent villagers from walking onto houses
-                if (!v._castleRole && !v._floorY && this._isOnHouse(v.x, v.z)) {
-                    v.x = prevX; v.z = prevZ;
-                    v.walking = false; v.wanderTimer = 0.3;
-                    v.angle += Math.PI * (0.5 + Math.random());
-                }
             }
             // Keep castle NPCs inside castle walls
             if (v._castleRole) {
@@ -1255,7 +1256,9 @@ export class VillageManager {
                 }
             }
 
-            const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
+            // Use house floor Y when inside a house, otherwise normal terrain height
+            const houseFloorY = (!v._castleRole && !v._floorY) ? this._getHouseFloorY(v.x, v.z) : -1;
+            const terrainY = v._floorY !== undefined ? v._floorY : (houseFloorY >= 0 ? houseFloorY : this.world.getHeight(v.x, v.z));
             v.group.position.set(v.x, terrainY, v.z);
 
             // Walk animation — same as player
