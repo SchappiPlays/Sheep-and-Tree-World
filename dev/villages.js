@@ -1,6 +1,6 @@
 // villages.js — Villages with block-built houses and villagers using player model
 
-import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath, getTerrainHeight } from './world.js';
+import { BLOCK_SIZE, BLOCK, WORLD_HEIGHT, isOnPath } from './world.js';
 
 // Village definitions — deterministic positions on the main island
 // Skill levels: 1=Apprentice, 2=Novice, 3=Journeyman, 4=Skilled, 5=Expert, 6=Master, 7=Veteran, 8=Grandmaster, 9=Legendary
@@ -727,6 +727,35 @@ export class VillageManager {
         this.world = world;
         this.villagers = [];
         this.spawnedVillages = new Set();
+        // Pre-compute house footprints (world coords) for villager avoidance
+        this._houseRects = [];
+        const sizes = [{ w: 12, d: 10 }, { w: 15, d: 12 }, { w: 18, d: 14 }];
+        for (const vd of VILLAGE_DEFS) {
+            const vbx = Math.floor(vd.x / BLOCK_SIZE);
+            const vbz = Math.floor(vd.z / BLOCK_SIZE);
+            for (let hi = 0; hi < vd.houses; hi++) {
+                const angle = (hi / vd.houses) * Math.PI * 2 + vd.x * 0.01;
+                const dist = 20 + (hi * 17) % 30;
+                const hx = vbx + Math.round(Math.cos(angle) * dist);
+                const hz = vbz + Math.round(Math.sin(angle) * dist);
+                const s = sizes[hi % 3];
+                // Convert block coords to world coords with margin
+                const margin = 1.5 * BLOCK_SIZE;
+                this._houseRects.push({
+                    x1: (hx - 1) * BLOCK_SIZE - margin,
+                    z1: (hz - 1) * BLOCK_SIZE - margin,
+                    x2: (hx + s.w + 1) * BLOCK_SIZE + margin,
+                    z2: (hz + s.d + 1) * BLOCK_SIZE + margin,
+                });
+            }
+        }
+    }
+
+    _isOnHouse(wx, wz) {
+        for (const r of this._houseRects) {
+            if (wx >= r.x1 && wx <= r.x2 && wz >= r.z1 && wz <= r.z2) return true;
+        }
+        return false;
     }
 
     update(dt, playerX, playerZ, timeOfDay) {
@@ -1097,7 +1126,7 @@ export class VillageManager {
             else if (v._stayHome && !v.fleeing) {
                 v.walking = false; v.speed = 0;
                 v.x = v.homeX; v.z = v.homeZ;
-                const fy = v._floorY !== undefined ? v._floorY : Math.max(BLOCK_SIZE, getTerrainHeight(v.x, v.z) + BLOCK_SIZE);
+                const fy = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
                 v.group.position.set(v.x, fy, v.z);
                 // Idle animation still runs below
             }
@@ -1204,8 +1233,15 @@ export class VillageManager {
             v.group.rotation.y += da * 3 * dt;
 
             if (v.speed > 0.01) {
+                const prevX = v.x, prevZ = v.z;
                 v.x += Math.sin(v.group.rotation.y) * v.speed * dt;
                 v.z += Math.cos(v.group.rotation.y) * v.speed * dt;
+                // Prevent villagers from walking onto houses
+                if (!v._castleRole && !v._floorY && this._isOnHouse(v.x, v.z)) {
+                    v.x = prevX; v.z = prevZ;
+                    v.walking = false; v.wanderTimer = 0.3;
+                    v.angle += Math.PI * (0.5 + Math.random());
+                }
             }
             // Keep castle NPCs inside castle walls
             if (v._castleRole) {
@@ -1219,7 +1255,7 @@ export class VillageManager {
                 }
             }
 
-            const terrainY = v._floorY !== undefined ? v._floorY : Math.max(BLOCK_SIZE, getTerrainHeight(v.x, v.z) + BLOCK_SIZE);
+            const terrainY = v._floorY !== undefined ? v._floorY : this.world.getHeight(v.x, v.z);
             v.group.position.set(v.x, terrainY, v.z);
 
             // Walk animation — same as player
