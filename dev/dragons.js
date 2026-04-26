@@ -1058,16 +1058,18 @@ export class DragonManager {
         const eggGeo = new THREE.SphereGeometry(0.18, 8, 6); // inner core (mostly hidden)
         // Diamond scale dimensions — thick enough to look genuinely 3D
         const _scaleW = 0.012, _scaleH = 0.016, _scaleD = 0.010;
-        // Diamond scale anchored at TOP tip (y=0). Scale hangs downward (y goes negative).
-        // Front: ridged keel. Back: flat. Side walls for thickness.
-        // Top tip is at origin — gets buried at the attachment point by the row above.
+        // Diamond scale anchored 35% from top. Top portion extends upward behind
+        // the row above; bottom portion hangs down visibly.
+        const _anchorFrac = 0.35; // anchor point as fraction from top
         function buildScaleGeo() {
             const sX = 5, sY = 7;
             const verts = [], idx = [], norms = [], uvs = [];
+            const fullH = 2 * _scaleH;
+            const anchorY = fullH * _anchorFrac; // distance from top to anchor
             // --- Front face (ridged) ---
             for (let iy = 0; iy <= sY; iy++) {
                 const ty = iy / sY; // 0=top tip, 1=bottom tip
-                const y = -ty * 2 * _scaleH; // 0 at top, -2*H at bottom
+                const y = anchorY - ty * fullH; // positive above anchor, negative below
                 // Diamond width: 0 at both tips, max at middle
                 const wt = 1 - Math.abs(ty - 0.5) * 2; // 0→1→0
                 const hw = _scaleW * wt;
@@ -1102,7 +1104,7 @@ export class DragonManager {
             const backOff = verts.length / 3;
             for (let iy = 0; iy <= sY; iy++) {
                 const ty = iy / sY;
-                const y = -ty * 2 * _scaleH;
+                const y = anchorY - ty * fullH;
                 const wt = 1 - Math.abs(ty - 0.5) * 2;
                 const hw = _scaleW * wt;
                 for (let ix = 0; ix <= sX; ix++) {
@@ -1185,8 +1187,8 @@ export class DragonManager {
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
             // Very tight row overlap — top point fully hidden by row above
-            // Row step < full scale height means each row's body covers the top of the row below
-            const rowStep = _scaleH * 0.9;
+            // Row step = visible portion below anchor. Top 35% hides behind row above.
+            const rowStep = _scaleH * 1.3;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             const _tmpN = new THREE.Vector3();
@@ -1230,8 +1232,8 @@ export class DragonManager {
                     // Scale's local: Y- hangs down (scale body), Z+ = outward (ridge), X = sideways
                     _tmpMat.makeBasis(_tmpRight, _tmpDown.clone().negate(), _tmpN);
                     scale.setRotationFromMatrix(_tmpMat);
-                    // Slight tilt so bottom tip peels away from surface
-                    scale.rotateX(0.25);
+                    // Gentle tilt so bottom tip lifts slightly off surface
+                    scale.rotateX(0.15);
                     // Position anchor (top tip) on egg surface
                     const surfR = ringR + _scaleD * 0.2;
                     scale.position.set(cosT * surfR, cy, sinT * surfR);
