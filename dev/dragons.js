@@ -1188,7 +1188,7 @@ export class DragonManager {
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
             // Very tight row overlap — top point fully hidden by row above
-            const rowStep = _scaleH * 0.75;
+            const rowStep = _scaleH * 0.55;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             const _tmpN = new THREE.Vector3();
