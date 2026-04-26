@@ -1188,7 +1188,7 @@ export class DragonManager {
             const accentMat = new THREE.MeshStandardMaterial({ color: accentCol, emissive: accentCol, emissiveIntensity: 0.12, roughness: 0.25, metalness: 0.35 });
             const eggR = 0.21, eggYScale = 1.35, eggCY = 0.3;
             // Very tight row overlap — top point fully hidden by row above
-            const rowStep = _scaleH * 0.55;
+            const rowStep = _scaleH * 0.45;
             const totalH = eggR * eggYScale * 2;
             const scaleRows = Math.floor(totalH / rowStep);
             const _tmpN = new THREE.Vector3();
@@ -1220,26 +1220,24 @@ export class DragonManager {
                     else if (rnd < 0.55) mat = lightMat;
                     else mat = baseMat;
                     const scale = new THREE.Mesh(scaleGeo, mat);
-                    // Position on egg surface, pushed out so dome sits on top
-                    const surfR = ringR + _scaleD * 0.3;
-                    scale.position.set(cosT * surfR, cy, sinT * surfR);
                     // Build orientation matrix from egg surface:
                     // Normal = ellipsoid outward direction
                     _tmpN.set(cosT * sinPhi, (cy - eggCY) / (eggYScale * eggYScale * eggR), sinT * sinPhi).normalize();
                     // "Down" on the egg surface = tangent along phi (toward south pole)
-                    // dphi direction: d/dphi of (sinPhi*cosT, cosPhi*yScale, sinPhi*sinT)
                     _tmpDown.set(cosPhi * cosT, -sinPhi * eggYScale, cosPhi * sinT).normalize();
                     // Right = normal × down
                     _tmpRight.crossVectors(_tmpN, _tmpDown).normalize();
-                    // Recompute down to be exactly perpendicular to normal
+                    // Recompute down to be exactly perpendicular
                     _tmpDown.crossVectors(_tmpRight, _tmpN).normalize();
-                    // Matrix: columns = right, down (scale's -Y points down), normal (Z = outward)
-                    // Scale's Y axis = up on scale = -_tmpDown, Z axis = _tmpN, X axis = _tmpRight
+                    // Scale Y-up = -down, Z-out = normal, X = right
                     _tmpMat.makeBasis(_tmpRight, _tmpDown.clone().negate(), _tmpN);
                     scale.setRotationFromMatrix(_tmpMat);
-                    // Tilt bottom tip outward (away from egg surface) so it peels away naturally
-                    // and top tip tucks behind the row above
-                    scale.rotateX(0.35);
+                    // Strong tilt: top tip presses INTO egg, bottom tip peels outward
+                    scale.rotateX(0.7);
+                    // Position: anchor at scale's midpoint on egg surface,
+                    // pushed out enough that the ridge clears the core
+                    const surfR = ringR + _scaleD * 0.15;
+                    scale.position.set(cosT * surfR, cy, sinT * surfR);
                     eggGrp.add(scale);
                 }
             }
