@@ -13733,18 +13733,6 @@ const QUEST_DEFS = {
         check: () => killedBosses.has('Goblin Warchief'),
         reward: { copper: 200, xp: 100, items: { gold_coin: 2 } },
     },
-    explore_ice_castle: {
-        name: 'The Frozen Throne',
-        giver: 'Elder Sage',
-        location: 'Frostpine Keep',
-        type: 'explore',
-        description: "The Elder Sage asks you to explore the Ice Castle deep in the frozen north.",
-        objectives: [{ type: 'location', x: 10, z: -600, radius: 30, label: 'Reach the Ice Castle' }],
-        dialog_offer: "Far to the north, beyond the frozen wastes, stands a castle of pure ice. Our scouts have seen it glinting in the distance but none have dared approach. Go there. See what secrets it holds. Return to me with your account.",
-        dialog_progress: "The Ice Castle lies deep in the frozen north. Head past the frost outpost and keep going. You'll know it when you see it.",
-        dialog_done: "You made it to the Ice Castle and returned alive! Remarkable. The knowledge you bring is invaluable. Here, take this — and stay warm out there.",
-        reward: { copper: 90, xp: 50, items: { health_potion: 3 } },
-    },
 };
 
 // Quest state — persisted in save

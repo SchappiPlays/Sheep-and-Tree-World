@@ -1310,7 +1310,7 @@ export class VillageManager {
                 // Castle spans ~38 wide (x), ~28.5 deep (z). Gate at z≈28.5, hall interior z≈5-19
                 const tcNpcs = [
                     { dx: 16, dz: 10, role: 'jarl',       name: 'Jarl Thorne',    shirt: 0x664422, pants: 0x332211, quest: 'wolf_pelts' },
-                    { dx: 18, dz: 11, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344, quest: 'explore_ice_castle' },
+                    { dx: 18, dz: 11, role: 'advisor',     name: 'Elder Sage',     shirt: 0x445566, pants: 0x223344 },
                     { dx: 12, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
                     { dx: 26, dz: 20, role: 'guard',       name: 'Pine Guard',     shirt: 0x3a4a3a, pants: 0x2a3a2a },
                     { dx: 19, dz: 27, role: 'guard',       name: 'Gate Warden',    shirt: 0x3a4a3a, pants: 0x2a3a2a },
