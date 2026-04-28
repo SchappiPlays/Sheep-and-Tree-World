@@ -1117,16 +1117,45 @@ export class VillageManager {
 
             // Spawn blacksmith shopkeepers — one per skill in vd.smiths (defaults to [3])
             const smithSkills = vd.smiths || [3];
-            const shopDist = 28;
+            const shopDist = 36;
             const firstSmithAngle = this.world._hash(vd.x + 555, vd.z + 666) * Math.PI * 2;
             // Total shops: smiths + magic + armor + stable — evenly space around circle
             const totalShops = smithSkills.length + 3; // +3 for magic, armor, stable
+            // Collision-avoiding shop placement: search outward in distance from preferred angle
+            // until the shop footprint clears all houses (this._houseRects) and any earlier shops.
+            const shopHalfExtent = 5 * BLOCK_SIZE + 1; // hw=5 blocks + 1 world buffer
+            const placedShops = [];
+            const findShopPos = (preferredAngle) => {
+                for (let attempt = 0; attempt < 24; attempt++) {
+                    const dist = shopDist + attempt * 3;
+                    const sx = vd.x + Math.cos(preferredAngle) * dist;
+                    const sz = vd.z + Math.sin(preferredAngle) * dist;
+                    let ok = true;
+                    // Rect-vs-rect against houses
+                    for (const r of this._houseRects) {
+                        if (sx + shopHalfExtent < r.x1 || sx - shopHalfExtent > r.x2) continue;
+                        if (sz + shopHalfExtent < r.z1 || sz - shopHalfExtent > r.z2) continue;
+                        ok = false; break;
+                    }
+                    if (!ok) continue;
+                    // Circle-vs-circle against earlier shops
+                    for (const p of placedShops) {
+                        const ddx = sx - p.x, ddz = sz - p.z;
+                        const minSep = (shopHalfExtent + p.r);
+                        if (ddx * ddx + ddz * ddz < minSep * minSep) { ok = false; break; }
+                    }
+                    if (ok) return { x: sx, z: sz };
+                }
+                // Fallback: best-effort at base distance
+                return { x: vd.x + Math.cos(preferredAngle) * shopDist, z: vd.z + Math.sin(preferredAngle) * shopDist };
+            };
             for (let si = 0; si < smithSkills.length; si++) {
                 const skill = smithSkills[si];
                 const skillName = SMITH_SKILL_NAMES[skill] || 'Smith';
                 const bsAngle = firstSmithAngle + (si / totalShops) * Math.PI * 2;
-                const bsX = vd.x + Math.cos(bsAngle) * shopDist;
-                const bsZ = vd.z + Math.sin(bsAngle) * shopDist;
+                const bsPos = findShopPos(bsAngle);
+                const bsX = bsPos.x, bsZ = bsPos.z;
+                placedShops.push({ x: bsX, z: bsZ, r: shopHalfExtent });
                 const bsY = this.world.getHeight(bsX, bsZ);
                 const bsV = makeVillager(this.scene, bsX, bsZ, bsY, 0.8 + si * 0.13);
                 bsV._shopType = 'blacksmith';
@@ -1151,8 +1180,9 @@ export class VillageManager {
 
             // Spawn magic shop keeper
             const msAngle = firstSmithAngle + (smithSkills.length / totalShops) * Math.PI * 2;
-            const msX = vd.x + Math.cos(msAngle) * shopDist;
-            const msZ = vd.z + Math.sin(msAngle) * shopDist;
+            const msPos = findShopPos(msAngle);
+            const msX = msPos.x, msZ = msPos.z;
+            placedShops.push({ x: msX, z: msZ, r: shopHalfExtent });
             const msY = this.world.getHeight(msX, msZ);
             const msV = makeVillager(this.scene, msX, msZ, msY, 0.3);
             msV._shopType = 'magic';
@@ -1176,8 +1206,9 @@ export class VillageManager {
 
             // Spawn armor shopkeeper
             const asAngle = firstSmithAngle + ((smithSkills.length + 1) / totalShops) * Math.PI * 2;
-            const asX = vd.x + Math.cos(asAngle) * shopDist;
-            const asZ = vd.z + Math.sin(asAngle) * shopDist;
+            const asPos = findShopPos(asAngle);
+            const asX = asPos.x, asZ = asPos.z;
+            placedShops.push({ x: asX, z: asZ, r: shopHalfExtent });
             const asY = this.world.getHeight(asX, asZ);
             const asV = makeVillager(this.scene, asX, asZ, asY, 0.55);
             asV._shopType = 'armor';
@@ -1200,8 +1231,9 @@ export class VillageManager {
 
             // Spawn stablemaster
             const stAngle = firstSmithAngle + ((smithSkills.length + 2) / totalShops) * Math.PI * 2;
-            const stX = vd.x + Math.cos(stAngle) * shopDist;
-            const stZ = vd.z + Math.sin(stAngle) * shopDist;
+            const stPos = findShopPos(stAngle);
+            const stX = stPos.x, stZ = stPos.z;
+            placedShops.push({ x: stX, z: stZ, r: shopHalfExtent });
             const stY = this.world.getHeight(stX, stZ);
             const stV = makeVillager(this.scene, stX, stZ, stY, 0.15);
             stV._shopType = 'stable';
