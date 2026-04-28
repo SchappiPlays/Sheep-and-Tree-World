@@ -1034,6 +1034,25 @@ export class VillageManager {
         return -1;
     }
 
+    // Physics-style ground lookup: scan column DOWNWARD from currentY+stepUp so a
+    // villager walking under a roof overhang doesn't teleport to the roof.
+    _findFloorY(x, z, currentY) {
+        const yOff = 128;
+        const bx = Math.floor(x / BLOCK_SIZE);
+        const bz = Math.floor(z / BLOCK_SIZE);
+        const maxStepUp = BLOCK_SIZE * 1.6;
+        const startBy = Math.floor((currentY + maxStepUp) / BLOCK_SIZE) + yOff;
+        for (let by = startBy; by > startBy - 40; by--) {
+            const b = this.world.getBlockAt(bx, by, bz);
+            if (b && b !== BLOCK.WATER && b !== BLOCK.LEAVES && b !== BLOCK.PINE_LEAVES &&
+                b !== BLOCK.FLOWER_RED && b !== BLOCK.FLOWER_YELLOW && b !== BLOCK.FLOWER_BLUE &&
+                b !== BLOCK.FLOWER_WHITE && b !== BLOCK.TORCH) {
+                return (by - yOff + 1) * BLOCK_SIZE;
+            }
+        }
+        return this.world.getHeight(x, z);
+    }
+
     update(dt, playerX, playerZ, timeOfDay) {
         // Spawn villagers for nearby villages
         for (const vd of VILLAGE_DEFS) {
@@ -1525,6 +1544,7 @@ export class VillageManager {
             }
 
             const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
+            if (v._collideCooldown > 0) v._collideCooldown -= dt;
 
             // Castle NPCs — wander within the castle
             if (v._castleRole && !v.fleeing) {
@@ -1670,7 +1690,10 @@ export class VillageManager {
                     else tgtZ = h.z1 - 0.6; // approach door from outside
                     const tdx = tgtX - v.x, tdz = tgtZ - v.z;
                     if (tdx * tdx + tdz * tdz > 0.16) {
-                        v.angle = Math.atan2(tdx, tdz);
+                        // Don't snap angle while sidestepping an obstacle
+                        if (!v._collideCooldown || v._collideCooldown <= 0) {
+                            v.angle = Math.atan2(tdx, tdz);
+                        }
                         v.walking = true;
                     } else {
                         v.walking = false; v.speed = 0;
@@ -1718,23 +1741,35 @@ export class VillageManager {
             if (v.speed > 0.01) {
                 const stepX = Math.sin(v.group.rotation.y) * v.speed * dt;
                 const stepZ = Math.cos(v.group.rotation.y) * v.speed * dt;
-                // Axis-separated collision check (mirrors player). Probe at ankle and chest.
+                // Axis-separated collision check. Probe full body height (ankle to head),
+                // and reject the move if the floor at the new position would step up by
+                // more than ~1.5 blocks (prevents climbing walls onto roofs).
                 const probeY = v.group.position.y;
                 const r = 0.3;
+                const maxStepUp = BLOCK_SIZE * 1.6;
                 const collide = (px, pz) => {
-                    for (const ph of [0.4, 1.3]) {
-                        const py = probeY + ph;
+                    for (let h = 0.1; h < 1.7; h += BLOCK_SIZE * 0.9) {
+                        const py = probeY + h;
                         if (this.world.isSolid(px + r, py, pz + r)) return true;
                         if (this.world.isSolid(px - r, py, pz + r)) return true;
                         if (this.world.isSolid(px + r, py, pz - r)) return true;
                         if (this.world.isSolid(px - r, py, pz - r)) return true;
                     }
+                    if (this._findFloorY(px, pz, probeY) > probeY + maxStepUp) return true;
                     return false;
                 };
+                let bumped = false;
                 if (!collide(v.x + stepX, v.z)) v.x += stepX;
-                else { v.angle += 1.5 + Math.random() * 1.5; v.wanderTimer = 0.4; }
+                else bumped = true;
                 if (!collide(v.x, v.z + stepZ)) v.z += stepZ;
-                else { v.angle += 1.5 + Math.random() * 1.5; v.wanderTimer = 0.4; }
+                else bumped = true;
+                if (bumped) {
+                    // Swerve ~80–130° away and hold that heading for ~1s before
+                    // resuming home/wander targeting (lets them path around walls/trees).
+                    v.angle += (Math.random() < 0.5 ? -1 : 1) * (Math.PI * 0.45 + Math.random() * 0.3);
+                    v._collideCooldown = 0.7 + Math.random() * 0.6;
+                    v.wanderTimer = 0.4;
+                }
             }
             // Keep castle NPCs inside castle walls
             if (v._castleRole) {
@@ -1755,9 +1790,10 @@ export class VillageManager {
                 }
             }
 
-            // Use house floor Y when inside a house, otherwise normal terrain height
-            const houseFloorY = (!v._castleRole && !v._floorY) ? this._getHouseFloorY(v.x, v.z) : -1;
-            const terrainY = v._floorY !== undefined ? v._floorY : (houseFloorY >= 0 ? houseFloorY : this.world.getHeight(v.x, v.z));
+            // Floor Y: explicit override for castle NPCs; otherwise scan down from
+            // currentY+stepUp so roof overhangs and topmost roof blocks don't snap
+            // the villager up onto the roof.
+            const terrainY = v._floorY !== undefined ? v._floorY : this._findFloorY(v.x, v.z, v.group.position.y);
             v.group.position.set(v.x, terrainY, v.z);
 
             // Walk animation — same as player
