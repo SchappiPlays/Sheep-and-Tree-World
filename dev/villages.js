@@ -1524,11 +1524,11 @@ export class VillageManager {
                 continue;
             }
 
+            const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
+
             // Castle NPCs — wander within the castle
             if (v._castleRole && !v.fleeing) {
                 const role = v._castleRole;
-                // Taiga castle: non-guards go inside great hall at night
-                const isNight = timeOfDay < 0.22 || timeOfDay > 0.78;
                 if (v._taigaCastle && isNight && role !== 'guard') {
                     const hallX = TAIGA_CASTLE.wx + 19, hallZ = TAIGA_CASTLE.wz + 16;
                     const hdx = hallX - v.x, hdz = hallZ - v.z;
@@ -1645,6 +1645,46 @@ export class VillageManager {
                     }
                 }
             }
+            // Night: head home and stay inside until dawn
+            else if (!v._stayHome && !v._isMerchant && isNight) {
+                // Lazy-assign nearest house once
+                if (!v._house) {
+                    let best = null, bestD = 80 * 80;
+                    for (const r of this._houseRects) {
+                        const cx = (r.x1 + r.x2) / 2, cz = (r.z1 + r.z2) / 2;
+                        const d = (cx - v.homeX) * (cx - v.homeX) + (cz - v.homeZ) * (cz - v.homeZ);
+                        if (d < bestD) { bestD = d; best = r; }
+                    }
+                    v._house = best || null;
+                }
+                if (v._house) {
+                    const h = v._house;
+                    const inside = v.x >= h.x1 + 0.3 && v.x <= h.x2 - 0.3 && v.z >= h.z1 + 0.3 && v.z <= h.z2 - 0.3;
+                    // Door is on the -z (front) face, centered. Waypoint just outside, then interior centre.
+                    const doorMidX = (h.x1 + h.x2) / 2;
+                    const interiorZ = (h.z1 + h.z2) / 2 + 0.5;
+                    const tgtX = doorMidX;
+                    let tgtZ;
+                    if (inside) tgtZ = interiorZ;
+                    else if (v.z < h.z1 + 0.4) tgtZ = h.z1 + 0.6; // step through doorway
+                    else tgtZ = h.z1 - 0.6; // approach door from outside
+                    const tdx = tgtX - v.x, tdz = tgtZ - v.z;
+                    if (tdx * tdx + tdz * tdz > 0.16) {
+                        v.angle = Math.atan2(tdx, tdz);
+                        v.walking = true;
+                    } else {
+                        v.walking = false; v.speed = 0;
+                    }
+                } else {
+                    // No house found — fall back to normal wander
+                    v.wanderTimer -= dt;
+                    if (v.wanderTimer <= 0) {
+                        v.walking = !v.walking;
+                        v.angle += (Math.random() - 0.5) * 2.2;
+                        v.wanderTimer = 2 + Math.random() * 3;
+                    }
+                }
+            }
             // Normal wander AI
             else if (!v._stayHome) {
                 v.wanderTimer -= dt;
@@ -1676,8 +1716,25 @@ export class VillageManager {
             v.group.rotation.y += da * 3 * dt;
 
             if (v.speed > 0.01) {
-                v.x += Math.sin(v.group.rotation.y) * v.speed * dt;
-                v.z += Math.cos(v.group.rotation.y) * v.speed * dt;
+                const stepX = Math.sin(v.group.rotation.y) * v.speed * dt;
+                const stepZ = Math.cos(v.group.rotation.y) * v.speed * dt;
+                // Axis-separated collision check (mirrors player). Probe at ankle and chest.
+                const probeY = v.group.position.y;
+                const r = 0.3;
+                const collide = (px, pz) => {
+                    for (const ph of [0.4, 1.3]) {
+                        const py = probeY + ph;
+                        if (this.world.isSolid(px + r, py, pz + r)) return true;
+                        if (this.world.isSolid(px - r, py, pz + r)) return true;
+                        if (this.world.isSolid(px + r, py, pz - r)) return true;
+                        if (this.world.isSolid(px - r, py, pz - r)) return true;
+                    }
+                    return false;
+                };
+                if (!collide(v.x + stepX, v.z)) v.x += stepX;
+                else { v.angle += 1.5 + Math.random() * 1.5; v.wanderTimer = 0.4; }
+                if (!collide(v.x, v.z + stepZ)) v.z += stepZ;
+                else { v.angle += 1.5 + Math.random() * 1.5; v.wanderTimer = 0.4; }
             }
             // Keep castle NPCs inside castle walls
             if (v._castleRole) {
